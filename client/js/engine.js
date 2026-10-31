@@ -1,0 +1,2113 @@
+/*
+ * Genesis Town v2 engine.  Mods talk to the engine ONLY through window.GT (defined synchronously, boot is deferred
+ * until DOMContentLoaded / next tick so every GT.register() has run).  Contract notes beyond SPEC2.md:
+ *
+ *  GT.register(mod)       mod = {id, init(GT), onWorld(world), onSceneEnter(scene), onFrame(dt), onInteract(ctx)->bool, onKey(e)->bool}
+ *                         onInteract ctx = {mode:'talk'|'message'|'bump', scene, tile:{x,y}, tileType, npc|null, door|null, building|null, locked:bool}
+ *                           mode 'talk' = A / Space / Enter / Z, 'message' = E, 'bump' = walking into a locked door.
+ *                           tileType is the faced tile ('door' for door tiles, 'npc' is NOT used: look at ctx.npc).
+ *                           For casino dice_table the dealer is ctx.npc; for the mart counter the keeper is ctx.npc.
+ *                         onKey(e) is only called while no modal is open; return true to swallow the key.
+ *                         v2.3 draw hooks: mod.onDraw(ctx, camX, camY, T) runs after the world + night overlay; GT.charDraw = fn(ctx, npc|null(player), x, y, pal, dir, step)
+ *                         -> true if it drew the character itself (combat.js: flash / KO pose). npc.bubble.shake = true shakes the speech bubble.
+ *  GT.modal(opts)         {title, body:Element|string(plain text, \n = new paragraph), actions:[{label,primary,id,disabled,onClick(handle,ev),close}],
+ *                          wide, closable:false (no X/Esc), backdropClose:true, onClose(reason), onKey(e)->bool (called for keydown while on top)}
+ *                         Clicking an action runs onClick and does NOT close the modal unless the action has no onClick, has close:true,
+ *                         or onClick returns true.  handle = {close(reason), el, box, body, setBody(x), setTitle(t), setActions(list), btn(id), isOpen()}.
+ *                         Esc / X close with reason 'esc' / 'x'.  Tapping outside never closes (unless backdropClose).  close() is idempotent.
+ *  GT.menu(title, opts)   modal list; picking an option closes the menu FIRST, then calls onPick (so it can open another modal). Digits 1-9 pick.
+ *  Extra helpers          GT.addHudButton({id,label,key,onClick,secondary}), GT.hotkey(key,fn), GT.addNpc(sceneRef,def), GT.removeNpc(npc),
+ *                         GT.moveNpc(npc,sceneRef,x,y), GT.npcHide(npc,bool), GT.npcTeleport(npc,x,y,dir), GT.findNpc(key), GT.getScene(ref),
+ *                         GT.doorFront(b), GT.getAffinity(npc), GT.setAffinity(npc,v), GT.addAffinity(npc,d), GT.iconEl(id,size),
+ *                         GT.openShop(), GT.openBag(), GT.openProfile(), GT.time, GT.isQA, GT.engageNpc(npc).
+ *  findPath(scene,from,to) returns the tiles AFTER `from` up to and including `to` ([] when equal, null when unreachable); scene may be null (current),
+ *                         'out', a scene object, or a building. Ignores actors.
+ *  npc fields mods may set: npc.label (small tag above head), npc.remote, npc.hidden (use GT.npcHide).
+ */
+(function(){
+'use strict';
+var T = (window.SPRITES && SPRITES.TILE) || 12;
+var WT = 60, HT = 60, BS = 6, NB = 10;
+var DIRS = {up:[0,-1], down:[0,1], left:[-1,0], right:[1,0]};
+var OPP = {up:'down', down:'up', left:'right', right:'left'};
+var DIRLIST = ['up','down','left','right'];
+var SOLID = new Set(['tree','fence','sign','mailbox','rock','water','wall','bed','table','tv','plant','counter','fridge','bookshelf','shelf','chair','card_table','slot','chest','dice_table','lamp']);
+var ANIMATED = {water:1, flower:1};
+var MOVE_T = 0.15, NPC_T = 0.26, NPC_FAST = 0.18, TURN_T = 0.09, CPS = 48;
+var REDUCE = false;
+try { REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){}
+
+/* ---------- QA mode (skips first-boot modal, regen confirm and auto-opened shop; never needed by players) ---------- */
+function qaMode(){
+  if (window.GT_QA === false) return false;
+  if (window.GT_QA === true) return true;
+  try { if (/(^|[#&,;])qa($|[&,;=])/.test(String(location.hash).replace(/^#/, '#'))) return true; } catch(e){}
+  try { if (navigator.webdriver) return true; } catch(e){}
+  return false;
+}
+var QA = false;
+
+/* ---------- data pools ---------- */
+var FIRST = ['Budi','Siti','Agus','Dewi','Rina','Joko','Wayan','Putu','Ayu','Bayu','Citra','Dimas','Eko','Fajar','Gita','Hadi','Intan','Kadek','Lestari','Maya','Nanda','Oka','Putri','Rizky','Sari','Tono','Utami','Vina','Wahyu','Yuni','Zaki','Andi','Bimo','Dian','Endah','Farah','Galih','Heru','Indra','Jaya','Kirana','Lina','Mawar','Nugi'];
+var LAST = ['Santoso','Wijaya','Pratama','Hartono','Siregar','Nugroho','Saputra','Kusuma','Hidayat','Lubis','Purnama','Setiawan','Wibowo','Rahman','Susanto','Halim','Utomo','Permata','Firmansyah','Gunawan'];
+var PARK = ['Melati','Kenanga','Flamboyan','Cempaka','Anggrek','Teratai','Mawar','Dahlia'];
+var NPC_LINES = [
+  'Halo! Cuacanya cerah ya hari ini.',
+  'Kamu warga baru? Selamat datang di Genesis Town!',
+  'Rumah yang bergembok cuma bisa dimasuki kalau kamu diundang.',
+  'Katanya ada Mart di dekat sini. Stok mie instannya banyak!',
+  'Aku lagi jalan-jalan sore. Kamu juga?',
+  'Hati-hati di rumput tinggi. Banyak serangga!',
+  'Taman kota itu tempat favoritku buat bersantai.',
+  'Setiap kota dibuat ulang, jalanannya berubah lho.',
+  'Ada beberapa tetangga yang sudah mengundangmu, coba cari rumah yang tidak bergembok.',
+  'Aku lupa mau ke mana tadi... hehe.',
+  'Peta ada di tombol M. Praktis banget!',
+  'Ada Kasino di kota ini, tapi cuma pakai koin permainan lho.'
+];
+var HOME_LINES = [
+  ['Selamat datang di rumahku!','Anggap saja rumah sendiri ya.'],
+  ['Eh, ada tamu! Silakan duduk.'],
+  ['Kamu diundang masuk, jadi jangan sungkan.'],
+  ['Rumahku kecil, tapi nyaman.']
+];
+var MART_LINES = [
+  ['Selamat datang di Mart Genesis!','Mau beli apa hari ini?'],
+  ['Hari ini roti dan susu lagi segar.','Silakan lihat-lihat dulu!'],
+  ['Obeng juga ada lho, buat yang butuh.','Mau beli apa?'],
+  ['Jangan lupa bawa tas belanja sendiri.','Mau beli apa?']
+];
+var CASINO_LINES = [
+  ['Selamat datang di Kasino Genesis!','(Meja belum dibuka: modul kasino belum terpasang.)']
+];
+var SIGN_LINES = [
+  'Dilarang menginjak bunga.',
+  'Jaga kebersihan taman ya!',
+  'Awas rumput tinggi, banyak serangga.',
+  'Bebek dilarang diberi makan roti.'
+];
+
+/* ---------- PRNG ---------- */
+function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function makeR(seed){
+  var f = mulberry32(seed >>> 0);
+  var r = {f:f};
+  r.int = function(a,b){ return a + Math.floor(f() * (b - a + 1)); };
+  r.pick = function(arr){ return arr[Math.floor(f() * arr.length)]; };
+  r.chance = function(p){ return f() < p; };
+  r.shuffle = function(arr){ for (var i = arr.length - 1; i > 0; i--){ var j = Math.floor(f() * (i + 1)); var t = arr[i]; arr[i] = arr[j]; arr[j] = t; } return arr; };
+  return r;
+}
+function hashStr(s){ s = String(s); var h = 2166136261 >>> 0; for (var i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
+function randomSeed(){ return (Math.random() * 4294967296) >>> 0; }
+function pickRand(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+/* ---------- tile / sprite fallbacks (art is developed in parallel) ---------- */
+var tileOk = {};
+var FB_COL = {card_table:['#2d7a3e','#1b5128'], slot:['#8a8fa8','#c0392b'], chest:['#8a5a2b','#f2c94c'], carpet_red:['#9c2f40','#7d2433'], floor_dark:['#3a3550','#2d2940'], dice_table:['#2d7a3e','#f4f1dc']};
+function tileSupported(t){
+  if (t in tileOk) return tileOk[t];
+  var ok = true;
+  try {
+    if (window.SPRITES && SPRITES._tileTypes && SPRITES._tileTypes.indexOf(t) >= 0) ok = true;
+    else {
+      var c = document.createElement('canvas'); c.width = c.height = T;
+      var g = c.getContext('2d', {willReadFrequently:true});
+      SPRITES.drawTile(g, t, 0, 0, 0);
+      var d = g.getImageData(5, 5, 1, 1).data;
+      ok = !(d[0] === 255 && d[1] === 0 && d[2] === 255);
+    }
+  } catch(e){ ok = false; }
+  tileOk[t] = ok; return ok;
+}
+function fbTile(g, t, x, y){
+  var c = FB_COL[t] || ['#ff00ff','#ff00ff'];
+  g.fillStyle = c[0]; g.fillRect(x, y, T, T);
+  if (t === 'carpet_red' || t === 'floor_dark') return;
+  g.fillStyle = c[1]; g.fillRect(x + 2, y + 2, T - 4, T - 4);
+}
+function drawTileSafe(g, t, x, y, f){
+  if (t === 'lamp' && !tileSupported('lamp')) fbLamp(g, x, y);
+  else if (FB_COL[t] && !tileSupported(t)) fbTile(g, t, x, y); else SPRITES.drawTile(g, t, x, y, f);
+}
+function fbLamp(g, x, y){   // simple stand-in street lamp when sprites.js has no 'lamp' tile
+  SPRITES.drawTile(g, 'grass', x, y, 0);
+  g.fillStyle = '#1c1a24'; g.fillRect(x + 4, y, 4, 4); g.fillRect(x + 5, y + 4, 2, 7); g.fillRect(x + 3, y + 10, 6, 2);
+  g.fillStyle = '#f8d838'; g.fillRect(x + 5, y + 1, 2, 2);
+  g.fillStyle = '#8a8c9c'; g.fillRect(x + 5, y + 5, 1, 5);
+}
+function drawChar(g, x, y, pal, dir, step){
+  try { SPRITES.drawCharacter(g, x, y, pal, dir, step); }
+  catch(e){ SPRITES.drawCharacter(g, x, y, (pal | 0) % 6, dir, step); }
+}
+
+/* ---------- GT state / events ---------- */
+var ITEMS = {
+  roti:   {name:'Roti',   price:10, icon:'roti'},
+  apel:   {name:'Apel',   price:8,  icon:'apel'},
+  susu:   {name:'Susu',   price:12, icon:'susu'},
+  bunga:  {name:'Bunga',  price:15, icon:'bunga'},
+  kue:    {name:'Kue',    price:25, icon:'kue'},
+  obeng:  {name:'Obeng',  price:60, icon:'obeng'},
+  permen: {name:'Permen', price:3,  icon:'permen'}
+};
+var SHOP_CORE = ['roti','apel','susu','bunga','kue','permen','obeng'];
+var CONSUMABLE = {roti:'Kamu makan roti. Kenyang!', apel:'Apelnya renyah dan manis.', susu:'Segar! Susunya habis diminum.', kue:'Kue yang lezat. Enak banget!', permen:'Manis... permennya cepat habis.'};
+var state = { coins:500, inventory:{}, role:'warga', reputation:0, affinity:{}, clan:null, playerName:'Kamu', onboarded:false };
+var LS_KEY = 'gt.v2';
+var listeners = {};
+function on(evt, fn){ (listeners[evt] = listeners[evt] || []).push(fn); return function(){ off(evt, fn); }; }
+function off(evt, fn){ var a = listeners[evt]; if (!a) return; var i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); }
+function emit(evt, data){
+  var a = listeners[evt]; if (!a) return;
+  a.slice().forEach(function(fn){ try { fn(data); } catch(e){ console.error('[GT] listener error for ' + evt, e); } });
+}
+var saveTimer = 0, savedSeed = null;
+function lsRead(){ try { var s = window.localStorage.getItem(LS_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; } }
+function save(){
+  if (saveTimer) return;
+  saveTimer = setTimeout(saveNow, 150);
+}
+function saveNow(){
+  saveTimer = 0;
+  try {
+    window.localStorage.setItem(LS_KEY, JSON.stringify({ v:2, coins:state.coins, inventory:state.inventory, role:state.role, playerName:state.playerName,
+      affinity:state.affinity, reputation:state.reputation, clan:state.clan, onboarded:state.onboarded, seed:seed, gameMin:gameMin,
+      dayLength:dayLength, timePaused:timePaused, devEnabled:devEnabled }));
+  } catch(e){}
+}
+function num(v, lo, hi, dflt){ v = +v; if (!isFinite(v)) return dflt; return Math.max(lo, Math.min(hi, v)); }
+function loadSaved(){
+  var d = lsRead();
+  if (!d || typeof d !== 'object') return;
+  try {
+    if (d.coins != null) state.coins = Math.floor(num(d.coins, 0, 1e9, 500));
+    if (d.inventory && typeof d.inventory === 'object'){
+      Object.keys(d.inventory).slice(0, 60).forEach(function(k){
+        var c = Math.floor(num(d.inventory[k], 0, 99999, 0)); if (c > 0 && k.length <= 24) state.inventory[k] = c;
+      });
+    }
+    if (d.role === 'warga' || d.role === 'maling') state.role = d.role;
+    if (typeof d.playerName === 'string' && d.playerName.trim()) state.playerName = d.playerName.trim().slice(0, 16);
+    if (d.affinity && typeof d.affinity === 'object'){
+      Object.keys(d.affinity).slice(0, 400).forEach(function(k){ state.affinity[k] = Math.round(num(d.affinity[k], 0, 100, 40)); });
+    }
+    state.reputation = Math.round(num(d.reputation, -1000, 1000, 0));
+    if (d.clan && typeof d.clan === 'object' && typeof d.clan.id === 'string') state.clan = {id:String(d.clan.id).slice(0, 40), name:String(d.clan.name || '').slice(0, 24), tag:String(d.clan.tag || '').slice(0, 4)};
+    state.onboarded = !!d.onboarded;
+    if (d.seed != null && isFinite(+d.seed)) savedSeed = (+d.seed) >>> 0;
+    if (d.gameMin != null && isFinite(+d.gameMin)) gameMin = num(d.gameMin, 0, 1e8, gameMin);
+    if (d.dayLength != null && isFinite(+d.dayLength)) dayLength = num(d.dayLength, 1, 60, 10);
+    if (d.timePaused === true) timePaused = true;
+    if (d.devEnabled === true) devEnabled = true;
+  } catch(e){}
+}
+function addCoins(n){
+  n = Math.floor(+n); if (!isFinite(n) || n === 0) return state.coins;
+  state.coins = Math.max(0, Math.min(1e9, state.coins + n));
+  emit('coins', {coins:state.coins, delta:n}); hudDirty = true; save();
+  return state.coins;
+}
+function spendCoins(n){
+  n = Math.floor(+n); if (!isFinite(n) || n < 0) return false;
+  if (state.coins < n) return false;
+  if (n === 0) return true;
+  state.coins -= n;
+  emit('coins', {coins:state.coins, delta:-n}); hudDirty = true; save();
+  return true;
+}
+function addItem(id, n){
+  n = n == null ? 1 : Math.floor(+n); if (!id || !isFinite(n) || n <= 0) return false;
+  state.inventory[id] = (state.inventory[id] || 0) + n;
+  emit('inventory', {id:id, count:state.inventory[id], delta:n}); save(); return true;
+}
+function removeItem(id, n){
+  n = n == null ? 1 : Math.floor(+n); if (!id || !isFinite(n) || n <= 0) return false;
+  if ((state.inventory[id] || 0) < n) return false;
+  state.inventory[id] -= n; if (state.inventory[id] <= 0) delete state.inventory[id];
+  emit('inventory', {id:id, count:state.inventory[id] || 0, delta:-n}); save(); return true;
+}
+function hasItem(id, n){ n = n == null ? 1 : Math.floor(+n); return (state.inventory[id] || 0) >= n; }
+function setRole(r){
+  if (r !== 'warga' && r !== 'maling') return;
+  var old = state.role; state.role = r; hudDirty = true; save();
+  if (old !== r) emit('role', {role:r, old:old});
+}
+function addRep(d){ state.reputation = Math.round(num(state.reputation + d, -1000, 1000, 0)); save(); hudDirty = true; return state.reputation; }
+
+/* affinity */
+function npcKey(n){ return n ? (n.key || ('anon:' + (n.name || '?'))) : ''; }
+function defaultAff(n){ return n && n.aff0 != null ? n.aff0 : 40; }
+function getAffinity(n){ var k = npcKey(n); return state.affinity[k] != null ? state.affinity[k] : defaultAff(n); }
+function setAffinity(n, v){
+  var k = npcKey(n), old = getAffinity(n);
+  v = Math.round(num(v, 0, 100, old)); state.affinity[k] = v; save();
+  if (v !== old) emit('affinity', {key:k, npc:n, value:v, delta:v - old});
+  return v;
+}
+function addAffinity(n, d){ return setAffinity(n, getAffinity(n) + d); }
+function hearts(n){ var h = Math.max(0, Math.min(5, Math.floor(getAffinity(n) / 20))); return new Array(h + 1).join('♥') + new Array(5 - h + 1).join('♡'); }
+
+/* ---------- map structure ---------- */
+function newMap(w, h, fill, kind){
+  return { w:w, h:h, kind:kind, tiles:new Array(w*h).fill(fill), walk:null, blocked:new Set(),
+    bld:new Map(), door:new Map(), info:new Map(), exit:new Set(), buildings:[], cache:null };
+}
+function finalize(m){
+  m.walk = new Uint8Array(m.w * m.h);
+  for (var i = 0; i < m.tiles.length; i++) m.walk[i] = (SOLID.has(m.tiles[i]) || m.blocked.has(i)) ? 0 : 1;
+}
+function buildCache(m){
+  var c = document.createElement('canvas');
+  c.width = m.w * T; c.height = m.h * T;
+  var g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  for (var y = 0; y < m.h; y++) for (var x = 0; x < m.w; x++) drawTileSafe(g, m.tiles[y*m.w + x], x*T, y*T, 0);
+  m.buildings.forEach(function(b){
+    if (b.kind === 'mart') SPRITES.drawMart(g, b.x*T, b.y*T);
+    else if (b.kind === 'casino'){
+      if (SPRITES.drawCasino) SPRITES.drawCasino(g, b.x*T, b.y*T); else SPRITES.drawHouse(g, b.x*T, b.y*T, 2, false);
+    }
+    else SPRITES.drawHouse(g, b.x*T, b.y*T, b.style, !b.invited);
+  });
+  m.cache = c;
+}
+
+/* ---------- world generation ---------- */
+function genWorld(seed){
+  for (var att = 0; att < 40; att++){
+    var w = tryWorld(seed, att);
+    if (w) { w.attempt = att; return w; }
+  }
+  throw new Error('Gagal membuat dunia');
+}
+
+function tryWorld(seed, att){
+  var R = makeR((seed + att * 7919) >>> 0);
+  var m = newMap(WT, HT, 'grass', 'world');
+  m.seed = seed;
+  var reserved = new Set();
+  function I(x,y){ return y * WT + x; }
+  function inb(x,y){ return x >= 0 && y >= 0 && x < WT && y < HT; }
+  function set(x,y,t){ if (inb(x,y)) m.tiles[I(x,y)] = t; }
+
+  // roads: top row + left column of every block
+  var bx, by, i;
+  for (by = 0; by < NB; by++) for (bx = 0; bx < NB; bx++){
+    var ox = bx*BS, oy = by*BS;
+    for (i = 0; i < BS; i++){ set(ox + i, oy, 'path'); set(ox, oy + i, 'path'); }
+  }
+  for (i = 1; i < WT - 1; i++) set(i, HT - 2, 'path'); // closing road along the south edge
+  for (i = 0; i < WT; i++){ set(i, 0, 'tree'); set(i, HT-1, 'tree'); set(0, i, 'tree'); set(WT-1, i, 'tree'); }
+
+  // block types
+  var types = []; for (i = 0; i < NB*NB; i++) types.push('house');
+  var ownB = {x:R.int(3,6), y:R.int(3,6)};
+  var marts = [];
+  while (marts.length < 2){
+    var cx = R.int(1,8), cy = R.int(1,8);
+    if (Math.abs(cx - ownB.x) + Math.abs(cy - ownB.y) < 2) continue;
+    if (marts.some(function(q){ return Math.abs(q.x-cx) + Math.abs(q.y-cy) < 4; })) continue;
+    marts.push({x:cx, y:cy});
+  }
+  marts.forEach(function(q){ types[q.y*NB + q.x] = 'mart'; });
+  // exactly one casino block (own PRNG so the rest of the layout keeps its v1 random stream)
+  var RC = makeR((seed * 31 + att * 977 + 0xCA51) >>> 0), ccand = [];
+  for (by = 1; by <= 8; by++) for (bx = 1; bx <= 8; bx++){
+    if (types[by*NB + bx] !== 'house') continue;
+    if (Math.abs(bx - ownB.x) + Math.abs(by - ownB.y) < 2) continue;
+    ccand.push(by*NB + bx);
+  }
+  var cpick = RC.pick(ccand); types[cpick] = 'casino';
+  var nPark = R.int(10, 14), guard = 0;
+  while (nPark > 0 && guard++ < 500){
+    var px = R.int(0,9), py = R.int(0,9);
+    if (types[py*NB + px] !== 'house' || (px === ownB.x && py === ownB.y)) continue;
+    types[py*NB + px] = 'park'; nPark--;
+  }
+  m.blockTypes = types;
+
+  var houses = [];
+  function fullName(){ return R.pick(FIRST) + ' ' + R.pick(LAST); }
+
+  for (by = 0; by < NB; by++) for (bx = 0; bx < NB; bx++){
+    var type = types[by*NB + bx];
+    var ox2 = bx*BS, oy2 = by*BS;
+    var ix0 = ox2 + 1, iy0 = oy2 + 1;
+    var ix1 = Math.min(ox2 + 5, WT - 2), iy1 = Math.min(oy2 + 5, HT - 3); // interior bounds (inclusive)
+    var x, y;
+    if (type === 'park'){
+      var pathRow = iy0 + R.int(1, 3); if (pathRow > iy1) pathRow = iy1;
+      for (x = ix0; x <= ix1; x++){ set(x, pathRow, 'path'); reserved.add(I(x, pathRow)); }
+      // sign next to the west road
+      var sy = iy0; do { sy = iy0 + R.int(0, iy1 - iy0); } while (sy === pathRow);
+      set(ix0, sy, 'sign'); reserved.add(I(ix0, sy));
+      var parkName = R.pick(PARK);
+      m.info.set(I(ix0, sy), 'Taman ' + parkName + '. ' + R.pick(SIGN_LINES));
+      // pond
+      var pw = R.int(2,3), ph = 2, tries = 0, placed = false;
+      while (!placed && tries++ < 30){
+        var pxx = R.int(ix0 + 1, Math.max(ix0 + 1, ix1 - pw + 1)), pyy = R.int(iy0, Math.max(iy0, iy1 - ph + 1));
+        var okp = pxx + pw - 1 <= ix1 && pyy + ph - 1 <= iy1;
+        for (y = pyy; y < pyy + ph && okp; y++) for (x = pxx; x < pxx + pw && okp; x++) if (reserved.has(I(x,y))) okp = false;
+        if (!okp) continue;
+        for (y = pyy; y < pyy + ph; y++) for (x = pxx; x < pxx + pw; x++){ set(x, y, 'water'); reserved.add(I(x,y)); }
+        // sand ring where free
+        for (y = pyy - 1; y <= pyy + ph; y++) for (x = pxx - 1; x <= pxx + pw; x++){
+          if (x < ix0 || x > ix1 || y < iy0 || y > iy1 || reserved.has(I(x,y))) continue;
+          set(x, y, 'sand'); reserved.add(I(x,y));
+        }
+        placed = true;
+      }
+      for (y = iy0; y <= iy1; y++) for (x = ix0; x <= ix1; x++){
+        if (reserved.has(I(x,y))) continue;
+        var r = R.f();
+        if (r < 0.24) set(x, y, 'tree'); else if (r < 0.38) set(x, y, 'flower'); else if (r < 0.55) set(x, y, 'tallgrass'); else if (r < 0.58) set(x, y, 'rock');
+      }
+      continue;
+    }
+
+    // house, mart or casino
+    var maxHx = Math.min(ox2 + 3, WT - 4);
+    var hx = R.int(ox2 + 1, maxHx);
+    var hy = (by === NB - 1) ? oy2 + 1 : R.int(oy2 + 1, oy2 + 3);
+    var b = { kind:type, bx:bx, by:by, x:hx, y:hy, dx:hx + 1, dy:hy + 2, style:R.int(0,3) };
+    var big = (type !== 'house');
+    if (type === 'house'){
+      b.id = houses.length; b.owner = fullName(); b.invited = false; b.own = false;
+      b.iseed = R.int(1, 1073741823); b.hasNpc = R.chance(0.4);
+      houses.push(b);
+    } else { b.invited = true; b.owner = type === 'mart' ? 'Mart Genesis' : 'Kasino Genesis'; b.iseed = (seed ^ (bx * 131 + by * 17)) >>> 0; }
+    m.buildings.push(b);
+    for (y = hy; y < hy + 3; y++) for (x = hx; x < hx + 3; x++){
+      var bi = I(x,y);
+      set(x, y, 'grass'); m.blocked.add(bi); reserved.add(bi);
+      if (x === b.dx && y === b.dy) m.door.set(bi, b); else m.bld.set(bi, b);
+    }
+    // path stub from the door down to the road
+    for (y = hy + 3; y <= Math.min(oy2 + 5, HT - 2); y++){ set(b.dx, y, 'path'); reserved.add(I(b.dx, y)); }
+    if (big){
+      for (x = hx - 1; x <= hx + 3; x++) if (x >= ix0 && x <= ix1 && hy + 3 <= iy1){ set(x, hy + 3, 'path'); reserved.add(I(x, hy + 3)); }
+    }
+    // mailbox
+    if (type === 'house'){
+      var mxs = [hx + 3, hx - 1]; if (R.chance(0.5)) mxs.reverse();
+      for (var k = 0; k < 2; k++){
+        var mx = mxs[k];
+        if (mx >= ix0 && mx <= ix1 && !reserved.has(I(mx, hy + 2))){
+          set(mx, hy + 2, 'mailbox'); reserved.add(I(mx, hy + 2)); b.mail = I(mx, hy + 2);
+          m.info.set(I(mx, hy + 2), 'Kotak surat milik ' + b.owner + '. Isinya kosong.');
+          break;
+        }
+      }
+    }
+    // fence along the top yard edge
+    if (type === 'house' && hy > iy0 && R.chance(0.45)){
+      for (x = ix0; x <= ix1; x++) if (!reserved.has(I(x, iy0))){ set(x, iy0, 'fence'); reserved.add(I(x, iy0)); }
+    }
+    // decor
+    for (y = iy0; y <= iy1; y++) for (x = ix0; x <= ix1; x++){
+      if (reserved.has(I(x,y))) continue;
+      var rr = R.f();
+      var near = (Math.abs(x - b.dx) <= 1 && y > hy + 2);
+      if (rr < 0.09) set(x, y, 'flower');
+      else if (rr < 0.17) set(x, y, 'tallgrass');
+      else if (rr < 0.20 && !near) set(x, y, 'rock');
+      else if (rr < 0.26 && !near && type === 'house') set(x, y, 'tree');
+    }
+  }
+
+  // ownership / invitations
+  var own = houses.filter(function(h){ return h.bx === ownB.x && h.by === ownB.y; })[0];
+  if (!own) return null;
+  own.own = true; own.invited = true; own.owner = 'Kamu';
+  if (own.mail != null) m.info.set(own.mail, 'Kotak surat milikmu. Belum ada surat.');
+  var others = R.shuffle(houses.filter(function(h){ return h !== own; }));
+  for (i = 0; i < 4; i++) others[i].invited = true;
+  m.houses = houses; m.own = own;
+  m.marts = m.buildings.filter(function(q){ return q.kind === 'mart'; });
+  m.casino = m.buildings.filter(function(q){ return q.kind === 'casino'; })[0] || null;
+  if (!m.casino) return null;
+  m.spawn = {x:own.dx, y:own.dy + 1};
+  finalize(m);
+  placeLamps(m, seed, att, reserved);
+
+  // validate: BFS from spawn must reach the front of every door
+  var reach = bfs(m, m.spawn.x, m.spawn.y);
+  if (!reach[I(m.spawn.x, m.spawn.y)]) return null;
+  var bad = false;
+  m.buildings.forEach(function(q){ if (!reach[I(q.dx, q.dy + 1)]) bad = true; });
+  if (bad) return null;
+  m.reach = reach;
+  m.doorFront = new Set();
+  m.buildings.forEach(function(q){ m.doorFront.add(I(q.dx, q.dy + 1)); });
+  m.npcSpawns = [];
+  for (var yy = 1; yy < HT - 1; yy++) for (var xx = 1; xx < WT - 1; xx++){
+    var ii = I(xx, yy);
+    if (reach[ii] && !m.doorFront.has(ii) && (Math.abs(xx - m.spawn.x) + Math.abs(yy - m.spawn.y) > 4)) m.npcSpawns.push([xx,yy]);
+  }
+  R.shuffle(m.npcSpawns);
+  m.r = R;
+  buildCache(m);
+  return m;
+}
+
+/* street lamps: solid 'lamp' tiles on road-side grass.  Own PRNG (the v1 random stream is untouched).  Each lamp is only kept if the
+   walkable region stays connected (exactly one tile lost) and every door front stays reachable.  Pass 1 lights ~half of the doors,
+   pass 2 adds more lamps (up to 25-35 total) while keeping at least ~35% of doors dark. */
+function placeLamps(m, seed, att, reserved){
+  var RL = makeR((Math.imul(seed >>> 0, 2654435761) ^ Math.imul(att + 1, 40503) ^ 0x1A4B5) >>> 0);
+  var W = m.w, H = m.h, i;
+  var fronts = m.buildings.map(function(b){ return {x:b.dx, y:b.dy + 1}; });
+  var base = bfs(m, m.spawn.x, m.spawn.y), baseCount = 0;
+  for (i = 0; i < base.length; i++) baseCount += base[i];
+  var lamps = [], lit = new Uint8Array(fronts.length), litN = 0;
+  function cheb(a, b, c, d){ return Math.max(Math.abs(a - c), Math.abs(b - d)); }
+  var cands = [], x, y;
+  for (y = 2; y < H - 2; y++) for (x = 2; x < W - 2; x++){
+    var idx = y*W + x, t = m.tiles[idx];
+    if (t !== 'grass' && t !== 'flower' && t !== 'tallgrass') continue;
+    if (reserved.has(idx) || m.blocked.has(idx) || m.walk[idx] !== 1) continue;
+    if (m.tiles[idx - 1] !== 'path' && m.tiles[idx + 1] !== 'path' && m.tiles[idx - W] !== 'path' && m.tiles[idx + W] !== 'path') continue;
+    var nearDoor = false;
+    for (i = 0; i < fronts.length; i++) if (cheb(x, y, fronts[i].x, fronts[i].y) <= 1) { nearDoor = true; break; }
+    if (nearDoor) continue;
+    cands.push({x:x, y:y, i:idx});
+  }
+  RL.shuffle(cands);
+  var target = RL.int(25, 35);
+  function newly(c){ var a = []; for (var k = 0; k < fronts.length; k++) if (!lit[k] && cheb(c.x, c.y, fronts[k].x, fronts[k].y) <= 4) a.push(k); return a; }
+  function tryAdd(c, minSp, maxLit, needGain){
+    for (var k = 0; k < lamps.length; k++) if (cheb(c.x, c.y, lamps[k].x, lamps[k].y) < minSp) return false;
+    var nw = newly(c);
+    if (needGain && !nw.length) return false;
+    if ((litN + nw.length) / fronts.length > maxLit) return false;
+    m.walk[c.i] = 0;
+    var r = bfs(m, m.spawn.x, m.spawn.y), cnt = 0, ok = true;
+    for (k = 0; k < r.length; k++) cnt += r[k];
+    if (cnt !== baseCount - lamps.length - 1) ok = false;
+    for (k = 0; ok && k < fronts.length; k++) if (!r[fronts[k].y*W + fronts[k].x]) ok = false;
+    if (!ok){ m.walk[c.i] = 1; return false; }
+    m.tiles[c.i] = 'lamp'; lamps.push({x:c.x, y:c.y});
+    nw.forEach(function(q){ lit[q] = 1; litN++; });
+    m.info.set(c.i, 'Tiang listrik. Lampunya menyala saat malam.');
+    return true;
+  }
+  var c;
+  for (i = 0; i < cands.length && lamps.length < target; i++) tryAdd(cands[i], 4, 0.55, true);
+  for (i = 0; i < cands.length && lamps.length < target; i++) if (m.tiles[cands[i].i] !== 'lamp') tryAdd(cands[i], 3, 0.62, false);
+  m.lamps = lamps;
+  m.litFrac = litN / Math.max(1, fronts.length);
+}
+
+function bfs(m, sx, sy){
+  var seen = new Uint8Array(m.w * m.h), q = [sx, sy], head = 0;
+  if (sx < 0 || sy < 0 || sx >= m.w || sy >= m.h || !m.walk[sy*m.w + sx]) return seen;
+  seen[sy*m.w + sx] = 1;
+  while (head < q.length){
+    var x = q[head++], y = q[head++];
+    for (var d = 0; d < 4; d++){
+      var dv = DIRS[DIRLIST[d]], nx = x + dv[0], ny = y + dv[1];
+      if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h) continue;
+      var ni = ny*m.w + nx;
+      if (seen[ni] || !m.walk[ni]) continue;
+      seen[ni] = 1; q.push(nx, ny);
+    }
+  }
+  return seen;
+}
+
+/* ---------- interiors ---------- */
+function genHouseInterior(h){
+  var R = makeR(h.iseed), w = 10, hh = 8;
+  var m = newMap(w, hh, R.chance(0.6) ? 'floor_wood' : 'floor_tile', 'interior');
+  function I(x,y){ return y*w + x; }
+  var x, y;
+  for (x = 0; x < w; x++){ m.tiles[I(x,0)] = 'wall'; m.tiles[I(x,hh-1)] = 'wall'; }
+  for (y = 0; y < hh; y++){ m.tiles[I(0,y)] = 'wall'; m.tiles[I(w-1,y)] = 'wall'; }
+  m.mat = {x:4, y:hh-1};
+  m.tiles[I(4,hh-1)] = 'doormat'; m.exit.add(I(4,hh-1));
+  m.entry = {x:4, y:hh-2};
+  for (y = 5; y <= 6; y++) for (x = 3; x <= 6; x++) m.tiles[I(x,y)] = 'rug';
+  var names = {bed:'Kasur yang empuk. Jangan tidur dulu!', bookshelf:'Buku resep, komik, dan satu kamus tebal.', tv:'Acaranya lagi seru, tapi kamu tidak punya waktu nonton.', fridge:'Isinya jus jeruk dan telur. Jangan diambil!', plant:'Tanamannya terawat dengan baik.'};
+  var items = ['bed','bookshelf','tv','fridge','plant'];
+  var slots = R.shuffle([1,2,3,4,5,6,7,8]);
+  items.forEach(function(it, n){ m.tiles[I(slots[n],1)] = it; m.info.set(I(slots[n],1), names[it]); });
+  var tx = R.int(2,7);
+  m.tiles[I(tx,3)] = 'table'; m.info.set(I(tx,3), 'Meja makan. Ada sepiring pisang goreng.');
+  m.tiles[I(tx,4)] = 'chair'; m.info.set(I(tx,4), 'Kursi kayu yang kokoh.');
+  if (R.chance(0.6)){ m.tiles[I(1,6)] = 'plant'; m.info.set(I(1,6), names.plant); }
+  if (R.chance(0.6)){ m.tiles[I(8,6)] = 'plant'; m.info.set(I(8,6), names.plant); }
+  // storage chest on a free back-wall slot (row 1 is always reachable from row 2); separate PRNG keeps the layout above unchanged
+  var free = slots.slice(5), RK = makeR((h.iseed ^ 0x5eed1234) >>> 0);
+  var cxs = RK.pick(free);
+  m.tiles[I(cxs,1)] = 'chest'; m.chest = {x:cxs, y:1};
+  finalize(m);
+  m.npcs = [];
+  if (h.hasNpc || h.own){
+    var cand = [];
+    for (y = 2; y <= 6; y++) for (x = 1; x <= 8; x++) if (m.walk[I(x,y)] && !(x === 4 && y >= 5)) cand.push([x,y]);
+    var c = R.pick(cand);
+    var nm = h.own ? 'Ibu' : h.owner.split(' ')[0];
+    var npc = mkNpc(c[0], c[1], nm, R.int(1,5), h.own ? [['Kamu sudah pulang, nak?','Jangan lupa makan ya.'],['Rumah ini selalu terbuka buatmu.']] : HOME_LINES, {turns:true});
+    npc.key = 'house:' + h.id + ':0';
+    if (h.own) npc.aff0 = 70;
+    m.npcs.push(npc);
+  }
+  buildCache(m);
+  return m;
+}
+
+function genMartInterior(b, martIdx){
+  var w = 11, hh = 9;
+  var m = newMap(w, hh, 'floor_tile', 'interior');
+  function I(x,y){ return y*w + x; }
+  var x, y;
+  for (x = 0; x < w; x++){ m.tiles[I(x,0)] = 'wall'; m.tiles[I(x,hh-1)] = 'wall'; }
+  for (y = 0; y < hh; y++){ m.tiles[I(0,y)] = 'wall'; m.tiles[I(w-1,y)] = 'wall'; }
+  m.mat = {x:5, y:hh-1};
+  m.tiles[I(5,hh-1)] = 'doormat'; m.exit.add(I(5,hh-1));
+  m.entry = {x:5, y:hh-2};
+  var shelfTxt = ['Rak penuh mie instan dan biskuit.','Sabun, sampo, dan odol berjejer rapi.','Camilan keripik aneka rasa.','Minuman kaleng dingin.'];
+  var n = 0;
+  for (x = 1; x <= 2; x++){ m.tiles[I(x,1)] = 'shelf'; m.info.set(I(x,1), shelfTxt[n++ % 4]); }
+  for (x = 6; x <= 7; x++){ m.tiles[I(x,1)] = 'fridge'; m.info.set(I(x,1), 'Lemari pendingin: es krim dan susu.'); }
+  for (x = 8; x <= 9; x++){ m.tiles[I(x,1)] = 'shelf'; m.info.set(I(x,1), shelfTxt[n++ % 4]); }
+  for (x = 4; x <= 5; x++){ m.tiles[I(x,2)] = 'counter'; m.info.set(I(x,2), 'Meja kasir. Mesin kasirnya berkedip-kedip.'); }
+  // staff-only pocket behind the counter (x=4..5, row 1), enclosed by a plant at (3,1), the fridge and the counter
+  m.tiles[I(3,1)] = 'plant'; m.info.set(I(3,1), 'Tanaman hias di belakang kasir.');
+  m.staff = new Set(); for (x = 4; x <= 5; x++) m.staff.add(I(x,1));
+  for (y = 4; y <= 5; y++){
+    for (x = 2; x <= 4; x++){ m.tiles[I(x,y)] = 'shelf'; m.info.set(I(x,y), shelfTxt[n++ % 4]); }
+    for (x = 6; x <= 8; x++){ m.tiles[I(x,y)] = 'shelf'; m.info.set(I(x,y), shelfTxt[n++ % 4]); }
+  }
+  m.tiles[I(1,7)] = 'plant'; m.info.set(I(1,7), 'Tanaman hias di dekat pintu.');
+  m.tiles[I(9,7)] = 'plant'; m.info.set(I(9,7), 'Tanaman hias di dekat pintu.');
+  finalize(m);
+  // the pocket is fully enclosed (plant, fridge, counter) and blocked for the player via m.staff.
+  var keeper = mkNpc(4, 1, 'Penjaga Mart', 3, MART_LINES, {});
+  keeper.dir = 'down'; keeper.key = 'mart:' + martIdx + ':keeper';
+  m.npcs = [keeper];
+  buildCache(m);
+  return m;
+}
+
+function genCasinoInterior(b){
+  var w = 11, hh = 9;
+  var m = newMap(w, hh, 'floor_dark', 'interior');
+  function I(x,y){ return y*w + x; }
+  var x, y;
+  for (y = 3; y <= 7; y++) for (x = 4; x <= 6; x++) m.tiles[I(x,y)] = 'carpet_red';
+  for (x = 3; x <= 7; x++) m.tiles[I(x,7)] = 'carpet_red';
+  for (x = 0; x < w; x++){ m.tiles[I(x,0)] = 'wall'; m.tiles[I(x,hh-1)] = 'wall'; }
+  for (y = 0; y < hh; y++){ m.tiles[I(0,y)] = 'wall'; m.tiles[I(w-1,y)] = 'wall'; }
+  m.mat = {x:5, y:hh-1};
+  m.tiles[I(5,hh-1)] = 'doormat'; m.exit.add(I(5,hh-1));
+  m.entry = {x:5, y:hh-2};
+  [1,2,3,7,8,9].forEach(function(sx){ m.tiles[I(sx,1)] = 'slot'; });
+  [4,5,6].forEach(function(dx){ m.tiles[I(dx,2)] = 'dice_table'; });
+  [[2,4],[2,5],[8,4],[8,5]].forEach(function(p){ m.tiles[I(p[0],p[1])] = 'card_table'; });
+  m.tiles[I(1,7)] = 'plant'; m.info.set(I(1,7), 'Tanaman plastik. Tetap terlihat mewah.');
+  m.tiles[I(9,7)] = 'plant'; m.info.set(I(9,7), 'Tanaman plastik. Tetap terlihat mewah.');
+  m.staff = new Set(); [4,5,6].forEach(function(sx){ m.staff.add(I(sx,1)); });
+  finalize(m);
+  var dealer = mkNpc(5, 1, 'Bandar', 6, CASINO_LINES, {});
+  dealer.dir = 'down'; dealer.key = 'casino:dealer';
+  m.npcs = [dealer];
+  buildCache(m);
+  return m;
+}
+
+/* ---------- NPCs ---------- */
+function mkNpc(x, y, name, pal, lines, o){
+  o = o || {};
+  return { x:x, y:y, fx:x, fy:y, dir:'down', moving:false, t:0, flip:false, pal:pal, name:name, lines:lines,
+    wait:0.5 + Math.random()*2, talking:false, home:{x:x, y:y}, leash:o.leash || 0, wander:!!o.wander, turns:!!o.turns,
+    key:o.key || null, follow:false, script:null, hidden:false, bubble:null, label:o.label || null, spd:0, lastTalk:-1e9 };
+}
+
+/* ---------- state ---------- */
+var world = null, scene = null, outScene = null, seed = 0;
+var interiors = new Map();
+var P = { x:0, y:0, fx:0, fy:0, dir:'down', moving:false, t:0, flip:false, turnT:0 };
+var held = [];            // stack of held directions
+var waitRelease = false;
+var D = null;             // dialog state
+var mapOpen = false;
+var tr = null;            // transition
+var timeAcc = 0;
+var gameMin = 8 * 60;     // in-game minutes since day 1 00:00
+var dayLength = 10;       // real minutes per full 24h game day (1..60); game minutes per real second = 24 / dayLength
+var timePaused = false, devEnabled = false;
+var VW = 180, VH = 132, S = 2;
+var booted = false;
+var hudDirty = true;
+var modals = [];
+
+function makeOutScene(){
+  var npcs = [], sp = world.npcSpawns, n = 0;
+  for (var i = 0; i < sp.length && npcs.length < 8; i++){
+    var x = sp[i][0], y = sp[i][1];
+    // keep NPCs spread out: not too close to another NPC
+    var close = false;
+    for (var j = 0; j < npcs.length; j++) if (Math.abs(npcs[j].x - x) + Math.abs(npcs[j].y - y) < 6) close = true;
+    if (close) continue;
+    var name = FIRST[(world.seed + n * 13 + i) % FIRST.length];
+    var npc = mkNpc(x, y, name, 1 + (n % 5), NPC_LINES.map(function(l){ return [l]; }), {wander:true, leash:9});
+    npc.key = 'out:' + n;
+    npc.dir = pickRand(DIRLIST);
+    npcs.push(npc); n++;
+  }
+  return { kind:'out', map:world, npcs:npcs, name:null, key:'out' };
+}
+
+function regen(s){
+  seed = (s == null) ? randomSeed() : (s >>> 0);
+  world = genWorld(seed);
+  interiors = new Map();
+  scene = makeOutScene();
+  outScene = scene;
+  P.x = P.fx = world.spawn.x; P.y = P.fy = world.spawn.y; P.dir = 'down'; P.moving = false; P.t = 0; P.turnT = 0;
+  closeDialog(true); setMap(false); tr = null;
+  waitRelease = held.length > 0;
+  hudDirty = true;
+  save();
+  if (booted){
+    callMods('onWorld', [world]);
+    emit('world', world);
+    callMods('onSceneEnter', [scene]);
+    emit('scene', scene);
+  }
+  return seed;
+}
+
+function houseScene(b){
+  var key = b.kind + ':' + (b.id != null ? b.id : (b.bx + '_' + b.by));
+  var sc = interiors.get(key);
+  if (!sc){
+    var m, kind = b.kind;
+    if (kind === 'mart') m = genMartInterior(b, world.marts.indexOf(b));
+    else if (kind === 'casino') m = genCasinoInterior(b);
+    else m = genHouseInterior(b);
+    sc = { kind:kind, map:m, npcs:m.npcs, house:b, key:key, name:null };
+    interiors.set(key, sc);
+  }
+  return sc;
+}
+
+function allScenes(){ var a = [outScene]; interiors.forEach(function(sc){ a.push(sc); }); return a; }
+function resolveScene(ref){
+  if (ref == null) return scene;
+  if (typeof ref === 'string'){
+    if (ref === 'out' || ref === 'outdoor') return outScene;
+    var found = null;
+    allScenes().forEach(function(sc){ if (sc && sc.key === ref) found = sc; });
+    if (found) return found;
+    if (ref === 'casino' && world && world.casino) return houseScene(world.casino);
+    var mm = /^(house|mart|casino):(.+)$/.exec(ref);
+    if (mm && world){
+      var bb = world.buildings.filter(function(b){ return b.kind === mm[1] && (mm[1] === 'house' ? String(b.id) === mm[2] : (mm[1] === 'casino' || String(world.marts.indexOf(b)) === mm[2])); })[0];
+      if (bb) return houseScene(bb);
+    }
+    return null;
+  }
+  if (ref.map && ref.npcs) return ref;
+  if (ref.dx != null && ref.kind) return houseScene(ref);
+  return null;
+}
+
+/* ---------- collision ---------- */
+function inb(m,x,y){ return x >= 0 && y >= 0 && x < m.w && y < m.h; }
+function npcAtTile(x, y, sc){
+  sc = sc || scene;
+  for (var i = 0; i < sc.npcs.length; i++){
+    var n = sc.npcs[i];
+    if (n.hidden) continue;
+    if ((n.x === x && n.y === y) || (n.moving && n.fx === x && n.fy === y)) return n;
+  }
+  return null;
+}
+function playerAt(x, y){ return (P.x === x && P.y === y) || (P.moving && P.fx === x && P.fy === y); }
+function canEnterPlayer(x, y){
+  var m = scene.map;
+  return inb(m,x,y) && m.walk[y*m.w + x] === 1 && !(m.staff && m.staff.has(y*m.w + x)) && !npcAtTile(x,y);
+}
+function canEnterNpc(n, x, y, allowDF, sc){
+  sc = sc || scene;
+  var m = sc.map;
+  if (!inb(m,x,y) || m.walk[y*m.w + x] !== 1) return false;
+  if (sc === scene && playerAt(x,y)) return false;
+  var o = npcAtTile(x,y,sc); if (o && o !== n) return false;
+  if (!allowDF && m.doorFront && m.doorFront.has(y*m.w + x)) return false;
+  return true;
+}
+
+/* ---------- pathfinding / NPC script control ---------- */
+function findPath(sc, from, to, opt){
+  sc = resolveScene(sc); if (!sc || !from || !to) return null;
+  var m = sc.map, W = m.w, H = m.h;
+  var sx = Math.round(from.x), sy = Math.round(from.y), tx = Math.round(to.x), ty = Math.round(to.y);
+  if (![sx, sy, tx, ty].every(isFinite)) return null;
+  if (!inb(m, sx, sy) || !inb(m, tx, ty)) return null;
+  if (m.walk[ty*W + tx] !== 1) return null;
+  if (sx === tx && sy === ty) return [];
+  var prev = new Int32Array(W * H).fill(-1), q = [sy*W + sx], head = 0, goal = ty*W + tx, avoid = opt && opt.avoid;
+  prev[sy*W + sx] = sy*W + sx;
+  while (head < q.length){
+    var cur = q[head++];
+    if (cur === goal) break;
+    var cx = cur % W, cy = (cur / W) | 0;
+    for (var d = 0; d < 4; d++){
+      var dv = DIRS[DIRLIST[d]], nx = cx + dv[0], ny = cy + dv[1];
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      var ni = ny*W + nx;
+      if (prev[ni] !== -1 || m.walk[ni] !== 1) continue;
+      if (avoid && ni !== goal && avoid(nx, ny)) continue;
+      prev[ni] = cur; q.push(ni);
+    }
+  }
+  if (prev[goal] === -1) return null;
+  var path = [], c = goal, start = sy*W + sx;
+  while (c !== start){ path.push({x:c % W, y:(c / W) | 0}); c = prev[c]; }
+  return path.reverse();
+}
+
+function startNpcStep(n, dx, dy, spd){
+  n.dir = dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up';
+  n.fx = n.x; n.fy = n.y; n.x += dx; n.y += dy; n.moving = true; n.t = 0; n.flip = !n.flip; n.spd = spd || 0;
+}
+function finishScript(n, ok){
+  var s = n.script; if (!s) return;
+  n.script = null; n.wait = 0.5; n.spd = 0;
+  n.home = {x:n.x, y:n.y};
+  if (s.done){ try { s.done(!!ok); } catch(e){ console.error('[GT] npcGo callback', e); } }
+}
+function npcGo(npc, path, done){
+  if (!npc){ if (done) done(false); return false; }
+  if (npc.script) finishScript(npc, false);
+  var arr = [];
+  if (Array.isArray(path)) path.forEach(function(p){ if (p && isFinite(p.x) && isFinite(p.y)) arr.push({x:Math.round(p.x), y:Math.round(p.y)}); });
+  npc.script = { path:arr, i:0, stuck:0, done:done || null };
+  if (!arr.length) setTimeout(function(){ if (npc.script && !npc.script.path.length) finishScript(npc, true); }, 0);
+  return true;
+}
+function stepScript(sc, n, dt){
+  var s = n.script;
+  if (s.i >= s.path.length){ finishScript(n, true); return; }
+  var nx = s.path[s.i];
+  if (nx.x === n.x && nx.y === n.y){ s.i++; return; }
+  if (Math.abs(nx.x - n.x) + Math.abs(nx.y - n.y) !== 1){
+    for (var j = 0; j < s.path.length; j++) if (s.path[j].x === n.x && s.path[j].y === n.y){ s.i = j + 1; return; }
+    finishScript(n, false); return;
+  }
+  if (canEnterNpc(n, nx.x, nx.y, true, sc)){
+    startNpcStep(n, nx.x - n.x, nx.y - n.y, NPC_FAST); s.i++; s.stuck = 0;
+  } else {
+    n.dir = nx.x > n.x ? 'right' : nx.x < n.x ? 'left' : nx.y > n.y ? 'down' : 'up';
+    s.stuck += dt;
+    if (s.stuck > 6) finishScript(n, false);
+  }
+}
+function stepFollow(sc, n, dt){
+  var dist = Math.abs(n.x - P.x) + Math.abs(n.y - P.y);
+  if (dist <= 1){
+    if (dist === 1) n.dir = P.x > n.x ? 'right' : P.x < n.x ? 'left' : P.y > n.y ? 'down' : 'up';
+    return;
+  }
+  var goal = {x:P.x, y:P.y};
+  var path = findPath(sc, n, goal, {avoid:function(x, y){ var o = npcAtTile(x, y, sc); return !!o && o !== n; }}) || findPath(sc, n, goal);
+  if (!path || !path.length) return;
+  var nx = path[0];
+  if (canEnterNpc(n, nx.x, nx.y, true, sc)) startNpcStep(n, nx.x - n.x, nx.y - n.y, dist > 3 ? 0.12 : NPC_FAST);   // catch up when far behind
+  else n.dir = nx.x > n.x ? 'right' : nx.x < n.x ? 'left' : nx.y > n.y ? 'down' : 'up';
+}
+function npcFollow(npc, on){
+  if (!npc) return;
+  npc.follow = !!on;
+  if (!on){ npc.wait = 1; npc.home = {x:npc.x, y:npc.y}; npc.spd = 0; if (!npc.wander){ npc.wander = true; npc.leash = Math.max(npc.leash || 0, 3); } }
+}
+function npcSay(npc, text){
+  if (!npc || text == null) return;
+  npc.bubble = { text:String(text).slice(0, 140), t:3 };
+}
+
+/* nearest free walkable tile around (x,y): not occupied, not exit/doorFront/staff */
+function freeTileNear(sc, x, y, extraBlock){
+  var m = sc.map, W = m.w, seen = new Uint8Array(W * m.h), q = [x, y], head = 0;
+  if (!inb(m, x, y)) return null;
+  seen[y*W + x] = 1;
+  while (head < q.length){
+    var cx = q[head++], cy = q[head++], i = cy*W + cx;
+    var ok = m.walk[i] === 1 && !(cx === x && cy === y) && !m.exit.has(i) && !(m.doorFront && m.doorFront.has(i)) && !(m.staff && m.staff.has(i))
+      && !npcAtTile(cx, cy, sc) && !(sc === scene && playerAt(cx, cy)) && !(extraBlock && extraBlock(cx, cy));
+    if (ok) return {x:cx, y:cy};
+    for (var d = 0; d < 4; d++){
+      var dv = DIRS[DIRLIST[d]], nx = cx + dv[0], ny = cy + dv[1];
+      if (!inb(m, nx, ny)) continue;
+      var ni = ny*W + nx; if (seen[ni]) continue;
+      if (m.walk[ni] !== 1 && !(nx === x && ny === y)) { seen[ni] = 1; continue; }
+      seen[ni] = 1; q.push(nx, ny);
+    }
+  }
+  return null;
+}
+function placeNpc(sc, n, x, y){
+  n.x = n.fx = x; n.y = n.fy = y; n.moving = false; n.t = 0; n.home = {x:x, y:y};
+}
+function evictAt(sc, x, y, except){
+  for (var i = 0; i < sc.npcs.length; i++){
+    var n = sc.npcs[i];
+    if (n === except || n.hidden) continue;
+    if ((n.x === x && n.y === y) || (n.moving && n.fx === x && n.fy === y)){
+      var t = freeTileNear(sc, x, y);
+      if (t) placeNpc(sc, n, t.x, t.y);
+    }
+  }
+}
+function removeNpcFromScenes(npc){
+  allScenes().forEach(function(sc){ var i = sc.npcs.indexOf(npc); if (i >= 0) sc.npcs.splice(i, 1); });
+}
+function npcSceneOf(npc){
+  var r = null; allScenes().forEach(function(sc){ if (sc.npcs.indexOf(npc) >= 0) r = sc; }); return r;
+}
+
+/* single place that changes the active scene; followers come along */
+function setScene(sc, x, y, dir){
+  var old = scene, fol = [];
+  if (old && old !== sc) fol = old.npcs.filter(function(n){ return n.follow && !n.hidden; });
+  fol.forEach(function(n){ var i = old.npcs.indexOf(n); if (i >= 0) old.npcs.splice(i, 1); });
+  scene = sc;
+  P.x = P.fx = x; P.y = P.fy = y; P.dir = dir || P.dir; P.moving = false; P.t = 0; P.turnT = 0;
+  evictAt(sc, x, y, null);
+  fol.forEach(function(n){
+    if (n.script) finishScript(n, false);
+    var t = freeTileNear(sc, x, y) || {x:x, y:y};
+    placeNpc(sc, n, t.x, t.y);
+    n.dir = P.dir === 'up' ? 'up' : 'down';
+    sc.npcs.push(n);
+  });
+  waitRelease = held.length > 0; hudDirty = true;
+  if (booted){ callMods('onSceneEnter', [sc]); emit('scene', sc); }
+}
+
+/* ---------- dialog ---------- */
+var elSm, elDlg, elTxt, elWho, elNext, elLoc, elSeed, elMap, elMM, elCv, elScreen, elFit, elFx, elCoins, elClock, elRole, elClan, elHud, elActs, elMroot, elToasts, elApp;
+function openDialog(pages, who, npc, after){
+  if (typeof pages === 'string') pages = [pages];
+  if (!pages || !pages.length) return;
+  D = { pages:pages, i:0, shown:0, acc:0, done:false, who:who || '', npc:npc || null, after:after || null };
+  if (npc){ npc.talking = true; npc._eng = true; }
+  elDlg.classList.add('on');
+  elWho.textContent = D.who; elWho.classList.toggle('on', !!D.who);
+  elWho.setAttribute('data-hearts', (npc && D.who && !npc.noAffinity) ? hearts(npc) : '');
+  renderDialog();
+}
+function renderDialog(){
+  if (!D) return;
+  var s = D.pages[D.i], n = Math.min(D.shown, s.length);
+  elTxt.textContent = '';
+  var a = document.createElement('span'); a.textContent = s.slice(0, n);
+  var b = document.createElement('span'); b.className = 'h'; b.textContent = s.slice(n);
+  elTxt.appendChild(a); elTxt.appendChild(b);
+  var more = D.done && D.i < D.pages.length - 1;
+  elNext.classList.toggle('on', more);
+}
+function closeDialog(silent){
+  if (!D) return;
+  var d = D;
+  if (d.npc){ d.npc.talking = false; d.npc._eng = false; d.npc.wait = 1; }
+  D = null;
+  elDlg.classList.remove('on'); elWho.classList.remove('on'); elNext.classList.remove('on');
+  if (held.length) waitRelease = true;
+  if (!silent){
+    emit('dialogClose', {who:d.who, npc:d.npc});
+    if (d.after){ try { d.after(); } catch(e){ console.error('[GT] dialog callback', e); } }
+  }
+}
+function advanceDialog(){
+  if (!D) return;
+  var s = D.pages[D.i];
+  if (!D.done){ D.shown = s.length; D.done = true; renderDialog(); return; }
+  if (D.i < D.pages.length - 1){ D.i++; D.shown = 0; D.acc = 0; D.done = false; renderDialog(); }
+  else closeDialog();
+}
+function updateDialog(dt){
+  if (!D || D.done) return;
+  D.acc += dt;
+  var s = D.pages[D.i], n = Math.min(s.length, Math.floor(D.acc * CPS));
+  if (n !== D.shown){ D.shown = n; if (n >= s.length) D.done = true; renderDialog(); }
+}
+
+/* ---------- toasts ---------- */
+function toast(text){
+  if (text == null || !elToasts) return;
+  var t = el('div', 'toast', String(text).slice(0, 120));
+  elToasts.appendChild(t);
+  while (elToasts.children.length > 3) elToasts.removeChild(elToasts.firstChild);
+  setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2400);
+  emit('toast', String(text));
+}
+
+/* ---------- modal system ---------- */
+var modalSeq = 0;
+var FOCUSABLE = 'button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])';
+function setContent(node, c){
+  node.textContent = '';
+  if (c == null) return;
+  if (typeof c === 'string'){
+    c.split('\n').forEach(function(line){ node.appendChild(el('p', null, line)); });
+  } else if (c.nodeType) node.appendChild(c);
+}
+function focusables(box){
+  return Array.prototype.filter.call(box.querySelectorAll(FOCUSABLE), function(e){ return e.offsetParent !== null && !e.closest('[inert]'); });
+}
+function modal(o){
+  o = o || {};
+  var h = { id:++modalSeq, opts:o, closed:false };
+  var over = el('div', 'mover'), box = el('div', 'mbox' + (o.wide ? ' wide' : ''));
+  box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.tabIndex = -1;
+  var head = el('div', 'mhead'), title = el('h2', 'mtitle', o.title || '');
+  title.id = 'mt' + h.id; box.setAttribute('aria-labelledby', title.id);
+  head.appendChild(title);
+  if (o.closable !== false){
+    var x = el('button', 'mx', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Tutup');
+    x.addEventListener('click', function(){ h.close('x'); });
+    head.appendChild(x);
+  }
+  var body = el('div', 'mbody'), foot = el('div', 'mfoot');
+  setContent(body, o.body);
+  box.appendChild(head); box.appendChild(body); box.appendChild(foot);
+  over.appendChild(box);
+  // taps on the dimmed backdrop never close a modal by accident (unless explicitly allowed)
+  over.addEventListener('pointerdown', function(e){ if (e.target === over && o.backdropClose) h.close('backdrop'); });
+  h.el = over; h.box = box; h.body = body; h.foot = foot; h.title = title;
+  h.isOpen = function(){ return !h.closed; };
+  h.setBody = function(c){ setContent(body, c); };
+  h.setTitle = function(t){ title.textContent = t; };
+  h.btn = function(id){ return foot.querySelector('[data-id="' + id + '"]'); };
+  h.setActions = function(list){
+    foot.textContent = '';
+    (list || []).forEach(function(a){
+      var b = el('button', 'mbtn' + (a.primary ? ' primary' : ''), a.label); b.type = 'button';
+      if (a.id != null) b.setAttribute('data-id', a.id);
+      if (a.disabled) b.disabled = true;
+      b.addEventListener('click', function(ev){
+        var r;
+        if (a.onClick){ try { r = a.onClick(h, ev); } catch(e){ console.error('[GT] modal action', e); } }
+        if (!a.onClick || a.close || r === true) h.close('action');
+      });
+      foot.appendChild(b);
+    });
+  };
+  h.close = function(reason){ closeModal(h, reason || 'close'); };
+  h.setActions(o.actions);
+  modals.push(h);
+  elMroot.appendChild(over);
+  syncModalStack();
+  if (modals.length === 1 && booted){ held.length = 0; }
+  // initial focus
+  setTimeout(function(){ if (!h.closed && modals[modals.length - 1] === h) focusInto(h); }, 0);
+  focusInto(h);
+  emit('modalOpen', {id:h.id});
+  return h;
+}
+function focusInto(h){
+  var tgt = h.box.querySelector('[data-autofocus]') || h.foot.querySelector('.primary') || h.body.querySelector('button,input') || h.foot.querySelector('button') || h.box.querySelector('.mx');
+  try { (tgt || h.box).focus({preventScroll:true}); } catch(e){}
+}
+function syncModalStack(){
+  modals.forEach(function(m, i){ m.el.classList.toggle('under', i !== modals.length - 1); });
+  var any = modals.length > 0;
+  if (elApp){ if (any) elApp.setAttribute('inert', ''); else elApp.removeAttribute('inert'); }
+}
+function closeModal(h, reason){
+  if (h.closed) return;
+  h.closed = true;
+  var i = modals.indexOf(h); if (i >= 0) modals.splice(i, 1);
+  if (h.el.parentNode) h.el.parentNode.removeChild(h.el);
+  syncModalStack();
+  if (modals.length){ focusInto(modals[modals.length - 1]); }
+  else {
+    try { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); } catch(e){}
+    if (held.length) waitRelease = true;
+  }
+  if (h.opts.onClose){ try { h.opts.onClose(reason); } catch(e){ console.error('[GT] modal onClose', e); } }
+  emit('modalClose', {id:h.id, reason:reason});
+}
+function closeAllModals(){ modals.slice().reverse().forEach(function(m){ m.close('all'); }); }
+function modalKey(e){
+  var top = modals[modals.length - 1];
+  if (!top) return;
+  if (e.key === 'Escape' || e.code === 'Escape'){
+    if (top.opts.onKey){ try { if (top.opts.onKey(e) === true){ e.preventDefault(); return; } } catch(err){ console.error(err); } }
+    if (top.opts.closable !== false){ e.preventDefault(); top.close('esc'); }
+    return;
+  }
+  if (e.key === 'Tab'){
+    var f = focusables(top.box);
+    if (!f.length){ e.preventDefault(); top.box.focus(); return; }
+    var first = f[0], last = f[f.length - 1], act = document.activeElement;
+    if (!top.box.contains(act)){ e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && (act === first || act === top.box)){ e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && act === last){ e.preventDefault(); first.focus(); }
+    return;
+  }
+  if (top.opts.onKey){
+    try { if (top.opts.onKey(e) === true){ e.preventDefault(); e.stopPropagation(); return; } } catch(err){ console.error(err); }
+  }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && document.activeElement && document.activeElement.classList.contains('mopt')){
+    var opts = Array.prototype.slice.call(top.box.querySelectorAll('.mopt')), k = opts.indexOf(document.activeElement);
+    if (k >= 0){ e.preventDefault(); opts[(k + (e.key === 'ArrowDown' ? 1 : opts.length - 1)) % opts.length].focus(); }
+  }
+}
+function menu(title, options){
+  options = options || [];
+  var list = el('div', 'mlist'), h;
+  options.forEach(function(o, i){
+    var b = el('button', 'mbtn mopt', (i < 9 ? (i + 1) + '. ' : '') + o.label); b.type = 'button';
+    if (o.disabled) b.disabled = true;
+    b.addEventListener('click', function(){ h.close('pick'); if (o.onPick){ try { o.onPick(); } catch(e){ console.error('[GT] menu pick', e); } } });
+    list.appendChild(b);
+  });
+  h = modal({ title:title, body:list, onKey:function(e){
+    if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey){
+      var idx = +e.key - 1, btn = list.children[idx];
+      if (btn && !btn.disabled){ btn.click(); return true; }
+    }
+    return false;
+  }});
+  var first = list.querySelector('button:not([disabled])'); if (first) first.setAttribute('data-autofocus', '');
+  focusInto(h);
+  return h;
+}
+function isUiOpen(){ return !!D || modals.length > 0 || mapOpen || !!tr; }
+
+/* ---------- icons ---------- */
+function iconEl(id, size){
+  size = Math.max(8, Math.floor((size || 16) / 8) * 8);
+  var c = document.createElement('canvas'); c.width = c.height = size; c.style.width = c.style.height = size + 'px';
+  c.setAttribute('aria-hidden', 'true');
+  var g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  try {
+    if (SPRITES.drawIcon) SPRITES.drawIcon(g, id, 0, 0, size);
+    else throw new Error('no icons');
+  } catch(e){
+    g.fillStyle = '#6b6e8f'; g.fillRect(1, 1, size - 2, size - 2);
+    g.fillStyle = '#fff'; g.font = (size - 4) + 'px monospace'; g.textBaseline = 'top'; g.fillText(String(id).charAt(0).toUpperCase(), 3, 1);
+  }
+  return c;
+}
+function itemName(id){ return (ITEMS[id] && ITEMS[id].name) || id; }
+
+/* ---------- Tas (inventory) / Profil / Peran / Toko / konfirmasi ---------- */
+function openBag(){
+  if (modals.length || tr) return null;
+  var h = modal({ title:'Tas', backdropClose:true, actions:[{label:'Tutup', primary:true}] });
+  function render(){
+    var wrap = el('div');
+    var money = el('div', 'mmoney', 'Koin: ' + state.coins); wrap.appendChild(money);
+    var ids = Object.keys(state.inventory).filter(function(k){ return state.inventory[k] > 0; });
+    if (!ids.length) wrap.appendChild(el('p', 'mnote', 'Tasmu kosong. Beli sesuatu di Mart!'));
+    ids.forEach(function(id){
+      var row = el('div', 'mrow');
+      row.appendChild(iconEl((ITEMS[id] && ITEMS[id].icon) || id, 16));
+      row.appendChild(el('span', 'grow', itemName(id)));
+      row.appendChild(el('span', 'num', 'x' + state.inventory[id]));
+      var use = el('button', 'mbtn', CONSUMABLE[id] ? 'Makan' : 'Pakai'); use.type = 'button';
+      use.addEventListener('click', function(){ useItem(id); render(); });
+      var give = el('button', 'mbtn', 'Beri'); give.type = 'button';
+      give.addEventListener('click', function(){
+        var handled = false;
+        try { if (typeof GT.giveHandler === 'function') handled = GT.giveHandler(id) === true; } catch(e){ console.error(e); }
+        emit('giveRequest', {item:id});
+        if (!handled) toast('Beri ' + itemName(id) + ': pakai menu Sosial atau bicara dengan NPC.');
+      });
+      row.appendChild(use); row.appendChild(give);
+      wrap.appendChild(row);
+    });
+    h.setBody(wrap);
+  }
+  render();
+  var offInv = on('inventory', function(){ if (h.isOpen()) render(); });
+  var offCoin = on('coins', function(){ if (h.isOpen()) render(); });
+  h.opts.onClose = function(){ offInv(); offCoin(); };
+  return h;
+}
+function useItem(id){
+  var def = ITEMS[id] || {};
+  if (typeof def.use === 'function'){
+    var ok = false, keep = false; try { var ur = def.use(GT); ok = ur === true; keep = ur === 'keep'; } catch(e){ console.error(e); }
+    if (keep) return;   // 'keep': handled (toast shown) but the item is not consumed
+    if (ok){ removeItem(id, 1); return; }
+  }
+  if (CONSUMABLE[id] && removeItem(id, 1)){ toast(CONSUMABLE[id]); return; }
+  toast(itemName(id) + ' belum bisa dipakai sekarang.');
+}
+function roleLabel(r){ return r === 'maling' ? 'MALING' : 'WARGA'; }
+function openProfile(){
+  if (modals.length || tr) return null;
+  var wrap = el('div');
+  var f1 = el('label', 'mfield'); f1.appendChild(el('span', null, 'Nama'));
+  var inp = el('input'); inp.type = 'text'; inp.maxLength = 16; inp.value = state.playerName; inp.autocomplete = 'off'; inp.setAttribute('data-autofocus', ''); inp.id = 'profname';
+  f1.appendChild(inp); wrap.appendChild(f1);
+  var f2 = el('div', 'mfield'); f2.appendChild(el('span', null, 'Peran'));
+  var seg = el('div', 'mseg'); seg.setAttribute('role', 'radiogroup');
+  [['warga', 'Warga'], ['maling', 'Maling']].forEach(function(r){
+    var lab = el('label'), rb = el('input'); rb.type = 'radio'; rb.name = 'perans'; rb.value = r[0]; rb.checked = state.role === r[0];
+    lab.appendChild(rb); lab.appendChild(el('span', null, r[1])); seg.appendChild(lab);
+  });
+  f2.appendChild(seg); wrap.appendChild(f2);
+  wrap.appendChild(el('p', 'mnote', 'Maling bisa membongkar kunci rumah (butuh obeng), tapi berisiko ketahuan dan reputasi turun.'));
+  wrap.appendChild(el('p', null, 'Reputasi: ' + state.reputation));
+  wrap.appendChild(el('p', null, 'Klan: ' + (state.clan ? '[' + state.clan.tag + '] ' + state.clan.name : '-')));
+  wrap.appendChild(el('p', null, 'Koin: ' + state.coins));
+  var h = modal({ title:'Profil', body:wrap, backdropClose:false, actions:[
+    {label:'Batal'},
+    {label:'Simpan', primary:true, onClick:function(m){
+      var nm = (inp.value || '').trim().slice(0, 16) || 'Kamu';
+      state.playerName = nm;
+      var sel = seg.querySelector('input:checked'); if (sel) setRole(sel.value);
+      save(); hudDirty = true; toast('Profil disimpan.'); m.close('save');
+    }}
+  ]});
+  inp.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); h.btn && h.foot.querySelector('.primary').click(); } });
+  return h;
+}
+function openRoleChoice(){
+  var wrap = el('div');
+  wrap.appendChild(el('p', null, 'Selamat datang di Genesis Town! Pilih perananmu. Kamu bisa mengubahnya nanti di menu Profil.'));
+  var b1 = el('button', 'choice'); b1.type = 'button'; b1.setAttribute('data-autofocus', '');
+  b1.appendChild(el('b', null, 'Warga')); b1.appendChild(document.createTextNode('Hidup normal: belanja, mengobrol, bermain.'));
+  var b2 = el('button', 'choice'); b2.type = 'button';
+  b2.appendChild(el('b', null, 'Maling')); b2.appendChild(document.createTextNode('Bisa membongkar kunci rumah, tapi reputasi berisiko.'));
+  wrap.appendChild(b1); wrap.appendChild(b2);
+  var h = modal({ title:'Pilih peran', body:wrap, closable:false });
+  function pick(r){ setRole(r); state.onboarded = true; save(); h.close('pick'); toast('Peran: ' + roleLabel(r).toLowerCase() + '.'); }
+  b1.addEventListener('click', function(){ pick('warga'); });
+  b2.addEventListener('click', function(){ pick('maling'); });
+  onboardModal = h;
+  return h;
+}
+var onboardModal = null;
+function skipOnboarding(){
+  state.onboarded = true; save();
+  if (onboardModal && onboardModal.isOpen()) onboardModal.close('skip');
+  onboardModal = null;
+}
+function shopItems(){
+  var ids = SHOP_CORE.slice();
+  Object.keys(ITEMS).forEach(function(k){ if (ITEMS[k] && ITEMS[k].shop && ids.indexOf(k) < 0) ids.push(k); });
+  return ids.filter(function(k){ return ITEMS[k] && ITEMS[k].price > 0; });
+}
+function openShop(keeper){
+  if (modals.length) return null;
+  var h = modal({ title:'Mart Genesis', backdropClose:false, actions:[{label:'Selesai', primary:true}] });
+  function render(){
+    var wrap = el('div');
+    wrap.appendChild(el('div', 'mmoney', 'Koin: ' + state.coins));
+    shopItems().forEach(function(id){
+      var it = ITEMS[id], row = el('div', 'mrow');
+      row.appendChild(iconEl(it.icon || id, 16));
+      var g = el('span', 'grow', it.name); row.appendChild(g);
+      row.appendChild(el('span', 'num', it.price + ' koin'));
+      var b = el('button', 'mbtn', 'Beli'); b.type = 'button'; b.setAttribute('data-id', 'buy-' + id);
+      b.disabled = state.coins < it.price;
+      b.addEventListener('click', function(){
+        if (!spendCoins(it.price)){ toast('Koin tidak cukup.'); return; }
+        addItem(id, 1);
+        if (keeper) addAffinity(keeper, 1);
+        toast('Membeli ' + it.name + '.');
+        render();
+      });
+      row.appendChild(b); wrap.appendChild(row);
+    });
+    var have = Object.keys(state.inventory).filter(function(k){ return state.inventory[k] > 0; }).map(function(k){ return itemName(k) + ' x' + state.inventory[k]; });
+    wrap.appendChild(el('p', 'mnote', 'Tasmu: ' + (have.length ? have.join(', ') : 'kosong')));
+    var sc = h.body.scrollTop;
+    h.setBody(wrap); h.body.scrollTop = sc;
+    // keep keyboard focus on a sensible button after re-render
+    if (h.box.contains(document.activeElement) === false) focusInto(h);
+  }
+  render();
+  var offInv = on('inventory', function(){ if (h.isOpen()) render(); });
+  var offCoin = on('coins', function(){ if (h.isOpen()) render(); });
+  h.opts.onClose = function(){ offInv(); offCoin(); };
+  return h;
+}
+function confirmRegen(){
+  if (QA){ doRegen(); return; }
+  if (modals.length || tr) return;
+  modal({ title:'Generasi ulang?', body:'Kota baru akan dibuat dengan seed baru. Koin dan isi tasmu tetap dibawa.', actions:[
+    {label:'Batal'},
+    {label:'Ya, buat baru', primary:true, onClick:function(m){ m.close('ok'); doRegen(); }}
+  ]});
+}
+function doRegen(){
+  held.length = 0;
+  var ns = randomSeed();
+  transition(function(){ regen(ns); });
+}
+
+/* ---------- HUD buttons / hotkeys ---------- */
+var hudButtons = [];   // secondary buttons shown in the "Menu" list on narrow screens
+var hotkeys = {};      // code -> fn
+function hotkey(key, fn){
+  var code = /^[A-Za-z]$/.test(key) ? 'Key' + key.toUpperCase() : key;
+  hotkeys[code] = fn;
+}
+function addHudButton(o){
+  if (!o || !o.label) return null;
+  var b = el('button', 'btn' + (o.secondary === false ? '' : ' sec'), o.label); b.type = 'button';
+  if (o.id) b.id = o.id;
+  b.addEventListener('click', function(e){ e.currentTarget.blur(); if (!isUiOpen() && o.onClick) o.onClick(); });
+  elActs.insertBefore(b, document.getElementById('menubtn'));
+  if (o.key) hotkey(o.key, function(){ if (o.onClick) o.onClick(); });
+  hudButtons.push({label:o.label, key:o.key, onClick:o.onClick, secondary:o.secondary !== false});
+  return b;
+}
+function openMenu(){
+  if (isUiOpen()) return;
+  var opts = [{label:'Profil (P)', onPick:openProfile}];
+  hudButtons.forEach(function(hb){ if (hb.secondary) opts.push({label:hb.label + (hb.key ? ' (' + hb.key + ')' : ''), onPick:function(){ if (hb.onClick) hb.onClick(); }}); });
+  opts.push({label:'Peta (M)', onPick:function(){ setMap(true); }});
+  menu('Menu', opts);
+}
+
+/* ---------- Dev panel ---------- */
+var devSections = [], devModal = null;
+function addDevSection(title, build){
+  if (typeof build !== 'function') return;
+  var rec = {title:String(title == null ? '' : title).slice(0, 40), build:build};
+  devSections.push(rec);
+  if (devModal && devModal.isOpen() && devModal._wrap) renderDevSection(devModal._wrap, rec);
+}
+function renderDevSection(wrap, rec){
+  var sec = el('div', 'dsec');
+  if (rec.title) sec.appendChild(el('h3', null, rec.title));
+  wrap.appendChild(sec);
+  try { rec.build(sec); } catch(e){ console.error('[GT] dev section "' + rec.title + '"', e); }
+}
+function fmtMin(v){ return (Math.round(v * 10) / 10).toString().replace('.', ','); }
+function openDev(){
+  if (devModal && devModal.isOpen()) return devModal;
+  if (modals.length || tr || D || mapOpen) return null;
+  var wrap = el('div');
+  // 1. day length
+  var s1 = el('div', 'dsec'); s1.appendChild(el('h3', null, 'Panjang 1 hari (menit nyata)'));
+  var num = el('input'); num.type = 'number'; num.min = 1; num.max = 60; num.step = 1; num.id = 'dev-daylen'; num.setAttribute('aria-label', 'Panjang 1 hari dalam menit');
+  var rng = el('input'); rng.type = 'range'; rng.min = 1; rng.max = 60; rng.step = 1; rng.id = 'dev-dayrange'; rng.setAttribute('aria-label', 'Panjang 1 hari (slider)');
+  var info = el('p', 'mnote'); info.id = 'dev-dayinfo';
+  function syncDay(from){
+    if (from !== num) num.value = String(Math.round(dayLength * 10) / 10);
+    if (from !== rng) rng.value = String(Math.round(dayLength));
+    info.textContent = 'Siang \u2248 ' + fmtMin(dayLength * 13 / 24) + ' menit, malam \u2248 ' + fmtMin(dayLength * 11 / 24) + ' menit';
+  }
+  function setLen(v, from){ if (!isFinite(v) || v < 1) return; setDayLength(v); syncDay(from); }
+  num.addEventListener('input', function(){ var v = parseFloat(num.value); if (isFinite(v)) setLen(Math.min(60, v), num); });
+  num.addEventListener('change', function(){ syncDay(null); });
+  rng.addEventListener('input', function(){ setLen(+rng.value, rng); });
+  var r1 = el('div', 'mrow'); r1.appendChild(num); r1.appendChild(el('span', 'grow', 'menit = 1 hari (1-60)'));
+  s1.appendChild(r1); s1.appendChild(rng); s1.appendChild(info);
+  wrap.appendChild(s1);
+  syncDay(null);
+  // 2. time
+  var s2 = el('div', 'dsec'); s2.appendChild(el('h3', null, 'Waktu'));
+  var now = el('p', null); now.id = 'dev-now'; s2.appendChild(now);
+  var bt = el('div', 'dbtns');
+  [['Pagi 07:00', 7, 'pagi'], ['Siang 12:00', 12, 'siang'], ['Senja 18:00', 18, 'senja'], ['Malam 22:00', 22, 'malam']].forEach(function(p){
+    var b = el('button', 'mbtn', p[0]); b.type = 'button'; b.id = 'dev-t-' + p[2];
+    b.addEventListener('click', function(){ setTime(p[1], 0); refresh(); });
+    bt.appendChild(b);
+  });
+  var pb = el('button', 'mbtn', ''); pb.type = 'button'; pb.id = 'dev-pause';
+  pb.addEventListener('click', function(){ pauseTime(!timePaused); refresh(); });
+  bt.appendChild(pb);
+  s2.appendChild(bt);
+  wrap.appendChild(s2);
+  // 3. developer mode
+  var s3 = el('div', 'dsec'); s3.appendChild(el('h3', null, 'Mode developer'));
+  var lab = el('label', 'dchk'), cb = el('input'); cb.type = 'checkbox'; cb.id = 'dev-mode'; cb.checked = devEnabled;
+  cb.addEventListener('change', function(){ GT.dev.enabled = cb.checked; });
+  var tx = el('span'); tx.appendChild(document.createTextNode('Mode developer '));
+  tx.appendChild(el('span', 'mnote', '- Izinkan perintah `#` di chat NPC (mis. `#ikut aku`).'));
+  lab.appendChild(cb); lab.appendChild(tx); s3.appendChild(lab);
+  wrap.appendChild(s3);
+  function refresh(){
+    var ci = clockInfo();
+    now.textContent = 'Sekarang ' + ci.hhmm + ' (hari ' + ci.day + ', ' + (ci.night ? 'malam' : ci.light < 0.98 ? 'senja/fajar' : 'siang') + ')' + (timePaused ? ' - waktu berhenti' : '');
+    pb.textContent = timePaused ? 'Lanjut waktu' : 'Pause waktu';
+    if (cb.checked !== devEnabled) cb.checked = devEnabled;
+  }
+  refresh();
+  devSections.forEach(function(rec){ renderDevSection(wrap, rec); });
+  var timer = setInterval(function(){ if (devModal && devModal.isOpen()) refresh(); }, 400);
+  var h = modal({ title:'Panel Developer', body:wrap, backdropClose:false, actions:[{label:'Tutup', primary:true}], onClose:function(){ clearInterval(timer); if (devModal === h) devModal = null; } });
+  h._wrap = wrap; devModal = h;
+  return h;
+}
+function devKey(e){
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  var t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return false;
+  if (e.repeat) return false;
+  if (devModal && devModal.isOpen()){
+    if (modals[modals.length - 1] === devModal){ e.preventDefault(); devModal.close('key'); return true; }
+    return false;
+  }
+  if (modals.length || D || tr || mapOpen) return false;
+  e.preventDefault(); openDev(); return true;
+}
+
+/* ---------- map overlay ---------- */
+function setMap(on){
+  mapOpen = !!on;
+  elMap.classList.toggle('on', mapOpen);
+  if (mapOpen) drawMinimap();
+}
+function drawMinimap(){
+  var g = elMM.getContext('2d'); g.imageSmoothingEnabled = false;
+  var C = 12;
+  g.fillStyle = '#1a1b2e'; g.fillRect(0, 0, 120, 120);
+  var homeB = world.own;
+  var friendSet = new Set(); world.houses.forEach(function(h){ if (h.invited && !h.own) friendSet.add(h.bx + ',' + h.by); });
+  for (var by = 0; by < NB; by++) for (var bx = 0; bx < NB; bx++){
+    var t = world.blockTypes[by*NB + bx], col;
+    if (t === 'park') col = '#3f8f4a'; else if (t === 'mart') col = '#4a82e0'; else if (t === 'casino') col = '#c452e0';
+    else if (bx === homeB.bx && by === homeB.by) col = '#f2c94c';
+    else if (friendSet.has(bx + ',' + by)) col = '#7fd18a';
+    else col = '#d98c5f';
+    g.fillStyle = col; g.fillRect(bx*C + 1, by*C + 1, C - 2, C - 2);
+  }
+  if (world.lamps && clockInfo().night){ g.fillStyle = '#ffe066'; world.lamps.forEach(function(l){ g.fillRect(l.x * 2, l.y * 2, 2, 2); }); }
+  var px, py;
+  if (scene.kind === 'out'){ px = (P.x + 0.5) / BS; py = (P.y + 0.5) / BS; }
+  else { px = scene.house.bx + 0.5; py = scene.house.by + 0.5; }
+  var blink = REDUCE ? true : Math.floor(timeAcc * 3) % 2 === 0;
+  g.fillStyle = '#000'; g.fillRect(Math.round(px*C) - 3, Math.round(py*C) - 3, 6, 6);
+  g.fillStyle = blink ? '#ff3b3b' : '#ffffff'; g.fillRect(Math.round(px*C) - 2, Math.round(py*C) - 2, 4, 4);
+}
+
+/* ---------- transitions ---------- */
+function transition(fn){
+  if (REDUCE){ fn(); return; }
+  tr = { ph:0, t:0, fn:fn };
+}
+function updateTransition(dt){
+  tr.t += dt / 0.16;
+  if (tr.t >= 1){
+    if (tr.ph === 0){ var f = tr.fn; tr.ph = 1; tr.t = 0; f(); }
+    else tr = null;
+  }
+}
+
+/* ---------- mods ---------- */
+var mods = [];
+function register(mod){
+  if (!mod || typeof mod !== 'object') return;
+  mods.push(mod);
+  if (booted){
+    callOne(mod, 'init', [GT]);
+    if (world) callOne(mod, 'onWorld', [world]);
+    if (scene) callOne(mod, 'onSceneEnter', [scene]);
+  }
+}
+function callOne(mod, hook, args){
+  if (typeof mod[hook] !== 'function') return undefined;
+  try { return mod[hook].apply(mod, args); } catch(e){ console.error('[GT mod ' + (mod.id || '?') + '] ' + hook + ' failed', e); return undefined; }
+}
+function callMods(hook, args){ for (var i = 0; i < mods.length; i++) callOne(mods[i], hook, args); }
+function callModsBool(hook, args){
+  for (var i = 0; i < mods.length; i++) if (callOne(mods[i], hook, args) === true) return true;
+  return false;
+}
+
+/* ---------- interaction ---------- */
+function doorBump(door, ctxIn){
+  if (door.kind === 'mart' || door.kind === 'casino' || door.invited){
+    transition(function(){ enterBuilding(door); });
+  } else {
+    if (!ctxIn){
+      var m = scene.map;
+      var c = { mode:'bump', scene:scene, tile:{x:door.dx, y:door.dy}, tileType:'door', npc:null, door:door, building:door, locked:true };
+      if (callModsBool('onInteract', [c])) return;
+    }
+    openDialog('Rumah ' + door.owner + ' terkunci. Kamu belum diundang.', '');
+  }
+}
+function enterBuilding(door){
+  var sc = houseScene(door);
+  sc.returnTo = {x:door.dx, y:door.dy + 1};
+  setScene(sc, sc.map.entry.x, sc.map.entry.y, 'up');
+}
+function leaveBuilding(){
+  transition(function(){
+    var sc = scene, back = sc.returnTo || world.spawn;
+    setScene(outScene, back.x, back.y, 'down');
+  });
+}
+
+function facingTile(){ var d = DIRS[P.dir]; return {x:P.x + d[0], y:P.y + d[1]}; }
+function engage(npc){
+  var f = facingTile();
+  if (npc.moving){ if (npc.x === f.x && npc.y === f.y){ npc.fx = npc.x; npc.fy = npc.y; } else { npc.x = npc.fx; npc.y = npc.fy; } npc.moving = false; npc.t = 0; }
+  npc.talking = true; npc._eng = true; npc.dir = OPP[P.dir];
+}
+function keeperOf(sc){ var r = null; sc.npcs.forEach(function(n){ if (n.key && /:keeper$/.test(n.key)) r = n; }); return r; }
+
+function interact(mode){
+  mode = mode || 'talk';
+  if (tr || modals.length) return;
+  if (mapOpen){ setMap(false); return; }
+  if (D){ advanceDialog(); return; }
+  if (P.moving) return;
+  var m = scene.map, f = facingTile();
+  if (!inb(m, f.x, f.y)) return;
+  var idx = f.y*m.w + f.x, tt = m.tiles[idx];
+  var npc = npcAtTile(f.x, f.y);
+  if (!npc && tt === 'counter' && scene.kind === 'mart') npc = keeperOf(scene);
+  if (!npc && tt === 'dice_table' && scene.kind === 'casino'){ var dl = scene.npcs.filter(function(n){ return n.key === 'casino:dealer' && !n.hidden && !n.moving && Math.abs(n.x - f.x) <= 1 && n.y === f.y - 1; })[0]; npc = dl || null; }
+  var door = m.door.get(idx) || null;
+  var bld = door || m.bld.get(idx) || scene.house || null;
+  var ctx = { mode:mode, scene:scene, tile:{x:f.x, y:f.y}, tileType:door ? 'door' : tt, npc:npc, door:door, building:bld,
+    locked:!!(door && !(door.kind === 'mart' || door.kind === 'casino' || door.invited)) };
+  if (npc) engage(npc);
+  if (callModsBool('onInteract', [ctx])) return;
+  if (mode === 'message'){
+    if (npc) openDialog('(' + npc.name + ' belum punya jiwa. Pasang di menu Jiwa.)', '', npc);
+    else toast('Hadapi seseorang lalu tekan E untuk kirim pesan.');
+    return;
+  }
+  if (npc){
+    var lines = npc.lines[Math.floor(Math.random() * npc.lines.length)];
+    if (timeAcc - npc.lastTalk >= 60){ npc.lastTalk = timeAcc; addAffinity(npc, 1); }
+    var after = null;
+    if (scene.kind === 'mart' && /:keeper$/.test(npc.key || '')) after = function(){ if (!QA) openShop(npc); };
+    openDialog(lines.slice(), npc.name, npc, after);
+    return;
+  }
+  if (door){ doorBump(door, ctx); return; }
+  if (m.info.has(idx)){ openDialog(m.info.get(idx), ''); return; }
+  if (tt === 'chest'){ openDialog('Peti kayu. Tertutup rapat dan tidak bisa dibuka sekarang.', ''); return; }
+  if (scene.kind === 'casino' && (tt === 'card_table' || tt === 'dice_table' || tt === 'slot')){
+    openDialog('Meja belum dibuka. (Modul kasino belum terpasang.)', ''); return;
+  }
+  if (m.bld.has(idx)){
+    var b = m.bld.get(idx);
+    var txt = b.kind === 'mart' ? 'Mart Genesis. Pintunya ada di tengah bawah.' : b.kind === 'casino' ? 'Kasino Genesis. Koin permainan saja! Pintunya ada di tengah bawah.' : (b.own ? 'Ini rumahmu. Masuk lewat pintu di tengah.' : 'Rumah ' + b.owner + '.');
+    openDialog(txt, '');
+  }
+}
+
+/* ---------- update ---------- */
+function canControl(){ return !D && !tr && !mapOpen && !modals.length; }
+function desired(){ return held.length ? held[held.length - 1].d : null; }
+
+function tryMove(d){
+  var m = scene.map, dv = DIRS[d], nx = P.x + dv[0], ny = P.y + dv[1];
+  P.dir = d;
+  if (!inb(m, nx, ny)) return false;
+  var idx = ny*m.w + nx;
+  if (m.door.has(idx)){ doorBump(m.door.get(idx)); return false; }
+  if (m.exit.has(idx)){ leaveBuilding(); return false; }
+  var fo = npcAtTile(nx, ny);
+  if (fo && fo.follow && !fo.moving && !fo.script && !fo.hidden && nx === fo.x && ny === fo.y && !P.moving && m.walk[idx] === 1 && !(m.staff && m.staff.has(idx))){
+    // swap with own follower: it steps into the player's tile (tween), no overlap at any frame
+    var ox = P.x, oy = P.y;
+    P.fx = P.x; P.fy = P.y; P.x = nx; P.y = ny; P.moving = true; P.t = 0; P.flip = !P.flip;
+    fo.dir = OPP[d]; fo.fx = fo.x; fo.fy = fo.y; fo.x = ox; fo.y = oy; fo.moving = true; fo.t = 0; fo.flip = !fo.flip; fo.spd = 0;
+    return true;
+  }
+  if (!canEnterPlayer(nx, ny)) return false;
+  P.fx = P.x; P.fy = P.y; P.x = nx; P.y = ny; P.moving = true; P.t = 0; P.flip = !P.flip;
+  return true;
+}
+
+function updatePlayer(dt){
+  var chained = false;
+  if (P.moving){
+    P.t += dt / MOVE_T;
+    if (P.t < 1) return;
+    P.moving = false; chained = true;
+    var carry = (P.t - 1) * MOVE_T; P.t = 0;
+    hudDirty = true;
+    if (!canControl()) return;
+    dt = carry;
+  }
+  if (!canControl()) return;
+  var d = desired();
+  if (waitRelease){ if (!d) waitRelease = false; else return; }
+  if (!d){ P.turnT = 0; return; }
+  if (P.dir !== d){ P.dir = d; P.turnT = chained ? 0 : TURN_T; }
+  if (P.turnT > 0){ P.turnT -= dt; if (P.turnT > 0) return; }
+  if (tryMove(d) && dt > 0){ P.t = Math.min(0.9, dt / MOVE_T); }
+}
+
+function updateNpcs(sc, dt, isCur){
+  var arr = sc.npcs.slice();
+  for (var i = 0; i < arr.length; i++){
+    var n = arr[i];
+    if (n.bubble){ n.bubble.t -= dt; if (n.bubble.t <= 0) n.bubble = null; }
+    if (!isCur && !n.script) continue;
+    if (n.moving){
+      n.t += dt / (n.spd || NPC_T);
+      if (n.t >= 1){ n.moving = false; n.t = 0; if (!(n.script || n.follow)) continue; } else continue;
+    }
+    if (n.hidden) continue;
+    if (n.talking){
+      if (n._eng && !(D && D.npc === n) && !modals.length){ n.talking = false; n._eng = false; n.wait = Math.max(n.wait, 1); }
+      else continue;
+    }
+    if (n.script){ stepScript(sc, n, dt); continue; }
+    if (n.follow){ if (isCur) stepFollow(sc, n, dt); continue; }
+    n.wait -= dt;
+    if (n.wait > 0) continue;
+    n.wait = 0.7 + Math.random() * 2.3;
+    if (n.turns && !n.wander){ n.dir = pickRand(DIRLIST); continue; }
+    if (!n.wander) continue;
+    var d = pickRand(DIRLIST), dv = DIRS[d];
+    n.dir = d;
+    var nx = n.x + dv[0], ny = n.y + dv[1];
+    if (Math.abs(nx - n.home.x) + Math.abs(ny - n.home.y) > n.leash) continue;
+    if (!canEnterNpc(n, nx, ny, false, sc)) continue;
+    n.fx = n.x; n.fy = n.y; n.x = nx; n.y = ny; n.moving = true; n.t = 0; n.flip = !n.flip; n.spd = 0;
+  }
+}
+
+function update(dt){
+  timeAcc += dt;
+  if (!timePaused) gameMin += dt * 24 / dayLength;
+  checkClock();
+  callMods('onFrame', [dt]);
+  if (tr) updateTransition(dt);
+  if (mapOpen){ drawMinimap(); return; }
+  updateDialog(dt);
+  updatePlayer(dt);
+  if (!tr || tr.ph === 1){
+    updateNpcs(scene, dt, true);
+    allScenes().forEach(function(sc){ if (sc !== scene) updateNpcs(sc, dt, false); });
+  }
+}
+
+/* ---------- render ---------- */
+var ctx;
+var camX = 0, camY = 0;
+function lerpPos(o){
+  var t = o.moving ? Math.min(1, o.t) : 1;
+  var a = o.moving ? o.fx : o.x, b = o.x, c = o.moving ? o.fy : o.y, e = o.y;
+  return { px:Math.round((a + (b - a) * t) * T), py:Math.round((c + (e - c) * t) * T) };
+}
+function charStep(o){
+  if (!o.moving) return 0;
+  return o.flip ? 1 : 2;
+}
+function render(){
+  var m = scene.map, mw = m.w * T, mh = m.h * T;
+  ctx.fillStyle = '#0b0c14'; ctx.fillRect(0, 0, VW, VH);
+  var pp = lerpPos(P);
+  if (mw <= VW) camX = -Math.floor((VW - mw) / 2); else camX = Math.max(0, Math.min(mw - VW, pp.px + 6 - Math.floor(VW / 2)));
+  if (mh <= VH) camY = -Math.floor((VH - mh) / 2); else camY = Math.max(0, Math.min(mh - VH, pp.py + 6 - Math.floor(VH / 2)));
+  // static layer
+  var sx = Math.max(0, camX), sy = Math.max(0, camY);
+  var ex = Math.min(mw, camX + VW), ey = Math.min(mh, camY + VH);
+  if (ex > sx && ey > sy) ctx.drawImage(m.cache, sx, sy, ex - sx, ey - sy, sx - camX, sy - camY, ex - sx, ey - sy);
+  // animated tiles
+  var frame = Math.floor(timeAcc * 2.5);
+  var tx0 = Math.max(0, Math.floor(camX / T)), ty0 = Math.max(0, Math.floor(camY / T));
+  var tx1 = Math.min(m.w - 1, Math.floor((camX + VW - 1) / T)), ty1 = Math.min(m.h - 1, Math.floor((camY + VH - 1) / T));
+  for (var y = ty0; y <= ty1; y++) for (var x = tx0; x <= tx1; x++){
+    var tt = m.tiles[y*m.w + x];
+    if (ANIMATED[tt]) SPRITES.drawTile(ctx, tt, x*T - camX, y*T - camY, frame);
+  }
+  // entities sorted by y
+  var ents = [];
+  scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n}); });
+  ents.push({py:pp.py, px:pp.px, n:null});
+  ents.sort(function(a, b){ return a.py - b.py; });
+  for (var i = 0; i < ents.length; i++){
+    var e = ents[i];
+    // GT.charDraw(ctx, npcOrNull(player), x, y, pal, dir, step) -> true when a mod (combat.js) drew the character itself
+    var chd = GT.charDraw, hand = false;
+    if (typeof chd === 'function'){ try { hand = chd(ctx, e.n, e.px - camX, e.py - camY, e.n ? e.n.pal : 0, e.n ? e.n.dir : P.dir, charStep(e.n || P)) === true; } catch(err){ hand = false; } }
+    if (hand) continue;
+    if (e.n) drawChar(ctx, e.px - camX, e.py - camY, e.n.pal, e.n.dir, charStep(e.n));
+    else drawChar(ctx, e.px - camX, e.py - camY, 0, P.dir, charStep(P));
+  }
+  if (scene.kind === 'out') drawNight();
+  else lastDark = 0;
+  callMods('onDraw', [ctx, camX, camY, T]);
+  if (tr){
+    var a = tr.ph === 0 ? tr.t : 1 - tr.t;
+    ctx.fillStyle = 'rgba(0,0,0,' + Math.max(0, Math.min(1, a)).toFixed(3) + ')';
+    ctx.fillRect(0, 0, VW, VH);
+  }
+  renderFx(ents);
+}
+
+/* ---------- night lighting ----------
+   Darkness is rendered into an offscreen canvas at logical resolution (deep-blue fill), each visible lamp punches a radial hole
+   (destination-out), then it is composited over the world + characters; a faint warm glow is added around lamps. Outdoor only. */
+var nightCv = null, nightCtx = null, darkOverride = null, lastDark = 0, LAMP_R = 3.3;
+function currentDark(){ return darkOverride != null ? darkOverride : 1 - lightAt(gameMin % 1440); }
+function drawNight(){
+  var d = currentDark();
+  lastDark = d;
+  if (!(d > 0.01)) return;
+  if (!nightCv || nightCv.width !== VW || nightCv.height !== VH){
+    nightCv = document.createElement('canvas'); nightCv.width = VW; nightCv.height = VH; nightCtx = nightCv.getContext('2d');
+  }
+  var g = nightCtx, t = Math.min(1, d), k = sstep((t - 0.2) / 0.8);
+  var cr = Math.round(104 + (8 - 104) * k), cg = Math.round(46 + (14 - 46) * k), cb = Math.round(84 + (52 - 84) * k);
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, VW, VH);
+  g.fillStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (0.84 * t).toFixed(3) + ')';
+  g.fillRect(0, 0, VW, VH);
+  var L = world.lamps || [], vis = [], i;
+  for (i = 0; i < L.length; i++){
+    var fl = REDUCE ? 1 : 1 + 0.03 * Math.sin(timeAcc * 8 + i * 2.3) + 0.02 * Math.sin(timeAcc * 21 + i * 5.1);
+    var r = LAMP_R * T * fl, cx = L[i].x * T + T / 2 - camX, cy = L[i].y * T + 3 - camY;
+    if (cx + r < 0 || cy + r < 0 || cx - r > VW || cy - r > VH) continue;
+    vis.push(cx, cy, r);
+  }
+  g.globalCompositeOperation = 'destination-out';
+  for (i = 0; i < vis.length; i += 3){
+    var gr = g.createRadialGradient(vis[i], vis[i+1], 1, vis[i], vis[i+1], vis[i+2]);
+    gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.35, 'rgba(0,0,0,0.93)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.62)'); gr.addColorStop(0.85, 'rgba(0,0,0,0.2)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(vis[i] - vis[i+2], vis[i+1] - vis[i+2], vis[i+2] * 2, vis[i+2] * 2);
+  }
+  g.globalCompositeOperation = 'source-over';
+  ctx.drawImage(nightCv, 0, 0);
+  for (i = 0; i < vis.length; i += 3){
+    var wg = ctx.createRadialGradient(vis[i], vis[i+1], 1, vis[i], vis[i+1], vis[i+2] * 0.95);
+    wg.addColorStop(0, 'rgba(255,205,120,' + (0.34 * t).toFixed(3) + ')'); wg.addColorStop(0.45, 'rgba(255,170,70,' + (0.14 * t).toFixed(3) + ')'); wg.addColorStop(1, 'rgba(255,150,50,0)');
+    ctx.fillStyle = wg; ctx.fillRect(vis[i] - vis[i+2], vis[i+1] - vis[i+2], vis[i+2] * 2, vis[i+2] * 2);
+  }
+}
+
+/* speech bubbles + name tags (HTML over the canvas: crisp text, clamped to the screen) */
+var fxBub = new Map(), fxTag = new Map();
+function fxSync(map, npc, want, cls, text){
+  var rec = map.get(npc);
+  if (!want){ if (rec){ if (rec.e.parentNode) rec.e.parentNode.removeChild(rec.e); map.delete(npc); } return null; }
+  if (!rec){ rec = {e:el('div', cls), text:null, w:0, h:0}; elFx.appendChild(rec.e); map.set(npc, rec); }
+  if (rec.text !== text){ rec.e.textContent = text; rec.text = text; rec.w = 0; }
+  return rec;
+}
+function renderFx(ents){
+  if (!elFx) return;
+  var sw = VW * S, sh = VH * S;
+  var live = new Set();
+  ents.forEach(function(en){
+    var n = en.n; if (!n) return;
+    live.add(n);
+    var cx = (en.px - camX + T / 2) * S, top = (en.py - camY) * S;
+    var visible = cx > -20 && cx < sw + 20 && top > -20 && top < sh + 20;
+    var tag = fxSync(fxTag, n, !!n.label && visible, 'ntag', n.label);
+    var tagH = 0;
+    if (tag){
+      if (!tag.w){ tag.w = tag.e.offsetWidth; tag.h = tag.e.offsetHeight; }
+      var tx = Math.max(tag.w / 2 + 1, Math.min(sw - tag.w / 2 - 1, cx));
+      tag.e.style.transform = 'translate(' + Math.round(tx - tag.w / 2) + 'px,' + Math.round(top - tag.h - 2 * S) + 'px)';
+      tagH = tag.h + 2;
+    }
+    var bub = fxSync(fxBub, n, !!n.bubble && visible, 'bub', n.bubble ? n.bubble.text : '');
+    if (bub){
+      bub.e.classList.toggle('shk', !!(n.bubble && n.bubble.shake));
+      if (!bub.w){ bub.w = bub.e.offsetWidth; bub.h = bub.e.offsetHeight; }
+      var bx = Math.max(bub.w / 2 + 2, Math.min(sw - bub.w / 2 - 2, cx));
+      var by = Math.max(2, top - bub.h - 8 - tagH - 2 * S);
+      bub.e.style.transform = 'translate(' + Math.round(bx - bub.w / 2) + 'px,' + Math.round(by) + 'px)';
+    }
+  });
+  [fxBub, fxTag].forEach(function(map){
+    map.forEach(function(rec, n){ if (!live.has(n)){ if (rec.e.parentNode) rec.e.parentNode.removeChild(rec.e); map.delete(n); } });
+  });
+}
+
+/* ---------- HUD ---------- */
+var lastLoc = '', lastSeed = -1, lastCoins = -1, lastClock = '', lastRole = '', lastClan = '\u0000', lastSm = '';
+function locText(){
+  if (scene.kind === 'out') return 'Blok (' + Math.floor(P.x / BS) + ',' + Math.floor(P.y / BS) + ')';
+  if (scene.kind === 'mart') return 'Mart Genesis';
+  if (scene.kind === 'casino') return 'Kasino Genesis';
+  return scene.house.own ? 'Rumah Kamu' : 'Rumah ' + scene.house.owner;
+}
+function pad2(n){ return (n < 10 ? '0' : '') + n; }
+function sstep(t){ t = t < 0 ? 0 : t > 1 ? 1 : t; return t*t*(3 - 2*t); }
+/* daylight 0..1 for a minute-of-day: full 07:00-17:00, dusk fades 17:00-19:00, night 19:00-05:00, dawn 05:00-07:00 */
+function lightAt(fm){
+  var h = fm / 60;
+  if (h >= 7 && h < 17) return 1;
+  if (h >= 17 && h < 19) return 1 - sstep((h - 17) / 2);
+  if (h >= 19 || h < 5) return 0;
+  return sstep((h - 5) / 2);
+}
+function clockInfo(){
+  var tot = Math.floor(gameMin), day = Math.floor(tot / 1440) + 1, mm = tot % 1440, hh = Math.floor(mm / 60), mi = mm % 60, fm = gameMin % 1440;
+  return { total:tot, day:day, hour:hh, minute:mi, hhmm:pad2(hh) + ':' + pad2(mi),
+    h:hh, m:mi, night:(hh >= 19 || hh < 6), light:lightAt(fm), phase:fm / 1440 };
+}
+var evHour = -1, evNight = null;
+function checkClock(){
+  var mm = Math.floor(gameMin) % 1440, h = Math.floor(mm / 60), n = (h >= 19 || h < 6);
+  if (evNight === null){ evNight = n; evHour = h; return; }
+  if (h !== evHour){ evHour = h; emit('hour', {h:h}); }
+  if (n !== evNight){ evNight = n; emit('daynight', {night:n}); }
+}
+function setTime(h, m){
+  h = Math.floor(+h); m = Math.floor(+(m || 0));
+  if (!isFinite(h) || !isFinite(m) || h < 0 || h > 23 || m < 0 || m > 59) return false;
+  gameMin = Math.floor(gameMin / 1440) * 1440 + h * 60 + m;
+  checkClock(); hudDirty = true; save(); return true;
+}
+function setDayLength(v){
+  v = +v; if (!isFinite(v)) return dayLength;
+  dayLength = Math.max(1, Math.min(60, v));
+  save(); emit('dayLength', {minutes:dayLength}); return dayLength;
+}
+function pauseTime(on){
+  var was = timePaused; timePaused = on === undefined ? true : !!on;
+  save(); if (was !== timePaused) emit('timePaused', {paused:timePaused});
+}
+function lampNear(x, y, r){
+  r = r == null ? 4 : r;
+  var L = world && world.lamps; if (!L) return false;
+  for (var i = 0; i < L.length; i++) if (Math.abs(L[i].x - x) <= r && Math.abs(L[i].y - y) <= r) return true;
+  return false;
+}
+function updateHud(){
+  var l = locText();
+  if (l !== lastLoc){ lastLoc = l; elLoc.textContent = l; }
+  if (seed !== lastSeed){ lastSeed = seed; elSeed.textContent = String(seed); }
+  if (state.coins !== lastCoins){ lastCoins = state.coins; elCoins.textContent = String(state.coins); }
+  var ci = clockInfo(), cs = ci.hhmm + ' H' + ci.day;
+  if (cs !== lastClock){ lastClock = cs; elClock.textContent = cs; }
+  var smc = ci.night ? 'night' : (ci.light < 0.98 ? 'dusk' : '');
+  if (smc !== lastSm){ lastSm = smc; elSm.className = 'sm' + (smc ? ' ' + smc : ''); }
+  if (state.role !== lastRole){ lastRole = state.role; elRole.textContent = roleLabel(state.role); elRole.classList.toggle('maling', state.role === 'maling'); }
+  var clan = state.clan && state.clan.tag ? '[' + state.clan.tag + ']' : '';
+  if (clan !== lastClan){ lastClan = clan; elClan.textContent = clan; }
+}
+
+/* ---------- layout ---------- */
+function layout(){
+  var avail = elFit.clientWidth || 340;
+  var sW = Math.floor(avail / (15 * T)); // prefer ~15 columns
+  if (sW < 2) sW = Math.max(1, Math.floor(avail / (11 * T))); // tiny screens: 11-column minimum
+  function apply(s){
+    var cols = Math.max(11, Math.min(17, Math.floor(avail / (T * s))));
+    S = s; VW = cols * T; VH = 11 * T;
+    elCv.width = VW * s; elCv.height = VH * s;
+    elCv.style.width = (VW * s) + 'px'; elCv.style.height = (VH * s) + 'px';
+    elScreen.style.width = (VW * s) + 'px';
+    var fsTable = [10, 8, 10, 12, 14, 16, 18];
+    elScreen.style.setProperty('--fs', fsTable[Math.min(s, 6)] + 'px');
+    elScreen.classList.toggle('short', VH * s < 340);
+  }
+  var s;
+  // measure the real page height: biggest scale whose page still fits the window, floor 1
+  for (s = Math.max(1, Math.min(sW, 6)); s > 1; s--){
+    apply(s);
+    if (document.documentElement.scrollHeight <= window.innerHeight) break;
+  }
+  apply(s);
+  try { var sr = elScreen.getBoundingClientRect(); document.documentElement.style.setProperty('--toastTop', Math.max(8, Math.round(sr.top + 8)) + 'px'); } catch(e){}
+  ctx = elCv.getContext('2d');
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  fxBub.forEach(function(r){ r.w = 0; }); fxTag.forEach(function(r){ r.w = 0; });
+}
+
+/* ---------- input ---------- */
+var KEYDIR = { ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down', ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right' };
+function pressDir(d, id){
+  id = id || d; releaseDir(id);
+  held.push({id:id, d:d});
+  if (canControl() && !P.moving && !waitRelease && P.dir !== d){ P.dir = d; P.turnT = TURN_T; }
+}
+function releaseDir(id){ for (var i = held.length - 1; i >= 0; i--) if (held[i].id === id) held.splice(i, 1); }
+function onButton(e){ return !!(e.target && e.target.closest && e.target.closest('button')); }
+function setupInput(){
+  window.addEventListener('keydown', function(e){
+    if ((e.code === 'F2' || e.code === 'Backquote') && devKey(e)) return;
+    if (modals.length){ modalKey(e); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (callModsBool('onKey', [e])){ e.preventDefault(); return; }
+    var d = KEYDIR[e.code];
+    if (d){ e.preventDefault(); if (!e.repeat) pressDir(d, e.code); return; }
+    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyZ'){
+      if (onButton(e)) return;
+      e.preventDefault();
+      if (!e.repeat) interact('talk');
+      return;
+    }
+    if (e.code === 'KeyE'){ e.preventDefault(); if (!e.repeat) interact('message'); return; }
+    if (e.code === 'KeyM'){ e.preventDefault(); if (!e.repeat && !tr && !D) setMap(!mapOpen); else if (!e.repeat && mapOpen) setMap(false); return; }
+    if (e.code === 'Escape' && mapOpen){ setMap(false); return; }
+    var hk = hotkeys[e.code];
+    if (hk){ e.preventDefault(); if (!e.repeat && !isUiOpen()) hk(); return; }
+  });
+  window.addEventListener('keyup', function(e){
+    var d = KEYDIR[e.code];
+    if (d){ releaseDir(e.code); if (!modals.length) e.preventDefault(); }
+    else if ((e.code === 'Space' || e.code === 'Enter') && !modals.length && !onButton(e)) e.preventDefault();
+  });
+  window.addEventListener('blur', function(){ held.length = 0; });
+  document.addEventListener('visibilitychange', function(){ if (document.hidden) held.length = 0; });
+  document.addEventListener('focusin', function(e){
+    if (!modals.length) return;
+    var top = modals[modals.length - 1];
+    if (!top.box.contains(e.target) && !(e.target.closest && e.target.closest('#toasts'))) focusInto(top);
+  });
+
+  // touch pad
+  Array.prototype.forEach.call(document.querySelectorAll('.dp'), function(btn){
+    var dir = btn.getAttribute('data-dir');
+    function down(e){ e.preventDefault(); try { btn.setPointerCapture(e.pointerId); } catch(_){} btn.classList.add('down'); pressDir(dir, 'pad:' + dir); }
+    function up(e){ btn.classList.remove('down'); releaseDir('pad:' + dir); }
+    btn.addEventListener('pointerdown', down);
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointercancel', up);
+    btn.addEventListener('lostpointercapture', up);
+    btn.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  });
+  function actionBtn(id, mode){
+    var b = document.getElementById(id);
+    b.addEventListener('pointerdown', function(e){ e.preventDefault(); b.classList.add('down'); interact(mode); });
+    ['pointerup','pointercancel','pointerleave'].forEach(function(t){ b.addEventListener(t, function(){ b.classList.remove('down'); }); });
+    b.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  }
+  actionBtn('btnA', 'talk'); actionBtn('btnE', 'message');
+  document.getElementById('padmap').addEventListener('click', function(e){ toggleMapUi(); e.currentTarget.blur(); });
+  document.getElementById('mapbtn').addEventListener('click', function(e){ toggleMapUi(); e.currentTarget.blur(); });
+  document.getElementById('bagbtn').addEventListener('click', function(e){ e.currentTarget.blur(); if (!isUiOpen()) openBag(); });
+  document.getElementById('profbtn').addEventListener('click', function(e){ e.currentTarget.blur(); if (!isUiOpen()) openProfile(); });
+  document.getElementById('menubtn').addEventListener('click', function(e){ e.currentTarget.blur(); openMenu(); });
+  elMap.addEventListener('click', function(){ setMap(false); });
+  elDlg.addEventListener('pointerdown', function(e){ e.preventDefault(); advanceDialog(); });
+  document.getElementById('regen').addEventListener('click', function(e){ e.currentTarget.blur(); confirmRegen(); });
+  hotkey('I', openBag); hotkey('P', openProfile);
+  addHudButton({id:'devbtn', label:'Dev', onClick:openDev});
+}
+function toggleMapUi(){ if (tr || D || modals.length) return; setMap(!mapOpen); }
+
+/* ---------- loop ---------- */
+var last = 0;
+function frame(ts){
+  var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+  last = ts;
+  update(dt);
+  render();
+  updateHud();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- GT public API ---------- */
+function teleportPlayer(ref, x, y, dir){
+  var sc = resolveScene(ref) || scene;
+  var m = sc.map;
+  x = Math.round(x); y = Math.round(y);
+  if (!inb(m, x, y) || m.walk[y*m.w + x] !== 1){
+    var t = freeTileNear(sc, Math.max(0, Math.min(m.w - 1, x)), Math.max(0, Math.min(m.h - 1, y))); if (t){ x = t.x; y = t.y; }
+  }
+  if (sc !== scene) setScene(sc, x, y, dir || P.dir);
+  else { P.x = P.fx = x; P.y = P.fy = y; P.moving = false; P.t = 0; if (dir) P.dir = dir; evictAt(sc, x, y, null); hudDirty = true; }
+}
+function addNpc(ref, def){
+  var sc = resolveScene(ref) || outScene; def = def || {};
+  var x = Math.round(def.x), y = Math.round(def.y);
+  if (!isFinite(x) || !isFinite(y) || !canEnterNpc(null, x, y, false, sc)){
+    var t = freeTileNear(sc, isFinite(x) ? x : sc.map.w >> 1, isFinite(y) ? y : sc.map.h >> 1); if (!t) return null; x = t.x; y = t.y;
+  }
+  var n = mkNpc(x, y, String(def.name || 'NPC').slice(0, 24), def.pal != null ? def.pal : 1, def.lines || [['...']], {wander:!!def.wander, leash:def.leash || 0, turns:!!def.turns, key:def.key || null, label:def.label || null});
+  if (def.dir) n.dir = def.dir;
+  if (def.aff0 != null) n.aff0 = def.aff0;
+  if (def.remote) n.remote = true;
+  if (def.noAffinity) n.noAffinity = true;
+  sc.npcs.push(n);
+  return n;
+}
+function removeNpc(npc){ if (npc){ if (npc.script) finishScript(npc, false); removeNpcFromScenes(npc); } }
+function moveNpc(npc, ref, x, y){
+  var sc = resolveScene(ref); if (!npc || !sc) return false;
+  if (npc.script) finishScript(npc, false);
+  npc.follow = false;
+  removeNpcFromScenes(npc);
+  var t = (isFinite(x) && isFinite(y) && canEnterNpc(null, Math.round(x), Math.round(y), true, sc)) ? {x:Math.round(x), y:Math.round(y)} : freeTileNear(sc, Math.round(x) || 1, Math.round(y) || 1);
+  if (!t){ t = {x:Math.round(x), y:Math.round(y)}; }
+  placeNpc(sc, npc, t.x, t.y);
+  sc.npcs.push(npc);
+  return true;
+}
+function npcTeleport(npc, x, y, dir){
+  var sc = npcSceneOf(npc) || scene;
+  if (!npc || !canEnterNpc(npc, Math.round(x), Math.round(y), true, sc)) return false;
+  placeNpc(sc, npc, Math.round(x), Math.round(y)); if (dir) npc.dir = dir; return true;
+}
+function npcHide(npc, on){ if (npc){ npc.hidden = !!on; if (on){ npc.moving = false; npc.t = 0; npc.fx = npc.x; npc.fy = npc.y; npc.talking = false; } } }
+function findNpc(key){ var r = null; allScenes().forEach(function(sc){ sc.npcs.forEach(function(n){ if (n.key === key) r = n; }); }); return r; }
+
+var GT = {
+  version: 2,
+  state: state,
+  ITEMS: ITEMS,
+  register: register,
+  addCoins: addCoins, spendCoins: spendCoins,
+  addItem: addItem, removeItem: removeItem, hasItem: hasItem,
+  on: on, off: off, emit: emit,
+  npcKey: npcKey,
+  findPath: findPath, npcGo: npcGo, npcFollow: npcFollow, npcSay: npcSay,
+  teleportPlayer: teleportPlayer,
+  enterBuilding: function(b){ if (b) transition(function(){ enterBuilding(b); }); },
+  dialog: function(pages, who, npc, after){ openDialog(pages, who, npc, after); },
+  toast: toast, modal: modal, menu: menu, isUiOpen: isUiOpen,
+  rng: function(salt){ var r = makeR((seed ^ hashStr(salt)) >>> 0), f = function(){ return r.f(); }; f.int = r.int; f.pick = r.pick; f.chance = r.chance; f.shuffle = r.shuffle; return f; },
+  cap: function(name){
+    return new Promise(function(resolve){
+      var done = false, timer = 0;
+      function fin(v){ if (!done){ done = true; clearTimeout(timer); resolve(v == null ? null : v); } }
+      try {
+        if (!(window.claude && typeof window.claude.use === 'function')) return fin(null);
+        timer = setTimeout(function(){ fin(null); }, 10000);
+        Promise.resolve(window.claude.use(name)).then(fin, function(){ fin(null); });
+      } catch(e){ fin(null); }
+    });
+  },
+  // extras
+  facing: function(){ return facingTile(); },
+  addHudButton: addHudButton, hotkey: hotkey,
+  addNpc: addNpc, removeNpc: removeNpc, moveNpc: moveNpc, npcTeleport: npcTeleport, npcHide: npcHide, findNpc: findNpc, npcScene: npcSceneOf,
+  engageNpc: function(npc){ if (npc) engage(npc); },
+  getScene: resolveScene,
+  doorFront: function(b){ return b ? {x:b.dx, y:b.dy + 1} : null; },
+  getAffinity: getAffinity, setAffinity: setAffinity, addAffinity: addAffinity,
+  addReputation: addRep,
+  setRole: setRole,
+  iconEl: iconEl, itemName: itemName,
+  openShop: function(k){ return openShop(k || null); }, openBag: openBag, openProfile: openProfile,
+  closeAllModals: closeAllModals,
+  isQA: function(){ return QA; },
+  giveHandler: null,
+  // day / night
+  isNight: function(){ return clockInfo().night; },
+  setDayLength: setDayLength, setTime: setTime, pauseTime: pauseTime,
+  lampNear: lampNear,
+  addDevSection: addDevSection,
+  openDev: function(){ return openDev(); }
+};
+GT.dev = {};
+Object.defineProperty(GT.dev, 'enabled', { enumerable:true, get: function(){ return devEnabled; }, set: function(v){
+  v = !!v; if (v === devEnabled) return; devEnabled = v; save(); emit('dev', {enabled:v});
+}});
+Object.defineProperties(GT, {
+  dayLength: { get: function(){ return dayLength; } },
+  timePaused: { get: function(){ return timePaused; } },
+  lamps: { get: function(){ return (world && world.lamps) || []; } },
+  world: { get: function(){ return world; } },
+  scene: { get: function(){ return scene; } },
+  outScene: { get: function(){ return outScene; } },
+  player: { get: function(){ return { x:P.x, y:P.y, dir:P.dir, moving:P.moving }; } },
+  time: { get: function(){ return clockInfo(); } },
+  buildings: { get: function(){ return world ? world.buildings : []; } },
+  seed: { get: function(){ return seed; } }
+});
+window.GT = GT;
+
+/* ---------- debug ---------- */
+function reachableReport(){
+  var r = bfs(world, world.spawn.x, world.spawn.y), bad = [];
+  world.buildings.forEach(function(b){ if (!r[(b.dy + 1)*world.w + b.dx]) bad.push({kind:b.kind, x:b.dx, y:b.dy}); });
+  return { ok: bad.length === 0, unreachable: bad, doors: world.buildings.length };
+}
+function exposeDebug(){
+  var g = {
+    regen: function(s){ return regen(s); },
+    reachable: reachableReport,
+    teleport: function(x, y, dir){ P.x = P.fx = x; P.y = P.fy = y; P.moving = false; P.t = 0; if (dir) P.dir = dir; },
+    isWalkable: function(x, y){ var m = scene.map; return inb(m,x,y) && m.walk[y*m.w + x] === 1; },
+    interact: function(mode){ interact(mode); },
+    setMap: setMap,
+    closeDialog: function(){ closeDialog(); },
+    enterHouse: function(b){ enterBuilding(b); },
+    skipOnboarding: skipOnboarding,
+    closeModals: closeAllModals,
+    openShop: function(){ return openShop(keeperOf(scene)); },
+    openBag: openBag, openProfile: openProfile,
+    setTime: setTime, setDayLength: setDayLength, pauseTime: pauseTime, isNight: function(){ return clockInfo().night; },
+    lampNear: lampNear, openDev: openDev,
+    renderOnce: function(){ render(); },
+    setDarkness: function(d){ darkOverride = (d == null) ? null : Math.max(0, Math.min(1, +d)); },
+    GT: GT,
+    VERSION: 2
+  };
+  Object.defineProperties(g, {
+    seed:   { get: function(){ return seed; } },
+    scene:  { get: function(){ return scene.kind; } },
+    sceneName: { get: function(){ return locText(); } },
+    player: { get: function(){ return { x:P.x, y:P.y, dir:P.dir, moving:P.moving, fx:P.fx, fy:P.fy }; } },
+    world:  { get: function(){ return world; } },
+    map:    { get: function(){ return scene.map; } },
+    houses: { get: function(){ return world.houses; } },
+    marts:  { get: function(){ return world.marts; } },
+    casino: { get: function(){ return world.casino; } },
+    ownHouse: { get: function(){ return world.own; } },
+    spawn:  { get: function(){ return world.spawn; } },
+    npcs:   { get: function(){ return scene.npcs; } },
+    dialog: { get: function(){ return D ? { text:D.pages[D.i], page:D.i, pages:D.pages.length, done:D.done, who:D.who } : null; } },
+    dialogOpen: { get: function(){ return !!D; } },
+    mapOpen: { get: function(){ return mapOpen; } },
+    transitioning: { get: function(){ return !!tr; } },
+    scale: { get: function(){ return S; } },
+    viewport: { get: function(){ return { w:VW, h:VH, scale:S }; } },
+    openModal: { get: function(){ return modals.length; } },
+    modalOpen: { get: function(){ return modals.length > 0; } },
+    qa: { get: function(){ return QA; } },
+    time: { get: function(){ return clockInfo(); } },
+    lamps: { get: function(){ return world.lamps; } },
+    dayLength: { get: function(){ return dayLength; } },
+    timePaused: { get: function(){ return timePaused; } },
+    darkness: { get: function(){ return lastDark; } },
+    cam: { get: function(){ return {x:camX, y:camY}; } },
+    nightCanvas: { get: function(){ return nightCv; } },
+    devOpen: { get: function(){ return !!(devModal && devModal.isOpen()); } },
+    state: { get: function(){ return { seed:seed, scene:scene.kind, location:locText(), player:g.player, dialogOpen:!!D, mapOpen:mapOpen, transitioning:!!tr,
+      coins:state.coins, inventory:state.inventory, role:state.role, playerName:state.playerName, reputation:state.reputation, affinity:state.affinity, clan:state.clan, openModal:modals.length }; } }
+  });
+  window.__game = g;
+}
+
+/* ---------- boot ---------- */
+function boot(){
+  if (booted) return;
+  QA = qaMode();
+  elDlg = document.getElementById('dlg'); elTxt = document.getElementById('dtxt'); elWho = document.getElementById('dwho'); elNext = document.getElementById('dnext');
+  elLoc = document.getElementById('loc'); elSeed = document.getElementById('seed'); elMap = document.getElementById('map'); elMM = document.getElementById('mm');
+  elCv = document.getElementById('cv'); elScreen = document.getElementById('screen'); elFit = document.getElementById('fit'); elFx = document.getElementById('fx');
+  elCoins = document.getElementById('coins'); elClock = document.getElementById('clock'); elSm = document.getElementById('sm'); elRole = document.getElementById('role'); elClan = document.getElementById('clan');
+  elHud = document.getElementById('hud'); elActs = document.getElementById('acts'); elMroot = document.getElementById('mroot'); elToasts = document.getElementById('toasts'); elApp = document.getElementById('app');
+  loadSaved();
+  booted = true;
+  // mods may register more mods from init, so index loop
+  for (var mi = 0; mi < mods.length; mi++) callOne(mods[mi], 'init', [GT]);
+  layout();
+  regen(savedSeed != null ? savedSeed : undefined);
+  setupInput();
+  exposeDebug();
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', layout);
+  window.addEventListener('pagehide', saveNow);
+  window.addEventListener('beforeunload', saveNow);
+  try {
+    if (window.ResizeObserver){
+      var lastH = elHud.offsetHeight;
+      new ResizeObserver(function(){ var h2 = elHud.offsetHeight; if (h2 !== lastH){ lastH = h2; layout(); } }).observe(elHud);
+    }
+  } catch(e){}
+  if (!state.onboarded){
+    if (QA) { /* tests: no first-boot modal */ }
+    else openRoleChoice();
+  }
+  requestAnimationFrame(frame);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else setTimeout(boot, 0);
+})();

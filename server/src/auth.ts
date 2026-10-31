@@ -12,6 +12,15 @@ import type { Store } from './db.ts';
 
 export type TokenVerifier = (idToken: string) => Promise<{ sub: string }>;
 
+// Mock-chain development only (DEV_LOGIN=1 with CHAIN_MODE=mock): "dev:<name>" logs in as sub "dev|<name>".
+export function withDevLogin(cfg: Config, inner: TokenVerifier): TokenVerifier {
+  if (!cfg.devLogin) return inner;
+  return async (idToken) => {
+    const m = /^dev:([a-z0-9_-]{1,32})$/.exec(idToken);
+    return m ? { sub: 'dev|' + m[1] } : inner(idToken);
+  };
+}
+
 export function auth0Verifier(cfg: Config, keys?: JWTVerifyGetKey): TokenVerifier {
   // jwks_uri and issuer come from https://login.testnet.fast-auth.com/.well-known/openid-configuration
   const issuer = `https://${cfg.fastAuth.domain}/`;

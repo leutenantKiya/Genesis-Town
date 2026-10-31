@@ -79,7 +79,8 @@ per the docs. So it is used for login and account ownership only, and gameplay i
 1. **Login (the only popup).** `@fast-auth-near/browser-sdk` + `@fast-auth-near/javascript-provider`, network
    `testnet`, with the shared testnet client id and contracts `fast-auth.testnet` / `v1.signer-prod.testnet` from the
    NEAR Auth testnet page. The client reads the player's MPC-derived public key.
-2. **Session key.** The browser generates an ed25519 key pair and keeps it in IndexedDB.
+2. **Session key.** The browser generates an ed25519 key pair. M1 keeps it in localStorage; M4 hardens it to a
+   non-extractable WebCrypto key.
 3. **Register.** `POST /auth/register {idToken, sessionPublicKey}`. The server:
    - verifies the Auth0 id token against the tenant's JWKS;
    - takes `sub` and derives the player's NEAR Auth key itself by calling `derived_public_key` on

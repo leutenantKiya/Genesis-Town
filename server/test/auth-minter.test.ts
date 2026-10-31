@@ -86,3 +86,15 @@ test('minter: rejects unknown items and rate-limits', () => {
   for (let i = 0; i < 20; i++) m.gather('p1.players.test', 'fish');
   assert.throws(() => m.gather('p1.players.test', 'fish'), (e: { status: number }) => e.status === 429);
 });
+
+test('dev login works only with the mock chain and DEV_LOGIN=1', async () => {
+  const { loadConfig } = await import('../src/config.ts');
+  const { withDevLogin } = await import('../src/auth.ts');
+  const reject = async () => { throw new Error('real verifier'); };
+  const on = loadConfig({ CHAIN_MODE: 'mock', DEV_LOGIN: '1' } as NodeJS.ProcessEnv);
+  assert.deepEqual(await withDevLogin(on, reject)('dev:alice'), { sub: 'dev|alice' });
+  await assert.rejects(withDevLogin(on, reject)('dev:Bad Name!'));
+  const off = loadConfig({ CHAIN_MODE: 'mock' } as NodeJS.ProcessEnv);
+  await assert.rejects(withDevLogin(off, reject)('dev:alice'));
+  assert.equal(loadConfig({ DEV_LOGIN: '1', GAME_CONTRACT_ID: 'g', RELAYER_ACCOUNT_ID: 'r', RELAYER_PRIVATE_KEYS: 'k', MINTER_ACCOUNT_ID: 'm', MINTER_PRIVATE_KEY: 'k', PLAYERS_PARENT_ACCOUNT_ID: 'p', PLAYERS_PARENT_PRIVATE_KEY: 'k' } as NodeJS.ProcessEnv).devLogin, false);
+});

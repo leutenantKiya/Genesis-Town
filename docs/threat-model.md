@@ -21,7 +21,7 @@ assets have no value, but the design assumes they might, so nothing here depends
 | Minter function-call key | server env | mints gathered items | per-account and per-item daily mint caps in the contract. Single-use `mint_id`. Cannot mint `coin` |
 | Town function-call key | server env | pays coins to merchants | coins limited by the daily faucet `W_day`, settlement once per day, starter grants from existing treasury coins only |
 | Merchant quote keys | server env | signs bad quotes | quotes bound to one player, 60 s expiry, single-use nonce. Per-merchant daily coin-out cap. Rotation is owner-only |
-| Player session key | browser IndexedDB | XSS or malware trades the player's items | function-call key limited to game methods on the game contract, so it can't move NEAR or call other contracts. Game methods have per-day limits. The player can revoke it with the full-access key |
+| Player session key | browser localStorage (M1). M4 moves it to a non-extractable WebCrypto Ed25519 key in IndexedDB | XSS or malware trades the player's items | function-call key limited to game methods on the game contract, so it can't move NEAR or call other contracts. Game methods have per-day limits. The player can revoke it with the full-access key |
 
 Secrets live only in environment variables. `.env` is git-ignored, and `.env.example` holds names only. Before any
 push we scan the whole history with `gitleaks` (or an equivalent; the tool is chosen in M4), and the scan result goes

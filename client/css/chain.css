@@ -1,0 +1,13 @@
+/* chain.css - banner and Riwayat styles for the NEAR layer (chain.js) */
+.chain-banner{margin:0 2px 8px;padding:5px 8px;border-radius:3px;font-size:8px;line-height:1.5;overflow-wrap:anywhere;box-shadow:0 0 0 2px #000}
+.chain-banner.net{background:#1f4d36;color:#d9ffe6}
+.chain-banner.mock{background:#5a4a14;color:#fff3c4}
+.chain-banner.off{background:#5a1f2a;color:#ffe0e6}
+.chain-dim{color:#6b6e8f;font-size:8px}
+.chain-link{color:#2d5fb3;font-size:8px;white-space:nowrap}
+.chain-link:focus-visible{outline:3px solid #2d7ad6;outline-offset:2px}
+.chain-st{font-size:8px;white-space:nowrap;padding:1px 4px;border-radius:3px;background:#e4e6ee}
+.chain-st.ok{background:#cdeccf}
+.chain-st.failed{background:#f6c9cf}
+.chain-st.pending{background:#f6ecc0}
+@media (prefers-reduced-motion:reduce){.chain-banner{transition:none}}

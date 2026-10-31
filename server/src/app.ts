@@ -67,6 +67,7 @@ export function createApp(deps: AppDeps) {
           rpcUrl: deps.cfg.rpcUrl,
           fastAuth: deps.cfg.fastAuth,
           items: GATHERABLE,
+          devLogin: deps.cfg.devLogin,
         });
       }
       if (req.method === 'POST' && p === '/api/auth/register') {
@@ -100,7 +101,7 @@ export function createApp(deps: AppDeps) {
     if (!file.startsWith(clientRoot)) throw new HttpError(403, 'forbidden');
     try {
       if (!(await stat(file)).isFile()) throw new Error();
-      res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
+      res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache' });
       return res.end(await readFile(file));
     } catch {
       throw new HttpError(404, 'not found');

@@ -92,5 +92,10 @@ rebalancing stretch would need explicit approval.
    https://docs.near.org/chain-abstraction/chain-signatures/tutorials/controlling-near-accounts/1-setup.md shows
    deriving an MPC public key, adding it as a full-access key, then signing for that account.
 
+Also found: the shared testnet Auth0 client accepts `http://localhost:3000` as a callback origin. Probed on
+2026-10-31: `localhost:3000` redirects to the login page, while `localhost:8787`, `localhost:5173`, `127.0.0.1:8787`
+and `example.com` return 403. So the local server runs on port 3000. A hosted demo would need its own Auth0
+client, or an origin that the shared client allows.
+
 Also found: the Auth0 testnet defaults (domain `login.testnet.fast-auth.com`, signing audience
 `auth0.jwt.fast-auth.testnet`, client id) are on https://docs.auth.near.org/protocol/concepts/auth0.md.

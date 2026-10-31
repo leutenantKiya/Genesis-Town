@@ -18,6 +18,7 @@ export interface Config {
   mintBatch: { maxItems: number; maxWaitMs: number };
   dbPath: string;
   chainMode: 'testnet' | 'mock';
+  devLogin: boolean; // mock chain only: accept idToken "dev:<name>" so tests run without a Google account
 }
 
 function need(env: NodeJS.ProcessEnv, name: string): string {
@@ -30,7 +31,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const chainMode = env.CHAIN_MODE === 'mock' ? 'mock' : 'testnet';
   const get = chainMode === 'mock' ? (n: string) => env[n] ?? `mock-${n.toLowerCase()}` : (n: string) => need(env, n);
   return {
-    port: Number(env.PORT ?? 8787),
+    port: Number(env.PORT ?? 3000), // the shared NEAR Auth testnet Auth0 client accepts http://localhost:3000 as a callback (probed 2026-10-31)
     network: 'testnet',
     // Public RPC for testnet as listed on the NEAR Auth testnet page and docs.near.org/api/rpc/providers.
     rpcUrl: env.NEAR_RPC_URL || 'https://rpc.testnet.near.org',
@@ -60,6 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mintBatch: { maxItems: 10, maxWaitMs: Number(env.MINT_BATCH_MS ?? 30000) },
     dbPath: env.DB_PATH ?? 'data/genesis-town.db',
     chainMode,
+    devLogin: chainMode === 'mock' && env.DEV_LOGIN === '1',
   };
 }
 

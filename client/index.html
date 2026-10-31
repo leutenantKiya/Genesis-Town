@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Genesis Town</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+<link rel="stylesheet" href="css/game.css">
+<link rel="stylesheet" href="css/chain.css">
+</head>
+<body>
+<main id="app">
+  <div class="shell">
+    <div class="brand"><b>GENESIS TOWN</b><span>PROTOTIPE</span></div>
+    <div class="hud" id="hud">
+      <div class="cell loc"><span class="lbl">LOKASI</span><span class="val" id="loc">Blok (0,0)</span></div>
+      <div class="cell"><span class="lbl">KOIN</span><span class="val"><i class="coin"></i><span id="coins">500</span></span></div>
+      <div class="cell"><span class="lbl">WAKTU</span><span class="val"><i class="sm" id="sm"></i><span id="clock">08:00 H1</span></span></div>
+      <div class="cell seedc"><span class="lbl">SEED</span><span class="val" id="seed">0</span></div>
+      <div class="cell"><span class="lbl">PERAN</span><span class="val"><span class="badge" id="role">WARGA</span> <span class="clantag" id="clan"></span></span></div>
+      <div class="acts" id="acts">
+        <button class="btn" id="bagbtn" type="button">Tas</button>
+        <button class="btn sec" id="profbtn" type="button">Profil</button>
+        <button class="btn menubtn" id="menubtn" type="button">Menu</button>
+        <button class="btn" id="mapbtn" type="button">Peta</button>
+        <button class="btn hot" id="regen" type="button">Generasi ulang</button>
+      </div>
+    </div>
+    <div class="bezel">
+      <div id="fit">
+        <div id="screen">
+          <canvas id="cv" width="180" height="132" role="img" aria-label="Peta permainan Genesis Town"></canvas>
+          <div id="fx" aria-hidden="true"></div>
+          <div id="dlg" role="dialog" aria-live="polite"><div id="dwho"></div><span id="dtxt"></span><div id="dnext"></div></div>
+          <div id="map" role="dialog" aria-label="Peta">
+            <h2>PETA KOTA</h2>
+            <canvas id="mm" width="120" height="120"></canvas>
+            <div class="legend">
+              <span><i style="background:#d98c5f"></i>Rumah</span><span><i style="background:#f2c94c"></i>Rumahmu</span><span><i style="background:#7fd18a"></i>Teman</span><span><i style="background:#4a82e0"></i>Mart</span><span><i style="background:#3f8f4a"></i>Taman</span><span><i style="background:#c452e0"></i>Kasino</span>
+            </div>
+            <div class="hint">Tekan M atau ketuk untuk menutup</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="pad" id="pad">
+      <div class="dpad">
+        <button class="dp up" data-dir="up" type="button" aria-label="Atas"></button>
+        <button class="dp left" data-dir="left" type="button" aria-label="Kiri"></button>
+        <div class="mid"></div>
+        <button class="dp right" data-dir="right" type="button" aria-label="Kanan"></button>
+        <button class="dp dn" data-dir="down" type="button" aria-label="Bawah"></button>
+      </div>
+      <div class="ab">
+        <button class="btn" id="padmap" type="button">Peta</button>
+        <div class="abrow">
+          <button id="btnE" type="button" aria-label="Tombol E, kirim pesan">E</button>
+          <button id="btnA" type="button" aria-label="Tombol A">A</button>
+        </div>
+      </div>
+    </div>
+    <p class="help"><kbd>Panah/WASD</kbd> jalan &middot; <kbd>Spasi/Enter/Z</kbd> bicara &middot; <kbd>E</kbd> pesan &middot; <kbd>I</kbd> tas &middot; <kbd>P</kbd> profil &middot; <kbd>M</kbd> peta</p>
+  </div>
+</main>
+<div id="mroot"></div>
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<script src="js/flags.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/mods/casino.js"></script>
+<script src="js/mods/thief.js"></script>
+<script src="js/mods/police.js"></script>
+<script src="js/mods/combat.js"></script>
+<script src="js/mods/curfew.js"></script>
+<script src="js/mods/gossip.js"></script>
+<script src="js/mods/agent.js"></script>
+<script src="js/mods/soul.js"></script>
+<script src="js/mods/social.js"></script>
+<script src="vendor/near.js"></script>
+<script src="js/mods/chain.js"></script>
+</body>
+</html>

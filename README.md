@@ -1,8 +1,9 @@
 # Genesis Town
 
-> **Status (2026-10-31): design stage (milestone M0).** This repository holds the unchanged prototype and the design
-> documents. The NEAR integration, server and contract are not built yet. Anything below marked *(planned)* does not
-> exist yet; this README is updated as each part lands, and only describes as working what has been run.
+> **Status (2026-10-31): milestone M1 in progress.** Working and tested: the server (login verification, account
+> creation, gas-free relayer, batched minting, Riwayat history) and the game's NEAR layer, all against a **mock
+> chain**. Not built yet: the NEP-245 contract and the testnet deployment, which are blocked on installing the Rust
+> toolchain. Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
@@ -55,17 +56,30 @@ Contract ids and explorer links will be filled in here after the M1 deploy.
 4. Press **Simulate 1 week** → watch the price charts move; merchant Budi's smithy goes bankrupt during the week.
 5. Invest 50 coins in Budi's shop → the shop reopens and your share appears in Profile.
 
-## Run locally *(planned)*
+## Run locally
+
+Requires Node 24 or later.
 
 ```bash
-cp .env.example .env
+npm run setup
 ```
+
+Mock chain (no NEAR account needed; everything is labelled "mock"). Open http://localhost:3000 and press **Masuk**:
 
 ```bash
-docker compose up
+npm run dev:mock
 ```
 
-## Demo / offline mode *(planned)*
+Testnet *(planned, after the M1 deploy)*: copy `.env.example` to `.env`, fill it in, then run:
+
+```bash
+npm run dev
+```
+
+The local server must run on port 3000. The shared NEAR Auth testnet login only accepts `http://localhost:3000` as a
+callback.
+
+## Demo / offline mode
 
 Open the game with `?mode=offline`. All chain calls are replaced by an in-browser mock, shown by a permanent
 "OFFLINE DEMO" banner. Use it if testnet or the server is unavailable.

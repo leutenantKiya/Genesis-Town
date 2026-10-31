@@ -134,7 +134,20 @@ export class MockChain implements Chain {
     }
     return { txHash: this.hash(), ok: true };
   }
-  async relay(): Promise<TxResult> { return { txHash: this.hash(), ok: true }; }
+  // Applies the one player method that exists in M1 (send_item) so mock mode behaves like the contract.
+  async relay(signedDelegate: unknown, senderId: string): Promise<TxResult> {
+    const sd = signedDelegate as { delegateAction: { actions: Array<{ functionCall?: { methodName: string; args: ArrayLike<number> } }> } };
+    const fc = sd.delegateAction.actions[0]?.functionCall;
+    if (fc?.methodName === 'send_item') {
+      const a = JSON.parse(Buffer.from(Uint8Array.from(fc.args)).toString('utf8')) as { receiver_id: string; token_id: string; amount: string };
+      const from = `${senderId}|${a.token_id}`, to = `${a.receiver_id}|${a.token_id}`, n = BigInt(a.amount);
+      if (!this.accounts.has(a.receiver_id)) return { txHash: this.hash(), ok: false, error: 'receiver is not a registered player' };
+      if ((this.bal.get(from) ?? 0n) < n || n <= 0n) return { txHash: this.hash(), ok: false, error: 'insufficient balance' };
+      this.bal.set(from, (this.bal.get(from) ?? 0n) - n);
+      this.bal.set(to, (this.bal.get(to) ?? 0n) + n);
+    }
+    return { txHash: this.hash(), ok: true };
+  }
   async balances(accountId: string, tokenIds: string[]): Promise<string[]> {
     return tokenIds.map((t) => String(this.bal.get(`${accountId}|${t}`) ?? 0n));
   }

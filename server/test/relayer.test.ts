@@ -9,6 +9,8 @@ function world(perMinute = 30) {
   const key = near.KeyPair.fromRandom('ed25519');
   s.store.addPlayer('p1.players.test', 'sub-1', 'ed25519:owner');
   s.store.addSessionKey(key.getPublicKey().toString(), 'p1.players.test');
+  s.chain.accounts.add('p1.players.test'); s.chain.accounts.add('p2.players.test');
+  s.chain.bal.set('p1.players.test|fish', 5n);
   const deps = { ...s, limiter: new RateLimiter(perMinute, 1000), currentBlockHeight: async () => 100n };
   return { ...s, key, deps };
 }
@@ -34,6 +36,7 @@ test('relays a valid delegate once, records history, and dedupes a resend', asyn
   const r2 = await relay(w.deps, { signedDelegate: b64 });
   assert.equal(r2.duplicate, true);
   assert.equal(r2.txHash, r1.txHash);
+  assert.deepEqual(await w.chain.balances('p2.players.test', ['fish']), ['1']);
   const h = w.store.history('p1.players.test');
   assert.equal(h.length, 1);
   assert.match(h[0].summary, /Kirim 1 fish/);

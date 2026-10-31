@@ -1,0 +1,16 @@
+{
+  "name": "genesis-town-client-build",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@fast-auth-near/browser-sdk": "1.4.2",
+    "@fast-auth-near/javascript-provider": "1.4.1",
+    "buffer": "6.0.3",
+    "esbuild": "0.28.2",
+    "near-api-js": "7.4.0",
+    "util": "0.12.5"
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}
