@@ -1,9 +1,13 @@
 # Genesis Town
 
-> **Status (2026-10-31): milestone M1, waiting for Checkpoint 2.** The game contract is deployed on NEAR testnet and
-> the full M1 loop has passed a scripted end-to-end run on testnet: account creation, batched gather mint, and a
-> gas-free player transfer signed by a session key. Not yet verified: Google/email sign-in in the browser against
-> testnet, which needs a person to log in. Anything marked *(planned)* does not exist yet.
+> **Status (2026-11-01): milestone M1 done except one browser check.** The game contract is deployed on NEAR testnet.
+> - A scripted end-to-end run on testnet passed: account creation, a batched gather mint, and a gas-free player
+>   transfer signed by a session key.
+> - A real Google sign-in through NEAR Auth created a player account on testnet, with the NEAR Auth key as full access
+>   and a game-only session key.
+> - Gathering from the browser on testnet has not been checked yet.
+>
+> Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
