@@ -1,7 +1,6 @@
 # Architecture
 
-Status: design (M0). Items marked **[verify M1]** depend on behaviour not yet confirmed in the docs or by a test.
-Nothing here is built yet.
+Status: design (M0). The checks that were open at M0 are resolved in [sources.md](sources.md#open-checks-from-m0-resolved-in-m1-2026-10-31).
 
 ## Overview
 
@@ -81,8 +80,12 @@ per the docs. So it is used for login and account ownership only, and gameplay i
    `testnet`, with the shared testnet client id and contracts `fast-auth.testnet` / `v1.signer-prod.testnet` from the
    NEAR Auth testnet page. The client reads the player's MPC-derived public key.
 2. **Session key.** The browser generates an ed25519 key pair and keeps it in IndexedDB.
-3. **Register.** `POST /auth/register {jwt, mpcPublicKey, sessionPublicKey}`. The server verifies the Auth0 JWT
-   **[verify M1: where the testnet tenant publishes its signing keys]**, then creates
+3. **Register.** `POST /auth/register {idToken, sessionPublicKey}`. The server:
+   - verifies the Auth0 id token against the tenant's JWKS;
+   - takes `sub` and derives the player's NEAR Auth key itself by calling `derived_public_key` on
+     `v1.signer-prod.testnet` (path `jwt#https://login.testnet.fast-auth.com/#<sub>`, predecessor
+     `fast-auth.testnet`, domain 1), so the browser cannot claim someone else's key;
+   - then creates
    `<id>.players.genesistown.testnet` in one transaction with:
    - the MPC-derived key as a **full-access** key, so the player owns the account and can revoke anything;
    - the session key as a **function-call key** limited to `game.genesistown.testnet` and the game method list.
@@ -90,8 +93,8 @@ per the docs. So it is used for login and account ownership only, and gameplay i
    The server then registers storage for the player in the contract and sends the starter kit from the treasury.
 4. **Play.** For each action the client builds a `DelegateAction` (receiver = game contract, one `FunctionCall`,
    deposit 0), signs it with the session key, and posts it to `/relay`. The relayer checks it, wraps it in a
-   NEP-366 `SignedDelegate` and pays the gas. **[verify M1: a function-call access key signing a delegate action for
-   a zero-deposit call on its allowed receiver]**
+   NEP-366 `SignedDelegate` and pays the gas. The meta-transaction docs confirm that function-call keys can sign
+   delegate actions; the key's allowance is not checked because the relayer pays.
 5. **Lost browser or new device.** Log in again with Auth0. The server adds a new session key only after one NEAR
    Auth signature (one Auth0 approval) from the account's full-access key. That is the only other popup, and it is
    rare.
@@ -108,8 +111,7 @@ trade-off is analysed in [threat-model.md](threat-model.md).
    `{merchant, player, side, token, qty, price_each, expires_at, nonce}`. The quote expires after 60 s.
 3. The client sends `sell_to_merchant(quote, signature)` through the relayer.
 4. The contract checks:
-   - the signature against Sari's registered quote key **[verify M1: `env::ed25519_verify` in the near-sdk version
-     we pin]**;
+   - the signature against Sari's registered quote key (`env::ed25519_verify`, present in near-sdk 5.30);
    - that the quote has not expired and the nonce is unused;
    - that `player == predecessor`;
    - that the shop is open, and the merchant's daily caps and both balances allow the trade.
@@ -132,8 +134,7 @@ Merchants never need to sign a transaction for a trade, and there is no "player 
 
 Every chain call made for a player returns a transaction hash. The server stores
 `{account, kind, summary, tx_hash, status, created_at}` in SQLite, and the client lists them with a link to the
-testnet explorer (testnet.nearblocks.io, as listed on the NEAR Auth testnet page; the transaction URL pattern is
-**[verify M1]**). Gathering shows as pending until its batch mint lands.
+testnet explorer at `https://testnet.nearblocks.io/txns/<hash>` (the pattern used in the NEAR docs). Gathering shows as pending until its batch mint lands.
 
 ## NEAR AI Cloud and the local brain
 

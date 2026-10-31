@@ -63,13 +63,34 @@ rebalancing stretch would need explicit approval.
 | @fast-auth-near/browser-sdk | 1.4.2 | NEAR Auth docs |
 | @fast-auth-near/javascript-provider | 1.4.1 | NEAR Auth docs |
 
-## Open checks (M1, before relying on them)
+## Open checks from M0, resolved in M1 (2026-10-31)
 
-1. Where the NEAR Auth testnet Auth0 tenant publishes JWT signing keys, so the server can verify a login.
-2. A function-call access key signing a NEP-366 delegate action for a zero-deposit call: works end to end, and how
-   the key's gas allowance is treated.
-3. `env::ed25519_verify` in the pinned near-sdk version (for merchant quote signatures).
-4. The testnet explorer transaction URL pattern.
-5. The near-sandbox 0.3 → 0.4 changes.
-6. That a NEAR Auth MPC-derived key added as a full-access key to a server-created sub-account can later sign for
-   that account.
+1. **Server-side login verification: resolved.** OIDC discovery at
+   `https://login.testnet.fast-auth.com/.well-known/openid-configuration` (HTTP 200) gives issuer
+   `https://login.testnet.fast-auth.com/`, `jwks_uri` `https://login.testnet.fast-auth.com/.well-known/jwks.json`,
+   and RS256 is supported. The server verifies the login id token against that JWKS (aud = client id) and reads `sub`.
+   - The player's key is derived at path `jwt#https://<domain>/#<sub>` (guard id `jwt#https://<domain>/`), per
+     https://docs.auth.near.org/protocol/concepts/auth0.md and
+     https://docs.auth.near.org/protocol/contracts/fast-auth.md.
+   - The server computes it with the view call `derived_public_key({path, predecessor: "fast-auth.testnet",
+     domain_id: 1})` on `v1.signer-prod.testnet`. Domain id 1 is what `fast-auth.testnet.mpc_domain_id()` returns.
+     Tested: it returns an `ed25519:` key.
+   - Still to test end to end: that this matches the key the browser SDK's `getPublicKey()` returns.
+2. **Function-call keys in delegate actions: resolved by the docs.** Meta Transactions, "Function Call Access Keys in
+   Meta Transactions": the key is checked against the receiver and methods, and its allowance is not checked
+   because the relayer pays. Since protocol 87 the inner delegate must be signed with a regular access key, not a
+   gas key. Still to test end to end on testnet.
+3. **`env::ed25519_verify`: resolved.** It exists in near-sdk 5.30.0:
+   `ed25519_verify(&[u8;64], impl AsRef<[u8]>, &[u8;32]) -> bool`
+   (https://docs.rs/near-sdk/5.30.0/near_sdk/env/fn.ed25519_verify.html).
+4. **Explorer transaction URL: found in the docs.** `https://testnet.nearblocks.io/txns/<hash>` is used throughout
+   https://docs.near.org/llms-full.txt. The site returns 403 to scripted requests, so it will be checked in a browser
+   with our first transaction.
+5. **near-sandbox 0.4.0 (2026-10-26): resolved.** The changelog lists nearcore 2.14.0 and a bin-path fix, with no API
+   change listed. Pinned to 0.4.0, and compile-tested once Rust is installed.
+6. **MPC key as full-access key on another account: resolved by the docs.**
+   https://docs.near.org/chain-abstraction/chain-signatures/tutorials/controlling-near-accounts/1-setup.md shows
+   deriving an MPC public key, adding it as a full-access key, then signing for that account.
+
+Also found: the Auth0 testnet defaults (domain `login.testnet.fast-auth.com`, signing audience
+`auth0.jwt.fast-auth.testnet`, client id) are on https://docs.auth.near.org/protocol/concepts/auth0.md.
