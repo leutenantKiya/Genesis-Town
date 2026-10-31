@@ -1,0 +1,164 @@
+# Architecture
+
+Status: design (M0). Items marked **[verify M1]** depend on behaviour not yet confirmed in the docs or by a test.
+Nothing here is built yet.
+
+## Overview
+
+```mermaid
+flowchart LR
+  subgraph Browser["Browser: /client (plain JS game)"]
+    G[Game engine + mods<br/>window.GT]
+    SK[(Session key<br/>IndexedDB)]
+    OFF[MockChain<br/>offline demo mode]
+  end
+  subgraph Server["/server (Node + TypeScript, SQLite)"]
+    AUTH[auth + account creation]
+    REL[relayer /relay<br/>NEP-366]
+    MER[merchant agents loop<br/>pricing ticks, quotes]
+    MINT[gather minter<br/>batches]
+    TOWN[town demand + daily settlement]
+    AI[NEAR AI Cloud client<br/>+ local rule brain]
+    SIM[/sim endpoint/]
+  end
+  subgraph Econ["/economy (shared TS)"]
+    PR[pricing.ts]
+    CFG[config.json]
+    SM[sim.ts]
+  end
+  subgraph Chain["NEAR testnet"]
+    C[game contract<br/>NEP-245 + NEP-145 + game methods]
+    FA[fast-auth.testnet<br/>NEAR Auth]
+  end
+  G -- "Auth0 login (once)" --> FA
+  G -- signed delegate action --> REL --> C
+  G <-- quotes, prices, reasons --> MER
+  MER --> PR
+  SIM --> SM --> PR
+  MINT --> C
+  TOWN --> C
+  AUTH --> C
+  MER --> AI
+  G -.offline flag.-> OFF
+```
+
+## Folders
+
+| Folder | What | Notes |
+| --- | --- | --- |
+| `/client` | The existing game, split back into `sprites.js`, `engine.js`, `mods/*.js`, plus new `mods/economy.js`, `mods/market.js`, `mods/riwayat.js`, `chain/` (real and mock chain adapters) | Plain JS, served statically, no build step needed for offline mode |
+| `/server` | Node 24 + TypeScript service, SQLite (`better-sqlite3` or Node's built-in `node:sqlite`, picked in M1) | Holds every key, reads them from env vars only |
+| `/contracts/game` | Rust, `near-sdk` 5.x, built with `cargo-near` | One contract: NEP-245 multi token (with `coin`), NEP-145 storage, game methods |
+| `/economy` | `config.json`, `pricing.ts`, `sim.ts`, `items.ts` | Imported by both server and simulator, and bundled for the browser chart view |
+| `/docs` | Design docs, threat model, sources, simulation reports | |
+| `/prototype` | The unchanged baseline (tag `pre-hackathon`) | Reference only, not served |
+
+One command: `docker compose up` (server + static client) with a `.env` copied from `.env.example`. A plain
+`npm run dev` will also work without Docker.
+
+## Accounts on testnet
+
+All are sub-accounts of one top-level account created for this project, named below as `genesistown.testnet`. The
+exact name will be picked when it is created in M1.
+
+| Account | Holds | Keys on the server |
+| --- | --- | --- |
+| `genesistown.testnet` | contract owner, config changes | **none**: its full-access key stays off the server (`near-cli-rs` keychain on the dev machine) |
+| `game.genesistown.testnet` | the contract | none after deploy |
+| `relayer.genesistown.testnet` | NEAR for gas | full-access keys (the reference relayer requires them), rate limited and spend monitored |
+| `minter.genesistown.testnet` | nothing; the contract only trusts it to mint gathered items | function-call key → `game` only |
+| `town.genesistown.testnet` | treasury coins, initial merchant shares | function-call key → `game` only |
+| `sari.…`, `budi.…`, `wati.…`, `joko.…` | merchant balances inside the contract | function-call key → `game` only, plus a separate ed25519 **quote key** registered in the contract |
+| `players.genesistown.testnet` | parent of player accounts, a small NEAR float for account creation | full-access key (account creation needs one), only small balances kept |
+| `<id>.players.genesistown.testnet` | a player | the server keeps **no** key for players |
+
+## Sign-in with no seed phrase and no gameplay popups
+
+NEAR Auth signs with an MPC-derived key, but **every** NEAR Auth signature goes through Auth0 (a popup or redirect),
+per the docs. So it is used for login and account ownership only, and gameplay is signed by a scoped session key.
+
+1. **Login (the only popup).** `@fast-auth-near/browser-sdk` + `@fast-auth-near/javascript-provider`, network
+   `testnet`, with the shared testnet client id and contracts `fast-auth.testnet` / `v1.signer-prod.testnet` from the
+   NEAR Auth testnet page. The client reads the player's MPC-derived public key.
+2. **Session key.** The browser generates an ed25519 key pair and keeps it in IndexedDB.
+3. **Register.** `POST /auth/register {jwt, mpcPublicKey, sessionPublicKey}`. The server verifies the Auth0 JWT
+   **[verify M1: where the testnet tenant publishes its signing keys]**, then creates
+   `<id>.players.genesistown.testnet` in one transaction with:
+   - the MPC-derived key as a **full-access** key, so the player owns the account and can revoke anything;
+   - the session key as a **function-call key** limited to `game.genesistown.testnet` and the game method list.
+
+   The server then registers storage for the player in the contract and sends the starter kit from the treasury.
+4. **Play.** For each action the client builds a `DelegateAction` (receiver = game contract, one `FunctionCall`,
+   deposit 0), signs it with the session key, and posts it to `/relay`. The relayer checks it, wraps it in a
+   NEP-366 `SignedDelegate` and pays the gas. **[verify M1: a function-call access key signing a delegate action for
+   a zero-deposit call on its allowed receiver]**
+5. **Lost browser or new device.** Log in again with Auth0. The server adds a new session key only after one NEAR
+   Auth signature (one Auth0 approval) from the account's full-access key. That is the only other popup, and it is
+   rare.
+
+**Consequence for NEP-245.** Standard `mt_transfer` requires exactly 1 yoctoNEAR attached, and function-call keys
+cannot attach deposits. Gameplay therefore uses game methods (`sell_to_merchant`, `buy_listing`, `craft`, …) that
+take no deposit and carry their own limits. The standard NEP-245 methods stay spec-compliant for real wallets. This
+trade-off is analysed in [threat-model.md](threat-model.md).
+
+## Trades with merchants: signed quotes, one atomic call
+
+1. The client asks `GET /quote?merchant=sari&item=fish&side=sell&qty=4`.
+2. The server runs `pricing.ts` and signs the quote with Sari's quote key:
+   `{merchant, player, side, token, qty, price_each, expires_at, nonce}`. The quote expires after 60 s.
+3. The client sends `sell_to_merchant(quote, signature)` through the relayer.
+4. The contract checks:
+   - the signature against Sari's registered quote key **[verify M1: `env::ed25519_verify` in the near-sdk version
+     we pin]**;
+   - that the quote has not expired and the nonce is unused;
+   - that `player == predecessor`;
+   - that the shop is open, and the merchant's daily caps and both balances allow the trade.
+
+   It then swaps the item and `coin` inside the contract and emits `mt_transfer` events.
+
+Merchants never need to sign a transaction for a trade, and there is no "player paid but merchant didn't" state.
+
+## What each server role may do on chain
+
+| Role | Methods it can call (enforced by the contract and the function-call key) | Hard limits in the contract |
+| --- | --- | --- |
+| minter | `mint_gathered(batch, mint_id)`, `break_tool` | per-account and per-item daily mint cap. `mint_id` is single-use, so retries never double-mint |
+| town | `town_buy(merchant, token, qty, price)`, `settle_day(day)`, `grant_starter(player)` | daily faucet `W_day` (see economy.md), one settlement per day, starter grants from treasury coins only |
+| merchant | `merchant_craft(recipe, times)`, plus its quote key accepted in trades | daily coin-out cap per merchant, daily buy cap per item |
+| relayer | none of its own. It only wraps delegate actions whose receiver is the game contract and whose method is on the allowlist | per-account and per-IP rate limits, gas cap per action, daily NEAR spend alarm |
+| owner | `set_config`, `register_merchant`, `set_roles`, `pause` | key not on the server |
+
+## Riwayat (history) panel
+
+Every chain call made for a player returns a transaction hash. The server stores
+`{account, kind, summary, tx_hash, status, created_at}` in SQLite, and the client lists them with a link to the
+testnet explorer (testnet.nearblocks.io, as listed on the NEAR Auth testnet page; the transaction URL pattern is
+**[verify M1]**). Gathering shows as pending until its batch mint lands.
+
+## NEAR AI Cloud and the local brain
+
+- The server calls the OpenAI-compatible API at `https://cloud-api.near.ai/v1` (from the `near-ai-cloud` skill) with
+  `NEARAI_API_KEY` from env. The model id comes from env and is chosen from the model list in M3.
+- It is used for merchant dialogue, haggling lines and souled-NPC chat. **Prices and reasons never come from the
+  LLM.** They come from `pricing.ts`, and a haggle can only move a quote within limits set in `pricing.ts`.
+- With no key, or on any error or timeout, it falls back to the prototype's local keyword brain, so the game stays
+  fully playable. No key ever reaches the browser. The prototype's "custom endpoint with browser API key" option is
+  removed.
+
+## Demo and offline mode
+
+Open `?mode=offline` (or the server can't be reached): the client swaps the real chain adapter for `MockChain`. It
+keeps balances in memory with the same interface and runs `pricing.ts` in the browser. A permanent banner reads
+"OFFLINE DEMO: tidak ada transaksi on-chain". Riwayat entries show "mock", with no explorer link.
+
+## Fast-forward
+
+`economy/sim.ts` runs the same `pricing.ts` and the same config with N simulated players, for D days, deterministic
+from a seed. It runs in the browser (Simulate 1 week button) or as a CLI for the 30-day report. It is labelled
+"Simulasi (off-chain)". Charts: price per item, cash per merchant, total money supply, open/closed shops.
+
+## Feature flags (default off in the submission build)
+
+`casino`, `combat`, `thief`, `police`, `curfew`, `gossip`, and the claude.ai-only `social` online mode. The code stays,
+and the flags are set in `client/flags.js` and the Dev panel. Player-to-player gifts and trades are replaced by the
+on-chain player market.

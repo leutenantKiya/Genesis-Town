@@ -1,0 +1,26 @@
+# secrets: keys live only in environment variables
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+**/credentials/
+near-credentials/
+
+# submission payload contains personal data (HACKATHON.md)
+submission*.json
+
+# data
+*.db
+*.sqlite
+*.sqlite3
+
+# build output
+node_modules/
+dist/
+target/
+*.wasm
+coverage/
+test-results/
+playwright-report/
+.DS_Store
