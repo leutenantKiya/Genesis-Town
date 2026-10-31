@@ -1,6 +1,23 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "genesis-mock", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev:mock"], "port": 3000 }
+    {
+      "name": "genesis-testnet",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "genesis-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:mock"
+      ],
+      "port": 3000
+    }
   ]
 }
