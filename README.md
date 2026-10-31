@@ -1,11 +1,11 @@
 # Genesis Town
 
-> **Status (2026-11-01): milestone M1 done except one browser check.** The game contract is deployed on NEAR testnet.
-> - A scripted end-to-end run on testnet passed: account creation, a batched gather mint, and a gas-free player
->   transfer signed by a session key.
-> - A real Google sign-in through NEAR Auth created a player account on testnet, with the NEAR Auth key as full access
->   and a game-only session key.
-> - Gathering from the browser on testnet has not been checked yet.
+> **Status (2026-11-01): milestone M1 done (Checkpoint 2).** The game contract is deployed on NEAR testnet, and the
+> M1 loop has been checked on testnet in two ways:
+> - **Scripted:** account creation, a batched gather mint, and a gas-free player transfer signed by a session key.
+> - **By hand in the browser:** Google sign-in through NEAR Auth created a player account (NEAR Auth key as full
+>   access, plus a game-only session key), and gathering 3 Ikan at the pond was minted in one batch transaction:
+>   https://testnet.nearblocks.io/txns/CNhfxPAQCAzkW8XsDoSo1R7MSar8LsJyKc3PCj7sDyxt
 >
 > Anything marked *(planned)* does not exist yet.
 
