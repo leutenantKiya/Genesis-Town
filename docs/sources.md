@@ -57,8 +57,9 @@ rebalancing stretch would need explicit approval.
 
 | Package | Latest | Docs or skill mention |
 | --- | --- | --- |
-| near-sdk (crate) | 5.30.0 | skill example 5.24 |
-| near-sandbox (crate) | 0.4.0 | integration-test docs use 0.3 |
+| near-sdk (crate) | 5.30.0 | skill example 5.24. The `cargo near new` template pins `5.29` (resolves to 5.30.0) |
+| cargo-near | 0.22.0 | official GitHub release binary, SHA-256 checked |
+| near-sandbox (crate) | 0.4.0 | integration-test docs use 0.3. We use the `cargo near new` template's pin, `0.3.12` (resolves to 0.3.16, nearcore 2.13.4), together with `near-api 0.8` |
 | near-api-js (npm) | 7.4.0 | relayer tutorial: 7.4 or later |
 | @fast-auth-near/browser-sdk | 1.4.2 | NEAR Auth docs |
 | @fast-auth-near/javascript-provider | 1.4.1 | NEAR Auth docs |

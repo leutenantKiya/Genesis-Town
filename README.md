@@ -1,9 +1,9 @@
 # Genesis Town
 
-> **Status (2026-10-31): milestone M1 in progress.** Working and tested: the server (login verification, account
-> creation, gas-free relayer, batched minting, Riwayat history) and the game's NEAR layer, all against a **mock
-> chain**. Not built yet: the NEP-245 contract and the testnet deployment, which are blocked on installing the Rust
-> toolchain. Anything marked *(planned)* does not exist yet.
+> **Status (2026-10-31): milestone M1, waiting for Checkpoint 2.** The game contract is deployed on NEAR testnet and
+> the full M1 loop has passed a scripted end-to-end run on testnet: account creation, batched gather mint, and a
+> gas-free player transfer signed by a session key. Not yet verified: Google/email sign-in in the browser against
+> testnet, which needs a person to log in. Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
@@ -37,15 +37,23 @@ burns, rent), so anyone can verify them, while staying invisible in the normal l
 Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [architecture](docs/architecture.md) ·
 [threat model](docs/threat-model.md) · [sources](docs/sources.md)
 
-## What is on-chain *(planned, NEAR testnet)*
+## What is on-chain (NEAR testnet)
 
-| Thing | Where | Methods |
+| Thing | Account | Notes |
 | --- | --- | --- |
-| Items + coin (NEP-245) | `game.<project>.testnet` *(account created in M1)* | `mt_transfer`, `mt_batch_transfer`, `mt_balance_of`, `mt_supply`, … (spec-standard) |
-| Game rules | same contract | `craft`, `sell_to_merchant`, `buy_from_merchant`, `list_item`, `buy_listing`, `invest`, `claim_dividends`, `settle_day`, … |
-| Player accounts | `<id>.players.<project>.testnet` | created at sign-up, owned by the player's NEAR Auth key |
+| Game contract (NEP-245 items + `coin`, NEP-145 storage) | [`game.genesistown.testnet`](https://testnet.nearblocks.io/address/game.genesistown.testnet) | source: [contracts/game](contracts/game) |
+| Relayer (pays players' gas, NEP-366) | [`relayer.genesistown.testnet`](https://testnet.nearblocks.io/address/relayer.genesistown.testnet) | |
+| Gather minter (function-call key: `mint_gathered`, `register_player` only) | [`minter.genesistown.testnet`](https://testnet.nearblocks.io/address/minter.genesistown.testnet) | |
+| Player accounts | `p<hash>.players.genesistown.testnet` | full-access key = the player's NEAR Auth key; plus a game-only session key |
 
-Contract ids and explorer links will be filled in here after the M1 deploy.
+Contract methods: NEP-245 `mt_transfer`, `mt_batch_transfer`, `mt_transfer_call`, `mt_batch_transfer_call`,
+`mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`; NEP-145 `storage_*`. Game
+methods so far: `register_player`, `mint_gathered`, `send_item`. Table: [contracts/game/README.md](contracts/game/README.md).
+
+Example transactions from the M1 end-to-end run (`node server/scripts/e2e-testnet.ts`):
+- batch mint of 3 Ikan: https://testnet.nearblocks.io/txns/9rQEcKUNzgQnVPsEx4FAKXv1X8FvLnGDqNNko58T47Tu
+- player A sends 1 Ikan to B, signed with A's session key and relayed gas-free:
+  https://testnet.nearblocks.io/txns/HbhpvdLJU9Yja5hsMKFYm9ZnPAPPGgSLfBXGvV9pRcuh
 
 ## Try it in 5 minutes *(planned, steps become real as milestones land)*
 
