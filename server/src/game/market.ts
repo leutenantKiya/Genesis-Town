@@ -92,7 +92,7 @@ export class Market {
     if (!d.buys.includes(token)) throw new HttpError(409, `${d.name} tidak membeli ${this.econ.items[token]?.name ?? token}.`);
     const t = this.clock.time();
     const acct = this.account(id);
-    const cap = this.econ.pricing.dailyBuyCapPerTarget * (d.target[token] ?? 10);
+    const cap = (this.personality(d).buyCapMult ?? this.econ.pricing.dailyBuyCapPerTarget) * (d.target[token] ?? 10);
     if (this.gs.boughtToday(acct, token, t.settleDay) + qty > cap) throw new HttpError(409, `${d.name} sudah cukup membeli ${this.econ.items[token].name} hari ini.`);
     if (this.gs.balance(account, token) < qty) throw new HttpError(409, 'Barangmu tidak cukup.');
     const { unit, total } = this.quote(id, token, 'sell', qty);

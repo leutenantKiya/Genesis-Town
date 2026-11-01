@@ -9,6 +9,26 @@ import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
 import type { Game } from './game/game.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
+import { Worker } from 'node:worker_threads';
+import type { SimResult } from './game/sim.ts';
+
+// Fast-forward simulations (off-chain, mock chain, same game code): run in a worker, cached by parameters.
+const simCache = new Map<string, Promise<SimResult>>();
+function simulate(days: number, players: number, seed: number): Promise<SimResult> {
+  const key = `${days}:${players}:${seed}`;
+  let p = simCache.get(key);
+  if (!p) {
+    p = new Promise<SimResult>((resolve, reject) => {
+      const w = new Worker(new URL('./game/sim-worker.ts', import.meta.url), { workerData: { days, players, seed } });
+      w.once('message', (r: SimResult) => { resolve(r); void w.terminate(); });
+      w.once('error', reject);
+    });
+    p.catch(() => simCache.delete(key));
+    if (simCache.size > 20) simCache.delete(simCache.keys().next().value as string);
+    simCache.set(key, p);
+  }
+  return p;
+}
 
 export interface AppDeps {
   cfg: Config;
@@ -125,6 +145,14 @@ export function createApp(deps: AppDeps) {
         const proofFor = url.searchParams.get('proof');
         const proofs = proofFor ? rows.map((r, i) => (r.account === proofFor ? { seq: r.seq, index: i, proof: merkleProof(leaves, i) } : null)).filter(Boolean) : undefined;
         return send(res, 200, { day, root: merkleRoot(leaves), rows, proofs, settlements: game.gs.settlements(50).filter((s) => (s as { day: number }).day === day) });
+      }
+      if (req.method === 'POST' && p === '/api/sim') {
+        const b = await readJson(req);
+        const days = Math.max(1, Math.min(30, Math.floor(Number(b.days ?? 7))));
+        const players = Math.max(1, Math.min(60, Math.floor(Number(b.players ?? 25))));
+        const seed = Math.floor(Number(b.seed ?? 42)) >>> 0;
+        const r = await simulate(days, players, seed);
+        return send(res, 200, { ...r, label: 'Simulasi off-chain: rantai tiruan, kode harga dan aturan yang sama (economy/pricing.ts)' });
       }
       if (req.method === 'POST' && p === '/api/dev/settle') {
         if (!deps.cfg.devTools) throw new HttpError(403, 'dev tools are off');

@@ -6,7 +6,9 @@
 //   fd  = clamp(1 + w * (sold - bought) / (sold + bought + damping), ...)    demand factor (decayed volumes)
 //   mid* = base * fs * fd, moved at most +-maxStepPerTick per tick, kept in [minMult, maxMult] * base
 //   fc  = clamp((cash / (comfortDays * rent)) ^ (0.5 * cashSensitivity), fcMin, 1)   short on cash -> lower bids
-//   ask = ceil(mid * (1 + spread/2))     bid = max(1, floor(mid * (1 - spread/2) * fc))
+//   ask = ceil(mid * (1 + spread/2))     bid = max(1, floor(mid * (1 - spread/2) * fc), floor(minBidMult * base))
+// A personality may set minBidMult (never bid below that share of base value: a generous merchant who overpays)
+// and buyCapMult (daily buy cap = buyCapMult x target stock; default from config.pricing).
 // Every tick produces a one-sentence reason (Indonesian) for the tooltip.
 
 export interface PricingConfig {
@@ -16,7 +18,7 @@ export interface PricingConfig {
   fcMin: number; cashComfortDays: number; volumeHalfLifeTicks: number;
   maxQuoteQty: number;
 }
-export interface Personality { spread: number; elasticity: number; cashSensitivity: number }
+export interface Personality { spread: number; elasticity: number; cashSensitivity: number; minBidMult?: number; buyCapMult?: number }
 
 export interface MarketInputs {
   item: string;          // token id, e.g. "fish"
@@ -57,8 +59,10 @@ export function decay(v: number, c: PricingConfig, ticks = 1): number {
   return v * Math.pow(0.5, ticks / c.volumeHalfLifeTicks);
 }
 
-export function askBid(mid: number, fc: number, p: Personality): { ask: number; bid: number } {
-  return { ask: Math.max(1, Math.ceil(mid * (1 + p.spread / 2))), bid: Math.max(1, Math.floor(mid * (1 - p.spread / 2) * fc)) };
+export function askBid(mid: number, fc: number, p: Personality, base = 0): { ask: number; bid: number } {
+  const ask = Math.max(1, Math.ceil(mid * (1 + p.spread / 2)));
+  const floorBid = p.minBidMult ? Math.floor(p.minBidMult * base) : 1;
+  return { ask, bid: Math.min(ask - 1 > 0 ? ask - 1 : 1, Math.max(1, floorBid, Math.floor(mid * (1 - p.spread / 2) * fc))) };
 }
 
 /** One pricing tick: move the mid price toward its target, bounded, and explain why. */
@@ -70,7 +74,7 @@ export function tick(prevMid: number, m: MarketInputs, p: Personality, c: Pricin
   const stepped = clamp(wanted, prevMid * (1 - c.maxStepPerTick), prevMid * (1 + c.maxStepPerTick));
   const mid = clamp(stepped, c.minMult * m.base, c.maxMult * m.base);
   const clamped = Math.abs(stepped - wanted) > 1e-9;
-  const { ask, bid } = askBid(mid, fc, p);
+  const { ask, bid } = askBid(mid, fc, p, m.base);
   return { mid, ask, bid, fs, fd, fc, reason: explain(prevMid, mid, fs, fd, fc, clamped, m) };
 }
 
@@ -81,7 +85,7 @@ export function lotUnitPrice(side: 'merchant_buys' | 'merchant_sells', qty: numb
   const fsLot = stockFactor(side === 'merchant_buys' ? m.stock + q / 2 : Math.max(0, m.stock - q / 2), m.target, p, c);
   const lotMid = clamp(mid * fsLot / fsNow, c.minMult * m.base, c.maxMult * m.base);
   const fc = cashFactor(m.cash, m.rent, p, c);
-  const { ask, bid } = askBid(lotMid, fc, p);
+  const { ask, bid } = askBid(lotMid, fc, p, m.base);
   return side === 'merchant_buys' ? bid : ask;
 }
 

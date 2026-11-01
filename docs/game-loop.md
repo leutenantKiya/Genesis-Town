@@ -28,7 +28,7 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
 
 1. Walk to a gathering node (pond, ore rock, tree, or a wheat plot on your own land). Nodes show how many charges are
    left (4 per node, respawn after 2 game hours).
-2. Press Space (or the on-screen A button on touch screens). A 2-second action plays, then a toast: `+1 Ikan`. Ore and wood use 1 durability of your Alat (tool).
+2. Press Space (or the on-screen A button on touch screens). A 2-second action plays, then a toast: `+1 Ikan`. Ore uses 1 durability of your Alat (tool); wood is gathered by hand.
    Each gather costs 4 energy.
 3. The bag counter updates at once. This is off-chain: the item shows a small clock icon ("today") until the 06:00
    daily settlement writes the day's net result on chain in one batch. See [onchain-offchain.md](onchain-offchain.md).
@@ -83,9 +83,9 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
 4. Walk to Sari's fish stall. Her bid for Ikan is shown with a tooltip. Sell 4 Ikan: coins go up, Sari's stock goes up,
    and next game hour her price ticks down a little, with the reason in the tooltip.
 5. Chop wood (uses the Alat), cook Ikan Bakar at your workbench, and sell it to Sari for more than the raw fish.
-6. The notice board shows Budi's smithy at 2 days of rent left and falling, because nobody needs tools this week.
-   Next morning it reads TUTUP.
-7. Open Budi's restoration board and contribute 50 coins and the 5 Kayu you chopped. When the board is complete
+6. The notice board shows Joko's general store at 2 days of rent left and falling: he buys everything and pays storage
+   on what he can't resell. Next morning his stall reads TUTUP.
+7. Open Joko's restoration board and contribute 50 coins and the 6 Kayu you chopped. When the board is complete
    (in the judge scenario the remaining gap is small), the shop reopens and your shares appear in Profile. The
    contribution has its own explorer link right away.
 8. Press **Settle sekarang** (Dev panel) to run the daily settlement now: Riwayat shows one on-chain settlement

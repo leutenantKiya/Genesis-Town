@@ -11,7 +11,7 @@
     "coin":  { "name": "Koin",       "kind": "currency", "base": 1 },
     "fish":  { "name": "Ikan",       "kind": "raw",      "base": 8 },
     "ore":   { "name": "Bijih",      "kind": "raw",      "base": 12, "needsTool": true },
-    "wood":  { "name": "Kayu",       "kind": "raw",      "base": 6,  "needsTool": true },
+    "wood":  { "name": "Kayu",       "kind": "raw",      "base": 6 },
     "wheat": { "name": "Gandum",     "kind": "raw",      "base": 5 },
     "bread": { "name": "Roti",       "kind": "crafted",  "base": 16, "energy": 25 },
     "meal":  { "name": "Ikan Bakar", "kind": "crafted",  "base": 20, "energy": 45 },
@@ -54,7 +54,7 @@
       "restore": { "coin": 200, "items": { "fish": 6, "wood": 4 } }
     },
     "budi": {
-      "name": "Budi", "shop": "Bengkel Budi", "personality": "generous",
+      "name": "Budi", "shop": "Bengkel Budi", "personality": "fair",
       "buys": ["ore", "wood"], "sells": ["tool"],
       "target": { "ore": 15, "wood": 10, "tool": 4 },
       "crafts": ["tool"],
@@ -70,17 +70,17 @@
       "restore": { "coin": 200, "items": { "wheat": 12 } }
     },
     "joko": {
-      "name": "Joko", "shop": "Toko Serba Ada Joko", "personality": "fair",
+      "name": "Joko", "shop": "Toko Serba Ada Joko", "personality": "generous",
       "buys": ["wood", "wheat", "fish"], "sells": ["wood", "bread"],
       "target": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },
       "crafts": [],
-      "startCash": 600, "startStock": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },
+      "startCash": 350, "startStock": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },
       "restore": { "coin": 200, "items": { "wood": 6, "wheat": 6 } }
     }
   },
   "personalities": {
     "fair":     { "spread": 0.20, "elasticity": 0.5, "cashSensitivity": 1.0 },
-    "generous": { "spread": 0.12, "elasticity": 0.3, "cashSensitivity": 0.0 },
+    "generous": { "spread": 0.12, "elasticity": 0.3, "cashSensitivity": 0.0, "minBidMult": 0.9, "buyCapMult": 3 },
     "greedy":   { "spread": 0.30, "elasticity": 0.5, "cashSensitivity": 1.0 }
   },
   "pricing": {
@@ -108,6 +108,7 @@
   },
   "shops": {
     "rent": 40,
+    "storageFeePerUnit": 0.5,
     "dividendShare": 0.4,
     "initialShares": 1000,
     "minSharePrice": 0.05

@@ -25,13 +25,14 @@ One NEP-245 contract holds every token. Token ids are short ASCII strings.
 | `coin` | Koin | currency (fungible) | town demand (§3), the only coin source | 1 | everything |
 | `fish` | Ikan | raw | pond nodes | 8 | Ikan Bakar, sell |
 | `ore` | Bijih | raw | rock nodes (needs Alat) | 12 | Alat |
-| `wood` | Kayu | raw | tree nodes (needs Alat) | 6 | Ikan Bakar, Alat, town firewood |
+| `wood` | Kayu | raw | tree nodes (by hand) | 6 | Ikan Bakar, Alat, town firewood |
 | `wheat` | Gandum | raw | farm plot: plant 1, harvest 3 after 3 watered days (not in Dingin) | 5 | Roti, seed |
 | `bread` | Roti | food | craft: 2 `wheat` | 16 | eat (+25 energy), town demand |
 | `meal` | Ikan Bakar | food | craft: 1 `fish` + 1 `wood` | 20 | eat (+45 energy), town demand |
-| `tool` | Alat | tool | craft: 2 `ore` + 1 `wood` | 45 | needed to gather ore and wood. 20 uses, then it breaks (burned) |
+| `tool` | Alat | tool | craft: 2 `ore` + 1 `wood` | 45 | needed to mine ore. 20 uses, then it breaks (burned) |
 
-Seven items plus `coin`, within the 6–10 limit. Tool durability is tracked per stack in game state and only the
+Seven items plus `coin`, within the 6–10 limit. Wood is gathered by hand: in an early simulation, wood needing a tool
+and tools needing wood deadlocked the economy once wood ran out (docs/sim-report-30d.md). Tool durability is tracked per stack in game state and only the
 break (burn of 1 `tool`) goes on chain.
 
 ## 1b. Seasons
@@ -58,9 +59,9 @@ can plan. They are config values in `economy/config.json`, used by both live pla
   | Merchant | Shop | Buys | Sells | Personality |
   | --- | --- | --- | --- | --- |
   | Sari | fish stall | fish, wood | fish, meal | fair: spread 20%, watches cash |
-  | Budi | smithy | ore, wood | tool | generous: spread 12%, ignores his own cash, the likely first bankruptcy |
+  | Budi | smithy | ore, wood | tool | fair: spread 20%, watches cash |
   | Wati | bakery | wheat | bread, wheat | greedy: spread 30%, slow to raise bids |
-  | Joko | general store | wood, wheat, fish | wood, bread | fair: spread 20% |
+  | Joko | general store | wood, wheat, fish | wood, bread | generous: spread 12%, never bids under 90% of base, buys up to 3× target a day, ignores his cash; starts with 350 coin |
 
   Merchants also craft: Wati bakes bread from wheat she holds, Sari cooks meals, and Budi forges tools. Each merchant
   has a daily crafting capacity (default 10 crafts per day), and crafting uses the same recipes and fees as players.
@@ -85,6 +86,7 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 | Sink | What is burned | Amount |
 | --- | --- | --- |
 | Shop rent | merchant `coin` | R = 40 per merchant per game day, while the shop is open |
+| Storage (gudang) fee | merchant `coin` | 0.5 per unit held above target stock per day, paid with the rent |
 | Crafting fee | player or merchant `coin` | 2 per craft |
 | Player-market fee | seller `coin` | 5% of each player-market sale |
 | Shipping box | items sold to the town at 70% of base price | counted inside the town faucet `W_day` (it is town demand, at a worse price) |
@@ -131,7 +133,7 @@ Inputs:
 - Personality: `spread`, elasticity `e`, cash sensitivity `c`.
 
 ```
-stockFactor  fs = clamp((T / max(s, 1)) ^ e,              0.5, 2.5)     e = 0.5 (Budi 0.3)
+stockFactor  fs = clamp((T / max(s, 1)) ^ e,              0.5, 2.5)     e = 0.5 (generous 0.3)
 demandFactor fd = clamp(1 + 0.4 · (S − B) / (S + B + 5),   0.7, 1.4)
 target       mid* = base · fs · fd
 bounded      mid  = clamp(mid*, 0.9 · mid_prev, 1.1 · mid_prev)          # at most ±10% per tick
@@ -200,10 +202,11 @@ the shop's stock, and the shop reopens. A pledge withdrawn before completion is 
 **Shop health in the UI.** Shown on the notice board, the shop dialog and Profile: cash, days of rent covered (C / R),
 7-day profit, status, and your share percentage.
 
-**Expected first bankruptcy.** Budi is generous (narrow spread, low elasticity, ignores his cash). Ore is easy to
-gather but the town buys only about 3 tools a day, so Budi keeps buying ore he cannot sell and his cash runs down.
-The design target is that he closes on about game day 3–5 of a fresh week, and reopens once players invest. The M3
-simulation must show this happening without scripting.
+**Expected first bankruptcy (confirmed by the simulator).** Joko is generous: he never bids under 90% of base value,
+buys up to 3× his target stock a day, and ignores his own cash. His general store buys fish, wood and wheat but resells
+only wood and bread, so stock piles up and the storage fees eat his cash. In the 7-day, 25-player simulation he closes
+on day 4 and players restore him on day 6; see [sim-report-30d.md](sim-report-30d.md) for the 30-day run. Fair and
+greedy merchants lower their bids when cash is short, so they protect themselves.
 
 ## 6. Player market
 

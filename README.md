@@ -89,7 +89,8 @@ Run locally (below), open http://localhost:3000.
    Outside, in the fenced field next to your house, press Space on a plot to till, plant (press twice) and water wheat.
 5. Open the Dev panel → **Settle sekarang** → Riwayat (H) shows "Settlement hari N" with a testnet explorer link,
    and everything from step 2 now points to it.
-6. *(planned, M3)* Press **Simulate 1 week** → price and cash charts move; Budi goes bankrupt during the week.
+6. Press **Simulasi** → 7 game days play in about 60 seconds: price charts per item, merchant cash, money supply.
+   Joko goes bankrupt on day 4 and players restore him on day 6 (off-chain simulation of the same game code, labelled).
 7. When a shop shows TUTUP, talk to its merchant → restoration board → **Sumbang** (on-chain) → the shop reopens and
    your shares appear in the shop window.
 

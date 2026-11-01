@@ -57,16 +57,21 @@ export class Settlement {
       const pay = Math.min(want, market.faucetLeft(day));
       if (pay > 0) gs.add(day, r.account, 'coin', pay, 'ship_pay', String(r.seq));
     }
-    // Rent: each open shop pays what it can; a shop that cannot pay in full is closed after settlement.
+    // Rent plus storage (gudang) fees: 0.5 coin per unit held above target stock, burned. Each open shop pays what
+    // it can; a shop that cannot pay in full is closed after settlement (the contract re-checks coin < rent).
     const toClose: string[] = [];
     for (const id of market.ids()) {
       if (!market.isOpen(id)) continue;
       const acct = market.account(id);
+      const d = econ.merchants[id];
       const cash = gs.balanceThrough(acct, 'coin', day);
-      const rent = econ.shops.rent;
-      const pay = Math.min(rent, cash);
-      if (pay > 0) gs.add(day, acct, 'coin', -pay, 'rent');
-      if (cash < rent) toClose.push(acct);
+      let over = 0;
+      for (const token of market.tokens(d)) over += Math.max(0, gs.balanceThrough(acct, token, day) - (d.target[token] ?? 0));
+      const storage = Math.floor(over * (econ.shops.storageFeePerUnit ?? 0));
+      const due = econ.shops.rent + storage;
+      const pay = Math.min(due, cash);
+      if (pay > 0) gs.add(day, acct, 'coin', -pay, 'rent', storage ? `rent ${econ.shops.rent} + gudang ${storage}` : null);
+      if (cash < due) toClose.push(acct);
     }
     gs.setMeta(`settle.close.${day}`, JSON.stringify(toClose));
     gs.setMeta(`settle.prepared.${day}`, '1');

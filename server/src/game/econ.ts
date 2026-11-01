@@ -24,7 +24,7 @@ export interface Econ {
   personalities: Record<string, Personality>;
   pricing: PricingConfig & { dailyBuyCapPerTarget: number; quoteValidMs: number };
   town: { dailyUnits: Record<string, number>; maxPriceMult: number; faucetW0: number; moneyCap0: number; activePlayerDivisor: number; maxK: number; shippingBoxMult: number };
-  shops: { rent: number; dividendShare: number; initialShares: number; minSharePrice: number };
+  shops: { rent: number; storageFeePerUnit: number; dividendShare: number; initialShares: number; minSharePrice: number };
   fees: { marketPct: number };
   starter: Record<string, number>;
   caps: { dailyGainPerItem: number; dailySends: number; maxSendAmount: number };
