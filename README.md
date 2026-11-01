@@ -35,11 +35,15 @@ burns, rent), so anyone can verify them, while staying invisible in the normal l
 - The only source of new coins is townsfolk buying finished goods. The contract caps it per day and throttles it as
   total coin supply approaches a cap, so the money supply is bounded. Sinks: shop rent, crafting fees, a 5%
   player-market fee, eaten food, tool wear.
+- Gathering, farming, crafting and merchant trades are instant and off-chain. Once per game day (every 24 real
+  minutes) one settlement transaction writes everyone's net change on chain, with a hash of the day's published ledger.
+  Player-to-player trades and shop shares are on-chain immediately. See [docs/onchain-offchain.md](docs/onchain-offchain.md).
+- Seasons (7 game days each) change what the land yields and what the town buys.
 - A merchant that can't pay its daily rent closes. Players invest coins to reopen it and receive shares that pay 40%
   of the shop's daily profit as dividends.
 
 Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [architecture](docs/architecture.md) ·
-[threat model](docs/threat-model.md) · [sources](docs/sources.md)
+[threat model](docs/threat-model.md) · [on-chain vs off-chain](docs/onchain-offchain.md) · [sources](docs/sources.md)
 
 ## What is on-chain (NEAR testnet)
 
@@ -63,7 +67,8 @@ Example transactions from the M1 end-to-end run (`node server/scripts/e2e-testne
 
 1. Open the demo URL *(TBD)* and press **Masuk**, signing in with email → see your house, 100 coins, an Alat and
    3 Roti. No wallet popup.
-2. Walk to the pond and press A → see `+1 Ikan`, and a Riwayat (history) entry with a testnet explorer link.
+2. Walk to the pond and press A → see `+1 Ikan` instantly. Press **Settle sekarang** (Dev panel) → Riwayat shows the
+   day's settlement transaction with a testnet explorer link.
 3. Sell 10 Ikan to merchant Sari → see her fish price fall over the next game hours, with her reason in the tooltip.
 4. Press **Simulate 1 week** → watch the price charts move; merchant Budi's smithy goes bankrupt during the week.
 5. Invest 50 coins in Budi's shop → the shop reopens and your share appears in Profile.
@@ -123,6 +128,8 @@ NEP-245 contract (`/contracts`), and shared economy code (`/economy`).
 - Design stage: nothing on-chain exists yet.
 - The baseline is the 2026-10-25 published build. Later prototype work (to 2026-10-31) was in a local folder that
   wasn't available when this repository was created.
+- Items gathered or traded off-chain today are owned on chain only after the 06:00 settlement (or "Simpan sekarang").
+- The warmer art pass and fullscreen/keybind settings are designed but scheduled after the economy loop works.
 - Testnet only. NEAR Intents has no testnet, so it is out of scope unless approved as a mainnet stretch.
 
 ## License

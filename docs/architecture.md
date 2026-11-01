@@ -1,6 +1,7 @@
 # Architecture
 
-Status: design (M0). The checks that were open at M0 are resolved in [sources.md](sources.md#open-checks-from-m0-resolved-in-m1-2026-10-31).
+Status: design (M0), updated 2026-11-01. Gathering, farming, crafting and merchant trades are now off-chain with a
+daily on-chain settlement; see [onchain-offchain.md](onchain-offchain.md). The checks that were open at M0 are resolved in [sources.md](sources.md#open-checks-from-m0-resolved-in-m1-2026-10-31).
 
 ## Overview
 
@@ -14,7 +15,7 @@ flowchart LR
   subgraph Server["/server (Node + TypeScript, SQLite)"]
     AUTH[auth + account creation]
     REL[relayer /relay<br/>NEP-366]
-    MER[merchant agents loop<br/>pricing ticks, quotes]
+    MER[merchant agents loop<br/>pricing ticks, daily ledger]
     MINT[gather minter<br/>batches]
     TOWN[town demand + daily settlement]
     AI[NEAR AI Cloud client<br/>+ local rule brain]
@@ -31,7 +32,7 @@ flowchart LR
   end
   G -- "Auth0 login (once)" --> FA
   G -- signed delegate action --> REL --> C
-  G <-- quotes, prices, reasons --> MER
+  G <-- prices, reasons, off-chain trades --> MER
   MER --> PR
   SIM --> SM --> PR
   MINT --> C
@@ -67,7 +68,7 @@ exact name will be picked when it is created in M1.
 | `relayer.genesistown.testnet` | NEAR for gas | full-access keys (the reference relayer requires them), rate limited and spend monitored |
 | `minter.genesistown.testnet` | nothing; the contract only trusts it to mint gathered items | function-call key → `game` only |
 | `town.genesistown.testnet` | treasury coins, initial merchant shares | function-call key → `game` only |
-| `sari.…`, `budi.…`, `wati.…`, `joko.…` | merchant balances inside the contract | function-call key → `game` only, plus a separate ed25519 **quote key** registered in the contract |
+| `sari.…`, `budi.…`, `wati.…`, `joko.…` | merchant balances inside the contract | function-call key → `game` only; balances change through the daily settlement (no quote key needed any more) |
 | `players.genesistown.testnet` | parent of player accounts, a small NEAR float for account creation | full-access key (account creation needs one), only small balances kept |
 | `<id>.players.genesistown.testnet` | a player | the server keeps **no** key for players |
 
@@ -105,29 +106,33 @@ cannot attach deposits. Gameplay therefore uses game methods (`sell_to_merchant`
 take no deposit and carry their own limits. The standard NEP-245 methods stay spec-compliant for real wallets. This
 trade-off is analysed in [threat-model.md](threat-model.md).
 
-## Trades with merchants: signed quotes, one atomic call
+## Trades with merchants: off-chain, settled daily
 
-1. The client asks `GET /quote?merchant=sari&item=fish&side=sell&qty=4`.
-2. The server runs `pricing.ts` and signs the quote with Sari's quote key:
-   `{merchant, player, side, token, qty, price_each, expires_at, nonce}`. The quote expires after 60 s.
-3. The client sends `sell_to_merchant(quote, signature)` through the relayer.
-4. The contract checks:
-   - the signature against Sari's registered quote key (`env::ed25519_verify`, present in near-sdk 5.30);
-   - that the quote has not expired and the nonce is unused;
-   - that `player == predecessor`;
-   - that the shop is open, and the merchant's daily caps and both balances allow the trade.
+Merchants are game NPCs that each own a real testnet account. Their trades with players happen off-chain at
+`pricing.ts` prices, as entries in the day's ledger (see [onchain-offchain.md](onchain-offchain.md)). At 06:00 the
+settlement moves each merchant's and each player's net change of items and `coin` on chain in one batch. Merchant
+balances, cash and stock are therefore real on-chain state, updated once per game day.
 
-   It then swaps the item and `coin` inside the contract and emits `mt_transfer` events.
+This replaces the M0 design of one atomic on-chain call per trade with merchant-signed quotes. Quotes were only
+needed because each trade was a transaction; with daily settlement they add cost without adding trust.
 
-Merchants never need to sign a transaction for a trade, and there is no "player paid but merchant didn't" state.
+## Session keys
+
+Session keys are created as function-call keys for the game contract with an **empty method list**, which NEAR
+treats as "any method on this contract". The relayer allowlist and the contract decide what a player may do:
+- admin and role methods check the caller;
+- `mt_transfer*` needs 1 yoctoNEAR, which a function-call key cannot attach.
+
+New player actions in later milestones therefore work without re-issuing keys. Accounts created in M1 have
+`send_item` only and need a new session key: one NEAR Auth approval, or a new test account.
 
 ## What each server role may do on chain
 
 | Role | Methods it can call (enforced by the contract and the function-call key) | Hard limits in the contract |
 | --- | --- | --- |
-| minter | `mint_gathered(batch, mint_id)`, `break_tool` | per-account and per-item daily mint cap. `mint_id` is single-use, so retries never double-mint |
-| town | `town_buy(merchant, token, qty, price)`, `settle_day(day)`, `grant_starter(player)` | daily faucet `W_day` (see economy.md), one settlement per day, starter grants from treasury coins only |
-| merchant | `merchant_craft(recipe, times)`, plus its quote key accepted in trades | daily coin-out cap per merchant, daily buy cap per item |
+| settler (the M1 `minter` account) | `settle_day(day, chunk, entries, ledger_root)`, `register_player` | each `(day, chunk)` applied once; per-account per-item daily gain cap; `coin` minted only inside the faucet `W_day` and money cap; spending needs settled balance |
+| town | `pay_dividends(day)`, `grant_starter(player)` | once per day; starter grants from treasury coins only |
+| merchant | none of its own in the daily loop; its balances change through settlement | daily coin-out cap per merchant, enforced in settlement |
 | relayer | none of its own. It only wraps delegate actions whose receiver is the game contract and whose method is on the allowlist | per-account and per-IP rate limits, gas cap per action, daily NEAR spend alarm |
 | owner | `set_config`, `register_merchant`, `set_roles`, `pause` | key not on the server |
 
@@ -135,7 +140,8 @@ Merchants never need to sign a transaction for a trade, and there is no "player 
 
 Every chain call made for a player returns a transaction hash. The server stores
 `{account, kind, summary, tx_hash, status, created_at}` in SQLite, and the client lists them with a link to the
-testnet explorer at `https://testnet.nearblocks.io/txns/<hash>` (the pattern used in the NEAR docs). Gathering shows as pending until its batch mint lands.
+testnet explorer at `https://testnet.nearblocks.io/txns/<hash>` (the pattern used in the NEAR docs). Off-chain actions show as "menunggu settlement" (waiting for settlement) and are grouped under the day's settlement
+transaction once it lands. Player-to-player actions get their own link immediately.
 
 ## NEAR AI Cloud and the local brain
 

@@ -1,13 +1,16 @@
 # Economy design
 
-Status: design (M0). These are starting values. The M3 simulation (30 game days, 50 simulated players) tunes them, and
+Status: design (M0), updated 2026-11-01: seasons, the farm plot, shop restoration bundles and the shipping box are
+added, and gathering, crafting and merchant trades are now off-chain until one daily on-chain settlement
+([onchain-offchain.md](onchain-offchain.md)). These are starting values. The M3 simulation (30 game days, 50 simulated players) tunes them, and
 its report will be committed next to this file. Code that will implement each part:
 
 | Part | Where it will live | Runs in |
 | --- | --- | --- |
 | Constants (items, recipes, fees, caps) | `economy/config.json` | server, simulator, and the contract's `init` arguments |
 | Pricing rule | `economy/pricing.ts` (the only pricing code) | server (live quotes) and `economy/sim.ts` (fast-forward) |
-| Invariants: mint caps, fees, burns, rent, shares, faucet throttle | `contracts/game` (Rust) | NEAR testnet |
+| Invariants: settlement caps, fees, burns, rent, shares, faucet throttle | `contracts/game` (Rust), checked at each daily settlement and on every player-to-player action | NEAR testnet |
+| Day-to-day state: gathering, farming, crafting, merchant trades, energy | server ledger (SQLite), published per day with a Merkle root | off-chain until 06:00 |
 
 Prices are decided off-chain by `pricing.ts`, because they are a judgement call that should be readable and easy to
 tune. Every rule that protects the money supply (caps, burns, fees, rent, the faucet throttle) is enforced by the
@@ -23,13 +26,28 @@ One NEP-245 contract holds every token. Token ids are short ASCII strings.
 | `fish` | Ikan | raw | pond nodes | 8 | Ikan Bakar, sell |
 | `ore` | Bijih | raw | rock nodes (needs Alat) | 12 | Alat |
 | `wood` | Kayu | raw | tree nodes (needs Alat) | 6 | Ikan Bakar, Alat, town firewood |
-| `wheat` | Gandum | raw | wheat plot on the player's own land | 5 | Roti |
+| `wheat` | Gandum | raw | farm plot: plant 1, harvest 3 after 3 watered days (not in Dingin) | 5 | Roti, seed |
 | `bread` | Roti | food | craft: 2 `wheat` | 16 | eat (+25 energy), town demand |
 | `meal` | Ikan Bakar | food | craft: 1 `fish` + 1 `wood` | 20 | eat (+45 energy), town demand |
 | `tool` | Alat | tool | craft: 2 `ore` + 1 `wood` | 45 | needed to gather ore and wood. 20 uses, then it breaks (burned) |
 
 Seven items plus `coin`, within the 6–10 limit. Tool durability is tracked per stack in game state and only the
 break (burn of 1 `tool`) goes on chain.
+
+## 1b. Seasons
+
+One season is 7 game days: Semi → Panas → Gugur → Dingin. That is one fast-forward week. Multipliers apply to node
+yield (chance of +1 extra per gather) and to how many units the town buys per day:
+
+| Season | Node yield | Town demand |
+| --- | --- | --- |
+| Semi | wheat grows, fish ×1.0, wood ×1.2 | bread ×1.2 |
+| Panas | fish ×1.5, ore ×1.0 | meal ×1.2, firewood ×0.6 |
+| Gugur | wood ×1.3, wheat harvest +1 | bread ×1.0, tool ×1.5 (repairs before winter) |
+| Dingin | no wheat growth, fish ×0.6 | meal ×1.4, firewood ×1.8 |
+
+Seasons move supply and demand in a predictable way, so prices drift across a week with no dev patch, and players
+can plan. They are config values in `economy/config.json`, used by both live play and the simulator.
 
 ## 2. Actors
 
@@ -60,7 +78,7 @@ break (burn of 1 `tool`) goes on chain.
 | Gathering | raw items, minted by the server's `minter` key | node charges (4 per node, 2-hour respawn), per-account rate limit on the server, per-account and per-item daily mint cap in the contract |
 | Crafting | output item, minted by the contract itself when inputs are burned | inputs are burned first, so crafting never creates value from nothing |
 | **Town demand** | **new `coin` paid to a merchant when the town buys a finished good** | **the only coin faucet. Daily cap in the contract, throttled by the total coin supply (see below)** |
-| Starter kit | 100 coins + 1 Alat + 3 Roti per new player | comes from the treasury's existing coins (a transfer, not a mint). When the treasury runs low, new players get items only |
+| Starter kit | 100 coins + 1 Alat + 3 Roti + 3 Gandum (seed) per new player | comes from the treasury's existing coins (a transfer, not a mint). When the treasury runs low, new players get items only |
 
 ### Sinks (things leave the game)
 
@@ -69,6 +87,7 @@ break (burn of 1 `tool`) goes on chain.
 | Shop rent | merchant `coin` | R = 40 per merchant per game day, while the shop is open |
 | Crafting fee | player or merchant `coin` | 2 per craft |
 | Player-market fee | seller `coin` | 5% of each player-market sale |
+| Shipping box | items sold to the town at 70% of base price | counted inside the town faucet `W_day` (it is town demand, at a worse price) |
 | Food | `bread`, `meal` | eaten by players, and bought (then burned) by the town |
 | Firewood | `wood` | bought (then burned) by the town |
 | Tool wear | `tool` | 1 tool burned every 20 uses |
@@ -165,10 +184,18 @@ newShares   = x / sharePrice
 The coins go into the merchant's cash. A closed shop has a low book value, so rescuing it is cheap and buys a large
 stake. That makes rescue rational, not charity.
 
-**Reopening.** A closed shop reopens once its cash reaches the reopen amount, 5 × R = 200 coins. Investments made
-while a shop is closed are held as pledges in the contract. When the pledges plus its cash reach 200, the pledges
-turn into shares at the share price fixed when the shop closed, and the shop reopens. If you withdraw a pledge before
-the threshold is reached, you get your coins back.
+**Restoration board (reopening).** A closed shop posts a board listing the coins and goods it needs:
+
+| Shop | Coins | Goods |
+| --- | --- | --- |
+| Sari (fish) | 200 | 6 Ikan, 4 Kayu |
+| Budi (smithy) | 200 | 10 Bijih, 5 Kayu |
+| Wati (bakery) | 200 | 12 Gandum |
+| Joko (general) | 200 | 6 Kayu, 6 Gandum |
+
+Contributions are on-chain pledges held in the contract. Item contributions are valued at base price for shares.
+When every line is met, the pledges turn into shares at the share price fixed when the shop closed, the goods join
+the shop's stock, and the shop reopens. A pledge withdrawn before completion is returned.
 
 **Shop health in the UI.** Shown on the notice board, the shop dialog and Profile: cash, days of rent covered (C / R),
 7-day profit, status, and your share percentage.

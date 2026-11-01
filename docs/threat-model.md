@@ -8,7 +8,7 @@ assets have no value, but the design assumes they might, so nothing here depends
 1. Player item and coin balances in the game contract.
 2. The money-supply invariant (no unbounded minting).
 3. NEAR held by the relayer and the account-creation account (pays gas and account storage).
-4. Server keys: relayer, minter, town, merchant function-call keys, merchant quote keys, account creator.
+4. Server keys: relayer, settler (the M1 minter account), town, merchant function-call keys, account creator.
 5. Player identity (Auth0 login) and the browser session key.
 
 ## Keys
@@ -18,9 +18,8 @@ assets have no value, but the design assumes they might, so nothing here depends
 | Owner (contract admin) | dev machine keychain only, never on the server | config change, role change | not on the server. Config changes emit events. `pause` exists |
 | Relayer full-access keys | server env | thief spends the relayer's NEAR | keep a small balance and top up manually, daily spend alarm, rotate keys |
 | Account-creator key | server env | creates junk accounts, spends the float | small float, account creation rate limited per Auth0 identity, per IP, and globally per day |
-| Minter function-call key | server env | mints gathered items | per-account and per-item daily mint caps in the contract. Single-use `mint_id`. Cannot mint `coin` |
+| Settler function-call key (the M1 minter account) | server env | submits daily settlements | per-account per-item daily gain caps, `coin` only within the faucet and money cap, each `(day, chunk)` once. The published ledger makes a dishonest settlement detectable |
 | Town function-call key | server env | pays coins to merchants | coins limited by the daily faucet `W_day`, settlement once per day, starter grants from existing treasury coins only |
-| Merchant quote keys | server env | signs bad quotes | quotes bound to one player, 60 s expiry, single-use nonce. Per-merchant daily coin-out cap. Rotation is owner-only |
 | Player session key | browser localStorage (M1). M4 moves it to a non-extractable WebCrypto Ed25519 key in IndexedDB | XSS or malware trades the player's items | function-call key limited to game methods on the game contract, so it can't move NEAR or call other contracts. Game methods have per-day limits. The player can revoke it with the full-access key |
 
 Secrets live only in environment variables. `.env` is git-ignored, and `.env.example` holds names only. Before any
@@ -32,13 +31,27 @@ in the M5 checklist.
 NEP-245 requires 1 yoctoNEAR on transfers so that a function-call key cannot move tokens without the user. We
 deliberately allow the session key to move game items through **game methods only**, because that is what "no
 popups" requires. The standard `mt_transfer` keeps the 1-yocto rule. Limits on game methods:
-- `sell_to_merchant` needs a merchant-signed quote naming this player;
+- `send_item` is capped per call and per day, and only reaches registered players;
 - `buy_listing` spends at most the listing price;
 - per account per day, a coin-out cap and a listings cap (5 open).
 
-So a stolen session key can at worst sell the player's goods at fair quotes or make bounded market moves. It can
-never send items to an arbitrary account. There is no free-form `gift` method; gifts go through a listing priced at 0
-coins and are capped.
+So a stolen session key can at worst send up to the daily `send_item` cap to other registered players, or make
+bounded market moves. It cannot move NEAR, call other contracts, or use `mt_transfer` (no deposit possible).
+
+From M2, session keys allow any method on the game contract (an empty method list), so each player method must be
+safe for a session key on its own: caps, no deposits, and caller checks. A unit test asserts this for every player
+method.
+
+## Off-chain ledger (server trust)
+
+Gathering, farming, crafting and merchant trades are off-chain until the 06:00 settlement
+([onchain-offchain.md](onchain-offchain.md)). The server is trusted for those events, as in any online game. The
+limits:
+- the contract caps each account's net daily gain per item, and the total new `coin` per day;
+- the day's full ledger is published with its Merkle root stored on chain, so a settlement that doesn't match its
+  ledger is publicly detectable;
+- unsettled items exist only on the server. If the server lost its database mid-day, those items would be lost;
+  players can settle their own bag early ("Simpan sekarang", once per game day).
 
 ## Relayer abuse
 
@@ -56,7 +69,8 @@ coins and are capped.
   instantly, and a pump fades.
 - A lot quote prices its own impact (fs at s ± q/2). Each quote covers at most 10 units. Merchants have a daily buy
   cap of 2 × target per item.
-- Quotes expire after 60 s and are single use, so you can't hold a quote and wait for the price to move.
+- A price shown to the player is valid for 60 s on the server, so you can't hold an old price and wait for the market
+  to move.
 - Player-market trades don't count toward merchant demand, so off-merchant deals can't move merchant prices.
 
 ## Bots and farming
@@ -75,8 +89,9 @@ coins and are capped.
 
 ## Double settlement (retries)
 
-- Mints carry a `mint_id` that the contract stores as used, so a retry is a no-op.
-- Trades carry a quote nonce, stored as used.
+- Each settlement chunk is keyed by `(day, chunk)` and stored as applied, so a retry is a no-op. (M1's `mint_id`
+  did the same for gather batches.)
+- Merchant trades are ledger entries with a sequence number; settlement nets them once.
 - `settle_day(day)` succeeds once per day number.
 - The relayer stores the delegate hash, so a duplicate post returns the first result.
 - Server tests (M4): replay each call and check no balance changes twice.
@@ -85,13 +100,13 @@ coins and are capped.
 
 Players can't attach deposits (function-call keys), so the contract pays for their storage. Growth is bounded by:
 storage registered only by the server at account creation, max 5 listings per account, fixed-size per-account records,
-and quote nonces pruned after expiry. The `minter`/`town` accounts fund storage top-ups. This follows the NEAR docs'
+and applied settlement keys kept only as a compact per-day bitmap. The `minter`/`town` accounts fund storage top-ups. This follows the NEAR docs'
 guidance to bound state growth that users don't pay for.
 
 ## Server compromise (worst case)
 
-An attacker with every server key could: spend relayer NEAR; mint gathered items up to the daily caps; pay up to
-`W_day` new coins per day; and sign quotes up to the merchants' daily caps. They could **not**: mint `coin` directly;
+An attacker with every server key could: spend relayer NEAR; settle fake gains up to the daily caps (detectable from
+the published ledger); and pay up to `W_day` new coins per day. They could **not**: mint `coin` directly;
 exceed the money cap; move player items to arbitrary accounts; or change the config (owner key is not on the server).
 Recovery: the owner calls `pause`, rotates the role keys, and unpauses.
 
