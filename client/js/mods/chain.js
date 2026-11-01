@@ -247,11 +247,61 @@
 
   function plotAt(x, y) { for (var i = 0; i < S.plots.length; i++) if (S.plots[i].x === x && S.plots[i].y === y) return i; return -1; }
 
+  var pendingPlant = null;
   function farm(idx) {
     var p = S.st && S.st.plots[idx];
     if (!p) { GT.toast('Masuk dulu untuk bertani.'); return; }
     var op = p.state === 'empty' ? 'till' : p.state === 'tilled' ? 'plant' : p.state === 'ready' ? 'harvest' : 'water';
+    // Planting spends 1 Gandum, so it needs a second press within 2 seconds.
+    if (op === 'plant' && !(pendingPlant && pendingPlant.idx === idx && Date.now() - pendingPlant.t < 2000)) {
+      pendingPlant = { idx: idx, t: Date.now() };
+      GT.toast('Tekan ' + keyLabel() + ' sekali lagi untuk menanam (pakai 1 Gandum).');
+      return;
+    }
+    pendingPlant = null;
     act({ action: 'farm', op: op, plot: idx });
+  }
+
+  /* ------------------------------------------------------------ context hint: which key does what here */
+  function keyLabel() { return window.GT_SETTINGS ? GT_SETTINGS.label('talk').split(' / ')[0] : 'Spasi'; }
+  var DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  var hintEl = null, hintT = 0;
+  function hintFor() {
+    var sc = GT.scene, pl = GT.player; if (!sc || !pl) return null;
+    var d = DIRV[pl.dir]; if (!d) return null;
+    var x = pl.x + d[0], y = pl.y + d[1], m = sc.map;
+    if (x < 0 || y < 0 || x >= m.w || y >= m.h) return null;
+    var npc = (sc.npcs || []).filter(function (n) { return !n.hidden && n.x === x && n.y === y; })[0];
+    if (npc && npc.key && npc.key.indexOf('merchant:') === 0) return 'Buka toko ' + npc.name;
+    if (npc) return 'Bicara dengan ' + npc.name;
+    var tt = m.tiles[y * m.w + x];
+    if (sc.house && sc.house.own && tt === 'table') return 'Meja Kerja (crafting)';
+    if (sc.house && sc.house.own && tt === 'chest') return 'Kotak Kirim';
+    if (sc.kind !== 'out') return null;
+    var pi = plotAt(x, y);
+    if (pi >= 0) {
+      var p = S.st && S.st.plots[pi]; if (!p) return 'Petak kebun (masuk dulu)';
+      if (p.state === 'empty') return 'Cangkul (−2 energi)';
+      if (p.state === 'tilled') return 'Tanam gandum (1 Gandum, tekan 2x)';
+      if (p.state === 'ready') return 'Panen gandum';
+      return p.wateredToday ? 'Sudah disiram hari ini' : 'Siram (−2 energi)';
+    }
+    var tok = TILE_ITEM[tt];
+    if (tok) {
+      var verb = { fish: 'Mancing', ore: 'Nambang', wood: 'Tebang' }[tok];
+      var needTool = tok !== 'fish' && S.st && (S.st.bag.tool.settled + S.st.bag.tool.today) < 1;
+      return verb + ' (−4 energi)' + (needTool ? ' · butuh Alat' : '');
+    }
+    return null;
+  }
+  function onFrame() {
+    var now = Date.now(); if (now - hintT < 150) return; hintT = now;
+    if (!hintEl) { var scr = document.getElementById('screen'); if (!scr) return; hintEl = $('div'); hintEl.id = 'gt-hint'; hintEl.setAttribute('aria-live', 'polite'); scr.appendChild(hintEl); }
+    var h = (GT.isUiOpen && GT.isUiOpen()) ? null : hintFor();
+    if (!h) { hintEl.className = ''; return; }
+    var txt = keyLabel() + '|' + h;
+    if (hintEl._t !== txt) { hintEl._t = txt; hintEl.textContent = ''; var b = $('b', null, keyLabel()); hintEl.appendChild(b); hintEl.appendChild(document.createTextNode(' ' + h)); }
+    hintEl.className = 'on';
   }
 
   var PLOT_COL = { empty: null, tilled: '#7a5230', planted: '#7a5230', ready: '#7a5230' };
@@ -508,5 +558,5 @@
   }
 
   window.GT_CHAIN = { state: S, refresh: refresh, login: login, open: open, act: act, _signedCall: signedCall };
-  GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDraw: onDraw });
+  GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDraw: onDraw, onFrame: onFrame });
 })();

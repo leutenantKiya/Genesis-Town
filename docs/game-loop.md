@@ -28,7 +28,7 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
 
 1. Walk to a gathering node (pond, ore rock, tree, or a wheat plot on your own land). Nodes show how many charges are
    left (4 per node, respawn after 2 game hours).
-2. Press A. A 2-second action plays, then a toast: `+1 Ikan`. Ore and wood use 1 durability of your Alat (tool).
+2. Press Space (or the on-screen A button on touch screens). A 2-second action plays, then a toast: `+1 Ikan`. Ore and wood use 1 durability of your Alat (tool).
    Each gather costs 4 energy.
 3. The bag counter updates at once. This is off-chain: the item shows a small clock icon ("today") until the 06:00
    daily settlement writes the day's net result on chain in one batch. See [onchain-offchain.md](onchain-offchain.md).
@@ -96,8 +96,11 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
 
 ## Screen, controls and look
 
-- **Fullscreen.** A ⛶ button in the HUD (and the key F) switches the game to fullscreen with the browser Fullscreen
-  API. The canvas scales in whole-pixel steps to fill the screen, the HUD sits on top, and Esc leaves fullscreen.
+- **Full window by default on desktop.** The view fills the browser window (up to 40×24 tiles) at the largest
+  whole-pixel scale; phones and small windows keep the boxed layout with the touch pad. Settings can force either.
+- **Fullscreen.** A ⛶ button in the HUD (and the key F) switches to browser fullscreen. Esc leaves it.
+- **Context hint.** When you face something usable, a line at the bottom says which key does what, e.g.
+  "Spasi Mancing (−4 energi)" or "Spasi Tanam gandum (1 Gandum, tekan 2x)". Planting needs a second press.
 - **Settings (Pengaturan)** is a gear button in the HUD, also on the Menu button on phones:
   - **Keybinds:** every action (move ×4, interact/A, message/E, bag, map, Riwayat, NEAR bag, fullscreen, settings)
     is listed with its key. Click an action, press a new key, and conflicts are flagged before saving. "Reset ke

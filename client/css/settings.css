@@ -1,0 +1,19 @@
+/* settings.css - full-window layout (html.gt-full), settings dialog, context hint, reduced motion */
+html.gt-full body{padding:0}
+html.gt-full #app{max-width:none;height:100vh;display:flex;flex-direction:column}
+html.gt-full .shell{flex:1;display:flex;flex-direction:column;border-radius:0;padding:6px 10px 8px;min-height:0}
+html.gt-full .brand,html.gt-full .help{display:none}
+html.gt-full .chain-banner{margin-bottom:4px;padding:3px 8px}
+html.gt-full .hud{margin-bottom:6px;gap:4px 12px}
+html.gt-full .bezel{flex:1;display:flex;align-items:center;justify-content:center;padding:6px;border-radius:6px;min-height:0}
+html.gt-full #fit{height:100%;align-items:center}
+html.gt-full .pad{display:none}
+html:fullscreen .shell{box-shadow:none}
+.gt-settings h3{margin:10px 0 6px;font-size:9px;font-weight:400;color:#4a4d75}
+.gt-settings h3:first-child{margin-top:0}
+.gt-key{min-width:64px;font-size:8px}
+.gt-key.gt-capturing{background:#9c2f55;color:#fff}
+#gt-hint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:rgba(10,12,24,.82);color:#fff;font-size:8px;line-height:1.4;padding:3px 7px;border-radius:3px;box-shadow:0 0 0 1px #000;pointer-events:none;white-space:nowrap;display:none;z-index:2}
+#gt-hint.on{display:block}
+#gt-hint b{color:#f2c94c;font-weight:400}
+html.gt-reduced-motion *{animation:none!important;transition:none!important}

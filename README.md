@@ -7,8 +7,9 @@
 > - one daily settlement written on chain, with the published ledger's Merkle root;
 > - a merchant closed on chain after failing rent, and reopened through its restoration board, with shares issued.
 >
-> Not built yet: the fast-forward simulator and charts (M3), NEAR AI Cloud dialogue (M3), the player market (M3),
-> fullscreen and keybind settings, and the warmer art pass. Anything marked *(planned)* does not exist yet.
+> Also done: a full-window layout on desktop, browser fullscreen (F), and a settings menu (O) with rebindable keys.
+> Not built yet: the fast-forward simulator and charts (M3), NEAR AI Cloud dialogue (M3), the player market (M3), and
+> the warmer art pass. Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
@@ -79,12 +80,13 @@ Run locally (below), open http://localhost:3000.
 
 1. Press **Masuk** and sign in with Google or email → you see your house, an energy bar, the season (Semi H1), and
    100 coins. No wallet popup.
-2. Walk to the pond and press A → `+1 Ikan` instantly. Open **Tas NEAR** (N) → it shows "+1 hari ini" (off-chain,
+2. Walk to the pond, face the water and press **Space** (the on-screen **A** button on touch screens) → `+1 Ikan`
+   instantly. A hint at the bottom of the screen always shows which key does what for the tile you face. Open **Tas NEAR** (N) → it shows "+1 hari ini" (off-chain,
    today).
 3. Walk to the market just south of your house and talk to **Sari** → prices with a reason under each item. Sell your
    fish.
-4. Inside your house, press A at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
-   Outside, press A on the plot tiles next to your house to till, plant and water wheat.
+4. Inside your house, press Space at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
+   Outside, press Space on the plot tiles next to your house to till, plant (press twice) and water wheat.
 5. Open the Dev panel → **Settle sekarang** → Riwayat (H) shows "Settlement hari N" with a testnet explorer link,
    and everything from step 2 now points to it.
 6. *(planned, M3)* Press **Simulate 1 week** → price and cash charts move; Budi goes bankrupt during the week.

@@ -1789,7 +1789,31 @@ function updateHud(){
 }
 
 /* ---------- layout ---------- */
+// Hackathon change (2026-11-01): full-window layout. When <html> has class "gt-full" (set by mods/settings.js on
+// desktop, or by the fullscreen toggle) the view fills the window: the largest whole-pixel scale that shows at least
+// 15x11 tiles, then as many columns/rows as fit (up to 40x24). Otherwise the original boxed layout below runs.
+function layoutFull(){
+  var W = elFit.clientWidth || window.innerWidth;
+  var top = elFit.getBoundingClientRect().top;
+  var H = Math.max(11 * T, window.innerHeight - top - 12);
+  var s = Math.max(1, Math.min(6, Math.floor(Math.min(W / (15 * T), H / (11 * T)))));
+  var cols = Math.max(11, Math.min(40, Math.floor(W / (T * s))));
+  var rows = Math.max(11, Math.min(24, Math.floor(H / (T * s))));
+  S = s; VW = cols * T; VH = rows * T;
+  elCv.width = VW * s; elCv.height = VH * s;
+  elCv.style.width = (VW * s) + 'px'; elCv.style.height = (VH * s) + 'px';
+  elScreen.style.width = (VW * s) + 'px';
+  var fsTable = [10, 8, 10, 12, 14, 16, 18];
+  elScreen.style.setProperty('--fs', fsTable[Math.min(s, 6)] + 'px');
+  elScreen.classList.toggle('short', VH * s < 340);
+  try { var sr = elScreen.getBoundingClientRect(); document.documentElement.style.setProperty('--toastTop', Math.max(8, Math.round(sr.top + 8)) + 'px'); } catch(e){}
+  ctx = elCv.getContext('2d');
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  fxBub.forEach(function(r){ r.w = 0; }); fxTag.forEach(function(r){ r.w = 0; });
+}
 function layout(){
+  if (document.documentElement.classList.contains('gt-full')) return layoutFull();
   var avail = elFit.clientWidth || 340;
   var sW = Math.floor(avail / (15 * T)); // prefer ~15 columns
   if (sW < 2) sW = Math.max(1, Math.floor(avail / (11 * T))); // tiny screens: 11-column minimum
