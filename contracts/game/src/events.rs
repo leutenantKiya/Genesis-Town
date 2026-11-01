@@ -16,7 +16,6 @@ pub fn mt_mint(owner_id: &str, token_ids: &[String], amounts: &[U128], memo: Opt
     emit("mt_mint", json!([d]));
 }
 
-#[allow(dead_code)] // used from M2 (crafting burns inputs)
 pub fn mt_burn(owner_id: &str, token_ids: &[String], amounts: &[U128], memo: Option<&str>) {
     let mut d = json!({ "owner_id": owner_id, "token_ids": token_ids, "amounts": amounts });
     if let Some(m) = memo {
@@ -31,4 +30,18 @@ pub fn mt_transfer(old_owner_id: &str, new_owner_id: &str, token_ids: &[String],
         d["memo"] = json!(m);
     }
     emit("mt_transfer", json!([d]));
+}
+
+/// Game events (NEP-297 format, standard "genesis-town"): settlement chunks and shop state changes.
+fn emit_game(event: &str, data: Value) {
+    let ev = json!({ "standard": "genesis-town", "version": "1.0.0", "event": event, "data": data });
+    env::log_str(&format!("EVENT_JSON:{ev}"));
+}
+
+pub fn gt_settle(day: u64, chunk: u32, ledger_root: &str, entries: usize) {
+    emit_game("settle", json!([{ "day": day, "chunk": chunk, "ledger_root": ledger_root, "entries": entries }]));
+}
+
+pub fn gt_shop(merchant: &str, what: &str, contributors: u32) {
+    emit_game("shop", json!([{ "merchant": merchant, "what": what, "contributors": contributors }]));
 }

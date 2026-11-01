@@ -18,22 +18,26 @@ async fn game_contract_flows() -> testresult::TestResult<()> {
     let signer = near_api::Signer::from_secret_key(near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY.parse().unwrap())?;
 
     let owner = create_subaccount(&sandbox, "owner.sandbox").await?;
-    let minter = create_subaccount(&sandbox, "minter.sandbox").await?;
+    let settler = create_subaccount(&sandbox, "settler.sandbox").await?;
+    let town = create_subaccount(&sandbox, "town.sandbox").await?;
+    let budi = create_subaccount(&sandbox, "budi.sandbox").await?;
     let alice = create_subaccount(&sandbox, "alice.sandbox").await?;
     let bob = create_subaccount(&sandbox, "bob.sandbox").await?;
     let contract = create_subaccount(&sandbox, "game.sandbox").await?.as_contract();
 
     let tokens = json!([
-        {"token_id": "coin", "name": "Koin", "kind": "Currency"},
-        {"token_id": "fish", "name": "Ikan", "kind": "Raw"},
-        {"token_id": "wood", "name": "Kayu", "kind": "Raw"}
+        {"token_id": "coin", "name": "Koin", "kind": "Currency", "base": "1"},
+        {"token_id": "fish", "name": "Ikan", "kind": "Raw", "base": "8"},
+        {"token_id": "ore", "name": "Bijih", "kind": "Raw", "base": "12"}
     ]);
-    let limits = json!({"daily_gather_cap": "100", "daily_sends": 20, "max_send_amount": "10", "max_batch": 50, "max_players": 100});
+    let limits = json!({"daily_gain_cap": "200", "daily_coin_gain_cap": "5000", "daily_sends": 20, "max_send_amount": "10",
+        "max_chunk": 50, "max_players": 100, "faucet_w0": "1200", "money_cap0": "25000", "active_divisor": 10, "max_k": 6,
+        "rent": "40", "initial_shares": "1000", "max_contributors": 20});
     near_api::Contract::deploy(contract.account_id().clone())
         .use_code(wasm)
         .with_init_call("new", json!({
-            "owner_id": owner.account_id(), "minter_id": minter.account_id(), "town_id": owner.account_id(),
-            "tokens": tokens, "limits": limits
+            "owner_id": owner.account_id(), "settler_id": settler.account_id(), "town_id": town.account_id(),
+            "tokens": tokens, "limits": limits, "treasury_coin": "5000"
         }))?
         .with_signer(signer.clone())
         .send_to(&net)
@@ -44,24 +48,34 @@ async fn game_contract_flows() -> testresult::TestResult<()> {
         contract
             .call_function(method, args)
             .transaction()
-            .gas(NearGas::from_tgas(100))
+            .gas(NearGas::from_tgas(150))
             .deposit(NearToken::from_yoctonear(deposit))
             .with_signer(who.account_id().clone(), signer.clone())
     };
+    let root = "a".repeat(64);
 
-    // The minter registers both players; a player cannot register anyone.
+    call("register_merchant", json!({"account_id": budi.account_id(), "name": "Bengkel Budi",
+        "restore": [{"token_id": "coin", "amount": "200"}, {"token_id": "ore", "amount": "10"}],
+        "start": [{"token_id": "coin", "amount": "600"}, {"token_id": "ore", "amount": "15"}]}), &owner, 0)
+        .send_to(&net).await?.assert_success();
     for p in [&alice, &bob] {
-        call("register_player", json!({"account_id": p.account_id()}), &minter, 0).send_to(&net).await?.assert_success();
+        call("register_player", json!({"account_id": p.account_id()}), &settler, 0).send_to(&net).await?.assert_success();
     }
     call("register_player", json!({"account_id": "mallory.sandbox"}), &alice, 0).send_to(&net).await?.assert_failure();
 
-    // Gathered items are minted by the minter only, and a mint_id can only be used once.
-    let batch = json!([{"account_id": alice.account_id(), "token_id": "fish", "amount": "3"}]);
-    call("mint_gathered", json!({"batch": batch, "mint_id": "batch-1"}), &minter, 0).send_to(&net).await?.assert_success();
-    call("mint_gathered", json!({"batch": batch, "mint_id": "batch-1"}), &minter, 0).send_to(&net).await?.assert_failure();
-    call("mint_gathered", json!({"batch": batch, "mint_id": "batch-2"}), &alice, 0).send_to(&net).await?.assert_failure();
-    let coin = json!([{"account_id": alice.account_id(), "token_id": "coin", "amount": "1000"}]);
-    call("mint_gathered", json!({"batch": coin, "mint_id": "batch-3"}), &minter, 0).send_to(&net).await?.assert_failure();
+    // Day 1 settlement: starter coin from the treasury, 3 fish gathered, budi pays alice 570 coin for 20 ore.
+    let day1 = json!([
+        {"account_id": town.account_id(), "token_id": "coin", "delta": "-100"},
+        {"account_id": alice.account_id(), "token_id": "coin", "delta": "670"},
+        {"account_id": alice.account_id(), "token_id": "fish", "delta": "3"},
+        {"account_id": alice.account_id(), "token_id": "ore", "delta": "20"},
+        {"account_id": budi.account_id(), "token_id": "coin", "delta": "-570"}
+    ]);
+    let settle = |entries: &Value, chunk: u32| call("settle_day", json!({"day": 1, "chunk": chunk, "entries": entries, "ledger_root": root, "active_players": 2}), &settler, 0);
+    settle(&day1, 0).send_to(&net).await?.assert_success();
+    settle(&day1, 0).send_to(&net).await?.assert_failure(); // same chunk twice
+    call("settle_day", json!({"day": 1, "chunk": 1, "entries": day1, "ledger_root": root, "active_players": 2}), &alice, 0)
+        .send_to(&net).await?.assert_failure(); // not the settler
 
     let balance = |acct: AccountId, token: &'static str| {
         let contract = contract.clone();
@@ -76,25 +90,27 @@ async fn game_contract_flows() -> testresult::TestResult<()> {
             r.data.parse::<u128>().unwrap()
         }
     };
-    assert_eq!(balance(alice.account_id().clone(), "fish").await, 3);
+    assert_eq!(balance(alice.account_id().clone(), "coin").await, 670);
+    assert_eq!(balance(budi.account_id().clone(), "coin").await, 30);
 
     // send_item works with no deposit; mt_transfer requires exactly 1 yoctoNEAR.
     call("send_item", json!({"receiver_id": bob.account_id(), "token_id": "fish", "amount": "1"}), &alice, 0).send_to(&net).await?.assert_success();
     call("mt_transfer", json!({"receiver_id": bob.account_id(), "token_id": "fish", "amount": "1"}), &alice, 0).send_to(&net).await?.assert_failure();
     call("mt_transfer", json!({"receiver_id": bob.account_id(), "token_id": "fish", "amount": "1"}), &alice, 1).send_to(&net).await?.assert_success();
+    // mt_transfer_call to an account with no contract: the transfer is refunded.
+    call("mt_transfer_call", json!({"receiver_id": bob.account_id(), "token_id": "fish", "amount": "1", "msg": ""}), &alice, 1)
+        .send_to(&net).await?.assert_success();
     assert_eq!(balance(alice.account_id().clone(), "fish").await, 1);
     assert_eq!(balance(bob.account_id().clone(), "fish").await, 2);
 
-    // mt_transfer_call to an account with no contract: the receiver call fails and the transfer is refunded.
-    call("mt_transfer_call", json!({"receiver_id": bob.account_id(), "token_id": "fish", "amount": "1", "msg": ""}), &alice, 1)
-        .send_to(&net)
-        .await?
-        .assert_success();
-    assert_eq!(balance(alice.account_id().clone(), "fish").await, 1, "refunded after failed mt_on_transfer");
-    assert_eq!(balance(bob.account_id().clone(), "fish").await, 2);
-
-    // Supply equals what was minted.
-    let supply: near_api::Data<Option<String>> = contract.call_function("mt_supply", json!({"token_id": "fish"})).read_only().fetch_from(&net).await?;
-    assert_eq!(supply.data.as_deref(), Some("3"));
+    // Budi cannot pay rent (30 < 40): the settler closes the shop; alice restores it and gets shares.
+    call("close_shop", json!({"merchant": budi.account_id()}), &settler, 0).send_to(&net).await?.assert_success();
+    call("restore_contribute", json!({"merchant": budi.account_id(), "contribution": [
+        {"token_id": "coin", "amount": "200"}, {"token_id": "ore", "amount": "10"}]}), &alice, 0).send_to(&net).await?.assert_success();
+    let shop: near_api::Data<Value> = contract.call_function("get_shop", json!({"merchant": budi.account_id()})).read_only().fetch_from(&net).await?;
+    assert_eq!(shop.data["open"], json!(true), "restored shop reopens");
+    let holding: near_api::Data<Value> = contract.call_function("get_holding", json!({"merchant": budi.account_id(), "holder": alice.account_id()})).read_only().fetch_from(&net).await?;
+    assert!(holding.data["shares"].as_str().unwrap().parse::<u128>().unwrap() > 0);
+    assert_eq!(balance(budi.account_id().clone(), "coin").await, 230);
     Ok(())
 }
