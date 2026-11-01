@@ -83,10 +83,10 @@ Run locally (below), open http://localhost:3000.
 2. Walk to the pond, face the water and press **Space** (the on-screen **A** button on touch screens) → `+1 Ikan`
    instantly. A hint at the bottom of the screen always shows which key does what for the tile you face. Open **Tas NEAR** (N) → it shows "+1 hari ini" (off-chain,
    today).
-3. Walk to the market just south of your house and talk to **Sari** → prices with a reason under each item. Sell your
+3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → prices with a reason under each item. Sell your
    fish.
 4. Inside your house, press Space at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
-   Outside, press Space on the plot tiles next to your house to till, plant (press twice) and water wheat.
+   Outside, in the fenced field next to your house, press Space on a plot to till, plant (press twice) and water wheat.
 5. Open the Dev panel → **Settle sekarang** → Riwayat (H) shows "Settlement hari N" with a testnet explorer link,
    and everything from step 2 now points to it.
 6. *(planned, M3)* Press **Simulate 1 week** → price and cash charts move; Budi goes bankrupt during the week.

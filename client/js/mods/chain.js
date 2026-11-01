@@ -218,17 +218,62 @@
 
   /* ------------------------------------------------------------ world: merchants, farm plot */
   function placeMerchants() {
-    var sp = GT.world && GT.world.spawn; if (!sp) return;
-    MERCHANTS.forEach(function (m) {
+    var w = GT.world, sp = w && w.spawn; if (!sp) return;
+    var stalls = (w.market && w.market.stalls) || [];
+    MERCHANTS.forEach(function (m, k) {
       if (S.npcs[m.id]) return;
-      S.npcs[m.id] = GT.addNpc('out', { x: sp.x + m.dx, y: sp.y + m.dy, name: m.id.charAt(0).toUpperCase() + m.id.slice(1), pal: m.pal,
-        key: 'merchant:' + m.id, label: m.tag, turns: true, noAffinity: true, lines: [['Mampir ke tokoku!']] });
+      var st = stalls[k], pos = st ? st.seat : { x: sp.x + m.dx, y: sp.y + m.dy };
+      if (st) st.merchant = m.id;
+      S.npcs[m.id] = GT.addNpc('out', { x: pos.x, y: pos.y, name: m.id.charAt(0).toUpperCase() + m.id.slice(1), pal: m.pal, dir: 'down',
+        key: 'merchant:' + m.id, label: st ? null : m.tag, turns: false, noAffinity: true, lines: [['Mampir ke tokoku!']] });
     });
+  }
+  function stallAt(x, y) {
+    var w = GT.world, st = w && w.market && w.market.stalls;
+    if (!st) return null;
+    for (var i = 0; i < st.length; i++) if (st[i].x === x && st[i].y === y) return st[i];
+    return null;
+  }
+
+  /* ------------------------------------------------------------ villagers who walk somewhere (ambient life) */
+  var villagers = [], lifeT = 0;
+  var VNAMES = ['Ayu', 'Bayu', 'Citra', 'Dimas', 'Eko', 'Gita'];
+  function spawnVillagers() {
+    var w = GT.world; if (!w || !w.npcSpawns) return;
+    villagers = [];
+    var sp = w.spawn, near = w.npcSpawns.filter(function (p) { return Math.abs(p[0] - sp.x) + Math.abs(p[1] - sp.y) < 16; });
+    for (var i = 0; i < Math.min(5, near.length); i++) {
+      var p = near[(i * 7) % near.length];
+      var n = GT.addNpc('out', { x: p[0], y: p[1], name: VNAMES[i % VNAMES.length], pal: 1 + (i % 6), wander: true, leash: 6, key: 'villager:' + i, lines: [['Pasar ramai hari ini!'], ['Harga ikan turun lagi, lho.'], ['Kebunmu tumbuh bagus!']] });
+      if (n) villagers.push(n);
+    }
+  }
+  function poi() {
+    var w = GT.world, pts = [];
+    if (w.market) w.market.stalls.forEach(function (st) { pts.push({ x: st.x, y: st.y + 1 }); });
+    if (w.farm) pts.push({ x: w.farm.gate.x, y: w.farm.gate.y + 1 });
+    pts.push({ x: w.spawn.x + 2, y: w.spawn.y + 1 });
+    for (var i = 0; i < 4 && w.npcSpawns && w.npcSpawns.length; i++) { var q = w.npcSpawns[Math.floor(Math.random() * w.npcSpawns.length)]; pts.push({ x: q[0], y: q[1] }); }
+    return pts;
+  }
+  function stepLife(dt) {
+    lifeT -= dt; if (lifeT > 0) return; lifeT = 1.5;
+    if (!GT.scene || GT.scene.kind !== 'out' || !villagers.length) return;
+    var pts = poi();
+    villagers.forEach(function (n) {
+      if (n.script || n.talking || n.hidden || Math.random() < 0.2) return;
+      var dest = pts[Math.floor(Math.random() * pts.length)];
+      var path = GT.findPath('out', { x: n.x, y: n.y }, dest);
+      if (path && path.length > 1) GT.npcGo(n, path.slice(0, 40), function () { n.home = { x: n.x, y: n.y }; });
+    });
+    // merchants look around behind their counters
+    MERCHANTS.forEach(function (m) { var n = S.npcs[m.id]; if (n && !n.talking && Math.random() < 0.3) n.dir = ['down', 'left', 'right', 'down'][Math.floor(Math.random() * 4)]; });
   }
 
   function findPlots() {
     var own = GT.world && GT.world.own, sc = GT.getScene('out');
     if (!own || !sc) return;
+    if (GT.world.farm && GT.world.farm.plots.length) { S.plots = GT.world.farm.plots.slice(0, 6); return; }
     var m = sc.map, out = [], sp = GT.world.spawn;
     for (var r = 1; r <= 5 && out.length < 6; r++) {
       for (var y = own.y - r; y <= own.y + 2 + r && out.length < 6; y++) {
@@ -275,8 +320,10 @@
     if (npc && npc.key && npc.key.indexOf('merchant:') === 0) return 'Buka toko ' + npc.name;
     if (npc) return 'Bicara dengan ' + npc.name;
     var tt = m.tiles[y * m.w + x];
+    if (tt === 'stall') { var st1 = stallAt(x, y); if (st1 && st1.merchant) return 'Belanja di lapak ' + st1.merchant.charAt(0).toUpperCase() + st1.merchant.slice(1); }
     if (sc.house && sc.house.own && tt === 'table') return 'Meja Kerja (crafting)';
     if (sc.house && sc.house.own && tt === 'chest') return 'Kotak Kirim';
+    if (sc.house && !sc.house.own && tt === 'chest') return 'Peti tetangga (terkunci)';
     if (sc.kind !== 'out') return null;
     var pi = plotAt(x, y);
     if (pi >= 0) {
@@ -294,7 +341,8 @@
     }
     return null;
   }
-  function onFrame() {
+  function onFrame(dt) {
+    stepLife(dt || 0);
     var now = Date.now(); if (now - hintT < 150) return; hintT = now;
     if (!hintEl) { var scr = document.getElementById('screen'); if (!scr) return; hintEl = $('div'); hintEl.id = 'gt-hint'; hintEl.setAttribute('aria-live', 'polite'); scr.appendChild(hintEl); }
     var h = (GT.isUiOpen && GT.isUiOpen()) ? null : hintFor();
@@ -304,23 +352,24 @@
     hintEl.className = 'on';
   }
 
-  var PLOT_COL = { empty: null, tilled: '#7a5230', planted: '#7a5230', ready: '#7a5230' };
-  function onDraw(ctx, camX, camY, T) {
+  // Crops are drawn in the ground pass (onDrawGround), so characters walk in front of them.
+  function onDrawGround(ctx, camX, camY, T) {
     if (!GT.scene || GT.scene.kind !== 'out' || !S.plots.length || !S.st) return;
+    var vw = ctx.canvas.width, vh = ctx.canvas.height;
     S.plots.forEach(function (pp, i) {
       var p = S.st.plots[i]; if (!p) return;
       var x = pp.x * T - camX, y = pp.y * T - camY;
-      if (x < -T || y < -T || x > 400 || y > 400) return;
-      if (PLOT_COL[p.state]) { ctx.fillStyle = PLOT_COL[p.state]; ctx.fillRect(x + 1, y + 1, T - 2, T - 2); ctx.fillStyle = '#5e3c20'; for (var k = 3; k < T - 1; k += 3) ctx.fillRect(x + 1, y + k, T - 2, 1); }
-      else { ctx.strokeStyle = 'rgba(122,82,48,.55)'; ctx.strokeRect(x + 1.5, y + 1.5, T - 3, T - 3); }
+      if (x < -T || y < -T || x > vw || y > vh) return;
+      if (p.state === 'empty') { ctx.fillStyle = 'rgba(214,170,110,.55)'; ctx.fillRect(x + 1, y + 1, T - 2, T - 2); return; }
+      if (p.state === 'planted' && p.wateredToday) { ctx.fillStyle = 'rgba(30,20,40,.28)'; ctx.fillRect(x, y, T, T); }
       if (p.state === 'planted') {
         var h = 2 + p.grown * 2;
-        ctx.fillStyle = p.wateredToday ? '#3c8a3c' : '#6aa04a';
-        ctx.fillRect(x + 3, y + T - 2 - h, 2, h); ctx.fillRect(x + 7, y + T - 2 - h, 2, h);
+        ctx.fillStyle = '#2f7d3a'; ctx.fillRect(x + 2, y + T - 2 - h, 2, h); ctx.fillRect(x + 6, y + T - 3 - h, 2, h + 1); ctx.fillRect(x + 9, y + T - 2 - h, 1, h);
+        ctx.fillStyle = '#7cc23e'; ctx.fillRect(x + 2, y + T - 2 - h, 1, 1); ctx.fillRect(x + 6, y + T - 3 - h, 1, 1);
       } else if (p.state === 'ready') {
-        ctx.fillStyle = '#e8c048'; ctx.fillRect(x + 2, y + 2, 3, 7); ctx.fillRect(x + 7, y + 3, 3, 6);
+        ctx.fillStyle = '#c99a2e'; ctx.fillRect(x + 2, y + 3, 2, 8); ctx.fillRect(x + 6, y + 2, 2, 9); ctx.fillRect(x + 9, y + 4, 2, 7);
+        ctx.fillStyle = '#f2d24a'; ctx.fillRect(x + 2, y + 2, 2, 3); ctx.fillRect(x + 6, y + 1, 2, 3); ctx.fillRect(x + 9, y + 3, 2, 3);
       }
-      if (p.state === 'planted' && p.wateredToday) { ctx.fillStyle = 'rgba(72,144,216,.35)'; ctx.fillRect(x + 1, y + 1, T - 2, T - 2); }
     });
   }
 
@@ -516,9 +565,16 @@
     // The prototype's mart keepers sold for local play coins; the town's shops are now the four merchants.
     if (ctx.npc && ctx.npc.key && /:keeper$/.test(ctx.npc.key)) { GT.toast('Mart sudah pindah: belanja di pasar dekat rumahmu (Sari, Budi, Wati, Joko).'); return true; }
     if (ctx.npc || ctx.door) return false;
-    var own = ctx.scene.house && ctx.scene.house.own;
-    if (own && ctx.tileType === 'table') { open('craft'); return true; }
-    if (own && ctx.tileType === 'chest') { open('ship'); return true; }
+    if (ctx.tileType === 'stall') { var st0 = stallAt(ctx.tile.x, ctx.tile.y); if (st0 && st0.merchant) { open('shop', st0.merchant); return true; } }
+    var house = ctx.scene.house, own = house && house.own;
+    if (own && (ctx.tileType === 'table' || ctx.tileType === 'chest')) {
+      if (S.mode !== 'offline' && !S.account) { GT.toast('Masuk dulu (tombol Masuk) untuk memakai ' + (ctx.tileType === 'table' ? 'Meja Kerja.' : 'Kotak Kirim.')); return true; }
+      open(ctx.tileType === 'table' ? 'craft' : 'ship'); return true;
+    }
+    if (house && !own && ctx.tileType === 'chest') {
+      GT.toast('Peti milik ' + (house.owner || 'tetangga') + ', terkunci. Kotak Kirim-mu ada di peti rumahmu sendiri.');
+      return true;
+    }
     if (ctx.scene.kind !== 'out') return false;
     var pi = plotAt(ctx.tile.x, ctx.tile.y);
     if (pi >= 0) { farm(pi); return true; }
@@ -530,7 +586,7 @@
     return true;
   }
 
-  function onWorld() { S.npcs = {}; placeMerchants(); findPlots(); }
+  function onWorld() { S.npcs = {}; placeMerchants(); findPlots(); spawnVillagers(); }
 
   function init() {
     accBtn = GT.addHudButton({ id: 'chainbtn', label: 'Masuk', key: 'N', secondary: false, onClick: function () { open('bag'); } });
@@ -558,5 +614,5 @@
   }
 
   window.GT_CHAIN = { state: S, refresh: refresh, login: login, open: open, act: act, _signedCall: signedCall };
-  GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDraw: onDraw, onFrame: onFrame });
+  GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onFrame: onFrame });
 })();

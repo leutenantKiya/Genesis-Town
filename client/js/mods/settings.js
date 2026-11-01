@@ -165,6 +165,11 @@
     fsb.addEventListener('click', function () { toggleFullscreen(); });
     fs.appendChild(fsb); wrap.appendChild(fs);
 
+    wrap.appendChild($('h3', null, 'Kota'));
+    var regen = $('button', 'mbtn', 'Buat kota baru (peta acak)'); regen.type = 'button';
+    regen.addEventListener('click', function () { if (modal) modal.close('regen'); var r = document.getElementById('regen'); if (r) setTimeout(function () { r.click(); }, 50); });
+    var rr = $('div', 'dbtns'); rr.appendChild(regen); wrap.appendChild(rr);
+
     var rm = $('label', 'dchk'); var cb = $('input'); cb.type = 'checkbox';
     cb.checked = document.documentElement.classList.contains('gt-reduced-motion');
     cb.addEventListener('change', function () { st.reducedMotion = cb.checked; save(); applyLayout(); });
@@ -204,8 +209,8 @@
   GT.register({
     id: 'settings',
     init: function () {
-      GT.addHudButton({ id: 'setbtn', label: '⚙', onClick: openSettings, secondary: false });
-      GT.addHudButton({ id: 'fsbtn', label: '⛶', onClick: toggleFullscreen, secondary: false });
+      GT.addHudButton({ id: 'setbtn', label: 'Atur', onClick: openSettings, secondary: false });
+      GT.addHudButton({ id: 'fsbtn', label: 'Layar', onClick: toggleFullscreen, secondary: false });
       renderHelp();
       applyLayout();
     }

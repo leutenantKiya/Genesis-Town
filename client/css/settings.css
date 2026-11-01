@@ -17,3 +17,16 @@ html:fullscreen .shell{box-shadow:none}
 #gt-hint.on{display:block}
 #gt-hint b{color:#f2c94c;font-weight:400}
 html.gt-reduced-motion *{animation:none!important;transition:none!important}
+/* art pass 1: quieter chrome so the scene leads */
+#regen,.hud .seedc{display:none!important}
+.hud .cell:has(#role){display:none}
+html.gt-full .shell{background:#14152a;box-shadow:none}
+html.gt-full .bezel{background:#0b0c14;box-shadow:none;padding:0}
+.chain-banner{display:inline-block;margin:0 0 6px 2px;padding:2px 7px;border-radius:9px;font-size:7px;box-shadow:none}
+.chain-banner::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:0;background:currentColor}
+.chain-energy i{background:#b8d94a}
+/* full-window must beat the prototype's short-landscape grid layout */
+html.gt-full .shell{display:flex!important;flex-direction:column!important;grid-template-columns:none!important}
+html.gt-full .bezel{width:100%;grid-column:auto!important;grid-row:auto!important}
+html.gt-full #fit{width:100%}
+html.gt-full .hud{grid-column:auto!important}

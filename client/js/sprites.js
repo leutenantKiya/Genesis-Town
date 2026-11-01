@@ -539,10 +539,10 @@
   /* HOUSES                                                              */
   /* ------------------------------------------------------------------ */
   var HOUSE_STYLES = [
-    { roof: '#d05848', roofD: '#a03c34', roofL: '#ec8472', wall: '#f2e2b8', wallD: '#d6bc8c', trim: '#fff6dc', chimney: false },
-    { roof: '#4c78cc', roofD: '#34549c', roofL: '#7ca4ea', wall: '#e2eaf2', wallD: '#bccadc', trim: '#ffffff', chimney: true },
-    { roof: '#58a456', roofD: '#3c7a3c', roofL: '#88cc7c', wall: '#f2eaa8', wallD: '#d4c680', trim: '#fffbd8', chimney: false },
-    { roof: '#d88a3a', roofD: '#a8602a', roofL: '#f0b468', wall: '#f2d4c4', wallD: '#d4aa98', trim: '#fff0e6', chimney: true }
+    { roof: '#b8442e', roofD: '#7a2a22', roofL: '#e2774a', wall: '#f2e2c4', wallD: '#d8bc94', trim: '#fff6dc', chimney: false },
+    { roof: '#4a64a8', roofD: '#2e3d6a', roofL: '#7ea0d8', wall: '#e8e2d4', wallD: '#c8bea8', trim: '#ffffff', chimney: true },
+    { roof: '#7a4a82', roofD: '#4a2a4e', roofL: '#b07ab0', wall: '#f4e8c8', wallD: '#d6c49c', trim: '#fffbe8', chimney: false },
+    { roof: '#c58a38', roofD: '#8e5a2c', roofL: '#e8b062', wall: '#f2d8c4', wallD: '#d4b098', trim: '#fff0e6', chimney: true }
   ];
   var houseCache = {};
 
@@ -1003,7 +1003,10 @@
     ICON_IDS: Object.keys(ICONS),
     // debug helpers (not part of the engine contract)
     _tileTypes: Object.keys(T).concat(['water']),
-    _problems: problems
+    _problems: problems,
+    // art.js (art pass 1) extends the tile table and reuses the painter
+    _T: T,
+    _paint: paint
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 

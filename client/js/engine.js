@@ -31,7 +31,7 @@ var WT = 60, HT = 60, BS = 6, NB = 10;
 var DIRS = {up:[0,-1], down:[0,1], left:[-1,0], right:[1,0]};
 var OPP = {up:'down', down:'up', left:'right', right:'left'};
 var DIRLIST = ['up','down','left','right'];
-var SOLID = new Set(['tree','fence','sign','mailbox','rock','water','wall','bed','table','tv','plant','counter','fridge','bookshelf','shelf','chair','card_table','slot','chest','dice_table','lamp']);
+var SOLID = new Set(['tree','fence','sign','mailbox','rock','water','wall','bed','table','tv','plant','counter','fridge','bookshelf','shelf','chair','card_table','slot','chest','dice_table','lamp','bush','barrel','crate','stall']);
 var ANIMATED = {water:1, flower:1};
 var MOVE_T = 0.15, NPC_T = 0.26, NPC_FAST = 0.18, TURN_T = 0.09, CPS = 48;
 var REDUCE = false;
@@ -138,6 +138,7 @@ function fbLamp(g, x, y){   // simple stand-in street lamp when sprites.js has n
   g.fillStyle = '#8a8c9c'; g.fillRect(x + 5, y + 5, 1, 5);
 }
 function drawChar(g, x, y, pal, dir, step){
+  if (SPRITES.charShadow && scene && scene.kind === 'out') SPRITES.charShadow(g, x, y);
   try { SPRITES.drawCharacter(g, x, y, pal, dir, step); }
   catch(e){ SPRITES.drawCharacter(g, x, y, (pal | 0) % 6, dir, step); }
 }
@@ -258,7 +259,61 @@ function finalize(m){
   m.walk = new Uint8Array(m.w * m.h);
   for (var i = 0; i < m.tiles.length; i++) m.walk[i] = (SOLID.has(m.tiles[i]) || m.blocked.has(i)) ? 0 : 1;
 }
+// Art pass 1 (2026-11-01): the outdoor world is cached in layers (see js/art.js): ground variants, a soft noise tint,
+// grass lips and water banks, drop shadows, props drawn without their grass base, tree trunks, then buildings.
+// Canopies and stall awnings are drawn later in the y-sorted pass (render). Interiors keep the original path.
+function valueNoise(seed, x, y){
+  function h(ix, iy){ return (hashStr(seed + ':' + ix + ',' + iy) % 1000) / 1000; }
+  var x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+  var a = h(x0, y0), b = h(x0 + 1, y0), c = h(x0, y0 + 1), d = h(x0 + 1, y0 + 1);
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+}
+function buildWorldCache(m){
+  var Sp = SPRITES, c = document.createElement('canvas');
+  c.width = m.w * T; c.height = m.h * T;
+  var g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  var x, y, i, t, gt, ground = new Array(m.w * m.h);
+  for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
+    i = y*m.w + x; t = m.tiles[i]; gt = Sp.groundOf(t) || 'grass'; ground[i] = gt;
+    var hv = hashStr(m.seed + ':' + x + ',' + y) % 10;
+    Sp.drawGround(g, gt, x*T, y*T, gt === 'grass' ? (hv < 6 ? 0 : hv < 8 ? 1 : hv < 9 ? 2 : 3) : hv & 3);
+    if (gt === 'grass'){
+      var n = valueNoise(m.seed, x / 5, y / 5) - 0.5;
+      g.fillStyle = n < 0 ? 'rgba(20,60,30,' + (-n * 0.45).toFixed(3) + ')' : 'rgba(220,240,120,' + (n * 0.28).toFixed(3) + ')';
+      g.fillRect(x*T, y*T, T, T);
+    }
+  }
+  function gAt(xx, yy){ return (xx < 0 || yy < 0 || xx >= m.w || yy >= m.h) ? 'grass' : ground[yy*m.w + xx]; }
+  for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
+    gt = ground[y*m.w + x];
+    if (gt === 'water') Sp.drawEdges(g, 'water', x*T, y*T, {n:gAt(x, y-1) !== 'water', s:gAt(x, y+1) !== 'water', w:gAt(x-1, y) !== 'water', e:gAt(x+1, y) !== 'water'});
+    else if (gt !== 'grass') Sp.drawEdges(g, gt, x*T, y*T, {n:gAt(x, y-1) === 'grass', s:gAt(x, y+1) === 'grass', w:gAt(x-1, y) === 'grass', e:gAt(x+1, y) === 'grass'});
+  }
+  m.buildings.forEach(function(b){ Sp.buildingShadow(g, b.x*T, b.y*T, 36, 36); });
+  m.canopies = [];
+  for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
+    t = m.tiles[y*m.w + x];
+    if (Sp.GROUND_TYPES[t]) continue;
+    if (t === 'tree'){
+      Sp.drawTrunk(g, x*T, y*T);
+      m.canopies.push({x:x, y:y, kind:Sp.treeKind(x, y, x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1)});
+      continue;
+    }
+    if (t === 'rock' || t === 'bush' || t === 'barrel' || t === 'crate') Sp.shadowEllipse(g, x*T + 6, y*T + 10, 5, 2);
+    if (t === 'lamp' && !tileSupported('lamp')){ fbLamp(g, x*T, y*T); continue; }
+    Sp.drawOverlay(g, t, x*T, y*T, 0);
+  }
+  m.buildings.forEach(function(b){
+    if (b.kind === 'mart') Sp.drawMart(g, b.x*T, b.y*T);
+    else if (b.kind === 'casino'){ if (Sp.drawCasino) Sp.drawCasino(g, b.x*T, b.y*T); else Sp.drawHouse(g, b.x*T, b.y*T, 2, false); }
+    else Sp.drawHouse(g, b.x*T, b.y*T, b.style, !b.invited);
+  });
+  m.layered = true;
+  m.cache = c;
+}
 function buildCache(m){
+  if (m.kind === 'world' && SPRITES.drawGround) return buildWorldCache(m);
   var c = document.createElement('canvas');
   c.width = m.w * T; c.height = m.h * T;
   var g = c.getContext('2d'); g.imageSmoothingEnabled = false;
@@ -325,7 +380,29 @@ function tryWorld(seed, att){
     if (types[py*NB + px] !== 'house' || (px === ownB.x && py === ownB.y)) continue;
     types[py*NB + px] = 'park'; nPark--;
   }
+  // Art pass 1: a market plaza and the player's fenced farm next to the player's block (own PRNG).
+  var RM = makeR((seed * 131 + att * 31 + 0x3A7C) >>> 0);
+  function freeNb(order){
+    for (var q = 0; q < order.length; q++){
+      var nx = ownB.x + order[q][0], ny = ownB.y + order[q][1];
+      if (nx >= 0 && ny >= 0 && nx < NB && ny < NB && types[ny*NB + nx] === 'house') return ny*NB + nx;
+    }
+    return -1;
+  }
+  var plazaI = freeNb([[0,1],[1,0],[-1,0],[0,-1]]);
+  if (plazaI >= 0) types[plazaI] = 'plaza';
+  var farmI = freeNb(RM.chance(0.5) ? [[-1,0],[1,0],[0,-1],[0,1],[1,1],[-1,1]] : [[1,0],[-1,0],[0,-1],[0,1],[-1,1],[1,1]]);
+  if (farmI >= 0) types[farmI] = 'farm';
   m.blockTypes = types;
+  // scatter a cluster of `tile` around (cx,cy) on free tiles inside [x0..x1]x[y0..y1]
+  function cluster(cx, cy, rad, n, tile, x0, y0, x1, y1, avoid){
+    for (var q = 0; q < n * 3 && n > 0; q++){
+      var xx = cx + R.int(-rad, rad), yy = cy + R.int(-rad, rad);
+      if (xx < x0 || xx > x1 || yy < y0 || yy > y1 || reserved.has(I(xx, yy)) || (avoid && avoid(xx, yy))) continue;
+      if (m.tiles[I(xx, yy)] !== 'grass') continue;
+      set(xx, yy, tile); n--;
+    }
+  }
 
   var houses = [];
   function fullName(){ return R.pick(FIRST) + ' ' + R.pick(LAST); }
@@ -336,6 +413,28 @@ function tryWorld(seed, att){
     var ix0 = ox2 + 1, iy0 = oy2 + 1;
     var ix1 = Math.min(ox2 + 5, WT - 2), iy1 = Math.min(oy2 + 5, HT - 3); // interior bounds (inclusive)
     var x, y;
+    if (type === 'plaza'){
+      for (y = iy0; y <= iy1; y++) for (x = ix0; x <= ix1; x++){ set(x, y, 'plaza'); reserved.add(I(x, y)); }
+      // four stalls in one row; merchants stand behind (north), customers in front (south); column ix0+2 stays open
+      var sxs = [ix0, ix0 + 1, ix0 + 3, ix0 + 4].filter(function(v){ return v <= ix1; });
+      var stallColors = ['#e8503c', '#4a8ad8', '#e8a13c', '#58a858'];
+      m.market = { stalls: [], block: {bx:bx, by:by} };
+      sxs.forEach(function(sx, k){ set(sx, iy0 + 1, 'stall'); m.market.stalls.push({x:sx, y:iy0 + 1, seat:{x:sx, y:iy0}, color:stallColors[k % 4]}); });
+      if (iy1 >= iy0 + 4){ set(ix0, iy1, 'crate'); set(ix1, iy1, 'barrel'); }
+      m.info.set(I(ix0 + 2, iy0), 'Pasar Genesis. Pedagang berjualan di sini setiap hari.');
+      continue;
+    }
+    if (type === 'farm'){
+      // fence ring with a gate on the south side; 3x2 soil plots inside, a walking row below them
+      for (x = ix0; x <= ix1; x++){ set(x, iy0, 'fence'); reserved.add(I(x, iy0)); }
+      for (y = iy0 + 1; y <= iy1; y++){ set(ix0, y, 'fence'); set(ix1, y, 'fence'); reserved.add(I(ix0, y)); reserved.add(I(ix1, y)); }
+      var gateX = ix0 + 2;
+      for (x = ix0 + 1; x < ix1; x++){ if (x !== gateX){ set(x, iy1, 'fence'); } else set(x, iy1, 'path'); reserved.add(I(x, iy1)); }
+      m.farm = { plots: [], gate: {x:gateX, y:iy1}, block: {bx:bx, by:by} };
+      for (y = iy0 + 1; y <= iy0 + 2; y++) for (x = ix0 + 1; x <= ix1 - 1; x++){ set(x, y, 'soil'); reserved.add(I(x, y)); m.farm.plots.push({x:x, y:y}); }
+      for (x = ix0 + 1; x <= ix1 - 1; x++) if (iy0 + 3 < iy1) reserved.add(I(x, iy0 + 3));
+      continue;
+    }
     if (type === 'park'){
       var pathRow = iy0 + R.int(1, 3); if (pathRow > iy1) pathRow = iy1;
       for (x = ix0; x <= ix1; x++){ set(x, pathRow, 'path'); reserved.add(I(x, pathRow)); }
@@ -359,10 +458,15 @@ function tryWorld(seed, att){
         }
         placed = true;
       }
+      // groves and patches (clustered), with a little scatter so it still feels natural
+      cluster(R.int(ix0, ix1), R.int(iy0, iy1), 2, R.int(3, 5), 'tree', ix0, iy0, ix1, iy1);
+      cluster(R.int(ix0, ix1), R.int(iy0, iy1), 1, R.int(3, 5), 'flower', ix0, iy0, ix1, iy1);
+      cluster(R.int(ix0, ix1), R.int(iy0, iy1), 1, R.int(2, 4), 'tallgrass', ix0, iy0, ix1, iy1);
+      cluster(R.int(ix0, ix1), R.int(iy0, iy1), 1, R.int(1, 3), 'bush', ix0, iy0, ix1, iy1);
       for (y = iy0; y <= iy1; y++) for (x = ix0; x <= ix1; x++){
-        if (reserved.has(I(x,y))) continue;
+        if (reserved.has(I(x,y)) || m.tiles[I(x,y)] !== 'grass') continue;
         var r = R.f();
-        if (r < 0.24) set(x, y, 'tree'); else if (r < 0.38) set(x, y, 'flower'); else if (r < 0.55) set(x, y, 'tallgrass'); else if (r < 0.58) set(x, y, 'rock');
+        if (r < 0.06) set(x, y, 'tallgrass'); else if (r < 0.09) set(x, y, 'flower'); else if (r < 0.10) set(x, y, 'rock');
       }
       continue;
     }
@@ -405,15 +509,24 @@ function tryWorld(seed, att){
     if (type === 'house' && hy > iy0 && R.chance(0.45)){
       for (x = ix0; x <= ix1; x++) if (!reserved.has(I(x, iy0))){ set(x, iy0, 'fence'); reserved.add(I(x, iy0)); }
     }
-    // decor
+    // decor: flowers along the house front, props against the walls, one themed cluster per lot
+    var nearDoor = function(xx, yy){ return Math.abs(xx - b.dx) <= 1 && yy > hy + 2; };
+    if (type === 'house'){
+      [b.dx - 1, b.dx + 1].forEach(function(fx){ if (fx >= ix0 && fx <= ix1 && hy + 3 <= iy1 && !reserved.has(I(fx, hy + 3))) set(fx, hy + 3, 'flower'); });
+      var side = R.chance(0.5) ? hx - 1 : hx + 3;
+      if (side >= ix0 && side <= ix1 && !reserved.has(I(side, hy + 1))){ set(side, hy + 1, R.chance(0.5) ? 'barrel' : 'crate'); reserved.add(I(side, hy + 1)); }
+      var theme = R.int(0, 3), cx0 = R.int(ix0, ix1), cy0 = R.int(iy0, iy1);
+      if (theme === 0) cluster(cx0, cy0, 1, R.int(3, 5), 'flower', ix0, iy0, ix1, iy1, nearDoor);
+      else if (theme === 1) cluster(cx0, cy0, 1, R.int(2, 3), 'bush', ix0, iy0, ix1, iy1, nearDoor);
+      else if (theme === 2) cluster(cx0, cy0, 1, R.int(2, 3), 'tree', ix0, iy0, ix1, iy1, nearDoor);
+      else cluster(cx0, cy0, 1, R.int(2, 4), 'tallgrass', ix0, iy0, ix1, iy1, nearDoor);
+    }
     for (y = iy0; y <= iy1; y++) for (x = ix0; x <= ix1; x++){
-      if (reserved.has(I(x,y))) continue;
+      if (reserved.has(I(x,y)) || m.tiles[I(x,y)] !== 'grass') continue;
       var rr = R.f();
-      var near = (Math.abs(x - b.dx) <= 1 && y > hy + 2);
-      if (rr < 0.09) set(x, y, 'flower');
-      else if (rr < 0.17) set(x, y, 'tallgrass');
-      else if (rr < 0.20 && !near) set(x, y, 'rock');
-      else if (rr < 0.26 && !near && type === 'house') set(x, y, 'tree');
+      if (rr < 0.05) set(x, y, 'flower');
+      else if (rr < 0.10) set(x, y, 'tallgrass');
+      else if (rr < 0.12 && !nearDoor(x, y)) set(x, y, 'rock');
     }
   }
 
@@ -730,7 +843,8 @@ function npcAtTile(x, y, sc){
 function playerAt(x, y){ return (P.x === x && P.y === y) || (P.moving && P.fx === x && P.fy === y); }
 function canEnterPlayer(x, y){
   var m = scene.map;
-  return inb(m,x,y) && m.walk[y*m.w + x] === 1 && !(m.staff && m.staff.has(y*m.w + x)) && !npcAtTile(x,y);
+  // Hackathon change: the player may walk through other characters, so nobody can block a path.
+  return inb(m,x,y) && m.walk[y*m.w + x] === 1 && !(m.staff && m.staff.has(y*m.w + x));
 }
 function canEnterNpc(n, x, y, allowDF, sc){
   sc = sc || scene;
@@ -1373,6 +1487,7 @@ function drawMinimap(){
   for (var by = 0; by < NB; by++) for (var bx = 0; bx < NB; bx++){
     var t = world.blockTypes[by*NB + bx], col;
     if (t === 'park') col = '#3f8f4a'; else if (t === 'mart') col = '#4a82e0'; else if (t === 'casino') col = '#c452e0';
+    else if (t === 'plaza') col = '#e8a13c'; else if (t === 'farm') col = '#8a5a2c';
     else if (bx === homeB.bx && by === homeB.by) col = '#f2c94c';
     else if (friendSet.has(bx + ',' + by)) col = '#7fd18a';
     else col = '#d98c5f';
@@ -1616,15 +1731,35 @@ function render(){
   var tx1 = Math.min(m.w - 1, Math.floor((camX + VW - 1) / T)), ty1 = Math.min(m.h - 1, Math.floor((camY + VH - 1) / T));
   for (var y = ty0; y <= ty1; y++) for (var x = tx0; x <= tx1; x++){
     var tt = m.tiles[y*m.w + x];
-    if (ANIMATED[tt]) SPRITES.drawTile(ctx, tt, x*T - camX, y*T - camY, frame);
+    if (!ANIMATED[tt]) continue;
+    if (m.layered){
+      if (tt === 'water') SPRITES.drawWaterAnim(ctx, x*T - camX, y*T - camY, frame, x, y);
+      else SPRITES.drawOverlay(ctx, tt, x*T - camX, y*T - camY, frame);
+    } else SPRITES.drawTile(ctx, tt, x*T - camX, y*T - camY, frame);
   }
+  // ground-level mod drawing (crops, markers): under characters and canopies, darkened at night
+  callMods('onDrawGround', [ctx, camX, camY, T]);
   // entities sorted by y
   var ents = [];
   scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n}); });
   ents.push({py:pp.py, px:pp.px, n:null});
   ents.sort(function(a, b){ return a.py - b.py; });
-  for (var i = 0; i < ents.length; i++){
-    var e = ents[i];
+  // overhead art (tree canopies, stall awnings) joins the y-sort; slightly before same-row characters
+  var all = ents;
+  if (m.canopies || m.market){
+    all = ents.slice();
+    if (m.canopies) m.canopies.forEach(function(cn){
+      if (cn.x < tx0 - 1 || cn.x > tx1 + 1 || cn.y < ty0 || cn.y > ty1 + 2) return;
+      all.push({py:cn.y*T - 0.5, draw:function(){ SPRITES.drawCanopy(ctx, cn.kind, cn.x*T - camX, cn.y*T - camY); }});
+    });
+    if (m.market && SPRITES.drawAwning) m.market.stalls.forEach(function(st){
+      all.push({py:st.y*T - 0.5, draw:function(){ SPRITES.drawAwning(ctx, st.x*T - camX, st.y*T - camY, st.color); }});
+    });
+    all.sort(function(a, b){ return a.py - b.py; });
+  }
+  for (var i = 0; i < all.length; i++){
+    var e = all[i];
+    if (e.draw){ e.draw(); continue; }
     // GT.charDraw(ctx, npcOrNull(player), x, y, pal, dir, step) -> true when a mod (combat.js) drew the character itself
     var chd = GT.charDraw, hand = false;
     if (typeof chd === 'function'){ try { hand = chd(ctx, e.n, e.px - camX, e.py - camY, e.n ? e.n.pal : 0, e.n ? e.n.dir : P.dir, charStep(e.n || P)) === true; } catch(err){ hand = false; } }
