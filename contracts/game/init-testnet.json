@@ -1,22 +1,71 @@
 {
   "owner_id": "genesistown.testnet",
-  "minter_id": "minter.genesistown.testnet",
+  "settler_id": "minter.genesistown.testnet",
   "town_id": "town.genesistown.testnet",
   "tokens": [
-    { "token_id": "coin",  "name": "Koin",       "kind": "Currency" },
-    { "token_id": "fish",  "name": "Ikan",       "kind": "Raw" },
-    { "token_id": "ore",   "name": "Bijih",      "kind": "Raw" },
-    { "token_id": "wood",  "name": "Kayu",       "kind": "Raw" },
-    { "token_id": "wheat", "name": "Gandum",     "kind": "Raw" },
-    { "token_id": "bread", "name": "Roti",       "kind": "Crafted" },
-    { "token_id": "meal",  "name": "Ikan Bakar", "kind": "Crafted" },
-    { "token_id": "tool",  "name": "Alat",       "kind": "Crafted" }
+    {
+      "token_id": "coin",
+      "name": "Koin",
+      "kind": "Currency",
+      "base": "1"
+    },
+    {
+      "token_id": "fish",
+      "name": "Ikan",
+      "kind": "Raw",
+      "base": "8"
+    },
+    {
+      "token_id": "ore",
+      "name": "Bijih",
+      "kind": "Raw",
+      "base": "12"
+    },
+    {
+      "token_id": "wood",
+      "name": "Kayu",
+      "kind": "Raw",
+      "base": "6"
+    },
+    {
+      "token_id": "wheat",
+      "name": "Gandum",
+      "kind": "Raw",
+      "base": "5"
+    },
+    {
+      "token_id": "bread",
+      "name": "Roti",
+      "kind": "Crafted",
+      "base": "16"
+    },
+    {
+      "token_id": "meal",
+      "name": "Ikan Bakar",
+      "kind": "Crafted",
+      "base": "20"
+    },
+    {
+      "token_id": "tool",
+      "name": "Alat",
+      "kind": "Crafted",
+      "base": "45"
+    }
   ],
   "limits": {
-    "daily_gather_cap": "200",
+    "daily_gain_cap": "200",
+    "daily_coin_gain_cap": "5000",
     "daily_sends": 20,
     "max_send_amount": "10",
-    "max_batch": 50,
-    "max_players": 200
-  }
+    "max_chunk": 50,
+    "max_players": 150,
+    "faucet_w0": "1200",
+    "money_cap0": "25000",
+    "active_divisor": 10,
+    "max_k": 6,
+    "rent": "40",
+    "initial_shares": "1000",
+    "max_contributors": 20
+  },
+  "treasury_coin": "5000"
 }

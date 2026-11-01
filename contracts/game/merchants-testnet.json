@@ -1,0 +1,142 @@
+[
+  {
+    "account_id": "sari.genesistown.testnet",
+    "name": "Lapak Ikan Sari",
+    "restore": [
+      {
+        "token_id": "coin",
+        "amount": "200"
+      },
+      {
+        "token_id": "fish",
+        "amount": "6"
+      },
+      {
+        "token_id": "wood",
+        "amount": "4"
+      }
+    ],
+    "start": [
+      {
+        "token_id": "coin",
+        "amount": "600"
+      },
+      {
+        "token_id": "fish",
+        "amount": "20"
+      },
+      {
+        "token_id": "wood",
+        "amount": "10"
+      },
+      {
+        "token_id": "meal",
+        "amount": "8"
+      }
+    ]
+  },
+  {
+    "account_id": "budi.genesistown.testnet",
+    "name": "Bengkel Budi",
+    "restore": [
+      {
+        "token_id": "coin",
+        "amount": "200"
+      },
+      {
+        "token_id": "ore",
+        "amount": "10"
+      },
+      {
+        "token_id": "wood",
+        "amount": "5"
+      }
+    ],
+    "start": [
+      {
+        "token_id": "coin",
+        "amount": "600"
+      },
+      {
+        "token_id": "ore",
+        "amount": "15"
+      },
+      {
+        "token_id": "wood",
+        "amount": "10"
+      },
+      {
+        "token_id": "tool",
+        "amount": "4"
+      }
+    ]
+  },
+  {
+    "account_id": "wati.genesistown.testnet",
+    "name": "Toko Roti Wati",
+    "restore": [
+      {
+        "token_id": "coin",
+        "amount": "200"
+      },
+      {
+        "token_id": "wheat",
+        "amount": "12"
+      }
+    ],
+    "start": [
+      {
+        "token_id": "coin",
+        "amount": "600"
+      },
+      {
+        "token_id": "wheat",
+        "amount": "30"
+      },
+      {
+        "token_id": "bread",
+        "amount": "12"
+      }
+    ]
+  },
+  {
+    "account_id": "joko.genesistown.testnet",
+    "name": "Toko Serba Ada Joko",
+    "restore": [
+      {
+        "token_id": "coin",
+        "amount": "200"
+      },
+      {
+        "token_id": "wood",
+        "amount": "6"
+      },
+      {
+        "token_id": "wheat",
+        "amount": "6"
+      }
+    ],
+    "start": [
+      {
+        "token_id": "coin",
+        "amount": "600"
+      },
+      {
+        "token_id": "wood",
+        "amount": "25"
+      },
+      {
+        "token_id": "wheat",
+        "amount": "15"
+      },
+      {
+        "token_id": "fish",
+        "amount": "10"
+      },
+      {
+        "token_id": "bread",
+        "amount": "6"
+      }
+    ]
+  }
+]
