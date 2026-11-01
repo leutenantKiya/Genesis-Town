@@ -11,3 +11,11 @@
 .chain-st.failed{background:#f6c9cf}
 .chain-st.pending{background:#f6ecc0}
 @media (prefers-reduced-motion:reduce){.chain-banner{transition:none}}
+.chain-hud .val{display:flex;align-items:center;gap:6px}
+.chain-energy{display:inline-block;width:46px;height:7px;background:#15162a;box-shadow:0 0 0 1px #000;border-radius:2px;overflow:hidden}
+.chain-energy i{display:block;height:100%;background:linear-gradient(90deg,#f2c94c,#b8d94a)}
+.chain-reason{font-size:8px;color:#4a4d75;line-height:1.5;margin-top:2px}
+.chain-item .mbtn{min-width:56px}
+.chain-today{color:#9c6a14}
+.chain-closed{color:#8a2f3a}
+.chain-st.offchain{background:#e9e2f6}
