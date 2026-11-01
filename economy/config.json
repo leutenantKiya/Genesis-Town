@@ -1,0 +1,126 @@
+{
+  "version": 2,
+  "time": {
+    "realMsPerGameHour": 60000,
+    "hoursPerDay": 24,
+    "daysPerSeason": 7,
+    "settleHour": 6,
+    "seasons": ["semi", "panas", "gugur", "dingin"]
+  },
+  "items": {
+    "coin":  { "name": "Koin",       "kind": "currency", "base": 1 },
+    "fish":  { "name": "Ikan",       "kind": "raw",      "base": 8 },
+    "ore":   { "name": "Bijih",      "kind": "raw",      "base": 12, "needsTool": true },
+    "wood":  { "name": "Kayu",       "kind": "raw",      "base": 6,  "needsTool": true },
+    "wheat": { "name": "Gandum",     "kind": "raw",      "base": 5 },
+    "bread": { "name": "Roti",       "kind": "crafted",  "base": 16, "energy": 25 },
+    "meal":  { "name": "Ikan Bakar", "kind": "crafted",  "base": 20, "energy": 45 },
+    "tool":  { "name": "Alat",       "kind": "crafted",  "base": 45, "durability": 20 }
+  },
+  "recipes": {
+    "bread": { "inputs": { "wheat": 2 }, "output": "bread", "fee": 2 },
+    "meal":  { "inputs": { "fish": 1, "wood": 1 }, "output": "meal", "fee": 2 },
+    "tool":  { "inputs": { "ore": 2, "wood": 1 }, "output": "tool", "fee": 2 }
+  },
+  "gather": {
+    "tiles": { "water": "fish", "rock": "ore", "tree": "wood" },
+    "charges": 4,
+    "respawnGameHours": 2,
+    "energyCost": 4,
+    "energyMax": 100,
+    "energyRegenPerHour": 2
+  },
+  "farm": {
+    "plots": 6,
+    "seed": "wheat",
+    "growDays": 3,
+    "harvest": 3,
+    "noGrowthSeasons": ["dingin"],
+    "energyCost": 2
+  },
+  "seasons": {
+    "semi":   { "yield": { "fish": 1.0, "ore": 1.0, "wood": 1.2 }, "demand": { "bread": 1.2, "meal": 1.0, "tool": 1.0, "wood": 1.0 } },
+    "panas":  { "yield": { "fish": 1.5, "ore": 1.0, "wood": 1.0 }, "demand": { "bread": 1.0, "meal": 1.2, "tool": 1.0, "wood": 0.6 } },
+    "gugur":  { "yield": { "fish": 1.0, "ore": 1.0, "wood": 1.3 }, "demand": { "bread": 1.0, "meal": 1.0, "tool": 1.5, "wood": 1.0 }, "harvestBonus": 1 },
+    "dingin": { "yield": { "fish": 0.6, "ore": 1.0, "wood": 1.0 }, "demand": { "bread": 1.0, "meal": 1.4, "tool": 1.0, "wood": 1.8 } }
+  },
+  "merchants": {
+    "sari": {
+      "name": "Sari", "shop": "Lapak Ikan Sari", "personality": "fair",
+      "buys": ["fish", "wood"], "sells": ["fish", "meal"],
+      "target": { "fish": 20, "wood": 10, "meal": 8 },
+      "crafts": ["meal"],
+      "startCash": 600, "startStock": { "fish": 20, "wood": 10, "meal": 8 },
+      "restore": { "coin": 200, "items": { "fish": 6, "wood": 4 } }
+    },
+    "budi": {
+      "name": "Budi", "shop": "Bengkel Budi", "personality": "generous",
+      "buys": ["ore", "wood"], "sells": ["tool"],
+      "target": { "ore": 15, "wood": 10, "tool": 4 },
+      "crafts": ["tool"],
+      "startCash": 600, "startStock": { "ore": 15, "wood": 10, "tool": 4 },
+      "restore": { "coin": 200, "items": { "ore": 10, "wood": 5 } }
+    },
+    "wati": {
+      "name": "Wati", "shop": "Toko Roti Wati", "personality": "greedy",
+      "buys": ["wheat"], "sells": ["bread", "wheat"],
+      "target": { "wheat": 30, "bread": 12 },
+      "crafts": ["bread"],
+      "startCash": 600, "startStock": { "wheat": 30, "bread": 12 },
+      "restore": { "coin": 200, "items": { "wheat": 12 } }
+    },
+    "joko": {
+      "name": "Joko", "shop": "Toko Serba Ada Joko", "personality": "fair",
+      "buys": ["wood", "wheat", "fish"], "sells": ["wood", "bread"],
+      "target": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },
+      "crafts": [],
+      "startCash": 600, "startStock": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },
+      "restore": { "coin": 200, "items": { "wood": 6, "wheat": 6 } }
+    }
+  },
+  "personalities": {
+    "fair":     { "spread": 0.20, "elasticity": 0.5, "cashSensitivity": 1.0 },
+    "generous": { "spread": 0.12, "elasticity": 0.3, "cashSensitivity": 0.0 },
+    "greedy":   { "spread": 0.30, "elasticity": 0.5, "cashSensitivity": 1.0 }
+  },
+  "pricing": {
+    "demandWeight": 0.4,
+    "demandDamping": 5,
+    "fsMin": 0.5, "fsMax": 2.5,
+    "fdMin": 0.7, "fdMax": 1.4,
+    "maxStepPerTick": 0.10,
+    "minMult": 0.25, "maxMult": 4.0,
+    "fcMin": 0.3,
+    "cashComfortDays": 10,
+    "volumeHalfLifeTicks": 24,
+    "maxQuoteQty": 10,
+    "dailyBuyCapPerTarget": 2,
+    "quoteValidMs": 60000
+  },
+  "town": {
+    "dailyUnits": { "bread": 30, "meal": 15, "tool": 3, "wood": 20 },
+    "maxPriceMult": 1.5,
+    "faucetW0": 1200,
+    "moneyCap0": 25000,
+    "activePlayerDivisor": 10,
+    "maxK": 6,
+    "shippingBoxMult": 0.7
+  },
+  "shops": {
+    "rent": 40,
+    "dividendShare": 0.4,
+    "initialShares": 1000,
+    "minSharePrice": 0.05
+  },
+  "fees": {
+    "marketPct": 0.05
+  },
+  "starter": {
+    "coin": 100, "tool": 1, "bread": 3, "wheat": 3
+  },
+  "caps": {
+    "dailyGainPerItem": 200,
+    "dailySends": 20,
+    "maxSendAmount": 10
+  }
+}

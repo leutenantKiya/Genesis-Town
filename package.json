@@ -2,12 +2,14 @@
   "name": "genesis-town",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "setup": "npm --prefix server ci && npm --prefix client/build ci && npm run build:client",
     "build:client": "npm --prefix client/build run build",
     "dev": "npm run build:client && node server/src/main.ts",
     "dev:mock": "npm run build:client && CHAIN_MODE=mock DEV_LOGIN=1 DB_PATH=data/mock.db GAME_CONTRACT_ID=game.genesistown.mock PLAYERS_PARENT_ACCOUNT_ID=players.genesistown.mock node server/src/main.ts",
-    "test": "npm --prefix server test && npm --prefix server run typecheck"
+    "test": "node --test economy/*.test.ts && npm --prefix server test && npm --prefix server run typecheck"
   }
 }
