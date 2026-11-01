@@ -9,7 +9,7 @@ export interface HistoryRow {
   kind: string;
   summary: string;
   tx_hash: string | null;
-  status: 'pending' | 'ok' | 'failed' | 'mock';
+  status: 'pending' | 'ok' | 'failed' | 'mock' | 'offchain';
   created_at: number;
 }
 
@@ -94,6 +94,11 @@ export class Store {
 
   settleHistory(id: number, status: HistoryRow['status'], txHash: string | null) {
     this.db.prepare('UPDATE history SET status = ?, tx_hash = ? WHERE id = ?').run(status, txHash, id);
+  }
+
+  /** Off-chain actions become settled: they point at the settlement transaction that included the account. */
+  settleOffchain(accountId: string, status: HistoryRow['status'], txHash: string | null) {
+    this.db.prepare("UPDATE history SET status = ?, tx_hash = ? WHERE account_id = ? AND status = 'offchain'").run(status, txHash, accountId);
   }
 
   history(accountId: string, limit = 50): HistoryRow[] {

@@ -50,7 +50,7 @@ export function isEd25519Key(s: unknown): s is string {
 export interface RegisterResult { accountId: string; created: boolean; txHashes: string[] }
 
 export async function register(
-  deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier },
+  deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; onNewPlayer?: (accountId: string) => void },
   body: { idToken?: unknown; sessionPublicKey?: unknown },
 ): Promise<RegisterResult> {
   if (typeof body.idToken !== 'string') throw new HttpError(400, 'idToken required');
@@ -75,6 +75,7 @@ export async function register(
   deps.store.addHistory(accountId, 'account', 'Akun dibuat (kunci NEAR Auth + kunci sesi game)', deps.chain.mode === 'mock' ? 'mock' : 'ok', created.txHash);
   const reg = await deps.chain.registerPlayer(accountId);
   deps.store.addHistory(accountId, 'storage', 'Terdaftar di kontrak game', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
+  deps.onNewPlayer?.(accountId);
   return { accountId, created: true, txHashes: [created.txHash, reg.txHash] };
 }
 

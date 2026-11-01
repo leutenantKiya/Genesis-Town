@@ -1,24 +1,29 @@
-// Chain adapter. `TestnetChain` talks to NEAR testnet with near-api-js 7.4; `MockChain` keeps balances in memory for
-// tests and for running the server without testnet (labelled "mock" everywhere it shows up).
+// Chain adapter. `TestnetChain` talks to the game contract on NEAR testnet (near-api-js 7.4); `MockChain` mirrors the
+// contract's rules in memory for tests and for running without testnet (labelled "mock" everywhere it shows up).
 import { Account, JsonRpcProvider, actions, teraToGas, PublicKey, type KeyPairString } from 'near-api-js';
 import type { Config } from './config.ts';
-import { PLAYER_METHODS } from './config.ts';
 
 export interface TxResult { txHash: string; ok: boolean; error?: string }
-export interface MintEntry { account_id: string; token_id: string; amount: string }
+export interface DeltaEntry { account_id: string; token_id: string; delta: string }
+export interface ShopInfo { account_id: string; name: string; open: boolean; coin: string; total_shares: string; need: Array<{ token_id: string; amount: string }>; pledged: Array<{ token_id: string; amount: string }>; contributors: number; times_closed: number }
+export interface HoldingInfo { shares: string; total_shares: string; claimable: string }
 
 export interface Chain {
   readonly mode: 'testnet' | 'mock';
   createPlayerAccount(accountId: string, ownerPk: string, sessionPk: string): Promise<TxResult>;
   registerPlayer(accountId: string): Promise<TxResult>;
-  mintGathered(batch: MintEntry[], mintId: string): Promise<TxResult>;
+  settleDay(day: number, chunk: number, entries: DeltaEntry[], root: string, active: number): Promise<TxResult>;
+  isChunkApplied(day: number, chunk: number): Promise<boolean>;
+  closeShop(merchant: string): Promise<TxResult>;
+  payDividend(merchant: string, day: number, amount: number): Promise<TxResult>;
   relay(signedDelegate: unknown, senderId: string): Promise<TxResult>;
   balances(accountId: string, tokenIds: string[]): Promise<string[]>;
-  isMintIdUsed(mintId: string): Promise<boolean>;
+  listShops(): Promise<ShopInfo[]>;
+  holding(merchant: string, holder: string): Promise<HoldingInfo>;
+  coinSupply(): Promise<string>;
   derivedOwnerKey(sub: string): Promise<string>;
 }
 
-// Shape of the parts of FinalExecutionOutcome we read.
 interface Outcome { transaction: { hash: string }; status: unknown }
 
 function toResult(o: Outcome): TxResult {
@@ -34,67 +39,61 @@ export class TestnetChain implements Chain {
   provider: JsonRpcProvider;
   cfg: Config;
   parent: Account;
-  minter: Account;
+  settler: Account;
   relayer: Account;
 
   constructor(cfg: Config) {
     this.cfg = cfg;
     this.provider = new JsonRpcProvider({ url: cfg.rpcUrl });
     this.parent = new Account(cfg.playersParentId, this.provider, cfg.playersParentPrivateKey as KeyPairString);
-    this.minter = new Account(cfg.minterAccountId, this.provider, cfg.minterPrivateKey as KeyPairString);
+    this.settler = new Account(cfg.settlerAccountId, this.provider, cfg.settlerPrivateKey as KeyPairString);
     this.relayer = new Account(cfg.relayerAccountId, this.provider, cfg.relayerPrivateKeys[0] as KeyPairString);
   }
 
+  private view<T>(method: string, args: Record<string, unknown>): Promise<T> {
+    return this.provider.callFunction({ contractId: this.cfg.gameContractId, method, args }) as Promise<T>;
+  }
+
+  private async settlerCall(method: string, args: Record<string, unknown>, tgas = '100'): Promise<TxResult> {
+    const o = await this.settler.signAndSendTransaction({
+      receiverId: this.cfg.gameContractId,
+      actions: [actions.functionCall(method, args, teraToGas(tgas as `${number}`), 0n)],
+    });
+    return toResult(o as unknown as Outcome);
+  }
+
   async createPlayerAccount(accountId: string, ownerPk: string, sessionPk: string): Promise<TxResult> {
+    // The session key may call any method on the game contract (empty method list); the relayer allowlist and the
+    // contract's own checks decide what a player can do. It can never move NEAR or attach a deposit.
     const o = await this.parent.signAndSendTransaction({
       receiverId: accountId,
       actions: [
         actions.createAccount(),
         actions.transfer(this.cfg.playerInitialNear),
         actions.addFullAccessKey(PublicKey.from(ownerPk)),
-        actions.addFunctionCallAccessKey(PublicKey.from(sessionPk), this.cfg.gameContractId, [...PLAYER_METHODS], 0n),
+        actions.addFunctionCallAccessKey(PublicKey.from(sessionPk), this.cfg.gameContractId, [], 0n),
       ],
     });
     return toResult(o as unknown as Outcome);
   }
 
-  async registerPlayer(accountId: string): Promise<TxResult> {
-    const o = await this.minter.signAndSendTransaction({
-      receiverId: this.cfg.gameContractId,
-      actions: [actions.functionCall('register_player', { account_id: accountId }, teraToGas('30'), 0n)],
-    });
-    return toResult(o as unknown as Outcome);
+  registerPlayer(accountId: string) { return this.settlerCall('register_player', { account_id: accountId }, '30'); }
+  settleDay(day: number, chunk: number, entries: DeltaEntry[], root: string, active: number) {
+    return this.settlerCall('settle_day', { day, chunk, entries, ledger_root: root, active_players: active }, '300');
   }
-
-  async mintGathered(batch: MintEntry[], mintId: string): Promise<TxResult> {
-    const o = await this.minter.signAndSendTransaction({
-      receiverId: this.cfg.gameContractId,
-      actions: [actions.functionCall('mint_gathered', { batch, mint_id: mintId }, teraToGas('100'), 0n)],
-    });
-    return toResult(o as unknown as Outcome);
-  }
+  isChunkApplied(day: number, chunk: number) { return this.view<boolean>('is_chunk_applied', { day, chunk }); }
+  closeShop(merchant: string) { return this.settlerCall('close_shop', { merchant }, '50'); }
+  payDividend(merchant: string, day: number, amount: number) { return this.settlerCall('pay_dividend', { merchant, day, amount: String(amount) }, '50'); }
 
   async relay(signedDelegate: unknown, _senderId: string): Promise<TxResult> {
-    // relayMetaTransaction wraps the SignedDelegate in a transaction to the sender and pays the gas.
     const o = await this.relayer.relayMetaTransaction(signedDelegate as Parameters<Account['relayMetaTransaction']>[0]);
     return toResult(o as unknown as Outcome);
   }
 
-  async balances(accountId: string, tokenIds: string[]): Promise<string[]> {
-    return (await this.provider.callFunction({
-      contractId: this.cfg.gameContractId,
-      method: 'mt_batch_balance_of',
-      args: { account_id: accountId, token_ids: tokenIds },
-    })) as string[];
-  }
-
-  async isMintIdUsed(mintId: string): Promise<boolean> {
-    return (await this.provider.callFunction({
-      contractId: this.cfg.gameContractId,
-      method: 'is_mint_id_used',
-      args: { mint_id: mintId },
-    })) as boolean;
-  }
+  balances(accountId: string, tokenIds: string[]) { return this.view<string[]>('mt_batch_balance_of', { account_id: accountId, token_ids: tokenIds }); }
+  listShops() { return this.view<ShopInfo[]>('list_shops', {}); }
+  holding(merchant: string, holder: string) { return this.view<HoldingInfo>('get_holding', { merchant, holder }); }
+  async coinSupply() { return (await this.view<string | null>('mt_supply', { token_id: 'coin' })) ?? '0'; }
 
   // The NEAR Auth key for a login is derived by the MPC contract at path `jwt#https://<domain>/#<sub>` with
   // predecessor fast-auth.testnet (docs.auth.near.org protocol/concepts/auth0.md, contracts/fast-auth.md).
@@ -108,52 +107,160 @@ export class TestnetChain implements Chain {
   }
 }
 
+/* ======================================================================= mock */
+
+interface MockShop { name: string; open: boolean; shares: Map<string, number>; total: number; need: Map<string, number>; pledged: Map<string, number>; contrib: Map<string, Map<string, number>>; claimable: Map<string, number>; closes: number; base: Record<string, number>; atClose: { book: number; shares: number } }
+
 export class MockChain implements Chain {
   readonly mode = 'mock' as const;
   bal = new Map<string, bigint>(); // `${account}|${token}`
   accounts = new Set<string>();
-  usedMints = new Set<string>();
+  applied = new Set<string>();
+  roots = new Map<number, string>();
+  shops = new Map<string, MockShop>();
+  rent = 40;
   n = 0;
   failNext = false;
 
   hash(): string { return `mock-${++this.n}`; }
+  get(a: string, t: string): bigint { return this.bal.get(`${a}|${t}`) ?? 0n; }
+  add(a: string, t: string, d: bigint) {
+    const v = this.get(a, t) + d;
+    if (v < 0n) throw new Error(`not enough ${t} for ${a}`);
+    this.bal.set(`${a}|${t}`, v);
+  }
+
+  /** Mirrors `register_merchant`: shop, board and opening stock. */
+  addMerchant(account: string, name: string, restore: Record<string, number>, start: Record<string, number>, base: Record<string, number>) {
+    this.accounts.add(account);
+    this.shops.set(account, { name, open: true, shares: new Map([['town', 1000]]), total: 1000, need: new Map(Object.entries(restore)), pledged: new Map(), contrib: new Map(), claimable: new Map(), closes: 0, base, atClose: { book: 0, shares: 0 } });
+    for (const [t, a] of Object.entries(start)) this.add(account, t, BigInt(a));
+  }
 
   async createPlayerAccount(accountId: string): Promise<TxResult> {
     if (this.accounts.has(accountId)) return { txHash: this.hash(), ok: false, error: 'AccountAlreadyExists' };
-    this.accounts.add(accountId);
     return { txHash: this.hash(), ok: true };
   }
-  async registerPlayer(): Promise<TxResult> { return { txHash: this.hash(), ok: true }; }
-  async mintGathered(batch: MintEntry[], mintId: string): Promise<TxResult> {
+  async registerPlayer(accountId: string): Promise<TxResult> { this.accounts.add(accountId); return { txHash: this.hash(), ok: true }; }
+
+  async settleDay(day: number, chunk: number, entries: DeltaEntry[], root: string): Promise<TxResult> {
     if (this.failNext) { this.failNext = false; throw new Error('mock network error'); }
-    if (this.usedMints.has(mintId)) return { txHash: this.hash(), ok: false, error: 'mint_id already used' };
-    this.usedMints.add(mintId);
-    for (const e of batch) {
-      const k = `${e.account_id}|${e.token_id}`;
-      this.bal.set(k, (this.bal.get(k) ?? 0n) + BigInt(e.amount));
+    const k = `${day}:${chunk}`;
+    if (this.applied.has(k)) return { txHash: this.hash(), ok: false, error: 'chunk already applied' };
+    if (this.roots.has(day) && this.roots.get(day) !== root) return { txHash: this.hash(), ok: false, error: 'ledger_root differs' };
+    const snapshot = new Map(this.bal);
+    try {
+      for (const e of entries.filter((x) => BigInt(x.delta) < 0n)) {
+        if (!this.accounts.has(e.account_id)) throw new Error(`${e.account_id} is not registered`);
+        this.add(e.account_id, e.token_id, BigInt(e.delta));
+      }
+      for (const e of entries.filter((x) => BigInt(x.delta) > 0n)) {
+        if (!this.accounts.has(e.account_id)) throw new Error(`${e.account_id} is not registered`);
+        this.add(e.account_id, e.token_id, BigInt(e.delta));
+      }
+    } catch (err) {
+      this.bal = snapshot;
+      return { txHash: this.hash(), ok: false, error: (err as Error).message };
     }
+    this.applied.add(k);
+    this.roots.set(day, root);
     return { txHash: this.hash(), ok: true };
   }
-  // Applies the one player method that exists in M1 (send_item) so mock mode behaves like the contract.
+  async isChunkApplied(day: number, chunk: number) { return this.applied.has(`${day}:${chunk}`); }
+
+  async closeShop(merchant: string): Promise<TxResult> {
+    const s = this.shops.get(merchant);
+    if (!s || !s.open) return { txHash: this.hash(), ok: false, error: 'not open' };
+    if (this.get(merchant, 'coin') >= BigInt(this.rent)) return { txHash: this.hash(), ok: false, error: 'shop can still pay rent' };
+    let book = Number(this.get(merchant, 'coin'));
+    for (const [t, b] of Object.entries(s.base)) if (t !== 'coin') book += Number(this.get(merchant, t)) * b;
+    Object.assign(s, { open: false, closes: s.closes + 1, pledged: new Map(), contrib: new Map(), atClose: { book, shares: s.total } });
+    return { txHash: this.hash(), ok: true };
+  }
+
+  async payDividend(merchant: string, _day: number, amount: number): Promise<TxResult> {
+    const s = this.shops.get(merchant);
+    if (!s || !s.open) return { txHash: this.hash(), ok: false, error: 'closed' };
+    this.add(merchant, 'coin', -BigInt(amount));
+    for (const [h, n] of s.shares) s.claimable.set(h, (s.claimable.get(h) ?? 0) + Math.floor((amount * n) / s.total));
+    return { txHash: this.hash(), ok: true };
+  }
+
+  private mockMethod(sender: string, method: string, a: Record<string, unknown>) {
+    if (method === 'send_item') {
+      const r = a as { receiver_id: string; token_id: string; amount: string };
+      if (!this.accounts.has(r.receiver_id) || this.shops.has(r.receiver_id)) throw new Error('receiver is not a registered player');
+      this.add(sender, r.token_id, -BigInt(r.amount));
+      this.add(r.receiver_id, r.token_id, BigInt(r.amount));
+    } else if (method === 'restore_contribute') {
+      const s = this.shops.get(String(a.merchant));
+      if (!s || s.open) throw new Error('shop is open');
+      const mine = s.contrib.get(sender) ?? new Map<string, number>();
+      for (const l of a.contribution as Array<{ token_id: string; amount: string }>) {
+        const take = Math.min(Number(l.amount), (s.need.get(l.token_id) ?? 0) - (s.pledged.get(l.token_id) ?? 0));
+        if (take <= 0) continue;
+        this.add(sender, l.token_id, -BigInt(take));
+        s.pledged.set(l.token_id, (s.pledged.get(l.token_id) ?? 0) + take);
+        mine.set(l.token_id, (mine.get(l.token_id) ?? 0) + take);
+      }
+      s.contrib.set(sender, mine);
+      if ([...s.need].every(([t, n]) => (s.pledged.get(t) ?? 0) >= n)) {
+        const book = Math.max(s.atClose.book, Math.floor(s.atClose.shares / 20), 1);
+        for (const [who, lines] of s.contrib) {
+          let value = 0;
+          for (const [t, n] of lines) value += n * (s.base[t] ?? 1);
+          const add = Math.floor((value * s.atClose.shares) / book);
+          s.shares.set(who, (s.shares.get(who) ?? 0) + add);
+          s.total += add;
+        }
+        for (const [t, n] of s.pledged) this.add(String(a.merchant), t, BigInt(n));
+        Object.assign(s, { open: true, pledged: new Map(), contrib: new Map() });
+      }
+    } else if (method === 'restore_withdraw') {
+      const s = this.shops.get(String(a.merchant));
+      const mine = s?.contrib.get(sender);
+      if (!s || s.open || !mine) throw new Error('no pledge to withdraw');
+      for (const [t, n] of mine) { this.add(sender, t, BigInt(n)); s.pledged.set(t, (s.pledged.get(t) ?? 0) - n); }
+      s.contrib.delete(sender);
+    } else if (method === 'claim_dividends') {
+      const s = this.shops.get(String(a.merchant));
+      const c = s?.claimable.get(sender) ?? 0;
+      if (s && c > 0) { this.add(sender, 'coin', BigInt(c)); s.claimable.set(sender, 0); }
+    }
+  }
+
   async relay(signedDelegate: unknown, senderId: string): Promise<TxResult> {
     const sd = signedDelegate as { delegateAction: { actions: Array<{ functionCall?: { methodName: string; args: ArrayLike<number> } }> } };
     const fc = sd.delegateAction.actions[0]?.functionCall;
-    if (fc?.methodName === 'send_item') {
-      const a = JSON.parse(Buffer.from(Uint8Array.from(fc.args)).toString('utf8')) as { receiver_id: string; token_id: string; amount: string };
-      const from = `${senderId}|${a.token_id}`, to = `${a.receiver_id}|${a.token_id}`, n = BigInt(a.amount);
-      if (!this.accounts.has(a.receiver_id)) return { txHash: this.hash(), ok: false, error: 'receiver is not a registered player' };
-      if ((this.bal.get(from) ?? 0n) < n || n <= 0n) return { txHash: this.hash(), ok: false, error: 'insufficient balance' };
-      this.bal.set(from, (this.bal.get(from) ?? 0n) - n);
-      this.bal.set(to, (this.bal.get(to) ?? 0n) + n);
+    if (fc) {
+      try {
+        this.mockMethod(senderId, fc.methodName, JSON.parse(Buffer.from(Uint8Array.from(fc.args)).toString('utf8')));
+      } catch (e) {
+        return { txHash: this.hash(), ok: false, error: (e as Error).message };
+      }
     }
     return { txHash: this.hash(), ok: true };
   }
-  async balances(accountId: string, tokenIds: string[]): Promise<string[]> {
-    return tokenIds.map((t) => String(this.bal.get(`${accountId}|${t}`) ?? 0n));
+
+  async balances(accountId: string, tokenIds: string[]) { return tokenIds.map((t) => String(this.get(accountId, t))); }
+  async listShops(): Promise<ShopInfo[]> {
+    return [...this.shops].map(([acct, s]) => ({
+      account_id: acct, name: s.name, open: s.open, coin: String(this.get(acct, 'coin')), total_shares: String(s.total),
+      need: [...s.need].map(([t, a]) => ({ token_id: t, amount: String(a) })),
+      pledged: [...s.pledged].map(([t, a]) => ({ token_id: t, amount: String(a) })),
+      contributors: s.contrib.size, times_closed: s.closes,
+    }));
   }
-  async isMintIdUsed(mintId: string): Promise<boolean> { return this.usedMints.has(mintId); }
+  async holding(merchant: string, holder: string): Promise<HoldingInfo> {
+    const s = this.shops.get(merchant);
+    return { shares: String(s?.shares.get(holder) ?? 0), total_shares: String(s?.total ?? 0), claimable: String(s?.claimable.get(holder) ?? 0) };
+  }
+  async coinSupply() {
+    let s = 0n;
+    for (const [k, v] of this.bal) if (k.endsWith('|coin')) s += v;
+    return String(s);
+  }
   async derivedOwnerKey(sub: string): Promise<string> {
-    // Deterministic fake key so tests can check the server never trusts a browser-supplied owner key.
     const { createHash } = await import('node:crypto');
     const { baseEncode } = await import('near-api-js');
     return 'ed25519:' + baseEncode(createHash('sha256').update('mock-owner:' + sub).digest());

@@ -5,7 +5,7 @@ import { Store } from '../src/db.ts';
 import { MockChain } from '../src/chain.ts';
 
 export function setup() {
-  const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', MINT_BATCH_MS: '50' } as NodeJS.ProcessEnv);
+  const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: 'town.gt.test', MERCHANT_PARENT_ACCOUNT_ID: 'gt.test' } as NodeJS.ProcessEnv);
   const store = new Store(':memory:');
   const chain = new MockChain();
   return { cfg, store, chain };

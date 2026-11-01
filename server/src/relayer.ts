@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import { deserialize, serialize } from 'borsh';
 import { SCHEMA, encodeDelegateAction, baseEncode, PublicKey, JsonRpcProvider } from 'near-api-js';
-import { PLAYER_METHODS, type Config } from './config.ts';
+import { RELAY_METHODS, type Config } from './config.ts';
 import type { Chain } from './chain.ts';
 import type { Store } from './db.ts';
 import { HttpError } from './auth.ts';
@@ -71,6 +71,7 @@ export interface RelayDeps {
   store: Store;
   limiter: RateLimiter;
   currentBlockHeight: () => Promise<bigint>;
+  afterRelay?: (sender: string, method: string, args: Record<string, unknown>) => Promise<void>;
 }
 
 export function blockHeightSource(cfg: Config): () => Promise<bigint> {
@@ -80,6 +81,9 @@ export function blockHeightSource(cfg: Config): () => Promise<bigint> {
 
 const SUMMARY: Record<string, (a: Record<string, unknown>) => string> = {
   send_item: (a) => `Kirim ${a.amount} ${a.token_id} ke ${a.receiver_id}`,
+  restore_contribute: (a) => `Sumbang ke papan pemulihan ${String(a.merchant).split('.')[0]}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${l.token_id}`).join(', ')}`,
+  restore_withdraw: (a) => `Tarik sumbangan dari ${String(a.merchant).split('.')[0]}`,
+  claim_dividends: (a) => `Ambil dividen dari ${String(a.merchant).split('.')[0]}`,
 };
 
 export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown }) {
@@ -97,7 +101,7 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
   if (da.receiverId !== deps.cfg.gameContractId) throw new HttpError(403, 'receiver must be the game contract');
   if (da.actions.length !== 1 || !da.actions[0].functionCall) throw new HttpError(403, 'exactly one function call allowed');
   const fc = da.actions[0].functionCall;
-  if (!(PLAYER_METHODS as readonly string[]).includes(fc.methodName)) throw new HttpError(403, `method ${fc.methodName} not allowed`);
+  if (!(RELAY_METHODS as readonly string[]).includes(fc.methodName)) throw new HttpError(403, `method ${fc.methodName} not allowed`);
   if (BigInt(fc.deposit) !== 0n) throw new HttpError(403, 'deposit must be 0');
   if (BigInt(fc.gas) > BigInt(deps.cfg.relay.maxGasTera) * 10n ** 12n) throw new HttpError(403, 'gas above cap');
   if (!verifyDelegateSignature(sd)) throw new HttpError(403, 'bad signature');
@@ -117,6 +121,7 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
     const status = r.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed';
     deps.store.relayPut(hash, da.senderId, status, r.txHash);
     deps.store.settleHistory(hid, status, r.txHash);
+    if (r.ok) await deps.afterRelay?.(da.senderId, fc.methodName, args);
     return { txHash: r.txHash, status, error: r.error };
   } catch (e) {
     deps.store.relayPut(hash, da.senderId, 'failed', null);

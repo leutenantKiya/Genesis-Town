@@ -7,15 +7,18 @@ export interface Config {
   gameContractId: string;
   relayerAccountId: string;
   relayerPrivateKeys: string[];
-  minterAccountId: string;
-  minterPrivateKey: string;
+  settlerAccountId: string;
+  settlerPrivateKey: string;
+  townAccountId: string;
+  merchantParentId: string;
+  devTools: boolean;
   playersParentId: string;
   playersParentPrivateKey: string;
   playerInitialNear: bigint; // yoctoNEAR sent to each new player account
   fastAuth: { domain: string; clientId: string; contractId: string; mpcContractId: string; mpcDomainId: number };
   explorerTxUrl: string; // prefix, hash is appended
   relay: { perMinute: number; perDay: number; maxGasTera: number; maxBlocksAhead: number };
-  mintBatch: { maxItems: number; maxWaitMs: number };
+  settleChunk: number;
   dbPath: string;
   chainMode: 'testnet' | 'mock';
   devLogin: boolean; // mock chain only: accept idToken "dev:<name>" so tests run without a Google account
@@ -38,8 +41,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     gameContractId: get('GAME_CONTRACT_ID'),
     relayerAccountId: get('RELAYER_ACCOUNT_ID'),
     relayerPrivateKeys: get('RELAYER_PRIVATE_KEYS').split(',').map((s) => s.trim()).filter(Boolean),
-    minterAccountId: get('MINTER_ACCOUNT_ID'),
-    minterPrivateKey: get('MINTER_PRIVATE_KEY'),
+    settlerAccountId: get('SETTLER_ACCOUNT_ID'),
+    settlerPrivateKey: get('SETTLER_PRIVATE_KEY'),
+    townAccountId: get('TOWN_ACCOUNT_ID'),
+    merchantParentId: get('MERCHANT_PARENT_ACCOUNT_ID'),
+    devTools: env.DEV_TOOLS === '1',
     playersParentId: get('PLAYERS_PARENT_ACCOUNT_ID'),
     playersParentPrivateKey: get('PLAYERS_PARENT_PRIVATE_KEY'),
     playerInitialNear: BigInt(env.PLAYER_INITIAL_YOCTO ?? '10000000000000000000000'), // 0.01 NEAR
@@ -58,12 +64,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       maxGasTera: 50,
       maxBlocksAhead: 200,
     },
-    mintBatch: { maxItems: 10, maxWaitMs: Number(env.MINT_BATCH_MS ?? 30000) },
+    settleChunk: Number(env.SETTLE_CHUNK ?? 25),
     dbPath: env.DB_PATH ?? 'data/genesis-town.db',
     chainMode,
     devLogin: chainMode === 'mock' && env.DEV_LOGIN === '1',
   };
 }
 
-// Game methods a player's session key may call (function-call key method list and relay allowlist).
-export const PLAYER_METHODS = ['send_item'] as const;
+// Contract methods the relayer will submit for players (on-chain, player-to-player and shop ownership actions).
+// Session keys themselves may call any game-contract method; the contract checks callers and deposits.
+export const RELAY_METHODS = ['send_item', 'restore_contribute', 'restore_withdraw', 'claim_dividends'] as const;

@@ -6,24 +6,49 @@ import { MockChain, TestnetChain } from './chain.ts';
 import { auth0Verifier, withDevLogin } from './auth.ts';
 import { blockHeightSource } from './relayer.ts';
 import { createApp } from './app.ts';
+import { Game } from './game/game.ts';
+import { loadEcon } from './game/econ.ts';
 
 try { process.loadEnvFile(join(dirname(fileURLToPath(import.meta.url)), '../../.env')); } catch { /* no .env: use the real environment */ }
 const cfg = loadConfig();
 const store = new Store(cfg.dbPath);
-const chain = cfg.chainMode === 'mock' ? new MockChain() : new TestnetChain(cfg);
+const econ = loadEcon();
+
+let chain;
+if (cfg.chainMode === 'mock') {
+  // The mock chain mirrors the deployed setup: town treasury and the four registered shops.
+  const m = new MockChain();
+  const base = Object.fromEntries(Object.entries(econ.items).map(([t, i]) => [t, i.base]));
+  m.accounts.add(cfg.townAccountId);
+  m.add(cfg.townAccountId, 'coin', 5000n);
+  for (const [id, d] of Object.entries(econ.merchants)) {
+    m.addMerchant(`${id}.${cfg.merchantParentId}`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, base);
+  }
+  chain = m;
+} else {
+  chain = new TestnetChain(cfg);
+}
+
+const game = new Game(store, chain, { merchantParent: cfg.merchantParentId, town: cfg.townAccountId, chunkSize: cfg.settleChunk, econ });
+await game.init();
+game.start();
+
 const here = dirname(fileURLToPath(import.meta.url));
-const { server, minter } = createApp({
+const { server } = createApp({
   cfg,
   chain,
   store,
+  game,
   verify: withDevLogin(cfg, auth0Verifier(cfg)),
   currentBlockHeight: cfg.chainMode === 'mock' ? async () => 0n : blockHeightSource(cfg),
   clientDir: join(here, '../../client'),
 });
 server.listen(cfg.port, () => {
   if (cfg.devLogin) console.log('DEV_LOGIN is on (mock chain only): tokens "dev:<name>" are accepted.');
-  console.log(`Genesis Town server on http://localhost:${cfg.port} (chain: ${chain.mode}, contract: ${cfg.gameContractId})`);
+  if (cfg.devTools) console.log('DEV_TOOLS is on: POST /api/dev/settle is enabled.');
+  const t = game.clock.time();
+  console.log(`Genesis Town server on http://localhost:${cfg.port} (chain: ${chain.mode}, contract: ${cfg.gameContractId}, day ${t.day} ${t.hour}:00 ${t.season})`);
 });
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(sig, async () => { await minter.flush(); server.close(); process.exit(0); });
+  process.on(sig, () => { game.stop(); server.close(); process.exit(0); });
 }
