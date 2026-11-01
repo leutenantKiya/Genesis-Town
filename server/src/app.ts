@@ -50,6 +50,7 @@ export function createApp(deps: AppDeps) {
   const afterRelay = async (sender: string, method: string, args: Record<string, unknown>) => {
     const accts = [sender];
     if (method === 'send_item' && typeof args.receiver_id === 'string') accts.push(args.receiver_id);
+    if (typeof args.merchant === 'string') accts.push(args.merchant);
     await game.settlement.refresh(accts);
     if (method.startsWith('restore')) await game.settlement.refreshShops();
   };

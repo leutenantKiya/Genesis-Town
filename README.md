@@ -1,13 +1,14 @@
 # Genesis Town
 
-> **Status (2026-11-01): milestone M1 done (Checkpoint 2).** The game contract is deployed on NEAR testnet, and the
-> M1 loop has been checked on testnet in two ways:
-> - **Scripted:** account creation, a batched gather mint, and a gas-free player transfer signed by a session key.
-> - **By hand in the browser:** Google sign-in through NEAR Auth created a player account (NEAR Auth key as full
->   access, plus a game-only session key), and gathering 3 Ikan at the pond was minted in one batch transaction:
->   https://testnet.nearblocks.io/txns/CNhfxPAQCAzkW8XsDoSo1R7MSar8LsJyKc3PCj7sDyxt
+> **Status (2026-11-01): milestone M2 done (Checkpoint 3).** The economy loop runs, and an end-to-end run on NEAR testnet
+> passed:
+> - off-chain play: gathering, energy, crafting, the farm plot, shipping, and trading with four merchants priced by
+>   `economy/pricing.ts`;
+> - one daily settlement written on chain, with the published ledger's Merkle root;
+> - a merchant closed on chain after failing rent, and reopened through its restoration board, with shares issued.
 >
-> Anything marked *(planned)* does not exist yet.
+> Not built yet: the fast-forward simulator and charts (M3), NEAR AI Cloud dialogue (M3), the player market (M3),
+> fullscreen and keybind settings, and the warmer art pass. Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
@@ -51,27 +52,44 @@ Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [ar
 | --- | --- | --- |
 | Game contract (NEP-245 items + `coin`, NEP-145 storage) | [`game.genesistown.testnet`](https://testnet.nearblocks.io/address/game.genesistown.testnet) | source: [contracts/game](contracts/game) |
 | Relayer (pays players' gas, NEP-366) | [`relayer.genesistown.testnet`](https://testnet.nearblocks.io/address/relayer.genesistown.testnet) | |
-| Gather minter (function-call key: `mint_gathered`, `register_player` only) | [`minter.genesistown.testnet`](https://testnet.nearblocks.io/address/minter.genesistown.testnet) | |
+| Settler (function-call key: `settle_day`, `register_player`, `close_shop`, `pay_dividend` only) | [`minter.genesistown.testnet`](https://testnet.nearblocks.io/address/minter.genesistown.testnet) | runs the daily settlement |
+| Town treasury (starter kits, initial shop shares) | [`town.genesistown.testnet`](https://testnet.nearblocks.io/address/town.genesistown.testnet) | |
+| Merchants Sari, Budi, Wati, Joko | [`sari`](https://testnet.nearblocks.io/address/sari.genesistown.testnet) · [`budi`](https://testnet.nearblocks.io/address/budi.genesistown.testnet) · [`wati`](https://testnet.nearblocks.io/address/wati.genesistown.testnet) · [`joko`](https://testnet.nearblocks.io/address/joko.genesistown.testnet) `.genesistown.testnet` | real accounts; the server holds no keys for them, so their balances change only through settlement rules |
 | Player accounts | `p<hash>.players.genesistown.testnet` | full-access key = the player's NEAR Auth key; plus a game-only session key |
 
 Contract methods: NEP-245 `mt_transfer`, `mt_batch_transfer`, `mt_transfer_call`, `mt_batch_transfer_call`,
-`mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`; NEP-145 `storage_*`. Game
-methods so far: `register_player`, `mint_gathered`, `send_item`. Table: [contracts/game/README.md](contracts/game/README.md).
+`mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`; NEP-145 `storage_*`. Game methods:
+`settle_day`, `register_player`, `register_merchant`, `close_shop`, `restore_contribute`, `restore_withdraw`,
+`pay_dividend`, `claim_dividends`, `send_item`. Full table: [contracts/game/README.md](contracts/game/README.md).
 
-Example transactions from the M1 end-to-end run (`node server/scripts/e2e-testnet.ts`):
-- batch mint of 3 Ikan: https://testnet.nearblocks.io/txns/9rQEcKUNzgQnVPsEx4FAKXv1X8FvLnGDqNNko58T47Tu
+Example transactions from the M2 end-to-end run (`node server/scripts/e2e-testnet.ts`, server stopped):
+- daily settlement of day 0 (45 ledger rows, root stored on chain):
+  https://testnet.nearblocks.io/txns/GPBpcDqWgXxQdhkkNEFZJhaFAeFHwPPn2LKZHXJ9DDXq
 - player A sends 1 Ikan to B, signed with A's session key and relayed gas-free:
-  https://testnet.nearblocks.io/txns/HbhpvdLJU9Yja5hsMKFYm9ZnPAPPGgSLfBXGvV9pRcuh
+  https://testnet.nearblocks.io/txns/HGh8cA8oYj7ACBSUPszmoXgPEdwARS4jtiuTgSRZ3bEn
+- A pledges 200 coin, 10 Bijih and 5 Kayu to Budi's restoration board; the shop reopens and A gets shares:
+  https://testnet.nearblocks.io/txns/DDVwUrvu9XB1AqWNLW2W5ynGLdUU92mL17pVbmvzfTQM
 
-## Try it in 5 minutes *(planned, steps become real as milestones land)*
+The run forced Budi's bankruptcy with ledger rows labelled `scripted` so the whole cycle fits in one run. In normal
+play, bankruptcy comes from trading, which the M3 simulator will show.
 
-1. Open the demo URL *(TBD)* and press **Masuk**, signing in with email → see your house, 100 coins, an Alat and
-   3 Roti. No wallet popup.
-2. Walk to the pond and press A → see `+1 Ikan` instantly. Press **Settle sekarang** (Dev panel) → Riwayat shows the
-   day's settlement transaction with a testnet explorer link.
-3. Sell 10 Ikan to merchant Sari → see her fish price fall over the next game hours, with her reason in the tooltip.
-4. Press **Simulate 1 week** → watch the price charts move; merchant Budi's smithy goes bankrupt during the week.
-5. Invest 50 coins in Budi's shop → the shop reopens and your share appears in Profile.
+## Try it in 5 minutes
+
+Run locally (below), open http://localhost:3000.
+
+1. Press **Masuk** and sign in with Google or email → you see your house, an energy bar, the season (Semi H1), and
+   100 coins. No wallet popup.
+2. Walk to the pond and press A → `+1 Ikan` instantly. Open **Tas NEAR** (N) → it shows "+1 hari ini" (off-chain,
+   today).
+3. Walk to the market just south of your house and talk to **Sari** → prices with a reason under each item. Sell your
+   fish.
+4. Inside your house, press A at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
+   Outside, press A on the plot tiles next to your house to till, plant and water wheat.
+5. Open the Dev panel → **Settle sekarang** → Riwayat (H) shows "Settlement hari N" with a testnet explorer link,
+   and everything from step 2 now points to it.
+6. *(planned, M3)* Press **Simulate 1 week** → price and cash charts move; Budi goes bankrupt during the week.
+7. When a shop shows TUTUP, talk to its merchant → restoration board → **Sumbang** (on-chain) → the shop reopens and
+   your shares appear in the shop window.
 
 ## Run locally
 
@@ -128,7 +146,11 @@ NEP-245 contract (`/contracts`), and shared economy code (`/economy`).
 - Design stage: nothing on-chain exists yet.
 - The baseline is the 2026-10-25 published build. Later prototype work (to 2026-10-31) was in a local folder that
   wasn't available when this repository was created.
-- Items gathered or traded off-chain today are owned on chain only after the 06:00 settlement (or "Simpan sekarang").
+- Items gathered or traded off-chain today are owned on chain only after the 06:00 settlement. "Simpan sekarang"
+  (settle my bag early) is planned.
+- The server trusts the account header for off-chain play (rate limited); session-key-signed requests come in M4.
+- Gathering does not yet check the player's position against the map (M4).
+- Pure offline mode (`?mode=offline`) supports gathering only. For the full game without testnet, run `npm run dev:mock`.
 - The warmer art pass and fullscreen/keybind settings are designed but scheduled after the economy loop works.
 - Testnet only. NEAR Intents has no testnet, so it is out of scope unless approved as a mainnet stretch.
 

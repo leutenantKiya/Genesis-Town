@@ -36,9 +36,10 @@ export function auth0Verifier(cfg: Config, keys?: JWTVerifyGetKey): TokenVerifie
   };
 }
 
-// Deterministic, privacy-preserving account name: p<hash of sub>.<players parent>.
+// Deterministic, privacy-preserving account name: p<hash of sub>.<players parent>. The salt changed in M2
+// ("genesis-town:m2:") because M1 accounts carry a session key limited to `send_item`.
 export function playerAccountId(sub: string, parent: string): string {
-  const h = createHash('sha256').update('genesis-town:' + sub).digest('hex').slice(0, 16);
+  const h = createHash('sha256').update('genesis-town:m2:' + sub).digest('hex').slice(0, 16);
   return `p${h}.${parent}`;
 }
 
