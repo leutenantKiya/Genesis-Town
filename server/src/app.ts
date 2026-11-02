@@ -9,6 +9,7 @@ import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
 import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
+import { ReplayCache, verifyRequest } from './reqauth.ts';
 import type { Game } from './game/game.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
 import { Worker } from 'node:worker_threads';
@@ -48,7 +49,7 @@ const MIME: Record<string, string> = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
 };
 
-async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readRaw(req: IncomingMessage): Promise<string> {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const c of req) {
@@ -56,8 +57,12 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
     if (size > 16_384) throw new HttpError(413, 'body too large');
     chunks.push(c as Buffer);
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw new HttpError(400, 'bad json'); }
+  return Buffer.concat(chunks).toString('utf8');
 }
+function parseJson(raw: string): Record<string, unknown> {
+  try { return JSON.parse(raw || '{}'); } catch { throw new HttpError(400, 'bad json'); }
+}
+async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> { return parseJson(await readRaw(req)); }
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -82,14 +87,10 @@ export function createApp(deps: AppDeps) {
     if (method === 'project_contribute') await game.syncProjects();
   };
 
-  // M2 trusts the account id header for off-chain play by a registered player (rate limited). Signed requests with
-  // the session key are planned for M4 hardening (docs/threat-model.md).
-  function accountOf(req: IncomingMessage): string {
-    const a = req.headers['x-account-id'];
-    if (typeof a !== 'string' || !deps.store.db.prepare('SELECT 1 FROM players WHERE account_id = ?').get(a)) {
-      throw new HttpError(401, 'not signed in');
-    }
-    return a;
+  // Off-chain play is signed with the player's session key (src/reqauth.ts); the account header alone proves nothing.
+  const replay = new ReplayCache();
+  function accountOf(req: IncomingMessage, url: URL, raw = ''): string {
+    return verifyRequest({ sessionKeyOwner: (k) => deps.store.sessionKeyOwner(k), replay }, req.headers, req.method ?? 'GET', url.pathname + url.search, raw);
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
@@ -122,12 +123,16 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null });
       }
       if (req.method === 'GET' && p === '/api/state') {
-        return send(res, 200, game.state(accountOf(req)));
+        const acct = accountOf(req, url);
+        const qx = url.searchParams.get('x'), qy = url.searchParams.get('y');
+        if (qx !== null && qy !== null) game.reportPosition(acct, { x: Number(qx), y: Number(qy) });
+        return send(res, 200, game.state(acct));
       }
       if (req.method === 'POST' && p === '/api/act') {
-        const acct = accountOf(req);
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
         if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
-        return send(res, 200, game.act(acct, await readJson(req)));
+        return send(res, 200, game.act(acct, parseJson(raw)));
       }
       if (req.method === 'GET' && p === '/api/market') {
         return send(res, 200, { merchants: game.merchants() });
@@ -142,9 +147,10 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, { shops: await game.shops(typeof a === 'string' ? a : undefined) });
       }
       if (req.method === 'POST' && p === '/api/talk') {
-        const acct = accountOf(req);
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
         if (!talkLimiter.take(acct)) throw new HttpError(429, 'Pedagangnya sedang sibuk melayani. Coba sebentar lagi.');
-        const b = await readJson(req);
+        const b = parseJson(raw);
         const id = String(b.merchant ?? '');
         if (!game.econ.merchants[id]) throw new HttpError(404, 'no such merchant');
         const r = await dialogue.reply(game.market.view(id), game.econ.merchants[id].personality, String(b.text ?? ''));
@@ -160,7 +166,7 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, { listings, feeBps: MARKET_FEE_BPS, contractId: deps.cfg.gameContractId });
       }
       if (req.method === 'GET' && p === '/api/history') {
-        const acct = accountOf(req);
+        const acct = accountOf(req, url);
         return send(res, 200, { history: deps.store.history(acct), explorerTxUrl: deps.cfg.explorerTxUrl });
       }
       const m = /^\/api\/ledger\/(\d+)$/.exec(p);

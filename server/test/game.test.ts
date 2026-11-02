@@ -247,7 +247,8 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
   chain.add(TOWN, 'coin', 5000n);
   for (const p of econ.projects) chain.addProject(p.id, p.name, p.chunk, p.need);
   const store = new Store(':memory:');
-  const game = new Game(store, chain, { merchantParent: 'gt.test', town: TOWN, econ, worldSeed: 42, chunkSize: 5 });
+  let now = 1_800_000_000_000;
+  const game = new Game(store, chain, { merchantParent: 'gt.test', town: TOWN, econ, worldSeed: 42, chunkSize: 5, now: () => now });
   for (const [id, d] of Object.entries(econ.merchants)) chain.addMerchant(`${id}.gt.test`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, {});
   await game.init();
   store.addPlayer(P, 'sub-' + P, 'ed25519:o'); await chain.registerPlayer(P); game.onNewPlayer(P);
@@ -255,12 +256,22 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
   assert.equal(new WorldMap(42).layout.tiles.join(), map.layout.tiles.join(), 'same seed, same map');
   const L = map.layout;
   const find = (pred: (x: number, y: number, t: string) => boolean) => { for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) if (pred(x, y, L.tiles[y * L.w + x])) return { x, y }; throw new Error('none'); };
-  const openWater = find((x, y, t) => t === 'water' && map.chunkAt(x, y).open);
-  const lockedTree = find((x, y, t) => t === 'tree' && map.chunkAt(x, y).id === 'seberang');
+  const FREE = new Set(['grass', 'path', 'sand', 'flower', 'tallgrass', 'plaza', 'bridge']);
+  const inBuilding = (x: number, y: number) => L.buildings.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  const freeNb = (x: number, y: number) => [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => FREE.has(L.tiles[(y + dy) * L.w + x + dx]) && !inBuilding(x + dx, y + dy));
+  const openWater = find((x, y, t) => t === 'water' && map.chunkAt(x, y).open && [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => map.walkable(x + dx, y + dy)));
+  const lockedTree = find((x, y, t) => t === 'tree' && map.chunkAt(x, y).id === 'seberang' && freeNb(x, y));
   const grass = find((x, y, t) => t === 'grass' && map.chunkAt(x, y).open);
-  assert.match(game.act(P, { action: 'gather', tile: 'water', x: openWater.x, y: openWater.y }).toast, /Ikan/);
-  assert.throws(() => game.act(P, { action: 'gather', tile: 'water', x: grass.x, y: grass.y }), /Tidak ada/);
-  assert.throws(() => game.act(P, { action: 'gather', tile: 'tree', x: lockedTree.x, y: lockedTree.y }), /Dusun Seberang belum dibuka/);
+  // stand on a walkable tile next to the target (an hour later, so walking there is plausible)
+  const beside = (t: { x: number; y: number }) => {
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (map.walkable(t.x + dx, t.y + dy)) return { x: t.x + dx, y: t.y + dy };
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (FREE.has(L.tiles[(t.y + dy) * L.w + t.x + dx]) && !inBuilding(t.x + dx, t.y + dy)) return { x: t.x + dx, y: t.y + dy };
+    return { x: t.x, y: t.y + 1 };
+  };
+  const gather = (tile: string, t: { x: number; y: number }) => { now += 3_600_000; return game.act(P, { action: 'gather', tile, x: t.x, y: t.y, pos: beside(t) }); };
+  assert.match(gather('water', openWater).toast, /Ikan/);
+  assert.throws(() => gather('water', grass), /Tidak ada/);
+  assert.throws(() => gather('tree', lockedTree), /Posisi tidak valid|Dusun Seberang belum dibuka/);
   // the town builds the bridge (on chain), and the server opens Dusun Seberang
   await game.devSettle();
   chain.add(P, 'wood', 60n); chain.add(P, 'ore', 20n); chain.add(P, 'coin', 300n);
@@ -270,6 +281,41 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
   assert.deepEqual(await game.syncProjects(), ['seberang']);
   assert.ok(map.chunkAt(lockedTree.x, lockedTree.y).open);
   assert.ok(map.layout.tiles.includes('bridge'), 'the bridge is on the map now');
-  assert.match(game.act(P, { action: 'gather', tile: 'tree', x: lockedTree.x, y: lockedTree.y }).toast, /Kayu/);
+  assert.match(gather('tree', lockedTree).toast, /Kayu/);
   assert.deepEqual(JSON.parse(game.gs.meta('world.unlocked')!), ['seberang'], 'persisted');
+});
+
+test('positions: actions happen where the player stands, and nobody jumps across the map', async () => {
+  const econ = (await import('../src/game/econ.ts')).loadEcon();
+  const chain = new MockChain();
+  chain.accounts.add(TOWN);
+  chain.add(TOWN, 'coin', 5000n);
+  for (const [id, d] of Object.entries(econ.merchants)) chain.addMerchant(`${id}.gt.test`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, {});
+  const store = new Store(':memory:');
+  let now = 1_800_000_000_000;
+  const game = new Game(store, chain, { merchantParent: 'gt.test', town: TOWN, econ, worldSeed: 42, now: () => now });
+  await game.init();
+  store.addPlayer(P, 'sub-' + P, 'ed25519:o'); await chain.registerPlayer(P); game.onNewPlayer(P);
+  const L = game.map!.layout;
+  const stall = L.market.stalls[0], front = { x: stall.x, y: stall.y + 1 };
+  const own = L.buildings.find((b) => b.own)!, door = { x: own.dx, y: own.dy + 1 };
+  // no position, or a position inside a wall, is refused
+  assert.throws(() => game.act(P, { action: 'eat', token: 'bread' }), /posisi pemain tidak ada/);
+  assert.throws(() => game.act(P, { action: 'eat', token: 'bread', pos: { x: own.x, y: own.y } }), /Posisi tidak valid/);
+  // at home: craft is fine; selling from home is not
+  now += 1000;
+  game.act(P, { action: 'ship', token: 'bread', qty: 1, pos: door });
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: door }), /lapak pedagang/);
+  // jumping from the house to the market in one second is refused; walking there (a minute later) is fine
+  now += 1000;
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: front }), /melompat/);
+  now += 60_000;
+  game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: front });
+  // crafting needs the house, farming needs the plot
+  now += 1000;
+  assert.throws(() => game.act(P, { action: 'craft', recipe: 'bread', pos: front }), /Meja Kerja/);
+  assert.throws(() => game.act(P, { action: 'farm', op: 'till', plot: 0, pos: front }), /petak kebunmu/);
+  // the spawn is always allowed (where a player appears after loading the page)
+  now += 1000;
+  game.act(P, { action: 'ship', token: 'bread', qty: 1, pos: L.spawn });
 });

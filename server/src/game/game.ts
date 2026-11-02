@@ -8,7 +8,7 @@ import { Clock } from './clock.ts';
 import { World, type Rng } from './world.ts';
 import { Market } from './market.ts';
 import { Settlement } from './settlement.ts';
-import { WorldMap } from './worldmap.ts';
+import { WorldMap, Positions, type Pos } from './worldmap.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
@@ -23,6 +23,8 @@ export class Game {
   settlement: Settlement;
   /** The shared village map; absent in unit tests and the simulator, which use abstract tile coordinates. */
   map: WorldMap | null = null;
+  positions: Positions | null = null;
+  now: () => number;
   store: Store;
   chain: Chain;
   town: string;
@@ -39,7 +41,17 @@ export class Game {
     this.world = new World(this.econ, this.gs, this.clock, o.rng);
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
-    if (o.worldSeed != null) this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
+    this.now = o.now ?? Date.now;
+    if (o.worldSeed != null) {
+      this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
+      this.positions = new Positions(this.map);
+    }
+  }
+
+  /** A state poll from the player's client, with where they stand (ignored without the shared map). */
+  reportPosition(account: string, pos: Pos | null) {
+    if (!this.positions || !pos) return;
+    try { this.positions.report(account, pos, this.now()); } catch { /* a bad poll is not an action; the next action is checked */ }
   }
 
   /** Opens the map areas of town projects that are done on chain. Returns the chunks opened now. */
@@ -99,6 +111,15 @@ export class Game {
     if (!(ACTIONS as readonly string[]).includes(a)) throw new HttpError(400, 'unknown action');
     const s = (k: string) => String(body[k] ?? '');
     const n = (k: string, d = 1) => Number(body[k] ?? d);
+    // With the shared map, every action says where the player stands, and the action must happen there.
+    if (this.map && this.positions) {
+      const pos = this.positions.report(account, body.pos, this.now());
+      const far = (msg: string) => { throw new HttpError(409, msg); };
+      if (a === 'gather' && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Terlalu jauh. Berdiri tepat di sebelahnya.');
+      if ((a === 'sell' || a === 'buy') && !this.map.nearStall(pos)) far('Jual-beli dilakukan di lapak pedagang di pasar.');
+      if (a === 'farm' && !this.map.nearPlot(pos, n('plot', -1))) far('Berdiri di sebelah petak kebunmu.');
+      if ((a === 'craft' || a === 'ship') && !this.map.atOwnHouse(pos)) far(a === 'craft' ? 'Meja Kerja ada di rumahmu.' : 'Kotak Kirim ada di rumahmu.');
+    }
     let res: { toast: string };
     switch (a) {
       case 'gather':

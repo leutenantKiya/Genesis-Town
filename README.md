@@ -1,6 +1,6 @@
 # Genesis Town
 
-> **Status (2026-11-02): milestone M3 in progress.** Done and tested:
+> **Status (2026-11-02): M3 done, M4 (hardening) in progress.** Done and tested:
 > - M2 (Checkpoint 3): off-chain play (gathering, energy, crafting, farm plot, shipping, trading with four merchants
 >   priced by `economy/pricing.ts`), a daily settlement on NEAR testnet with the ledger's Merkle root, and shop
 >   bankruptcy and restoration with shares, all in an end-to-end testnet run;
@@ -15,9 +15,11 @@
 > - **town projects** (contract v4): players pool goods and coin on chain to build the bridge to Dusun Seberang; the
 >   pledges are burned when it is built and the new area opens for everyone;
 > - warmer art, a full-window layout, fullscreen (F) and a settings menu (O) with rebindable keys.
+> - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
+>   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >
-> Not done yet: M4 hardening (signed off-chain requests, position checks for gathering) and M5 (demo video,
-> submission). Anything marked *(planned)* does not exist yet.
+> Not done yet: the rest of M4 (a new-device login flow, removing the game account's full-access key before
+> submission, a mobile pass) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
@@ -199,8 +201,8 @@ NEP-245 contract (`/contracts`), and shared economy code (`/economy`).
   wasn't available when this repository was created.
 - Items gathered or traded off-chain today are owned on chain only after the 06:00 settlement. "Simpan sekarang"
   (settle my bag early) is planned.
-- The server trusts the account header for off-chain play (rate limited); session-key-signed requests come in M4.
-- Gathering does not yet check the player's position against the map (M4).
+- Off-chain requests are signed with the player's session key, and actions are checked against where the player
+  stands (M4). A modified client can still walk anywhere a player could walk.
 - Pure offline mode (`?mode=offline`) supports gathering only. For the full game without testnet, run `npm run dev:mock`.
 - Merchant dialogue needs `NEARAI_API_KEY` for NEAR AI Cloud; without it the server uses local lines. The model's
   text is display-only and can't trigger trades. Chat signatures (TEE attestation) are not verified in the client yet.

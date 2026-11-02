@@ -76,9 +76,8 @@ rejects the second if the on-chain balance runs out, and the per-account rate li
 ## The shared map and town projects
 
 - The map comes from a public generator and a public seed, so anyone can rebuild it and check where things are.
-- Gathering is refused unless the tile really is water, rock or tree and lies in an open area (`worldmap.ts`). The
-  player's own position is not checked yet (M4), so a modified client can still gather from any real tile in reach of
-  nothing; the per-account rate limit, node charges and the contract's daily gain caps bound what that buys.
+- Gathering is refused unless the tile really is water, rock or tree, lies in an open area, and the player stands on
+  a walkable tile right next to it (`worldmap.ts`, `Positions`).
 - Project pledges follow the restoration rules: no deposit, from settled balances only (spend guard), held by the
   contract, withdrawable until complete, then burned. Only the owner creates projects; the server only reads `done`
   to open an area, so it cannot fake a finished project without the chain.
@@ -113,7 +112,20 @@ created without a usable key.)
 ## Bots and farming
 
 - Gathering is server-authorised: node charges are shared and respawn, there's a per-account action rate, and the
-  server checks the player's position and timing against the map (the same BFS reachability the prototype uses).
+  server checks the player's position against the shared map (M4): every action carries where the player stands; the
+  spot must be walkable and in an open area, and the move since the last report must fit the walking speed (one tile
+  per 0.15 s, checked at 8 tiles/s plus slack). Gathering needs the tile right next to the player, trading needs a
+  market stall nearby, farming the plot, crafting and shipping the player's own house. A modified client can still
+  walk anywhere a player could walk; it cannot act from across the map.
+
+## Off-chain requests (who is acting)
+
+Since M4 every off-chain request of a signed-in player is signed with that player's session key
+(`server/src/reqauth.ts`): method, path with query, timestamp and body hash; ±2 minutes; each signature accepted
+once. The key must be the session key the server registered for that account. Before M4 the server trusted an
+`x-account-id` header, so anyone who knew an account name could gather, sell or ship as that player off-chain.
+A stolen session key still allows play as that player, and on chain only what the relayer allowlist and the
+contract permit; it can never move NEAR or add keys.
 - Account creation is gated by Auth0 identity and rate limits. One identity maps to one account.
 - Daily mint caps in the contract bound what any account can farm even if the server is fooled.
 

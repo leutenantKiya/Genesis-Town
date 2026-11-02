@@ -31,11 +31,24 @@
   function button(label, onClick, cls) { var b = $('button', 'mbtn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.addEventListener('click', onClick); return b; }
 
   /* ------------------------------------------------------------ server API */
+  // Every request of a signed-in player is signed with the session key (server/src/reqauth.ts has the format).
+  function signHeaders(method, pathQuery, body) {
+    var kp = sessionKey(), ts = String(Date.now()), enc = new TextEncoder();
+    return crypto.subtle.digest('SHA-256', enc.encode(body)).then(function (h) {
+      var hex = Array.prototype.map.call(new Uint8Array(h), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+      var sig = kp.sign(enc.encode('GT1\n' + method + '\n' + pathQuery + '\n' + ts + '\n' + hex)).signature;
+      return { 'x-account-id': S.account, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': b64(sig) };
+    });
+  }
   function api(path, opts) {
     opts = opts || {};
+    var method = opts.method || 'GET', body = opts.body ? JSON.stringify(opts.body) : '';
     var headers = { 'content-type': 'application/json' };
-    if (S.account) headers['x-account-id'] = S.account;
-    return fetch('/api' + path, { method: opts.method || 'GET', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined })
+    var signing = S.account && window.NearLib ? signHeaders(method, '/api' + path, body) : Promise.resolve({});
+    return signing.then(function (sh) {
+      for (var k in sh) headers[k] = sh[k];
+      return fetch('/api' + path, { method: method, headers: headers, body: body || undefined });
+    })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
           if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; }
@@ -156,7 +169,8 @@
     if (S.mode === 'offline') { var d = OFF.load(); S.history = d.hist; redraw(); return Promise.resolve(); }
     var jobs = [api('/market').then(function (m) { S.market = m.merchants; })];
     if (S.account) {
-      jobs.push(api('/state').then(function (st) { S.st = st; syncClock(st.time); followWorld(st.world); }));
+      var sp = standPos();
+      jobs.push(api('/state?x=' + sp.x + '&y=' + sp.y).then(function (st) { S.st = st; syncClock(st.time); followWorld(st.world); }));
       if (full || S.modal) jobs.push(api('/history').then(function (h) { S.history = h.history || []; }));
       if (full || (S.modal && S.modal.kind === 'shop')) jobs.push(api('/shops').then(function (s) { S.shops = s.shops; }));
       if (S.modal && S.modal.kind === 'project') jobs.push(api('/projects').then(function (r) { S.projects = r.projects || []; }));
@@ -193,12 +207,19 @@
     S.poll = setTimeout(function () { refresh(false).then(schedulePoll); }, 5000);
   }
 
+  // Where the player stands for the server's checks: the tile outdoors, or the door front of the building they are in.
+  function standPos() {
+    var sc = GT.scene, p = GT.player;
+    if (sc && sc.kind !== 'out' && sc.house) return { x: sc.house.dx, y: sc.house.dy + 1 };
+    return { x: p.x, y: p.y };
+  }
   function act(body, quiet) {
     if (S.mode === 'offline') {
       if (body.action === 'gather') { OFF.gather(TILE_ITEM[body.tile]); GT.toast('+1 ' + item(TILE_ITEM[body.tile]) + ' (offline)'); return Promise.resolve(); }
       GT.toast('Mode offline hanya mendukung mengumpulkan.'); return Promise.resolve();
     }
     if (!S.account) { GT.toast('Masuk dulu (tombol Masuk).'); return Promise.resolve(); }
+    body.pos = standPos();
     return api('/act', { method: 'POST', body: body }).then(function (r) {
       S.st = r.state; renderHud(); redraw();
       if (!quiet) GT.toast(r.toast);

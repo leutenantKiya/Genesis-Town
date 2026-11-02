@@ -48,7 +48,8 @@ the bridge and lifts the fog; nothing already built moves.
 ## What the server checks
 
 `Game.act` with `gather` now requires that the tile at `(x, y)` really is that kind (water, rock or tree) and lies in
-an open chunk. Checking the player's own position against the tile is M4.
+an open chunk, and the player must stand on a walkable tile right next to it. Every action carries the player's
+position, and moves between reports must fit the walking speed (see the threat model).
 
 ## Town projects: growing the world
 
