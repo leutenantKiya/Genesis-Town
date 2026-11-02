@@ -123,5 +123,8 @@
     "dailyGainPerItem": 200,
     "dailySends": 20,
     "maxSendAmount": 10
-  }
+  },
+  "projects": [
+    { "id": "jembatan-timur", "name": "Jembatan ke Dusun Seberang", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } }
+  ]
 }

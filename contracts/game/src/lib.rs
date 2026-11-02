@@ -1,4 +1,4 @@
-//! Genesis Town game contract (NEAR testnet), v3.
+//! Genesis Town game contract (NEAR testnet), v4.
 //!
 //! One NEP-245 multi-token contract holds every item type and the in-game `coin`.
 //! - `mt.rs`: NEP-245 core (transfers with the 1 yoctoNEAR rule, transfer_call + resolve, views, events)
@@ -8,7 +8,8 @@
 //!   game day the server's settler applies everyone's net changes here, and the contract enforces the economy's
 //!   invariants (gain caps, the coin faucet and money cap, each chunk once) and stores the day's ledger root.
 //! - `shops.rs`: merchant shops: bankruptcy, restoration boards (on-chain pledges), shares and dividends
-//! - `market.rs`: the player market (escrowed listings, 5% fee burned) and the v2 -> v3 `migrate`
+//! - `market.rs`: the player market (escrowed listings, 5% fee burned)
+//! - `projects.rs`: town projects that open new map areas (pledged goods are burned when built) and the v3 -> v4 `migrate`
 //!
 //! Design: docs/onchain-offchain.md, docs/economy.md, docs/threat-model.md.
 use near_sdk::json_types::U128;
@@ -19,11 +20,13 @@ mod events;
 mod game;
 mod market;
 mod mt;
+mod projects;
 mod settle;
 mod shops;
 mod storage;
 
 pub use market::ListingView;
+pub use projects::ProjectView;
 pub use settle::Delta;
 pub use shops::{RestoreLine, ShopView};
 
@@ -48,6 +51,8 @@ enum StorageKey {
     // added in v3 (player market); appended so existing prefixes stay the same
     Listings,
     OpenListings,
+    // added in v4 (town projects)
+    Projects,
 }
 
 #[near(serializers = [json, borsh])]
@@ -120,6 +125,9 @@ pub struct Contract {
     next_listing_id: u64,
     open_listings: LookupMap<AccountId, u32>,
     market_fee_bps: u16,
+    // v4: town projects
+    projects: LookupMap<String, projects::Project>,
+    project_ids: Vec<String>,
 }
 
 impl Contract {
@@ -244,6 +252,8 @@ impl Contract {
             next_listing_id: 0,
             open_listings: LookupMap::new(StorageKey::OpenListings),
             market_fee_bps: 500,
+            projects: LookupMap::new(StorageKey::Projects),
+            project_ids: vec![],
         };
         c.registered.insert(town_id.clone());
         if treasury_coin.0 > 0 {

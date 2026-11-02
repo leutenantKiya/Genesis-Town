@@ -24,6 +24,8 @@ export interface Config {
   devLogin: boolean; // mock chain only: accept idToken "dev:<name>" so tests run without a Google account
   // Merchant dialogue via NEAR AI Cloud (optional; local lines without a key). Base URL: near-ai-cloud skill / docs.near.ai.
   nearai: { apiKey?: string; model?: string; baseUrl: string; timeoutMs: number };
+  /** Seed of the shared village map (client/js/world/village.js). One world per server. */
+  worldSeed: number;
 }
 
 function need(env: NodeJS.ProcessEnv, name: string): string {
@@ -72,6 +74,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dbPath: env.DB_PATH ?? 'data/genesis-town.db',
     chainMode,
     devLogin: chainMode === 'mock' && env.DEV_LOGIN === '1',
+    worldSeed: Number(env.WORLD_SEED ?? 20261114) >>> 0,
     nearai: {
       apiKey: env.NEARAI_API_KEY || undefined,
       model: env.NEARAI_MODEL || undefined,
@@ -86,4 +89,4 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 // Must match the contract's market_fee_bps (set in `new`/`migrate`, readable with the `market_fee_bps` view).
 export const MARKET_FEE_BPS = 500;
 
-export const RELAY_METHODS = ['send_item', 'restore_contribute', 'restore_withdraw', 'claim_dividends', 'list_item', 'buy_listing', 'cancel_listing'] as const;
+export const RELAY_METHODS = ['send_item', 'restore_contribute', 'restore_withdraw', 'claim_dividends', 'list_item', 'buy_listing', 'cancel_listing', 'project_contribute', 'project_withdraw'] as const;

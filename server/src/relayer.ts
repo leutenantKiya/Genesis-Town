@@ -91,6 +91,8 @@ const SUMMARY: Record<string, (a: Record<string, unknown>, n: (t: unknown) => st
   list_item: (a, n) => `Pasang ${a.amount} ${n(a.token_id)} di Pasar Pemain, ${a.price_each} koin/buah`,
   buy_listing: (a) => `Beli ${a.amount} dari lapak #${a.listing_id} (maks ${a.max_price_each} koin/buah)`,
   cancel_listing: (a) => `Tarik lapak #${a.listing_id} dari Pasar Pemain`,
+  project_contribute: (a, n) => `Sumbang ke proyek desa ${a.id}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${n(l.token_id)}`).join(', ')}`,
+  project_withdraw: (a) => `Tarik sumbangan dari proyek desa ${a.id}`,
 };
 
 export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown }) {

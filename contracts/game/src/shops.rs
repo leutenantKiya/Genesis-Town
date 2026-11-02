@@ -72,16 +72,16 @@ pub struct HoldingView {
     pub claimable: U128,
 }
 
-fn get_amount(v: &[(String, u128)], t: &str) -> u128 {
+pub(crate) fn get_amount(v: &[(String, u128)], t: &str) -> u128 {
     v.iter().find(|(k, _)| k == t).map(|(_, a)| *a).unwrap_or(0)
 }
-fn add_amount(v: &mut Vec<(String, u128)>, t: &str, n: u128) {
+pub(crate) fn add_amount(v: &mut Vec<(String, u128)>, t: &str, n: u128) {
     match v.iter_mut().find(|(k, _)| k == t) {
         Some((_, a)) => *a += n,
         None => v.push((t.to_string(), n)),
     }
 }
-fn sub_amount(v: &mut Vec<(String, u128)>, t: &str, n: u128) {
+pub(crate) fn sub_amount(v: &mut Vec<(String, u128)>, t: &str, n: u128) {
     if let Some((_, a)) = v.iter_mut().find(|(k, _)| k == t) {
         *a = a.saturating_sub(n);
     }

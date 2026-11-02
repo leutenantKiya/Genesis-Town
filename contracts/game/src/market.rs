@@ -5,10 +5,8 @@
 //!   `max_price_each` protects the buyer against a price change between seeing and buying
 //! - cancel_listing: the seller takes the escrow back
 //! Wash trading: buyer and seller must differ, and every sale burns the fee. Merchant prices ignore this market.
-//! `migrate` upgrades a v2 contract in place (adds the market fields, keeps all state).
-use crate::{COIN, Contract, ContractExt, Limits, StorageKey, TokenId, TokenKind, TokenMeta, events, shops};
+use crate::{COIN, Contract, ContractExt, TokenId, TokenKind, events};
 use near_sdk::json_types::U128;
-use near_sdk::store::{LookupMap, LookupSet};
 use near_sdk::{AccountId, env, near, require};
 
 pub const MAX_OPEN_LISTINGS: u32 = 5;
@@ -35,32 +33,6 @@ pub struct ListingView {
     pub created_ns: u64,
 }
 
-/// v2 state layout, read once by `migrate`.
-#[near(serializers = [borsh])]
-pub struct ContractV2 {
-    owner_id: AccountId,
-    settler_id: AccountId,
-    town_id: AccountId,
-    paused: bool,
-    tokens: Vec<TokenMeta>,
-    limits: Limits,
-    balances: LookupMap<(TokenId, AccountId), u128>,
-    supply: LookupMap<TokenId, u128>,
-    registered: LookupSet<AccountId>,
-    registered_count: u32,
-    applied: LookupSet<(u64, u32)>,
-    roots: LookupMap<u64, String>,
-    last_settled_day: u64,
-    gain_caps: LookupMap<(AccountId, TokenId), (u64, u128)>,
-    day_faucet: LookupMap<u64, (u128, u128)>,
-    send_caps: LookupMap<AccountId, (u64, u32)>,
-    storage_paid: LookupMap<AccountId, u128>,
-    merchants: Vec<AccountId>,
-    shops: LookupMap<AccountId, shops::Shop>,
-    shares: LookupMap<(AccountId, AccountId), shops::Holding>,
-    dividends_paid: LookupSet<(AccountId, u64)>,
-}
-
 impl Contract {
     fn listing(&self, id: u64) -> Listing {
         self.listings.get(&id).cloned().unwrap_or_else(|| env::panic_str("no such listing"))
@@ -77,41 +49,6 @@ impl Contract {
 
 #[near]
 impl Contract {
-    /// Upgrade from v2: keeps every v2 field and adds the empty market. Callable only by the contract account itself
-    /// (as part of a deploy with an init call).
-    #[private]
-    #[init(ignore_state)]
-    pub fn migrate() -> Self {
-        let o: ContractV2 = env::state_read().unwrap_or_else(|| env::panic_str("no v2 state to migrate"));
-        Self {
-            owner_id: o.owner_id,
-            settler_id: o.settler_id,
-            town_id: o.town_id,
-            paused: o.paused,
-            tokens: o.tokens,
-            limits: o.limits,
-            balances: o.balances,
-            supply: o.supply,
-            registered: o.registered,
-            registered_count: o.registered_count,
-            applied: o.applied,
-            roots: o.roots,
-            last_settled_day: o.last_settled_day,
-            gain_caps: o.gain_caps,
-            day_faucet: o.day_faucet,
-            send_caps: o.send_caps,
-            storage_paid: o.storage_paid,
-            merchants: o.merchants,
-            shops: o.shops,
-            shares: o.shares,
-            dividends_paid: o.dividends_paid,
-            listings: LookupMap::new(StorageKey::Listings),
-            next_listing_id: 0,
-            open_listings: LookupMap::new(StorageKey::OpenListings),
-            market_fee_bps: 500,
-        }
-    }
-
     /// Seller: escrow `amount` of an item and offer it at `price_each` coin. Returns the listing id.
     pub fn list_item(&mut self, token_id: TokenId, amount: U128, price_each: U128) -> u64 {
         self.require_not_paused();
@@ -189,43 +126,4 @@ impl Contract {
     }
 
     pub fn market_fee_bps(&self) -> u16 { self.market_fee_bps }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{Limits, TokenKind, TokenMeta};
-    use near_sdk::test_utils::VMContextBuilder;
-    use near_sdk::testing_env;
-
-    fn acc(s: &str) -> AccountId { s.parse().unwrap() }
-
-    #[test]
-    fn migrate_keeps_v2_state_and_adds_an_empty_market() {
-        let mut b = VMContextBuilder::new();
-        b.current_account_id(acc("game.testnet")).predecessor_account_id(acc("game.testnet"));
-        testing_env!(b.build());
-        let tokens = vec![TokenMeta { token_id: "coin".into(), name: "Koin".into(), kind: TokenKind::Currency, base: U128(1) }];
-        let limits = Limits { daily_gain_cap: U128(1), daily_coin_gain_cap: U128(1), daily_sends: 1, max_send_amount: U128(1), max_chunk: 1, max_players: 7, faucet_w0: U128(1), money_cap0: U128(1), active_divisor: 1, max_k: 1, rent: U128(40), initial_shares: U128(1000), max_contributors: 1 };
-        let mut balances = LookupMap::new(StorageKey::Balances);
-        balances.insert(("coin".to_string(), acc("alice.testnet")), 123u128);
-        balances.flush();
-        let v2 = ContractV2 {
-            owner_id: acc("owner.testnet"), settler_id: acc("settler.testnet"), town_id: acc("town.testnet"), paused: false,
-            tokens, limits, balances, supply: LookupMap::new(StorageKey::Supply), registered: LookupSet::new(StorageKey::Registered),
-            registered_count: 3, applied: LookupSet::new(StorageKey::Applied), roots: LookupMap::new(StorageKey::Roots), last_settled_day: 9,
-            gain_caps: LookupMap::new(StorageKey::GainCaps), day_faucet: LookupMap::new(StorageKey::DayFaucet), send_caps: LookupMap::new(StorageKey::SendCaps),
-            storage_paid: LookupMap::new(StorageKey::StoragePaid), merchants: vec![acc("joko.testnet")], shops: LookupMap::new(StorageKey::Shops),
-            shares: LookupMap::new(StorageKey::Shares), dividends_paid: LookupSet::new(StorageKey::Dividends),
-        };
-        env::state_write(&v2);
-        let c = Contract::migrate();
-        assert_eq!(c.registered_count, 3);
-        assert_eq!(c.last_settled_day, 9);
-        assert_eq!(c.merchants, vec![acc("joko.testnet")]);
-        assert_eq!(c.balance("coin", &acc("alice.testnet")), 123);
-        assert_eq!(c.next_listing_id, 0);
-        assert_eq!(c.market_fee_bps, 500);
-        assert!(c.list_listings(None).is_empty());
-    }
 }

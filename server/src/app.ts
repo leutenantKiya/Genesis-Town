@@ -79,6 +79,7 @@ export function createApp(deps: AppDeps) {
     if (typeof args.merchant === 'string') accts.push(args.merchant);
     await game.settlement.refresh(accts);
     if (method.startsWith('restore')) await game.settlement.refreshShops();
+    if (method === 'project_contribute') await game.syncProjects();
   };
 
   // M2 trusts the account id header for off-chain play by a registered player (rate limited). Signed requests with
@@ -105,6 +106,7 @@ export function createApp(deps: AppDeps) {
           devLogin: deps.cfg.devLogin,
           devTools: deps.cfg.devTools,
           dialogue: dialogue.enabled ? 'nearai' : 'local',
+          world: game.map?.view() ?? null,
           econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time },
         });
       }
@@ -117,7 +119,7 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay, itemName: (t) => game.econ.items[t]?.name ?? t }, await readJson(req)));
       }
       if (req.method === 'GET' && p === '/api/time') {
-        return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough() });
+        return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null });
       }
       if (req.method === 'GET' && p === '/api/state') {
         return send(res, 200, game.state(accountOf(req)));
@@ -147,6 +149,10 @@ export function createApp(deps: AppDeps) {
         if (!game.econ.merchants[id]) throw new HttpError(404, 'no such merchant');
         const r = await dialogue.reply(game.market.view(id), game.econ.merchants[id].personality, String(b.text ?? ''));
         return send(res, 200, r);
+      }
+      if (req.method === 'GET' && p === '/api/projects') {
+        // Town projects as the contract holds them (pledges, contributors, done), plus the map areas they open.
+        return send(res, 200, { projects: await deps.chain.listProjects(), world: game.map?.view() ?? null });
       }
       if (req.method === 'GET' && p === '/api/listings') {
         // Player market: open listings read from the contract (escrowed there), newest first.

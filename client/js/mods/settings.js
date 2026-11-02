@@ -167,9 +167,15 @@
     fs.appendChild(fsb); wrap.appendChild(fs);
 
     wrap.appendChild($('h3', null, 'Kota'));
-    var regen = $('button', 'mbtn', 'Buat kota baru (peta acak)'); regen.type = 'button';
-    regen.addEventListener('click', function () { if (modal) modal.close('regen'); var r = document.getElementById('regen'); if (r) setTimeout(function () { r.click(); }, 50); });
-    var rr = $('div', 'dbtns'); rr.appendChild(regen); wrap.appendChild(rr);
+    var shared = window.GT_CHAIN && GT_CHAIN.state.mode !== 'offline' && GT_CHAIN.state.cfg && GT_CHAIN.state.cfg.world;
+    if (shared) {
+      // with a server, every player shares one world made from the server's seed
+      wrap.appendChild($('p', 'mnote', 'Peta kota dibuat dari seed dunia ' + GT_CHAIN.state.cfg.world.seed + ' milik server, sama untuk semua pemain.'));
+    } else {
+      var regen = $('button', 'mbtn', 'Buat kota baru (peta acak)'); regen.type = 'button';
+      regen.addEventListener('click', function () { if (modal) modal.close('regen'); var r = document.getElementById('regen'); if (r) setTimeout(function () { r.click(); }, 50); });
+      var rr = $('div', 'dbtns'); rr.appendChild(regen); wrap.appendChild(rr);
+    }
 
     var rm = $('label', 'dchk'); var cb = $('input'); cb.type = 'checkbox';
     cb.checked = document.documentElement.classList.contains('gt-reduced-motion');

@@ -156,16 +156,27 @@
     if (S.mode === 'offline') { var d = OFF.load(); S.history = d.hist; redraw(); return Promise.resolve(); }
     var jobs = [api('/market').then(function (m) { S.market = m.merchants; })];
     if (S.account) {
-      jobs.push(api('/state').then(function (st) { S.st = st; syncClock(st.time); }));
+      jobs.push(api('/state').then(function (st) { S.st = st; syncClock(st.time); followWorld(st.world); }));
       if (full || S.modal) jobs.push(api('/history').then(function (h) { S.history = h.history || []; }));
       if (full || (S.modal && S.modal.kind === 'shop')) jobs.push(api('/shops').then(function (s) { S.shops = s.shops; }));
+      if (S.modal && S.modal.kind === 'project') jobs.push(api('/projects').then(function (r) { S.projects = r.projects || []; }));
       if (S.modal && S.modal.kind === 'market') jobs.push(api('/listings').then(function (l) { S.listings = l.listings || []; S.feeBps = l.feeBps; }));
     } else {
-      jobs.push(api('/time').then(function (t) { syncClock(t); }));
+      jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); }));
     }
     return Promise.all(jobs).then(function () { renderHud(); redraw(); }).catch(function (e) {
       if (e.status === 401) { S.account = null; lsSet(LS_ACC, null); renderBanner(); }
     });
+  }
+
+  // When a town project opens a new area, every player's map follows within one poll.
+  function followWorld(w) {
+    if (!w || !GT.setWorld) return;
+    var prevSeed = GT.world && GT.world.seed, before = (GT.world && GT.world.layout && GT.world.layout.unlocked) || [];
+    if (!GT.setWorld(w.seed, w.unlocked) || prevSeed !== w.seed) return; // first load or a new world: no news
+    var fresh = (w.unlocked || []).filter(function (c) { return before.indexOf(c) < 0; });
+    var names = fresh.map(function (id) { var c = (GT.world.chunks || []).filter(function (q) { return q.id === id; })[0]; return c ? c.name : id; });
+    if (names.length) GT.toast('Proyek desa selesai! ' + names.join(', ') + ' sekarang terbuka.');
   }
 
   function syncClock(t) {
@@ -464,10 +475,10 @@
     s.need.forEach(function (n) {
       var got = 0; (s.pledged || []).forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
       var missing = Math.max(0, +n.amount - got);
-      var have = S.st ? S.st.bag[n.token_id].settled : 0;
+      var have = spendable(n.token_id);
       var row = $('div', 'mrow');
       row.appendChild($('span', 'grow', item(n.token_id) + ': ' + got + '/' + n.amount));
-      row.appendChild($('span', 'num', 'punyamu (settled) ' + have));
+      row.appendChild($('span', 'num', 'bisa kamu sumbang ' + have));
       wrap.appendChild(row);
       if (missing > 0 && have > 0) lines.push({ token_id: n.token_id, amount: String(Math.min(missing, have)) });
     });
@@ -481,6 +492,41 @@
     } else {
       wrap.appendChild($('p', 'chain-dim', 'Sumbangan memakai saldo yang sudah settled. Barang hari ini bisa disumbang setelah pukul 06:00.'));
     }
+    return wrap;
+  }
+
+  /* ---- Papan Proyek Desa (Balai Desa): pooled goods and coin build things that open new areas (on-chain) ---- */
+  function spendable(t) { var b = S.st && S.st.bag[t]; return b ? Math.max(0, Math.min(b.settled, b.settled + b.today)) : 0; }
+  function projectBody() {
+    var wrap = $('div');
+    wrap.appendChild($('p', null, 'Warga mengumpulkan bahan bersama. Saat semua baris terpenuhi, bahan dipakai (dibakar on-chain) dan bagian peta baru terbuka untuk semua pemain.'));
+    if (!S.projects) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
+    if (!S.projects.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada proyek.'));
+    S.projects.forEach(function (pj) {
+      wrap.appendChild($('h4', 'chain-h', pj.name + (pj.done ? ' (selesai)' : '')));
+      var lines = [];
+      pj.need.forEach(function (n) {
+        var got = 0; pj.pledged.forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
+        var missing = Math.max(0, +n.amount - got), have = spendable(n.token_id);
+        var row = $('div', 'mrow');
+        row.appendChild($('span', 'grow', item(n.token_id) + ': ' + got + '/' + n.amount));
+        if (!pj.done) row.appendChild($('span', 'num', 'bisa kamu sumbang ' + Math.min(missing, have)));
+        wrap.appendChild(row);
+        if (!pj.done && missing > 0 && have > 0) lines.push({ token_id: n.token_id, amount: String(Math.min(missing, have)) });
+      });
+      var names = pj.contributors.map(function (c) { return c.account_id === S.account ? 'kamu' : String(c.account_id).split('.')[0]; });
+      wrap.appendChild($('p', 'chain-dim', pj.done ? 'Dibangun oleh ' + names.join(', ') + '.' : (names.length ? 'Penyumbang: ' + names.join(', ') + '.' : 'Belum ada penyumbang. Jadilah yang pertama!')));
+      if (pj.done) return;
+      var mine = pj.contributors.filter(function (c) { return c.account_id === S.account; })[0];
+      if (lines.length) wrap.appendChild(button('Sumbang semua yang bisa (on-chain)', function () {
+        GT.toast('Mengirim sumbangan…');
+        signedCall('project_contribute', { id: pj.id, contribution: lines }).then(function () { GT.toast('Terima kasih! Sumbanganmu tercatat on-chain.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+      }, 'primary'));
+      if (mine) wrap.appendChild(button('Tarik sumbanganku', function () {
+        signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast('Sumbangan dikembalikan ke tasmu.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+      }));
+    });
+    wrap.appendChild($('p', 'chain-dim', 'Sumbangan memakai barang yang sudah di rantai (settled) dan belum terpakai hari ini. Bisa ditarik lagi selama proyek belum selesai.'));
     return wrap;
   }
 
@@ -656,12 +702,12 @@
     return wrap;
   }
 
-  var BODIES = { bag: bagBody, history: historyBody, craft: craftBody, ship: shipBody, market: marketBody };
+  var BODIES = { bag: bagBody, history: historyBody, craft: craftBody, ship: shipBody, market: marketBody, project: projectBody };
   function open(kind, arg) {
     if (S.mode !== 'offline' && !S.account && kind !== 'shop') { login(); return; }
-    var title = kind === 'bag' ? 'Tas NEAR' : kind === 'market' ? 'Pasar Pemain' : kind === 'history' ? 'Riwayat' : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
+    var title = kind === 'bag' ? 'Tas NEAR' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? 'Riwayat' : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
     var body = kind === 'shop' ? shopBody(arg) : BODIES[kind]();
-    var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market', body: body, onClose: function () { S.modal = null; } });
+    var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; } });
     S.modal = { kind: kind, arg: arg, h: h };
     refresh(true);
   }
@@ -680,7 +726,11 @@
     if (ctx.npc && ctx.npc.key && /:keeper$/.test(ctx.npc.key)) { GT.toast('Mart sudah pindah: belanja di pasar dekat rumahmu (Sari, Budi, Wati, Joko).'); return true; }
     if (ctx.npc || ctx.door) return false;
     if (ctx.tileType === 'stall') { var st0 = stallAt(ctx.tile.x, ctx.tile.y); if (st0 && st0.merchant) { open('shop', st0.merchant); return true; } }
-    var house = ctx.scene.house, own = house && house.own;
+    var house = ctx.scene.house, own = house && house.own, board = ctx.scene.map && ctx.scene.map.board;
+    if (house && board && ctx.tile.x === board.x && ctx.tile.y === board.y && S.mode !== 'offline') {
+      if (house.kind === 'hall') { open('project'); return true; }
+      if (house.kind === 'broker') { open('market'); return true; }
+    }
     if (own && (ctx.tileType === 'table' || ctx.tileType === 'chest')) {
       if (S.mode !== 'offline' && !S.account) { GT.toast('Masuk dulu (tombol Masuk) untuk memakai ' + (ctx.tileType === 'table' ? 'Meja Kerja.' : 'Kotak Kirim.')); return true; }
       open(ctx.tileType === 'table' ? 'craft' : 'ship'); return true;
@@ -714,6 +764,8 @@
       Promise.race([api('/config'), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 4000); })]);
     cfgP.then(function (cfg) {
       S.cfg = cfg; S.mode = cfg.chainMode === 'mock' ? 'mock' : 'testnet';
+      // One shared world: the server's seed and the chunks opened by town projects.
+      if (cfg.world && GT.setWorld) GT.setWorld(cfg.world.seed, cfg.world.unlocked);
       S.account = lsGet(LS_ACC);
       if (cfg.devTools) GT.addDevSection('NEAR settlement', function (sec) {
         sec.appendChild($('p', 'mnote', 'Lompat ke pukul 06:00 berikutnya dan tulis hari ini ke chain sekarang.'));

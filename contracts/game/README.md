@@ -20,13 +20,16 @@ cargo-near.
 | `list_item(token_id, amount, price_each)` | player, **no deposit** | player market: escrows 1–50 of an item (not `coin`) in the contract; max 5 open listings per account; returns the listing id |
 | `buy_listing(listing_id, amount, max_price_each)` | player, **no deposit** | pays `price_each × amount` coin; 5% (`market_fee_bps`) is burned, the rest goes to the seller; buyer ≠ seller |
 | `cancel_listing(listing_id)` | the seller | returns the escrowed items |
-| `migrate()` | the contract itself (deploy with init call) | v2 → v3 upgrade: keeps all state, adds the empty market |
+| `create_project(id, name, chunk, need)` | owner | a town project that opens map area `chunk` when complete (max 20) |
+| `project_contribute(id, contribution)` | player, **no deposit** | pledges goods or coin; only what is still needed is taken; when every line is met the pledges are burned and the project is done |
+| `project_withdraw(id)` | player | takes a pledge back while the project is not done |
+| `migrate()` | the contract itself (deploy with init call) | v3 → v4 upgrade: keeps all state, adds the empty project list (the v2 → v3 market migration was deployed earlier and removed) |
 | `set_settler`, `set_paused`, `set_limits` | owner | admin |
-| `get_config`, `is_registered`, `get_day_root`, `is_chunk_applied`, `faucet_status`, `get_shop`, `list_shops`, `get_holding`, `get_listing`, `list_listings(limit)`, `market_fee_bps` | view | |
+| `get_config`, `is_registered`, `get_day_root`, `is_chunk_applied`, `faucet_status`, `get_shop`, `list_shops`, `get_holding`, `get_listing`, `list_listings(limit)`, `market_fee_bps`, `get_project`, `list_projects` | view | |
 
 Events follow NEP-245 / NEP-297 (`EVENT_JSON:` with `standard: "nep245"`, `version: "1.0.0"`). Settlement chunks and
-shop changes and market actions also emit `standard: "genesis-town"` events (`settle`, `shop`, `market`). A market
-fee burn emits `mt_burn`.
+shop changes, market actions and town projects also emit `standard: "genesis-town"` events (`settle`, `shop`, `market`,
+`project`). Market fees and finished projects emit `mt_burn`.
 
 Upgrading a deployed v2 contract in place:
 

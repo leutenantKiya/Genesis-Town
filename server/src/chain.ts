@@ -7,6 +7,7 @@ export interface TxResult { txHash: string; ok: boolean; error?: string }
 export interface DeltaEntry { account_id: string; token_id: string; delta: string }
 export interface ShopInfo { account_id: string; name: string; open: boolean; coin: string; total_shares: string; need: Array<{ token_id: string; amount: string }>; pledged: Array<{ token_id: string; amount: string }>; contributors: number; times_closed: number }
 export interface HoldingInfo { shares: string; total_shares: string; claimable: string }
+export interface ProjectInfo { id: string; name: string; chunk: string; need: Array<{ token_id: string; amount: string }>; pledged: Array<{ token_id: string; amount: string }>; contributors: Array<{ account_id: string; lines: Array<{ token_id: string; amount: string }> }>; done: boolean; done_ns: number }
 export interface ListingInfo { id: number; seller: string; token_id: string; amount: string; price_each: string; created_ns: number }
 
 export interface Chain {
@@ -24,6 +25,8 @@ export interface Chain {
   coinSupply(): Promise<string>;
   listListings(limit?: number): Promise<ListingInfo[]>;
   getListing(id: number): Promise<ListingInfo | null>;
+  listProjects(): Promise<ProjectInfo[]>;
+  getProject(id: string): Promise<ProjectInfo | null>;
   derivedOwnerKey(sub: string): Promise<string>;
 }
 
@@ -103,6 +106,8 @@ export class TestnetChain implements Chain {
   async coinSupply() { return (await this.view<string | null>('mt_supply', { token_id: 'coin' })) ?? '0'; }
   listListings(limit = 50) { return this.view<ListingInfo[]>('list_listings', { limit }); }
   getListing(id: number) { return this.view<ListingInfo | null>('get_listing', { listing_id: id }); }
+  listProjects() { return this.view<ProjectInfo[]>('list_projects', {}); }
+  getProject(id: string) { return this.view<ProjectInfo | null>('get_project', { id }); }
 
   // The NEAR Auth key for a login is derived by the MPC contract at path `jwt#https://<domain>/#<sub>` with
   // predecessor fast-auth.testnet (docs.auth.near.org protocol/concepts/auth0.md, contracts/fast-auth.md).
@@ -129,6 +134,7 @@ export class MockChain implements Chain {
   shops = new Map<string, MockShop>();
   rent = 40;
   listings = new Map<number, ListingInfo>();
+  projects = new Map<string, ProjectInfo>();
   nextListing = 0;
   contractId = 'game.genesistown.mock';
   n = 0;
@@ -269,6 +275,37 @@ export class MockChain implements Chain {
       this.add(this.contractId, l.token_id, -BigInt(l.amount));
       this.add(sender, l.token_id, BigInt(l.amount));
       this.listings.delete(l.id);
+    } else if (method === 'project_contribute') {
+      const p = this.projects.get(String(a.id));
+      if (!p) throw new Error('no such project');
+      if (p.done) throw new Error('project is already done');
+      if (this.shops.has(sender)) throw new Error('merchants do not pledge to projects');
+      const amt = (l: Array<{ token_id: string; amount: string }>, t: string) => Number(l.find((x) => x.token_id === t)?.amount ?? 0);
+      const bump = (l: Array<{ token_id: string; amount: string }>, t: string, n: number) => { const e = l.find((x) => x.token_id === t); if (e) e.amount = String(Number(e.amount) + n); else l.push({ token_id: t, amount: String(n) }); };
+      const taken: Array<{ token_id: string; amount: string }> = [];
+      for (const l of a.contribution as Array<{ token_id: string; amount: string }>) {
+        const take = Math.min(Number(l.amount), amt(p.need, l.token_id) - amt(p.pledged, l.token_id));
+        if (take <= 0) continue;
+        if (this.get(sender, l.token_id) < BigInt(take)) throw new Error(`not enough ${l.token_id} for ${sender}`);
+        bump(taken, l.token_id, take);
+      }
+      if (!taken.length) throw new Error('the project does not need that any more');
+      for (const l of taken) { this.add(sender, l.token_id, -BigInt(l.amount)); this.add(this.contractId, l.token_id, BigInt(l.amount)); bump(p.pledged, l.token_id, Number(l.amount)); }
+      const mine = p.contributors.find((c) => c.account_id === sender);
+      if (mine) for (const l of taken) bump(mine.lines, l.token_id, Number(l.amount)); else p.contributors.push({ account_id: sender, lines: taken });
+      if (p.need.every((n) => amt(p.pledged, n.token_id) >= Number(n.amount))) {
+        for (const l of p.pledged) this.add(this.contractId, l.token_id, -BigInt(l.amount)); // built: burned
+        p.done = true; p.done_ns = Date.now() * 1e6;
+      }
+    } else if (method === 'project_withdraw') {
+      const p = this.projects.get(String(a.id));
+      const i = p ? p.contributors.findIndex((c) => c.account_id === sender) : -1;
+      if (!p || p.done || i < 0) throw new Error('no pledge to withdraw');
+      const [c] = p.contributors.splice(i, 1);
+      for (const l of c.lines) {
+        this.add(this.contractId, l.token_id, -BigInt(l.amount)); this.add(sender, l.token_id, BigInt(l.amount));
+        const e = p.pledged.find((x) => x.token_id === l.token_id)!; e.amount = String(Number(e.amount) - Number(l.amount));
+      }
     } else if (method === 'claim_dividends') {
       const s = this.shops.get(String(a.merchant));
       const c = s?.claimable.get(sender) ?? 0;
@@ -309,6 +346,12 @@ export class MockChain implements Chain {
   }
   async listListings(limit = 50) { return [...this.listings.values()].sort((x, y) => y.id - x.id).slice(0, limit).map((l) => ({ ...l })); }
   async getListing(id: number) { const l = this.listings.get(id); return l ? { ...l } : null; }
+  async listProjects() { return [...this.projects.values()].map((p) => structuredClone(p)); }
+  async getProject(id: string) { const p = this.projects.get(id); return p ? structuredClone(p) : null; }
+  /** Mirrors the owner's `create_project`. */
+  addProject(id: string, name: string, chunk: string, need: Record<string, number>) {
+    this.projects.set(id, { id, name, chunk, need: Object.entries(need).map(([token_id, n]) => ({ token_id, amount: String(n) })), pledged: [], contributors: [], done: false, done_ns: 0 });
+  }
   async derivedOwnerKey(sub: string): Promise<string> {
     const { createHash } = await import('node:crypto');
     const { baseEncode } = await import('near-api-js');

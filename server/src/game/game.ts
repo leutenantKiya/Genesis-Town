@@ -8,8 +8,9 @@ import { Clock } from './clock.ts';
 import { World, type Rng } from './world.ts';
 import { Market } from './market.ts';
 import { Settlement } from './settlement.ts';
+import { WorldMap } from './worldmap.ts';
 
-export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ }
+export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
 const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy'] as const;
 
@@ -20,6 +21,8 @@ export class Game {
   world: World;
   market: Market;
   settlement: Settlement;
+  /** The shared village map; absent in unit tests and the simulator, which use abstract tile coordinates. */
+  map: WorldMap | null = null;
   store: Store;
   chain: Chain;
   town: string;
@@ -36,12 +39,29 @@ export class Game {
     this.world = new World(this.econ, this.gs, this.clock, o.rng);
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
+    if (o.worldSeed != null) this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
+  }
+
+  /** Opens the map areas of town projects that are done on chain. Returns the chunks opened now. */
+  async syncProjects(): Promise<string[]> {
+    if (!this.map) return [];
+    const opened: string[] = [];
+    for (const p of await this.chain.listProjects()) if (p.done && this.unlockChunk(p.chunk)) opened.push(p.chunk);
+    return opened;
+  }
+
+  /** Opens a chunk of the map for everyone (a finished town project). Persisted. */
+  unlockChunk(chunkId: string) {
+    if (!this.map || !this.map.unlock(chunkId)) return false;
+    this.gs.setMeta('world.unlocked', JSON.stringify(this.map.unlocked));
+    return true;
   }
 
   /** Loads on-chain state the off-chain game depends on: town treasury, merchant balances, shop status, supply. */
   async init() {
     await this.settlement.refresh([this.town, ...this.market.ids().map((id) => this.market.account(id))]);
     await this.settlement.refreshShops();
+    await this.syncProjects();
     if (!this.gs.meta('clock.hour')) this.gs.setMeta('clock.hour', String(this.clock.hours()));
   }
 
@@ -81,7 +101,10 @@ export class Game {
     const n = (k: string, d = 1) => Number(body[k] ?? d);
     let res: { toast: string };
     switch (a) {
-      case 'gather': res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1)); break;
+      case 'gather':
+        this.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
+        res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1));
+        break;
       case 'craft': res = this.world.craft(account, s('recipe')); break;
       case 'eat': res = this.world.eat(account, s('token')); break;
       case 'farm': res = this.world.farm(account, s('op'), n('plot', -1)); break;
@@ -106,6 +129,7 @@ export class Game {
       tool: { uses: p.tool_uses, durability: this.econ.items.tool.durability ?? 20 },
       bag,
       plots: this.world.plots(account).map((x) => ({ idx: x.idx, state: x.state, grown: x.grown, wateredToday: x.watered_day === t.day })),
+      world: this.map ? { seed: this.map.seed, unlocked: this.map.unlocked } : null,
     };
   }
 

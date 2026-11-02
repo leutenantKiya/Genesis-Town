@@ -158,6 +158,12 @@ Built in M3 (`server/src/dialogue.ts`, route `POST /api/talk`, the **Ngobrol** b
   endpoint (`/v1/signature/{chat_id}`); the client doesn't verify it yet.
 - Haggling lines and souled-NPC chat through NEAR AI are not built; the prototype's NPC brain stays local.
 
+## The shared map
+
+The village is generated from one world seed by `client/js/world/village.js`, a plain script the browser loads and
+the server imports, so both have the same map. The server uses it to check gathering and to open areas when town
+projects finish on chain. Details: [world.md](world.md).
+
 ## Demo and offline mode
 
 Open `?mode=offline` (or the server can't be reached): the client swaps the real chain adapter for `MockChain`. It

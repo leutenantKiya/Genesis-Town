@@ -238,3 +238,38 @@ test('settlement updates cached balances from what it wrote, even when a read ri
   assert.equal(game.gs.balance(P, 'bread'), 0);
   assert.throws(() => game.act(P, { action: 'eat', token: 'bread' }));
 });
+
+test('shared map: gathering must match the map, inside open areas; a finished project opens its area', async () => {
+  const { WorldMap } = await import('../src/game/worldmap.ts');
+  const econ = (await import('../src/game/econ.ts')).loadEcon();
+  const chain = new MockChain();
+  chain.accounts.add(TOWN);
+  chain.add(TOWN, 'coin', 5000n);
+  for (const p of econ.projects) chain.addProject(p.id, p.name, p.chunk, p.need);
+  const store = new Store(':memory:');
+  const game = new Game(store, chain, { merchantParent: 'gt.test', town: TOWN, econ, worldSeed: 42, chunkSize: 5 });
+  for (const [id, d] of Object.entries(econ.merchants)) chain.addMerchant(`${id}.gt.test`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, {});
+  await game.init();
+  store.addPlayer(P, 'sub-' + P, 'ed25519:o'); await chain.registerPlayer(P); game.onNewPlayer(P);
+  const map = game.map!;
+  assert.equal(new WorldMap(42).layout.tiles.join(), map.layout.tiles.join(), 'same seed, same map');
+  const L = map.layout;
+  const find = (pred: (x: number, y: number, t: string) => boolean) => { for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) if (pred(x, y, L.tiles[y * L.w + x])) return { x, y }; throw new Error('none'); };
+  const openWater = find((x, y, t) => t === 'water' && map.chunkAt(x, y).open);
+  const lockedTree = find((x, y, t) => t === 'tree' && map.chunkAt(x, y).id === 'seberang');
+  const grass = find((x, y, t) => t === 'grass' && map.chunkAt(x, y).open);
+  assert.match(game.act(P, { action: 'gather', tile: 'water', x: openWater.x, y: openWater.y }).toast, /Ikan/);
+  assert.throws(() => game.act(P, { action: 'gather', tile: 'water', x: grass.x, y: grass.y }), /Tidak ada/);
+  assert.throws(() => game.act(P, { action: 'gather', tile: 'tree', x: lockedTree.x, y: lockedTree.y }), /Dusun Seberang belum dibuka/);
+  // the town builds the bridge (on chain), and the server opens Dusun Seberang
+  await game.devSettle();
+  chain.add(P, 'wood', 60n); chain.add(P, 'ore', 20n); chain.add(P, 'coin', 300n);
+  const call = (method: string, args: Record<string, unknown>) => chain.relay({ delegateAction: { actions: [{ functionCall: { methodName: method, args: Buffer.from(JSON.stringify(args)) } }] } }, P);
+  assert.ok((await call('project_contribute', { id: 'jembatan-timur', contribution: [{ token_id: 'wood', amount: '60' }, { token_id: 'ore', amount: '20' }, { token_id: 'coin', amount: '300' }] })).ok);
+  assert.equal((await chain.getProject('jembatan-timur'))?.done, true);
+  assert.deepEqual(await game.syncProjects(), ['seberang']);
+  assert.ok(map.chunkAt(lockedTree.x, lockedTree.y).open);
+  assert.ok(map.layout.tiles.includes('bridge'), 'the bridge is on the map now');
+  assert.match(game.act(P, { action: 'gather', tile: 'tree', x: lockedTree.x, y: lockedTree.y }).toast, /Kayu/);
+  assert.deepEqual(JSON.parse(game.gs.meta('world.unlocked')!), ['seberang'], 'persisted');
+});

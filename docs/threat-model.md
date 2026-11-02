@@ -73,6 +73,18 @@ requires, per item, both: on-chain balance ≥ amount, and on-chain balance + to
 Remaining gap: two relays for the same item in flight at the same moment both pass the check; the contract still
 rejects the second if the on-chain balance runs out, and the per-account rate limit keeps this narrow.
 
+## The shared map and town projects
+
+- The map comes from a public generator and a public seed, so anyone can rebuild it and check where things are.
+- Gathering is refused unless the tile really is water, rock or tree and lies in an open area (`worldmap.ts`). The
+  player's own position is not checked yet (M4), so a modified client can still gather from any real tile in reach of
+  nothing; the per-account rate limit, node charges and the contract's daily gain caps bound what that buys.
+- Project pledges follow the restoration rules: no deposit, from settled balances only (spend guard), held by the
+  contract, withdrawable until complete, then burned. Only the owner creates projects; the server only reads `done`
+  to open an area, so it cannot fake a finished project without the chain.
+- Opening an area does not move anything already built (the generator reuses the closed map's attempt), so the
+  ledger's tile coordinates stay valid.
+
 ## Merchant dialogue (NEAR AI Cloud)
 
 The player's question and the shop's current prices go to NEAR AI Cloud (private inference in a TEE); the answer is

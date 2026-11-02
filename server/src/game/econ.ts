@@ -28,6 +28,8 @@ export interface Econ {
   fees: { marketPct: number };
   starter: Record<string, number>;
   caps: { dailyGainPerItem: number; dailySends: number; maxSendAmount: number };
+  /** Town projects; the contract holds the live state (create_project with these values). */
+  projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number> }>;
 }
 
 export function loadEcon(): Econ {

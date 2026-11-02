@@ -29,12 +29,13 @@ if (cfg.chainMode === 'mock') {
   for (const [id, d] of Object.entries(econ.merchants)) {
     m.addMerchant(`${id}.${cfg.merchantParentId}`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, base);
   }
+  for (const p of econ.projects ?? []) m.addProject(p.id, p.name, p.chunk, p.need);
   chain = m;
 } else {
   chain = new TestnetChain(cfg);
 }
 
-const game = new Game(store, chain, { merchantParent: cfg.merchantParentId, town: cfg.townAccountId, chunkSize: cfg.settleChunk, econ });
+const game = new Game(store, chain, { merchantParent: cfg.merchantParentId, town: cfg.townAccountId, chunkSize: cfg.settleChunk, econ, worldSeed: cfg.worldSeed });
 await game.init();
 game.start();
 

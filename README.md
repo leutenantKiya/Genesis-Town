@@ -9,6 +9,11 @@
 >   upgraded in place on testnet with all state kept;
 > - **merchant dialogue**: ask a merchant about prices; the answer comes from NEAR AI Cloud when the server has a key,
 >   otherwise from a local line built from the same price facts;
+> - **one shared, seeded village**: the same generator runs in the browser and on the server, so every player sees
+>   the same map: a river, a market plaza, Balai Desa, a church, Puskesmas, Kantor Pos, Kantor Makelar, Warung Kopi,
+>   forest and mine, fields, and fogged areas that open later ([docs/world.md](docs/world.md));
+> - **town projects** (contract v4): players pool goods and coin on chain to build the bridge to Dusun Seberang; the
+>   pledges are burned when it is built and the new area opens for everyone;
 > - warmer art, a full-window layout, fullscreen (F) and a settings menu (O) with rebindable keys.
 >
 > Not done yet: M4 hardening (signed off-chain requests, position checks for gathering) and M5 (demo video,
@@ -47,7 +52,7 @@ burns, rent), so anyone can verify them, while staying invisible in the normal l
 - A merchant that can't pay its daily rent closes. Players invest coins to reopen it and receive shares that pay 40%
   of the shop's daily profit as dividends.
 
-Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [architecture](docs/architecture.md) ·
+Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [world](docs/world.md) · [architecture](docs/architecture.md) ·
 [threat model](docs/threat-model.md) · [on-chain vs off-chain](docs/onchain-offchain.md) · [sources](docs/sources.md)
 
 ## What is on-chain (NEAR testnet)
@@ -64,7 +69,8 @@ Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [ar
 Contract methods: NEP-245 `mt_transfer`, `mt_batch_transfer`, `mt_transfer_call`, `mt_batch_transfer_call`,
 `mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`; NEP-145 `storage_*`. Game methods:
 `settle_day`, `register_player`, `register_merchant`, `close_shop`, `restore_contribute`, `restore_withdraw`,
-`pay_dividend`, `claim_dividends`, `send_item`, `list_item`, `buy_listing`, `cancel_listing`, `migrate`. Full table: [contracts/game/README.md](contracts/game/README.md).
+`pay_dividend`, `claim_dividends`, `send_item`, `list_item`, `buy_listing`, `cancel_listing`, `create_project`,
+`project_contribute`, `project_withdraw`, `migrate`. Full table: [contracts/game/README.md](contracts/game/README.md).
 
 Example transactions from the M2 end-to-end run (`node server/scripts/e2e-testnet.ts`, server stopped):
 - daily settlement of day 0 (45 ledger rows, root stored on chain):
@@ -77,8 +83,10 @@ Example transactions from the M2 end-to-end run (`node server/scripts/e2e-testne
 The run forced Budi's bankruptcy with ledger rows labelled `scripted` so the whole cycle fits in one run. In normal
 play, bankruptcy comes from trading, which the simulator shows (Joko, day 4).
 
-Contract v3 (player market) was deployed over v2 with a `migrate` init call, keeping every balance, shop and share:
-https://testnet.nearblocks.io/txns/JnFKDYgGjvZUwCjHJ4S9WsZaMQMb7YwQoxg2Mb1kqDN
+Contract upgrades were deployed in place with a `migrate` init call, keeping every balance, shop, share and listing:
+- v3 (player market) over v2: https://testnet.nearblocks.io/txns/JnFKDYgGjvZUwCjHJ4S9WsZaMQMb7YwQoxg2Mb1kqDN
+- v4 (town projects) over v3: https://testnet.nearblocks.io/txns/Cgc2KLL5krV5YpUumUNVfwCWJL7KNKStBqJP1BwTiTGS
+- the bridge project created by the owner: https://testnet.nearblocks.io/txns/5kkEN7uRopMhfJaB7xn1ZNPKVSg9qtmdunht3iDyXkym
 
 ### Player market (Pasar Pemain)
 
@@ -93,6 +101,18 @@ Testnet run of `node server/scripts/e2e-market.ts` (2026-11-02, MARKET E2E PASS)
 - A lists 3 Gandum at 10 coin each (escrowed): https://testnet.nearblocks.io/txns/DkeDjhqdqTFRiqCyjvhcyeyPSsT841ur5Huu1D7SjsVP
 - B buys 2 for 20 coin; 19 go to A, 1 is burned: https://testnet.nearblocks.io/txns/6qCrnA2NKRyDs28gb6B7qR1YYWRyXVNYwrLmP9n7zDzF
 - A cancels the last one and gets it back: https://testnet.nearblocks.io/txns/86QeWJ4kKZkxg2QhEZGj37fxJGQSEGuVUsdTGst76vRx
+
+### Town projects (the bridge)
+
+In the Balai Desa, the project board shows **Jembatan ke Dusun Seberang**: 60 Kayu, 20 Bijih, 300 Koin. Players
+pledge what they can (`project_contribute`, gas-free through the relayer, checked by the spend guard) and can take it
+back until the project is complete (`project_withdraw`). When every line is met, the contract burns the pledges and
+marks the project done; the server opens Dusun Seberang on the shared map and every player sees the bridge appear.
+The bridge is left unbuilt on testnet so players can build it.
+
+Testnet run of `node server/scripts/e2e-project.ts` (2026-11-02, PROJECT E2E PASS):
+- a new player pledges 40 coin: https://testnet.nearblocks.io/txns/3gEfJYc7DhoDrrYJndpUHBTgLkG2dGVtc2MakdR2GEHP
+- and withdraws it: https://testnet.nearblocks.io/txns/3hg3qgZNewW9HNtFeoQpzLyxDBsqv9QEf85BWfkrzaUP
 
 ## Try it in 5 minutes
 
@@ -114,8 +134,11 @@ Run locally (below), open http://localhost:3000.
 7. When a shop shows TUTUP, talk to its merchant → restoration board → **Sumbang** (on-chain) → the shop reopens and
    your shares appear in the shop window.
 8. Press **Pasar** (K) → list an item for other players (on-chain escrow), or buy someone's listing.
+   The same board is on the desk in the Kantor Makelar.
 9. In any shop, press **Ngobrol dengan …** and ask "kenapa harga ikan turun?" → the merchant answers from its real
    stock and price reason.
+10. Walk into the **Balai Desa** next to the plaza and face the shelf at the back → the project board. Pledge toward
+    the bridge to Dusun Seberang (the fogged hamlet across the river). Press **Peta** (M) to see the whole village.
 
 ## Run locally
 

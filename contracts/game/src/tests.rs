@@ -450,3 +450,74 @@ fn coin_cannot_be_listed() {
     ctx(bob(), 0);
     c.list_item("coin".into(), U128(1), U128(1));
 }
+
+/* ------------------------------------------------------------------ town projects (v4) */
+
+fn project_setup() -> Contract {
+    let mut c = market_setup();
+    ctx(owner(), 0);
+    c.create_project("jembatan-timur".into(), "Jembatan ke Dusun Seberang".into(), "seberang".into(), vec![line("fish", 6), line("coin", 50)]);
+    c
+}
+
+#[test]
+fn project_takes_only_what_it_needs_and_burns_the_pledges_when_built() {
+    let mut c = project_setup();
+    let fish0 = c.mt_supply("fish".into()).unwrap().0;
+    let coin0 = c.mt_supply("coin".into()).unwrap().0;
+    ctx(alice(), 0);
+    c.project_contribute("jembatan-timur".into(), vec![line("fish", 4)]);
+    assert_eq!(bal(&c, alice(), "fish"), 16);
+    ctx(bob(), 0);
+    c.project_contribute("jembatan-timur".into(), vec![line("coin", 80)]);
+    assert_eq!(bal(&c, bob(), "coin"), 450, "only the 50 still needed");
+    let p = c.get_project("jembatan-timur".into()).unwrap();
+    assert!(!p.done);
+    ctx(alice(), 0);
+    c.project_contribute("jembatan-timur".into(), vec![line("fish", 5)]);
+    let p = c.get_project("jembatan-timur".into()).unwrap();
+    assert!(p.done, "all lines met");
+    assert_eq!(bal(&c, alice(), "fish"), 14);
+    assert_eq!(p.contributors.len(), 2);
+    assert_eq!(c.mt_supply("fish".into()).unwrap().0, fish0 - 6, "built: goods burned");
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, coin0 - 50);
+    assert_eq!(bal(&c, acc("game.testnet"), "fish"), 0, "nothing left in escrow");
+    assert!(get_logs().iter().any(|l| l.contains(r#""what":"done""#)));
+}
+
+#[test]
+fn project_pledge_can_be_withdrawn_before_it_is_done() {
+    let mut c = project_setup();
+    ctx(alice(), 0);
+    c.project_contribute("jembatan-timur".into(), vec![line("fish", 3)]);
+    c.project_withdraw("jembatan-timur".into());
+    assert_eq!(bal(&c, alice(), "fish"), 20);
+    assert!(c.get_project("jembatan-timur".into()).unwrap().pledged.iter().all(|l| l.amount.0 == 0));
+}
+
+#[test]
+#[should_panic(expected = "not enough fish")]
+fn pledging_more_than_you_hold_fails_whole() {
+    let mut c = project_setup();
+    ctx(bob(), 0);
+    c.project_contribute("jembatan-timur".into(), vec![line("fish", 2)]);
+}
+
+#[test]
+#[should_panic(expected = "only the owner")]
+fn only_owner_creates_projects() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    c.create_project("x".into(), "X".into(), "y".into(), vec![line("fish", 1)]);
+}
+
+#[test]
+#[should_panic(expected = "project is already done")]
+fn done_projects_take_nothing() {
+    let mut c = project_setup();
+    ctx(alice(), 0);
+    c.project_contribute("jembatan-timur".into(), vec![line("fish", 6)]);
+    ctx(bob(), 0);
+    c.project_contribute("jembatan-timur".into(), vec![line("coin", 50)]);
+    c.project_contribute("jembatan-timur".into(), vec![line("coin", 1)]);
+}

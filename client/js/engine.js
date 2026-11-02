@@ -290,14 +290,14 @@ function buildWorldCache(m){
     if (gt === 'water') Sp.drawEdges(g, 'water', x*T, y*T, {n:gAt(x, y-1) !== 'water', s:gAt(x, y+1) !== 'water', w:gAt(x-1, y) !== 'water', e:gAt(x+1, y) !== 'water'});
     else if (gt !== 'grass') Sp.drawEdges(g, gt, x*T, y*T, {n:gAt(x, y-1) === 'grass', s:gAt(x, y+1) === 'grass', w:gAt(x-1, y) === 'grass', e:gAt(x+1, y) === 'grass'});
   }
-  m.buildings.forEach(function(b){ Sp.buildingShadow(g, b.x*T, b.y*T, 36, 36); });
+  m.buildings.forEach(function(b){ Sp.buildingShadow(g, b.x*T, b.y*T, (b.w || 3)*T, (b.h || 3)*T); });
   m.canopies = [];
   for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
     t = m.tiles[y*m.w + x];
     if (Sp.GROUND_TYPES[t]) continue;
     if (t === 'tree'){
       Sp.drawTrunk(g, x*T, y*T);
-      m.canopies.push({x:x, y:y, kind:Sp.treeKind(x, y, x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1)});
+      m.canopies.push({x:x, y:y, kind:Sp.treeKind(x, y, x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1), fog:!!(m.locked && m.locked[y*m.w + x])});
       continue;
     }
     if (t === 'rock' || t === 'bush' || t === 'barrel' || t === 'crate') Sp.shadowEllipse(g, x*T + 6, y*T + 10, 5, 2);
@@ -307,8 +307,18 @@ function buildWorldCache(m){
   m.buildings.forEach(function(b){
     if (b.kind === 'mart') Sp.drawMart(g, b.x*T, b.y*T);
     else if (b.kind === 'casino'){ if (Sp.drawCasino) Sp.drawCasino(g, b.x*T, b.y*T); else Sp.drawHouse(g, b.x*T, b.y*T, 2, false); }
+    else if (PUBLIC_KINDS[b.kind] && Sp.drawPublic) Sp.drawPublic(g, b.kind, b.x*T, b.y*T, b.w, b.h);
     else Sp.drawHouse(g, b.x*T, b.y*T, b.style, !b.invited);
   });
+  if (m.locked){
+    // fog over areas that are not open yet, a little lighter along the edge so the border reads as mist
+    for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
+      if (!m.locked[y*m.w + x]) continue;
+      var edge = (x > 0 && !m.locked[y*m.w + x - 1]) || (x < m.w - 1 && !m.locked[y*m.w + x + 1]) || (y > 0 && !m.locked[(y - 1)*m.w + x]) || (y < m.h - 1 && !m.locked[(y + 1)*m.w + x]);
+      g.fillStyle = edge ? 'rgba(30,26,58,0.38)' : 'rgba(30,26,58,0.55)';
+      g.fillRect(x*T, y*T, T, T);
+    }
+  }
   m.layered = true;
   m.cache = c;
 }
@@ -329,7 +339,12 @@ function buildCache(m){
 }
 
 /* ---------- world generation ---------- */
+// Hackathon world (2026-11-02): the shared seeded generator in js/world/village.js builds the village; the server
+// runs the same file, so every player sees the same map. `worldUnlocked` lists chunks opened by town projects.
+// The old block-grid generator (tryWorld) stays as the fallback when village.js is missing.
+var worldUnlocked = [];
 function genWorld(seed){
+  if (window.GTVillage) return fromLayout(GTVillage.generate(seed, worldUnlocked));
   for (var att = 0; att < 40; att++){
     var w = tryWorld(seed, att);
     if (w) { w.attempt = att; return w; }
@@ -565,14 +580,75 @@ function tryWorld(seed, att){
   return m;
 }
 
+var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1 };
+function fromLayout(L){
+  var R = makeR((L.seed ^ 0x9e3779b9) >>> 0), x, y, i;
+  var m = newMap(L.w, L.h, 'grass', 'world');
+  m.seed = L.seed; m.layout = L; m.tiles = L.tiles.slice(); m.chunks = L.chunks; m.plaza = L.plaza;
+  Object.keys(L.info).forEach(function(k){ m.info.set(+k, L.info[k]); });
+  var houses = [];
+  L.buildings.forEach(function(lb){
+    var b = { kind:lb.kind, x:lb.x, y:lb.y, w:lb.w, h:lb.h, dx:lb.dx, dy:lb.dy, style:lb.style || 0, open:lb.open, chunk:lb.chunk };
+    if (lb.kind === 'house'){
+      b.id = houses.length; b.own = !!lb.own; b.owner = b.own ? 'Kamu' : R.pick(FIRST) + ' ' + R.pick(LAST);
+      b.invited = b.own; b.iseed = R.int(1, 1073741823); b.hasNpc = R.chance(0.4);
+      houses.push(b);
+    } else {
+      b.id = lb.kind; b.name = lb.name; b.owner = lb.name; b.invited = lb.open; b.iseed = hashStr(L.seed + ':' + lb.kind);
+    }
+    if (lb.mail != null){ b.mail = lb.mail; m.info.set(lb.mail, b.own ? 'Kotak surat milikmu. Belum ada surat.' : 'Kotak surat milik ' + b.owner + '. Isinya kosong.'); }
+    m.buildings.push(b);
+    for (y = b.y; y < b.y + b.h; y++) for (x = b.x; x < b.x + b.w; x++){
+      i = y*m.w + x; m.blocked.add(i);
+      if (x === b.dx && y === b.dy) m.door.set(i, b); else m.bld.set(i, b);
+    }
+  });
+  var own = houses.filter(function(h){ return h.own; })[0];
+  R.shuffle(houses.filter(function(h){ return !h.own && h.open; })).slice(0, 4).forEach(function(h){ h.invited = true; });
+  m.houses = houses; m.own = own; m.marts = []; m.casino = null;
+  m.market = { stalls: L.market.stalls.map(function(s){ return { x:s.x, y:s.y, seat:{x:s.seat.x, y:s.seat.y}, color:s.color }; }) };
+  m.farm = { plots: L.farm.plots.slice(), gate: L.farm.gate };
+  m.spawn = { x:L.spawn.x, y:L.spawn.y };
+  finalize(m);
+  // locked chunks: generated and drawn under fog, but nobody walks there until a town project opens them
+  m.locked = new Uint8Array(m.w * m.h);
+  for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++) if (!GTVillage.chunkOf(L, x, y).open){ m.locked[y*m.w + x] = 1; m.walk[y*m.w + x] = 0; }
+  var reserved = new Set();
+  for (y = L.plaza.y0; y <= L.plaza.y1; y++) for (x = L.plaza.x0; x <= L.plaza.x1; x++) reserved.add(y*m.w + x);
+  for (y = L.farm.y0; y <= L.farm.y1 + 1; y++) for (x = L.farm.x0; x <= L.farm.x1; x++) reserved.add(y*m.w + x);
+  m.buildings.forEach(function(b){ reserved.add((b.dy + 1)*m.w + b.dx); });
+  placeLamps(m, L.seed, L.attempt, reserved);
+  var reach = bfs(m, m.spawn.x, m.spawn.y);
+  m.reach = reach;
+  m.doorFront = new Set();
+  m.buildings.forEach(function(q){ m.doorFront.add((q.dy + 1)*m.w + q.dx); });
+  m.npcSpawns = [];
+  for (y = 1; y < m.h - 1; y++) for (x = 1; x < m.w - 1; x++){
+    i = y*m.w + x;
+    if (reach[i] && !m.doorFront.has(i) && (Math.abs(x - m.spawn.x) + Math.abs(y - m.spawn.y) > 4)) m.npcSpawns.push([x, y]);
+  }
+  R.shuffle(m.npcSpawns);
+  m.r = R; m.attempt = L.attempt;
+  buildCache(m);
+  return m;
+}
+/** Name of the area at an outdoor tile: the chunk, or the landmark the player stands next to. */
+function areaName(x, y){
+  var m = world, L = m && m.layout;
+  if (!L) return 'Blok (' + Math.floor(x / BS) + ',' + Math.floor(y / BS) + ')';
+  if (L.plaza && x >= L.plaza.x0 - 1 && x <= L.plaza.x1 + 1 && y >= L.plaza.y0 - 1 && y <= L.plaza.y1 + 1) return 'Pasar Genesis';
+  for (var k = 0; k < m.buildings.length; k++){ var b = m.buildings[k]; if (b.name && Math.abs(x - b.dx) <= 2 && y >= b.dy && y <= b.dy + 2) return b.name; }
+  return GTVillage.chunkOf(L, x, y).name;
+}
+
 /* street lamps: solid 'lamp' tiles on road-side grass.  Own PRNG (the v1 random stream is untouched).  Each lamp is only kept if the
    walkable region stays connected (exactly one tile lost) and every door front stays reachable.  Pass 1 lights ~half of the doors,
    pass 2 adds more lamps (up to 25-35 total) while keeping at least ~35% of doors dark. */
 function placeLamps(m, seed, att, reserved){
   var RL = makeR((Math.imul(seed >>> 0, 2654435761) ^ Math.imul(att + 1, 40503) ^ 0x1A4B5) >>> 0);
   var W = m.w, H = m.h, i;
-  var fronts = m.buildings.map(function(b){ return {x:b.dx, y:b.dy + 1}; });
   var base = bfs(m, m.spawn.x, m.spawn.y), baseCount = 0;
+  var fronts = m.buildings.map(function(b){ return {x:b.dx, y:b.dy + 1}; }).filter(function(f){ return base[f.y*W + f.x]; });
   for (i = 0; i < base.length; i++) baseCount += base[i];
   var lamps = [], lit = new Uint8Array(fronts.length), litN = 0;
   function cheb(a, b, c, d){ return Math.max(Math.abs(a - c), Math.abs(b - d)); }
@@ -671,6 +747,49 @@ function genHouseInterior(h){
   return m;
 }
 
+// Public buildings: one room per kind, furnished from the existing interior tiles. Mods add what each one does
+// (the project board in the Balai Desa, the player market in the Kantor Makelar).
+function genPublicInterior(b){
+  var w = 12, hh = 9, k = b.kind;
+  var m = newMap(w, hh, k === 'clinic' || k === 'post' ? 'floor_tile' : 'floor_wood', 'interior');
+  function I(x,y){ return y*w + x; }
+  function put(x, y, t, txt){ m.tiles[I(x,y)] = t; if (txt) m.info.set(I(x,y), txt); }
+  var x, y;
+  for (x = 0; x < w; x++){ m.tiles[I(x,0)] = 'wall'; m.tiles[I(x,hh-1)] = 'wall'; }
+  for (y = 0; y < hh; y++){ m.tiles[I(0,y)] = 'wall'; m.tiles[I(w-1,y)] = 'wall'; }
+  m.mat = {x:6, y:hh-1}; m.tiles[I(6,hh-1)] = 'doormat'; m.exit.add(I(6,hh-1)); m.entry = {x:6, y:hh-2};
+  m.board = null;
+  if (k === 'hall'){
+    for (x = 3; x <= 8; x++) put(x, 3, 'table', 'Meja rapat warga.');
+    for (x = 3; x <= 8; x += 2){ put(x, 2, 'chair'); put(x, 4, 'chair'); }
+    put(5, 1, 'bookshelf', 'Papan proyek desa. Bicara di sini untuk melihat dan menyumbang.'); m.board = {x:5, y:1};
+    put(6, 1, 'bookshelf', 'Arsip desa: peta lama dan catatan panen.');
+    put(1, 1, 'plant'); put(10, 1, 'plant');
+  } else if (k === 'church'){
+    for (y = 3; y <= 6; y++){ for (x = 2; x <= 4; x++) put(x, y, 'chair'); for (x = 7; x <= 9; x++) put(x, y, 'chair'); }
+    put(5, 1, 'table', 'Meja di depan, dengan lilin dan bunga segar.'); put(6, 1, 'table', 'Meja di depan, dengan lilin dan bunga segar.');
+    put(1, 1, 'plant'); put(10, 1, 'plant');
+    for (x = 5; x <= 6; x++) for (y = 3; y <= 6; y++) put(x, y, 'rug');
+  } else if (k === 'clinic'){
+    put(2, 1, 'bed', 'Ranjang periksa yang bersih.'); put(4, 1, 'bed', 'Ranjang periksa yang bersih.');
+    put(8, 3, 'counter', 'Meja perawat. Obat belum dijual di sini (segera).'); put(9, 3, 'counter', 'Meja perawat.');
+    put(10, 1, 'shelf', 'Rak obat dan perban.'); put(1, 6, 'plant');
+  } else if (k === 'post'){
+    for (x = 3; x <= 8; x++) put(x, 3, 'counter', 'Loket pos. Kirim barang ke pemain lain lewat Tas NEAR (on-chain).');
+    put(2, 1, 'shelf', 'Rak paket.'); put(9, 1, 'shelf', 'Rak paket.'); put(10, 6, 'plant');
+  } else if (k === 'broker'){
+    put(3, 2, 'table', 'Meja makelar. Daftar lapak Pasar Pemain ada di sini.'); put(4, 2, 'table', 'Meja makelar.'); m.board = {x:3, y:2};
+    put(3, 3, 'chair'); put(8, 1, 'bookshelf', 'Buku catatan transaksi.'); put(9, 1, 'bookshelf', 'Buku catatan transaksi.'); put(1, 6, 'plant');
+  } else {
+    put(3, 2, 'counter', 'Kopi tubruk dan pisang goreng.'); put(4, 2, 'counter'); put(5, 2, 'counter');
+    for (x = 2; x <= 8; x += 3){ put(x, 5, 'table', 'Meja warung. Warga suka ngobrol di sini.'); put(x + 1, 5, 'chair'); }
+    put(10, 1, 'fridge', 'Es teh manis.');
+  }
+  finalize(m);
+  m.npcs = [];
+  buildCache(m);
+  return m;
+}
 function genMartInterior(b, martIdx){
   var w = 11, hh = 9;
   var m = newMap(w, hh, 'floor_tile', 'interior');
@@ -801,6 +920,7 @@ function houseScene(b){
     var m, kind = b.kind;
     if (kind === 'mart') m = genMartInterior(b, world.marts.indexOf(b));
     else if (kind === 'casino') m = genCasinoInterior(b);
+    else if (PUBLIC_KINDS[kind]) m = genPublicInterior(b);
     else m = genHouseInterior(b);
     sc = { kind:kind, map:m, npcs:m.npcs, house:b, key:key, name:null };
     interiors.set(key, sc);
@@ -1478,25 +1598,31 @@ function setMap(on){
   elMap.classList.toggle('on', mapOpen);
   if (mapOpen) drawMinimap();
 }
+var MM_COL = { grass:'#5fae36', flower:'#5fae36', tallgrass:'#56a232', path:'#d0903c', plaza:'#c6bba4', stall:'#e8a13c', water:'#2a8cc0', bridge:'#8e5a30',
+  tree:'#2e6a34', bush:'#3f8a2e', rock:'#8a8478', sand:'#e8bf72', soil:'#6a4024', fence:'#8a6038' };
+function minimapBase(){
+  if (world.mmCache) return world.mmCache;
+  var c = document.createElement('canvas'), W = world.w, H = world.h;
+  c.width = W * 2; c.height = H * 2;
+  var g = c.getContext('2d'), x, y;
+  for (y = 0; y < H; y++) for (x = 0; x < W; x++){ g.fillStyle = MM_COL[world.tiles[y*W + x]] || '#5fae36'; g.fillRect(x*2, y*2, 2, 2); }
+  world.buildings.forEach(function(b){
+    g.fillStyle = b.own ? '#f2c94c' : b.name ? '#e8503c' : b.invited ? '#7fd18a' : '#d98c5f';
+    g.fillRect(b.x*2, b.y*2, (b.w || 3)*2, (b.h || 3)*2);
+  });
+  if (world.locked){ g.fillStyle = 'rgba(26,27,46,0.6)'; for (y = 0; y < H; y++) for (x = 0; x < W; x++) if (world.locked[y*W + x]) g.fillRect(x*2, y*2, 2, 2); }
+  world.mmCache = c;
+  return c;
+}
 function drawMinimap(){
   var g = elMM.getContext('2d'); g.imageSmoothingEnabled = false;
-  var C = 12;
-  g.fillStyle = '#1a1b2e'; g.fillRect(0, 0, 120, 120);
-  var homeB = world.own;
-  var friendSet = new Set(); world.houses.forEach(function(h){ if (h.invited && !h.own) friendSet.add(h.bx + ',' + h.by); });
-  for (var by = 0; by < NB; by++) for (var bx = 0; bx < NB; bx++){
-    var t = world.blockTypes[by*NB + bx], col;
-    if (t === 'park') col = '#3f8f4a'; else if (t === 'mart') col = '#4a82e0'; else if (t === 'casino') col = '#c452e0';
-    else if (t === 'plaza') col = '#e8a13c'; else if (t === 'farm') col = '#8a5a2c';
-    else if (bx === homeB.bx && by === homeB.by) col = '#f2c94c';
-    else if (friendSet.has(bx + ',' + by)) col = '#7fd18a';
-    else col = '#d98c5f';
-    g.fillStyle = col; g.fillRect(bx*C + 1, by*C + 1, C - 2, C - 2);
-  }
+  var base = minimapBase();
+  if (elMM.width !== base.width){ elMM.width = base.width; elMM.height = base.height; }
+  g.drawImage(base, 0, 0);
   if (world.lamps && clockInfo().night){ g.fillStyle = '#ffe066'; world.lamps.forEach(function(l){ g.fillRect(l.x * 2, l.y * 2, 2, 2); }); }
-  var px, py;
-  if (scene.kind === 'out'){ px = (P.x + 0.5) / BS; py = (P.y + 0.5) / BS; }
-  else { px = scene.house.bx + 0.5; py = scene.house.by + 0.5; }
+  var px, py, C = 2;
+  if (scene.kind === 'out'){ px = P.x + 0.5; py = P.y + 0.5; }
+  else { px = scene.house.dx + 0.5; py = scene.house.dy + 0.5; }
   var blink = REDUCE ? true : Math.floor(timeAcc * 3) % 2 === 0;
   g.fillStyle = '#000'; g.fillRect(Math.round(px*C) - 3, Math.round(py*C) - 3, 6, 6);
   g.fillStyle = blink ? '#ff3b3b' : '#ffffff'; g.fillRect(Math.round(px*C) - 2, Math.round(py*C) - 2, 4, 4);
@@ -1750,7 +1876,10 @@ function render(){
     all = ents.slice();
     if (m.canopies) m.canopies.forEach(function(cn){
       if (cn.x < tx0 - 1 || cn.x > tx1 + 1 || cn.y < ty0 || cn.y > ty1 + 2) return;
-      all.push({py:cn.y*T - 0.5, draw:function(){ SPRITES.drawCanopy(ctx, cn.kind, cn.x*T - camX, cn.y*T - camY); }});
+      all.push({py:cn.y*T - 0.5, draw:function(){
+        SPRITES.drawCanopy(ctx, cn.kind, cn.x*T - camX, cn.y*T - camY);
+        if (cn.fog){ ctx.fillStyle = 'rgba(30,26,58,0.55)'; ctx.fillRect(cn.x*T - camX - 4, cn.y*T - camY - 12, T + 8, T + 12); }
+      }});
     });
     if (m.market && SPRITES.drawAwning) m.market.stalls.forEach(function(st){
       all.push({py:st.y*T - 0.5, draw:function(){ SPRITES.drawAwning(ctx, st.x*T - camX, st.y*T - camY, st.color); }});
@@ -1861,7 +1990,8 @@ function renderFx(ents){
 /* ---------- HUD ---------- */
 var lastLoc = '', lastSeed = -1, lastCoins = -1, lastClock = '', lastRole = '', lastClan = '\u0000', lastSm = '';
 function locText(){
-  if (scene.kind === 'out') return 'Blok (' + Math.floor(P.x / BS) + ',' + Math.floor(P.y / BS) + ')';
+  if (scene.kind === 'out') return areaName(P.x, P.y);
+  if (scene.house && scene.house.name) return scene.house.name;
   if (scene.kind === 'mart') return 'Mart Genesis';
   if (scene.kind === 'casino') return 'Kasino Genesis';
   return scene.house.own ? 'Rumah Kamu' : 'Rumah ' + scene.house.owner;
@@ -2106,6 +2236,15 @@ function npcHide(npc, on){ if (npc){ npc.hidden = !!on; if (on){ npc.moving = fa
 function findNpc(key){ var r = null; allScenes().forEach(function(sc){ sc.npcs.forEach(function(n){ if (n.key === key) r = n; }); }); return r; }
 
 var GT = {
+  // Shared world from the server: same seed and opened chunks for every player. No-op when nothing changed.
+  setWorld: function(s, unlocked){
+    var u = (unlocked || []).slice().sort();
+    if (world && seed === (s >>> 0) && u.join(',') === worldUnlocked.join(',')) return false;
+    var keepPos = world && seed === (s >>> 0) ? {x:P.x, y:P.y, scene:scene && scene.kind} : null;
+    worldUnlocked = u; regen(s);
+    if (keepPos && keepPos.scene === 'out' && world.walk[keepPos.y*world.w + keepPos.x]){ P.x = P.fx = keepPos.x; P.y = P.fy = keepPos.y; }
+    return true;
+  },
   version: 2,
   state: state,
   ITEMS: ITEMS,
@@ -2180,6 +2319,7 @@ function reachableReport(){
 function exposeDebug(){
   var g = {
     regen: function(s){ return regen(s); },
+
     reachable: reachableReport,
     teleport: function(x, y, dir){ P.x = P.fx = x; P.y = P.fy = y; P.moving = false; P.t = 0; if (dir) P.dir = dir; },
     isWalkable: function(x, y){ var m = scene.map; return inb(m,x,y) && m.walk[y*m.w + x] === 1; },
