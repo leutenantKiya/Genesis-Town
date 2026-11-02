@@ -2,11 +2,13 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
-import type { Config } from './config.ts';
+import { MARKET_FEE_BPS, type Config } from './config.ts';
 import type { Chain } from './chain.ts';
 import type { Store } from './db.ts';
 import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
+import { spendGuard } from './spend.ts';
+import { Dialogue } from './dialogue.ts';
 import type { Game } from './game/game.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
 import { Worker } from 'node:worker_threads';
@@ -38,6 +40,7 @@ export interface AppDeps {
   verify: TokenVerifier;
   currentBlockHeight: () => Promise<bigint>;
   clientDir: string;
+  dialogue?: Dialogue;
 }
 
 const MIME: Record<string, string> = {
@@ -66,9 +69,12 @@ export function createApp(deps: AppDeps) {
   const limiter = new RateLimiter(deps.cfg.relay.perMinute, deps.cfg.relay.perDay);
   const actLimiter = new RateLimiter(60, 5000); // off-chain actions per account
   const ipLimiter = new RateLimiter(10, 200); // account creation per IP
+  const talkLimiter = new RateLimiter(6, 150); // merchant questions per account (each may be one NEAR AI call)
+  const dialogue = deps.dialogue ?? new Dialogue(deps.cfg.nearai);
   const clientRoot = resolve(deps.clientDir);
-  const afterRelay = async (sender: string, method: string, args: Record<string, unknown>) => {
-    const accts = [sender];
+  const checkSpend = spendGuard(deps.chain, game);
+  const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[]) => {
+    const accts = [sender, ...extra];
     if (method === 'send_item' && typeof args.receiver_id === 'string') accts.push(args.receiver_id);
     if (typeof args.merchant === 'string') accts.push(args.merchant);
     await game.settlement.refresh(accts);
@@ -98,6 +104,7 @@ export function createApp(deps: AppDeps) {
           fastAuth: deps.cfg.fastAuth,
           devLogin: deps.cfg.devLogin,
           devTools: deps.cfg.devTools,
+          dialogue: dialogue.enabled ? 'nearai' : 'local',
           econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time },
         });
       }
@@ -107,7 +114,7 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, await register({ ...deps, onNewPlayer: (a) => game.onNewPlayer(a) }, await readJson(req)));
       }
       if (req.method === 'POST' && p === '/api/relay') {
-        return send(res, 200, await relay({ ...deps, limiter, afterRelay }, await readJson(req)));
+        return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay, itemName: (t) => game.econ.items[t]?.name ?? t }, await readJson(req)));
       }
       if (req.method === 'GET' && p === '/api/time') {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough() });
@@ -131,6 +138,20 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/shops') {
         const a = req.headers['x-account-id'];
         return send(res, 200, { shops: await game.shops(typeof a === 'string' ? a : undefined) });
+      }
+      if (req.method === 'POST' && p === '/api/talk') {
+        const acct = accountOf(req);
+        if (!talkLimiter.take(acct)) throw new HttpError(429, 'Pedagangnya sedang sibuk melayani. Coba sebentar lagi.');
+        const b = await readJson(req);
+        const id = String(b.merchant ?? '');
+        if (!game.econ.merchants[id]) throw new HttpError(404, 'no such merchant');
+        const r = await dialogue.reply(game.market.view(id), game.econ.merchants[id].personality, String(b.text ?? ''));
+        return send(res, 200, r);
+      }
+      if (req.method === 'GET' && p === '/api/listings') {
+        // Player market: open listings read from the contract (escrowed there), newest first.
+        const listings = await deps.chain.listListings(50);
+        return send(res, 200, { listings, feeBps: MARKET_FEE_BPS, contractId: deps.cfg.gameContractId });
       }
       if (req.method === 'GET' && p === '/api/history') {
         const acct = accountOf(req);

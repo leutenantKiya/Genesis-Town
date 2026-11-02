@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadConfig } from './config.ts';
 import { Store } from './db.ts';
@@ -11,6 +12,10 @@ import { loadEcon } from './game/econ.ts';
 
 try { process.loadEnvFile(join(dirname(fileURLToPath(import.meta.url)), '../../.env')); } catch { /* no .env: use the real environment */ }
 const cfg = loadConfig();
+// The mock chain lives in memory, so its off-chain database must start fresh too or the two disagree after a restart.
+if (cfg.chainMode === 'mock' && cfg.dbPath !== ':memory:') {
+  for (const f of [cfg.dbPath, cfg.dbPath + '-wal', cfg.dbPath + '-shm']) rmSync(f, { force: true });
+}
 const store = new Store(cfg.dbPath);
 const econ = loadEcon();
 

@@ -374,3 +374,79 @@ fn storage_deposit_registers() {
     c.storage_deposit(None, None);
     assert!(c.is_registered(acc("wallet.testnet")));
 }
+
+/* ------------------------------------------------------------ player market */
+
+fn market_setup() -> Contract {
+    let mut c = setup();
+    settle(&mut c, 1, 0, vec![d(alice(), "fish", 20), d(bob(), "coin", 500), d(town(), "coin", -500)]);
+    c
+}
+
+#[test]
+fn list_and_buy_moves_goods_and_burns_the_fee() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(10), U128(8));
+    assert_eq!(bal(&c, alice(), "fish"), 10, "escrowed");
+    let supply_before = c.mt_supply("coin".into()).unwrap().0;
+    ctx(bob(), 0);
+    c.buy_listing(id, U128(4), U128(8));
+    assert_eq!(bal(&c, bob(), "fish"), 4);
+    assert_eq!(bal(&c, bob(), "coin"), 500 - 32);
+    assert_eq!(bal(&c, alice(), "coin"), 32 - 1, "5% of 32 = 1 coin burned (integer)");
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, supply_before - 1);
+    assert_eq!(c.get_listing(id).unwrap().amount.0, 6);
+    c.buy_listing(id, U128(6), U128(8));
+    assert!(c.get_listing(id).is_none(), "sold out listings close");
+    assert!(get_logs().iter().any(|l| l.contains(r#""event":"market""#)));
+}
+
+#[test]
+#[should_panic(expected = "price is above your limit")]
+fn buyer_price_guard() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(1), U128(9));
+    ctx(bob(), 0);
+    c.buy_listing(id, U128(1), U128(8));
+}
+
+#[test]
+#[should_panic(expected = "cannot buy your own listing")]
+fn no_self_buys() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(1), U128(1));
+    c.buy_listing(id, U128(1), U128(1));
+}
+
+#[test]
+fn cancel_returns_escrow_and_only_seller_may_cancel() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(5), U128(3));
+    ctx(bob(), 0);
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { ctx(bob(), 0); c.cancel_listing(id); }));
+    assert!(r.is_err());
+    ctx(alice(), 0);
+    c.cancel_listing(id);
+    assert_eq!(bal(&c, alice(), "fish"), 20);
+    assert!(c.list_listings(None).is_empty());
+}
+
+#[test]
+#[should_panic(expected = "at most 5 open listings")]
+fn open_listings_are_capped() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    for _ in 0..6 { c.list_item("fish".into(), U128(1), U128(1)); }
+}
+
+#[test]
+#[should_panic(expected = "coin cannot be listed")]
+fn coin_cannot_be_listed() {
+    let mut c = market_setup();
+    ctx(bob(), 0);
+    c.list_item("coin".into(), U128(1), U128(1));
+}

@@ -19,3 +19,11 @@
 .chain-today{color:#9c6a14}
 .chain-closed{color:#8a2f3a}
 .chain-st.offchain{background:#e9e2f6}
+
+.chain-h{margin:10px 0 4px;font-size:10px;color:#b4572e}
+.chain-field{display:flex;align-items:center;gap:8px;margin:6px 0}
+.chain-field input{width:110px}
+.chain-talk{max-height:220px;overflow-y:auto;margin-bottom:8px}
+.chain-talk p{margin:4px 0}
+.chain-talk p.me{color:#6b6e8f}
+.chain-talk input,.mbody input[type=text]{width:100%;box-sizing:border-box}

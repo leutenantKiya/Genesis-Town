@@ -7,6 +7,7 @@ export interface TxResult { txHash: string; ok: boolean; error?: string }
 export interface DeltaEntry { account_id: string; token_id: string; delta: string }
 export interface ShopInfo { account_id: string; name: string; open: boolean; coin: string; total_shares: string; need: Array<{ token_id: string; amount: string }>; pledged: Array<{ token_id: string; amount: string }>; contributors: number; times_closed: number }
 export interface HoldingInfo { shares: string; total_shares: string; claimable: string }
+export interface ListingInfo { id: number; seller: string; token_id: string; amount: string; price_each: string; created_ns: number }
 
 export interface Chain {
   readonly mode: 'testnet' | 'mock';
@@ -21,6 +22,8 @@ export interface Chain {
   listShops(): Promise<ShopInfo[]>;
   holding(merchant: string, holder: string): Promise<HoldingInfo>;
   coinSupply(): Promise<string>;
+  listListings(limit?: number): Promise<ListingInfo[]>;
+  getListing(id: number): Promise<ListingInfo | null>;
   derivedOwnerKey(sub: string): Promise<string>;
 }
 
@@ -55,9 +58,11 @@ export class TestnetChain implements Chain {
   }
 
   private async settlerCall(method: string, args: Record<string, unknown>, tgas = '100'): Promise<TxResult> {
+    // Wait for FINAL so that the server's next read (possibly from another RPC node) already sees the change.
     const o = await this.settler.signAndSendTransaction({
       receiverId: this.cfg.gameContractId,
       actions: [actions.functionCall(method, args, teraToGas(tgas as `${number}`), 0n)],
+      waitUntil: 'FINAL',
     });
     return toResult(o as unknown as Outcome);
   }
@@ -86,7 +91,9 @@ export class TestnetChain implements Chain {
   payDividend(merchant: string, day: number, amount: number) { return this.settlerCall('pay_dividend', { merchant, day, amount: String(amount) }, '50'); }
 
   async relay(signedDelegate: unknown, _senderId: string): Promise<TxResult> {
-    const o = await this.relayer.relayMetaTransaction(signedDelegate as Parameters<Account['relayMetaTransaction']>[0]);
+    // Same as Account.relayMetaTransaction, but waits for FINAL (see settlerCall).
+    const sd = signedDelegate as Parameters<Account['relayMetaTransaction']>[0];
+    const o = await this.relayer.signAndSendTransaction({ receiverId: sd.delegateAction.senderId, actions: [actions.signedDelegate(sd)], waitUntil: 'FINAL' });
     return toResult(o as unknown as Outcome);
   }
 
@@ -94,6 +101,8 @@ export class TestnetChain implements Chain {
   listShops() { return this.view<ShopInfo[]>('list_shops', {}); }
   holding(merchant: string, holder: string) { return this.view<HoldingInfo>('get_holding', { merchant, holder }); }
   async coinSupply() { return (await this.view<string | null>('mt_supply', { token_id: 'coin' })) ?? '0'; }
+  listListings(limit = 50) { return this.view<ListingInfo[]>('list_listings', { limit }); }
+  getListing(id: number) { return this.view<ListingInfo | null>('get_listing', { listing_id: id }); }
 
   // The NEAR Auth key for a login is derived by the MPC contract at path `jwt#https://<domain>/#<sub>` with
   // predecessor fast-auth.testnet (docs.auth.near.org protocol/concepts/auth0.md, contracts/fast-auth.md).
@@ -119,6 +128,9 @@ export class MockChain implements Chain {
   roots = new Map<number, string>();
   shops = new Map<string, MockShop>();
   rent = 40;
+  listings = new Map<number, ListingInfo>();
+  nextListing = 0;
+  contractId = 'game.genesistown.mock';
   n = 0;
   failNext = false;
 
@@ -222,6 +234,41 @@ export class MockChain implements Chain {
       if (!s || s.open || !mine) throw new Error('no pledge to withdraw');
       for (const [t, n] of mine) { this.add(sender, t, BigInt(n)); s.pledged.set(t, (s.pledged.get(t) ?? 0) - n); }
       s.contrib.delete(sender);
+    } else if (method === 'list_item') {
+      const r = a as { token_id: string; amount: string; price_each: string };
+      const amount = Number(r.amount), price = Number(r.price_each);
+      if (!this.accounts.has(sender) || this.shops.has(sender)) throw new Error('not a registered player');
+      if (r.token_id === 'coin') throw new Error('coin cannot be listed');
+      if (!(amount >= 1 && amount <= 50)) throw new Error('amount must be 1-50');
+      if (!(price >= 1 && price <= 100_000)) throw new Error('price out of range');
+      if ([...this.listings.values()].filter((l) => l.seller === sender).length >= 5) throw new Error('at most 5 open listings');
+      this.add(sender, r.token_id, -BigInt(amount));
+      this.add(this.contractId, r.token_id, BigInt(amount));
+      const id = this.nextListing++;
+      this.listings.set(id, { id, seller: sender, token_id: r.token_id, amount: String(amount), price_each: String(price), created_ns: Date.now() * 1e6 });
+    } else if (method === 'buy_listing') {
+      const r = a as { listing_id: number; amount: string; max_price_each: string };
+      const l = this.listings.get(Number(r.listing_id));
+      if (!l) throw new Error('no such listing');
+      if (l.seller === sender) throw new Error('cannot buy your own listing');
+      if (BigInt(l.price_each) > BigInt(r.max_price_each)) throw new Error('price is above your limit');
+      const amount = BigInt(r.amount);
+      if (amount < 1n || amount > BigInt(l.amount)) throw new Error('amount not available');
+      const total = BigInt(l.price_each) * amount;
+      const fee = (total * 500n) / 10_000n;
+      this.add(sender, 'coin', -total);
+      this.add(l.seller, 'coin', total - fee);
+      this.add(this.contractId, l.token_id, -amount);
+      this.add(sender, l.token_id, amount);
+      const left = BigInt(l.amount) - amount;
+      if (left === 0n) this.listings.delete(l.id); else l.amount = String(left);
+    } else if (method === 'cancel_listing') {
+      const l = this.listings.get(Number(a.listing_id));
+      if (!l) throw new Error('no such listing');
+      if (l.seller !== sender) throw new Error('only the seller can cancel');
+      this.add(this.contractId, l.token_id, -BigInt(l.amount));
+      this.add(sender, l.token_id, BigInt(l.amount));
+      this.listings.delete(l.id);
     } else if (method === 'claim_dividends') {
       const s = this.shops.get(String(a.merchant));
       const c = s?.claimable.get(sender) ?? 0;
@@ -260,6 +307,8 @@ export class MockChain implements Chain {
     for (const [k, v] of this.bal) if (k.endsWith('|coin')) s += v;
     return String(s);
   }
+  async listListings(limit = 50) { return [...this.listings.values()].sort((x, y) => y.id - x.id).slice(0, limit).map((l) => ({ ...l })); }
+  async getListing(id: number) { const l = this.listings.get(id); return l ? { ...l } : null; }
   async derivedOwnerKey(sub: string): Promise<string> {
     const { createHash } = await import('node:crypto');
     const { baseEncode } = await import('near-api-js');

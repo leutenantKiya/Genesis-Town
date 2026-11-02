@@ -67,6 +67,8 @@ export async function register(
     if (owner === existing.account_id) return { accountId: existing.account_id, created: false, txHashes: [] };
     throw new HttpError(409, 'account exists; this device has no session key yet (new-device flow is planned for M4)');
   }
+  // A session key belongs to exactly one account. A second login in the same browser must bring a fresh key.
+  if (deps.store.sessionKeyOwner(body.sessionPublicKey)) throw new HttpError(409, 'session key already belongs to another account');
   const ownerPk = await deps.chain.derivedOwnerKey(sub);
   const accountId = playerAccountId(sub, deps.cfg.playersParentId);
   const created = await deps.chain.createPlayerAccount(accountId, ownerPk, body.sessionPublicKey);

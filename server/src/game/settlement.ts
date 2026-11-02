@@ -2,7 +2,8 @@
 // 1. prepare (once per day): shipping-box payouts (new coin, within the faucet) and shop rent rows;
 // 2. net every (account, token) over the day's rows; Merkle root over the rows;
 // 3. send `settle_day` in chunks (each chunk idempotent: skipped if already applied on chain);
-// 4. finalize: mark rows settled, refresh cached balances from chain, close bankrupt shops, pay dividends,
+// 4. finalize: mark rows settled and apply their net deltas to the cached balances (one DB transaction), close
+//    bankrupt shops, pay dividends,
 //    refresh shop status and coin supply, and update Riwayat.
 import type { Econ } from './econ.ts';
 import type { GameStore, LedgerRow } from './gamestore.ts';
@@ -113,9 +114,8 @@ export class Settlement {
     }
 
     // Finalize.
-    gs.markSettled(open.map((r) => r.seq));
+    gs.applySettlement(open.map((r) => r.seq), entries);
     const touched = [...new Set(entries.map((e) => e.account_id))];
-    await this.refresh(touched);
     const status = chain.mode === 'mock' ? 'mock' : 'ok';
     for (const a of touched.filter((x) => x.includes('.players.'))) {
       const tx = txByAccount.get(a) ?? null;
@@ -133,6 +133,7 @@ export class Settlement {
     for (const acct of toClose) {
       const r = await chain.closeShop(acct);
       if (!r.ok) console.error('close_shop', acct, r.error);
+      else market.closed.add(acct);
     }
     // Dividends: 40% of a shop's positive net coin change for the day.
     for (const id of market.ids()) {
@@ -143,9 +144,9 @@ export class Settlement {
       if (amount > 0 && gs.settledBalance(acct, 'coin') >= amount) {
         const r = await chain.payDividend(acct, day, amount);
         if (!r.ok) console.error('pay_dividend', acct, r.error);
+        else gs.setSettled(acct, 'coin', gs.settledBalance(acct, 'coin') - amount);
       }
     }
-    await this.refresh(market.ids().map((id) => market.account(id)));
     await this.refreshShops();
   }
 

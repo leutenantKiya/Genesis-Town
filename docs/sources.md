@@ -22,6 +22,8 @@ in a doc is listed under "Open checks" and is not assumed.
 
 - NEAR Auth overview: https://docs.near.org/web3-apps/tutorials/near-auth.md
 - NEAR Auth docs index: https://docs.auth.near.org/llms.txt
+- Testnet RPC `https://test.rpc.fastnear.com` (FastNear, public, free tier), chosen from the providers table on
+  2026-11-02 after `rpc.testnet.near.org` started answering HTTP 429 with a deprecation notice: https://docs.near.org/api/rpc/providers
 - Testnet contracts and shared client id (`fast-auth.testnet`, `v1.signer-prod.testnet`, RPC `https://rpc.testnet.near.org`, explorer `testnet.nearblocks.io`): https://docs.auth.near.org/resources/testnet.md
 - Signing transactions and delegate actions (each signature means an Auth0 popup or redirect): https://docs.auth.near.org/home/guides/sign-transactions.md
 - Relayer concept: https://docs.auth.near.org/protocol/concepts/relayer.md

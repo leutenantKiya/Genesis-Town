@@ -32,6 +32,9 @@ test('register: verifies token, uses the server-derived owner key, creates accou
   // Same login, new device: refused until the M4 new-device flow.
   const other = near.KeyPair.fromRandom('ed25519').getPublicKey().toString();
   await assert.rejects(register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|42'), sessionPublicKey: other }), (e: { status: number }) => e.status === 409);
+  // A different login in the same browser must not reuse the first account's session key.
+  await assert.rejects(register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|43'), sessionPublicKey: session }), /already belongs to another account/);
+  assert.equal(s.store.playerBySub('google-oauth2|43'), undefined, 'no account created');
 });
 
 test('register: rejects wrong issuer, wrong audience, garbage token, bad session key', async () => {

@@ -210,8 +210,12 @@ greedy merchants lower their bids when cash is short, so they protect themselves
 
 ## 6. Player market
 
-- **List.** Escrow up to N units of one item at your chosen price. Max 5 open listings per account.
-- **Buy.** Coins go to the seller minus the 5% fee (burned). Items go to the buyer.
+Built in M3: contract v3 (`contracts/game/src/market.rs`), on chain right away and relayed gas-free.
+
+- **List.** Escrow 1–50 units of one item (not coin) at your chosen price (1–100,000 coin each). Max 5 open listings
+  per account. Only items already on chain and not spent by today's off-chain play can be listed (server spend guard).
+- **Buy.** Coins go to the seller minus the 5% fee (burned, lowering coin supply). Items go to the buyer. The buyer
+  names a `max_price_each`, so a listing can't be repriced under them. Buyer and seller must differ.
 - **Cancel.** Returns the escrowed items.
 
 Player-market trades do **not** feed merchant demand counts (B, S), so wash trading between your own accounts cannot

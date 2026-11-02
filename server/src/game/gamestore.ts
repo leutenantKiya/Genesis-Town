@@ -79,6 +79,21 @@ export class GameStore {
     return this.db.prepare('SELECT * FROM ledger WHERE day = ? ORDER BY seq').all(day) as unknown as LedgerRow[];
   }
 
+  /** After a settlement landed on chain: mark its rows settled and move their net deltas into the cached on-chain
+   *  balances, in one transaction. Computed locally because a read right after the write may hit an RPC node that
+   *  hasn't seen it yet (that once cached a pre-settlement balance and let a player spend items twice). */
+  applySettlement(seqs: number[], entries: Array<{ account_id: string; token_id: string; delta: string }>) {
+    this.db.exec('BEGIN');
+    try {
+      for (const e of entries) this.setSettled(e.account_id, e.token_id, this.settledBalance(e.account_id, e.token_id) + Number(e.delta));
+      this.markSettled(seqs);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   markSettled(seqs: number[]) {
     const st = this.db.prepare('UPDATE ledger SET settled = 1 WHERE seq = ?');
     for (const s of seqs) st.run(s);

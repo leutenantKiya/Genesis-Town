@@ -145,13 +145,18 @@ transaction once it lands. Player-to-player actions get their own link immediate
 
 ## NEAR AI Cloud and the local brain
 
-- The server calls the OpenAI-compatible API at `https://cloud-api.near.ai/v1` (from the `near-ai-cloud` skill) with
-  `NEARAI_API_KEY` from env. The model id comes from env and is chosen from the model list in M3.
-- It is used for merchant dialogue, haggling lines and souled-NPC chat. **Prices and reasons never come from the
-  LLM.** They come from `pricing.ts`, and a haggle can only move a quote within limits set in `pricing.ts`.
-- With no key, or on any error or timeout, it falls back to the prototype's local keyword brain, so the game stays
-  fully playable. No key ever reaches the browser. The prototype's "custom endpoint with browser API key" option is
-  removed.
+Built in M3 (`server/src/dialogue.ts`, route `POST /api/talk`, the **Ngobrol** button in each shop):
+- The server calls the OpenAI-compatible chat API at `https://cloud-api.near.ai/v1` (from the `near-ai-cloud` skill)
+  with `NEARAI_API_KEY` from env. The model id comes from `NEARAI_MODEL`, or else the first entry of the provider's
+  `GET /v1/models` list at startup (logged). No model id is hard-coded.
+- The system prompt holds the merchant's persona and the shop's real facts from `pricing.ts`: stock vs target, bid,
+  ask and the one-sentence reason for each item, cash, rent, open or closed. **Prices and reasons never come from the
+  LLM**; the model only phrases them. Its reply is display-only: it can't trigger a trade or a chain action.
+- With no key, or on any error or timeout (8 s), the server answers with a local line built from the same facts
+  (the item the player named, or the biggest price move). No key ever reaches the browser.
+- The response includes the provider's chat id, so a reply can later be checked against NEAR AI Cloud's signature
+  endpoint (`/v1/signature/{chat_id}`); the client doesn't verify it yet.
+- Haggling lines and souled-NPC chat through NEAR AI are not built; the prototype's NPC brain stays local.
 
 ## Demo and offline mode
 
@@ -161,8 +166,9 @@ keeps balances in memory with the same interface and runs `pricing.ts` in the br
 
 ## Fast-forward
 
-`economy/sim.ts` runs the same `pricing.ts` and the same config with N simulated players, for D days, deterministic
-from a seed. It runs in the browser (Simulate 1 week button) or as a CLI for the 30-day report. It is labelled
+`server/src/game/sim.ts` runs the real game code (same `pricing.ts`, same config, an in-memory database and the mock
+chain) with N simulated players for D days, deterministic from a seed. It runs in a worker thread behind the
+**Simulasi** button (`POST /api/sim`) or as a CLI for the 30-day report (`server/scripts/sim-report.ts`). It is labelled
 "Simulasi (off-chain)". Charts: price per item, cash per merchant, total money supply, open/closed shops.
 
 ## Feature flags (default off in the submission build)

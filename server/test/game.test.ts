@@ -184,3 +184,57 @@ test('profitable shops pay dividends to shareholders', async () => {
   const h = await chain.holding('wati.gt.test', 'town');
   assert.ok(Number(h.claimable) > 0, 'town treasury holds the initial shares and earns dividends');
 });
+
+test('spend guard: on-chain debits only use items that are on chain and not spent today', async () => {
+  const { spendGuard } = await import('../src/spend.ts');
+  const { game, chain } = await world();
+  const guard = spendGuard(chain, game);
+  // Starter kit is off-chain until the first settlement.
+  await assert.rejects(guard(P, 'list_item', { token_id: 'bread', amount: '1', price_each: '5' }), /di rantai baru 0/);
+  await game.devSettle();
+  assert.equal(game.gs.settledBalance(P, 'bread'), 3);
+  await guard(P, 'list_item', { token_id: 'bread', amount: '3', price_each: '5' });
+  game.act(P, { action: 'ship', token: 'bread', qty: 1 }); // spends one off-chain today
+  await assert.rejects(guard(P, 'list_item', { token_id: 'bread', amount: '3', price_each: '5' }), /tidak cukup: perlu 3, punya 2/);
+  await guard(P, 'send_item', { receiver_id: Q, token_id: 'bread', amount: '2' });
+});
+
+test('player market on the mock chain: list escrows, buy burns 5%, cancel returns, seller refreshed', async () => {
+  const { spendGuard } = await import('../src/spend.ts');
+  const { game, chain } = await world();
+  await game.devSettle();
+  const call = (who: string, method: string, args: Record<string, unknown>) =>
+    chain.relay({ delegateAction: { actions: [{ functionCall: { methodName: method, args: Buffer.from(JSON.stringify(args)) } }] } }, who);
+  assert.ok((await call(P, 'list_item', { token_id: 'wheat', amount: '3', price_each: '10' })).ok);
+  assert.equal(chain.get(P, 'wheat'), 0n);
+  assert.equal(chain.get(chain.contractId, 'wheat'), 3n);
+  const [l] = await chain.listListings();
+  assert.equal(l.seller, P);
+  const supply0 = BigInt(await chain.coinSupply());
+  const extra = await spendGuard(chain, game)(Q, 'buy_listing', { listing_id: l.id, amount: '2', max_price_each: '10' });
+  assert.deepEqual(extra, [P]);
+  assert.equal((await call(Q, 'buy_listing', { listing_id: l.id, amount: '2', max_price_each: '9' })).ok, false, 'price above limit');
+  assert.equal((await call(P, 'buy_listing', { listing_id: l.id, amount: '1', max_price_each: '10' })).ok, false, 'own listing');
+  assert.ok((await call(Q, 'buy_listing', { listing_id: l.id, amount: '2', max_price_each: '10' })).ok);
+  assert.equal(chain.get(Q, 'wheat'), 5n);
+  assert.equal(BigInt(await chain.coinSupply()), supply0 - 1n, '5% of 20 burned');
+  assert.equal((await chain.getListing(l.id))?.amount, '1');
+  assert.equal((await call(Q, 'cancel_listing', { listing_id: l.id })).ok, false, 'only the seller cancels');
+  assert.ok((await call(P, 'cancel_listing', { listing_id: l.id })).ok);
+  assert.equal(chain.get(P, 'wheat'), 1n);
+  assert.equal(await chain.getListing(l.id), null);
+});
+
+test('settlement updates cached balances from what it wrote, even when a read right after is stale', async () => {
+  const { game, chain } = await world();
+  await game.devSettle();
+  assert.equal(game.gs.settledBalance(P, 'bread'), 3);
+  // A lagging RPC node would return the pre-settlement state; settlement must not depend on it.
+  chain.balances = async (_a: string, tokens: string[]) => tokens.map(() => '3');
+  game.act(P, { action: 'ship', token: 'bread', qty: 3 });
+  await game.devSettle();
+  assert.equal(chain.get(P, 'bread'), 0n);
+  assert.equal(game.gs.settledBalance(P, 'bread'), 0, 'cache follows the written deltas, not the stale read');
+  assert.equal(game.gs.balance(P, 'bread'), 0);
+  assert.throws(() => game.act(P, { action: 'eat', token: 'bread' }));
+});

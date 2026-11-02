@@ -18,13 +18,14 @@
     { id: 'message', canon: 'KeyE', label: 'Pesan ke NPC', keys: ['KeyE'] },
     { id: 'bag', canon: 'KeyI', label: 'Tas NEAR', keys: ['KeyI', 'KeyN'] },
     { id: 'history', canon: 'KeyH', label: 'Riwayat', keys: ['KeyH'] },
+    { id: 'market', canon: 'KeyK', label: 'Pasar Pemain', keys: ['KeyK'] },
     { id: 'map', canon: 'KeyM', label: 'Peta', keys: ['KeyM'] },
     { id: 'profile', canon: 'KeyP', label: 'Profil', keys: ['KeyP'] },
     { id: 'fullscreen', canon: 'KeyF', label: 'Layar penuh', keys: ['KeyF'] },
     { id: 'settings', canon: 'KeyO', label: 'Pengaturan', keys: ['KeyO'] }
   ];
   // Engine keys that must not fire on their own once rebound (the engine also listens to KeyZ for interact).
-  var ENGINE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'Enter', 'KeyZ', 'KeyE', 'KeyM', 'KeyI', 'KeyP', 'KeyN', 'KeyH', 'KeyF', 'KeyO'];
+  var ENGINE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'Enter', 'KeyZ', 'KeyE', 'KeyM', 'KeyI', 'KeyP', 'KeyN', 'KeyH', 'KeyK', 'KeyF', 'KeyO'];
 
   var st = load();
   var translate = {};  // pressed code -> canonical code

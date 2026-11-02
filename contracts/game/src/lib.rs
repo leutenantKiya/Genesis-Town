@@ -1,4 +1,4 @@
-//! Genesis Town game contract (NEAR testnet), v2.
+//! Genesis Town game contract (NEAR testnet), v3.
 //!
 //! One NEP-245 multi-token contract holds every item type and the in-game `coin`.
 //! - `mt.rs`: NEP-245 core (transfers with the 1 yoctoNEAR rule, transfer_call + resolve, views, events)
@@ -8,6 +8,7 @@
 //!   game day the server's settler applies everyone's net changes here, and the contract enforces the economy's
 //!   invariants (gain caps, the coin faucet and money cap, each chunk once) and stores the day's ledger root.
 //! - `shops.rs`: merchant shops: bankruptcy, restoration boards (on-chain pledges), shares and dividends
+//! - `market.rs`: the player market (escrowed listings, 5% fee burned) and the v2 -> v3 `migrate`
 //!
 //! Design: docs/onchain-offchain.md, docs/economy.md, docs/threat-model.md.
 use near_sdk::json_types::U128;
@@ -16,11 +17,13 @@ use near_sdk::{AccountId, BorshStorageKey, PanicOnDefault, env, near, require};
 
 mod events;
 mod game;
+mod market;
 mod mt;
 mod settle;
 mod shops;
 mod storage;
 
+pub use market::ListingView;
 pub use settle::Delta;
 pub use shops::{RestoreLine, ShopView};
 
@@ -42,6 +45,9 @@ enum StorageKey {
     Shares,
     DayFaucet,
     Dividends,
+    // added in v3 (player market); appended so existing prefixes stay the same
+    Listings,
+    OpenListings,
 }
 
 #[near(serializers = [json, borsh])]
@@ -109,6 +115,11 @@ pub struct Contract {
     shops: LookupMap<AccountId, shops::Shop>,
     shares: LookupMap<(AccountId, AccountId), shops::Holding>,
     dividends_paid: LookupSet<(AccountId, u64)>,
+    // v3: player market (escrowed listings)
+    listings: LookupMap<u64, market::Listing>,
+    next_listing_id: u64,
+    open_listings: LookupMap<AccountId, u32>,
+    market_fee_bps: u16,
 }
 
 impl Contract {
@@ -229,6 +240,10 @@ impl Contract {
             shops: LookupMap::new(StorageKey::Shops),
             shares: LookupMap::new(StorageKey::Shares),
             dividends_paid: LookupSet::new(StorageKey::Dividends),
+            listings: LookupMap::new(StorageKey::Listings),
+            next_listing_id: 0,
+            open_listings: LookupMap::new(StorageKey::OpenListings),
+            market_fee_bps: 500,
         };
         c.registered.insert(town_id.clone());
         if treasury_coin.0 > 0 {

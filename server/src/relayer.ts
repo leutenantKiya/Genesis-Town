@@ -71,7 +71,11 @@ export interface RelayDeps {
   store: Store;
   limiter: RateLimiter;
   currentBlockHeight: () => Promise<bigint>;
-  afterRelay?: (sender: string, method: string, args: Record<string, unknown>) => Promise<void>;
+  /** Runs before submitting; throws to refuse (e.g. the spend guard). Returns extra accounts to refresh afterwards. */
+  checkSpend?: (sender: string, method: string, args: Record<string, unknown>) => Promise<string[] | void>;
+  /** Display name of an item for Riwayat summaries. */
+  itemName?: (token: string) => string;
+  afterRelay?: (sender: string, method: string, args: Record<string, unknown>, extra: string[]) => Promise<void>;
 }
 
 export function blockHeightSource(cfg: Config): () => Promise<bigint> {
@@ -79,11 +83,14 @@ export function blockHeightSource(cfg: Config): () => Promise<bigint> {
   return async () => BigInt((await p.viewBlock({ finality: 'final' })).header.height);
 }
 
-const SUMMARY: Record<string, (a: Record<string, unknown>) => string> = {
-  send_item: (a) => `Kirim ${a.amount} ${a.token_id} ke ${a.receiver_id}`,
-  restore_contribute: (a) => `Sumbang ke papan pemulihan ${String(a.merchant).split('.')[0]}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${l.token_id}`).join(', ')}`,
+const SUMMARY: Record<string, (a: Record<string, unknown>, n: (t: unknown) => string) => string> = {
+  send_item: (a, n) => `Kirim ${a.amount} ${n(a.token_id)} ke ${a.receiver_id}`,
+  restore_contribute: (a, n) => `Sumbang ke papan pemulihan ${String(a.merchant).split('.')[0]}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${n(l.token_id)}`).join(', ')}`,
   restore_withdraw: (a) => `Tarik sumbangan dari ${String(a.merchant).split('.')[0]}`,
   claim_dividends: (a) => `Ambil dividen dari ${String(a.merchant).split('.')[0]}`,
+  list_item: (a, n) => `Pasang ${a.amount} ${n(a.token_id)} di Pasar Pemain, ${a.price_each} koin/buah`,
+  buy_listing: (a) => `Beli ${a.amount} dari lapak #${a.listing_id} (maks ${a.max_price_each} koin/buah)`,
+  cancel_listing: (a) => `Tarik lapak #${a.listing_id} dari Pasar Pemain`,
 };
 
 export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown }) {
@@ -113,7 +120,9 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
 
   let args: Record<string, unknown> = {};
   try { args = JSON.parse(Buffer.from(fc.args).toString('utf8')); } catch { /* summary falls back below */ }
-  const summary = SUMMARY[fc.methodName]?.(args) ?? fc.methodName;
+  const name = (t: unknown) => (deps.itemName ? deps.itemName(String(t)) : String(t));
+  const summary = SUMMARY[fc.methodName]?.(args, name) ?? fc.methodName;
+  const extra = (await deps.checkSpend?.(da.senderId, fc.methodName, args)) ?? [];
   deps.store.relayPut(hash, da.senderId, 'pending', null);
   const hid = deps.store.addHistory(da.senderId, fc.methodName, summary, 'pending');
   try {
@@ -121,7 +130,7 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
     const status = r.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed';
     deps.store.relayPut(hash, da.senderId, status, r.txHash);
     deps.store.settleHistory(hid, status, r.txHash);
-    if (r.ok) await deps.afterRelay?.(da.senderId, fc.methodName, args);
+    if (r.ok) await deps.afterRelay?.(da.senderId, fc.methodName, args, extra);
     return { txHash: r.txHash, status, error: r.error };
   } catch (e) {
     deps.store.relayPut(hash, da.senderId, 'failed', null);

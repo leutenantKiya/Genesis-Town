@@ -45,3 +45,7 @@ pub fn gt_settle(day: u64, chunk: u32, ledger_root: &str, entries: usize) {
 pub fn gt_shop(merchant: &str, what: &str, contributors: u32) {
     emit_game("shop", json!([{ "merchant": merchant, "what": what, "contributors": contributors }]));
 }
+
+pub fn gt_market(what: &str, id: u64, account: &str, token_id: &str, amount: u128, price_each: u128) {
+    emit_game("market", json!([{ "what": what, "listing_id": id, "account": account, "token_id": token_id, "amount": amount.to_string(), "price_each": price_each.to_string() }]));
+}

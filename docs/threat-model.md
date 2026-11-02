@@ -63,6 +63,31 @@ limits:
   submitted once (keyed by its hash).
 - Load test in M4: send above-limit traffic and check that it is rejected and the relayer's spend stays within budget.
 
+## Spending items that are still off-chain
+
+On-chain actions (send, list, pledge, buy) spend the *settled* balance right away, while today's off-chain play is
+only written at 06:00. Without a check, a player could sell 3 bread to a merchant off-chain and also list the same 3
+bread on chain; the 06:00 settlement would then try to debit bread that is gone and the chunk would fail.
+The relayer's spend guard (`server/src/spend.ts`) re-reads the player's on-chain balance before relaying and
+requires, per item, both: on-chain balance ≥ amount, and on-chain balance + today's off-chain change ≥ amount.
+Remaining gap: two relays for the same item in flight at the same moment both pass the check; the contract still
+rejects the second if the on-chain balance runs out, and the per-account rate limit keeps this narrow.
+
+## Merchant dialogue (NEAR AI Cloud)
+
+The player's question and the shop's current prices go to NEAR AI Cloud (private inference in a TEE); the answer is
+shown in the chat window and nothing else. It cannot trigger a trade, change a price or touch the chain, so a prompt
+injection in the question can at most make the merchant say something wrong. The system prompt tells the model to
+use only the listed prices, and the UI says the answer comes from the shop's real prices. Questions are capped at
+200 characters and 6 per minute per account. Without `NEARAI_API_KEY`, or on error or timeout (8 s), the server
+answers with a line built from the same facts.
+
+## Session keys and shared browsers
+
+A session key belongs to exactly one account. If a second person signs in on the same browser, the server refuses
+the first person's key for the new account and the client makes a fresh key. (Before this fix the new account was
+created without a usable key.)
+
 ## Price manipulation
 
 - Prices move at most ±10% per tick, inside [0.25, 4] × base, using decayed volumes. One big dump can't crash a price
@@ -82,7 +107,7 @@ limits:
 
 ## Wash trading
 
-- 5% fee burned on every player-market sale.
+- 5% fee burned on every player-market sale (`market_fee_bps` = 500, burned from the coin supply).
 - Player-market volume never feeds merchant pricing.
 - Self-trades (buyer == seller) are rejected by the contract. Trades between two accounts of the same Auth0 identity
   are impossible, because one identity has one account.

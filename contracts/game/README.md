@@ -17,11 +17,22 @@ cargo-near.
 | `pay_dividend(merchant, day, amount)` | settler | once per merchant and day; moves profit into the dividend pool |
 | `claim_dividends(merchant)` | shareholder, **no deposit** | pulls accumulated dividends |
 | `send_item(receiver_id, token_id, amount)` | player, **no deposit** | items only (never `coin`, never to a merchant), capped per call and per day |
+| `list_item(token_id, amount, price_each)` | player, **no deposit** | player market: escrows 1–50 of an item (not `coin`) in the contract; max 5 open listings per account; returns the listing id |
+| `buy_listing(listing_id, amount, max_price_each)` | player, **no deposit** | pays `price_each × amount` coin; 5% (`market_fee_bps`) is burned, the rest goes to the seller; buyer ≠ seller |
+| `cancel_listing(listing_id)` | the seller | returns the escrowed items |
+| `migrate()` | the contract itself (deploy with init call) | v2 → v3 upgrade: keeps all state, adds the empty market |
 | `set_settler`, `set_paused`, `set_limits` | owner | admin |
-| `get_config`, `is_registered`, `get_day_root`, `is_chunk_applied`, `faucet_status`, `get_shop`, `list_shops`, `get_holding` | view | |
+| `get_config`, `is_registered`, `get_day_root`, `is_chunk_applied`, `faucet_status`, `get_shop`, `list_shops`, `get_holding`, `get_listing`, `list_listings(limit)`, `market_fee_bps` | view | |
 
 Events follow NEP-245 / NEP-297 (`EVENT_JSON:` with `standard: "nep245"`, `version: "1.0.0"`). Settlement chunks and
-shop changes also emit `standard: "genesis-town"` events (`settle`, `shop`).
+shop changes and market actions also emit `standard: "genesis-town"` events (`settle`, `shop`, `market`). A market
+fee burn emits `mt_burn`.
+
+Upgrading a deployed v2 contract in place:
+
+```bash
+near contract deploy game.genesistown.testnet use-file target/near/game.wasm with-init-call migrate json-args '{}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-legacy-keychain send
+```
 
 ```bash
 cargo test
