@@ -27,3 +27,16 @@
 .chain-talk p{margin:4px 0}
 .chain-talk p.me{color:#6b6e8f}
 .chain-talk input,.mbody input[type=text]{width:100%;box-sizing:border-box}
+
+/* Phones (mobile pass, M4): price lines inside an item wrap instead of running under the buttons, and buttons in game
+   windows are big enough to tap. */
+.mrow .grow .num{white-space:normal}
+@media (pointer:coarse), (max-width:600px){
+  .mbody .mbtn, .mfoot .mbtn, .dsec .dbtns .mbtn{min-height:40px;padding:8px 10px}
+  .mx{min-width:40px;min-height:40px}
+  .chain-item{flex-wrap:wrap}
+  .chain-item .grow{flex-basis:100%}
+  .chain-item .grow + .mbtn{margin-left:auto}
+  .chain-field input{min-height:36px;font-size:16px}
+  .chain-talk input, .mbody input[type=text]{min-height:40px;font-size:16px}
+}

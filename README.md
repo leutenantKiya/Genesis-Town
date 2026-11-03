@@ -17,12 +17,12 @@
 > - warmer art, a full-window layout, fullscreen (F) and a settings menu (O) with rebindable keys.
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
->
 >   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow,
 >   run live on testnet 2026-11-03). Sign-out keeps each account's key in the browser.
+> - **Mobile pass**: game windows wrap their price lines and use 40 px buttons on phones; the prototype's
+>   thief-role picker no longer appears when the thief feature is off.
 >
-> Not done yet: the rest of M4 (removing the game account's full-access key before
-> submission, a mobile pass) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
+> Not done yet: the rest of M4 (removing the game account's full-access key before submission) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.

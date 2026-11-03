@@ -1386,12 +1386,12 @@ function openProfile(){
   f1.appendChild(inp); wrap.appendChild(f1);
   var f2 = el('div', 'mfield'); f2.appendChild(el('span', null, 'Peran'));
   var seg = el('div', 'mseg'); seg.setAttribute('role', 'radiogroup');
-  [['warga', 'Warga'], ['maling', 'Maling']].forEach(function(r){
+  [['warga', 'Warga'], ['maling', 'Maling']].filter(function(r){ return r[0] !== 'maling' || thiefOn(); }).forEach(function(r){
     var lab = el('label'), rb = el('input'); rb.type = 'radio'; rb.name = 'perans'; rb.value = r[0]; rb.checked = state.role === r[0];
     lab.appendChild(rb); lab.appendChild(el('span', null, r[1])); seg.appendChild(lab);
   });
   f2.appendChild(seg); wrap.appendChild(f2);
-  wrap.appendChild(el('p', 'mnote', 'Maling bisa membongkar kunci rumah (butuh obeng), tapi berisiko ketahuan dan reputasi turun.'));
+  if (thiefOn()) wrap.appendChild(el('p', 'mnote', 'Maling bisa membongkar kunci rumah (butuh obeng), tapi berisiko ketahuan dan reputasi turun.'));
   wrap.appendChild(el('p', null, 'Reputasi: ' + state.reputation));
   wrap.appendChild(el('p', null, 'Klan: ' + (state.clan ? '[' + state.clan.tag + '] ' + state.clan.name : '-')));
   wrap.appendChild(el('p', null, 'Koin: ' + state.coins));
@@ -1423,6 +1423,7 @@ function openRoleChoice(){
   return h;
 }
 var onboardModal = null;
+function thiefOn(){ return !!(window.GT_FLAGS && window.GT_FLAGS.thief); }
 function skipOnboarding(){
   state.onboarded = true; save();
   if (onboardModal && onboardModal.isOpen()) onboardModal.close('skip');
@@ -2401,9 +2402,12 @@ function boot(){
       new ResizeObserver(function(){ var h2 = elHud.offsetHeight; if (h2 !== lastH){ lastH = h2; layout(); } }).observe(elHud);
     }
   } catch(e){}
+  // The thief role only exists when the `thief` flag is on (off in the hackathon build): no role choice otherwise.
+  if (!thiefOn() && state.role === 'maling'){ state.role = 'warga'; save(); }
   if (!state.onboarded){
     if (QA) { /* tests: no first-boot modal */ }
-    else openRoleChoice();
+    else if (thiefOn()) openRoleChoice();
+    else { state.onboarded = true; state.role = 'warga'; save(); }
   }
   requestAnimationFrame(frame);
 }
