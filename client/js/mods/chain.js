@@ -84,7 +84,7 @@
     else if (S.mode === 'testnet') { txt = 'NEAR testnet' + (S.account ? ' · ' + S.account : ' · belum masuk'); cls += 'net'; }
     else { txt = 'Menghubungkan…'; cls += 'mock'; }
     banner.className = cls; banner.textContent = txt;
-    if (accBtn) accBtn.textContent = S.account || S.mode === 'offline' ? 'Tas NEAR' : 'Masuk';
+    if (accBtn) accBtn.textContent = S.account || S.mode === 'offline' ? 'Tas' : 'Masuk';
   }
 
   var SEASON = { semi: 'Semi', panas: 'Panas', gugur: 'Gugur', dingin: 'Dingin' };
@@ -805,7 +805,7 @@
       if (t !== 'coin' && b.settled > 0) row.appendChild(button('Kirim', function () { askSend(t); }));
       wrap.appendChild(row);
     });
-    wrap.appendChild($('p', 'chain-dim', '"hari ini" = perubahan off-chain yang ditulis ke chain pada settlement pukul 06:00. Kirim ke pemain lain memakai saldo settled dan langsung on-chain.'));
+    wrap.appendChild($('p', 'chain-dim', 'Satu tas untuk semua barangmu. Angka besar = semua yang kamu punya. "+n hari ini" = didapat atau dipakai hari ini; tercatat di NEAR saat penyelesaian pukul 06:00. Kirim dan Pasar Pemain memakai barang yang sudah tercatat.'));
     wrap.appendChild($('p', 'chain-dim', 'Alat: ' + S.st.tool.uses + '/' + S.st.tool.durability + ' pemakaian.'));
     wrap.appendChild(button('Keluar (ganti akun)', function () { signOut(); }));
     return wrap;
@@ -960,7 +960,7 @@
   function open(kind, arg) {
     if (S.mode !== 'offline' && !S.account && kind !== 'shop') { login(); return; }
     if (kind === 'project') markGoal('board');
-    var title = kind === 'bag' ? 'Tas NEAR' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? 'Riwayat' : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
+    var title = kind === 'bag' ? 'Tas' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? 'Riwayat' : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
     var body = kind === 'shop' ? shopBody(arg) : BODIES[kind]();
     var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; } });
     S.modal = { kind: kind, arg: arg, h: h };
@@ -1040,6 +1040,6 @@
     renderBanner();
   }
 
-  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, _signedCall: signedCall };
+  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame });
 })();

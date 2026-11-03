@@ -23,6 +23,8 @@
 >   (D-pad, A, E) with a bottom bar for Tas, Pasar, Peta, Riwayat and Lainnya; windows open as bottom sheets; buttons
 >   are 40 px or more. The prototype's thief-role picker no longer appears when the thief feature is off.
 >
+> - **Hotbar and one bag**: item slots along the bottom of the game view (tap a slot or press 1–7 to eat, send or
+>   list it); **E** opens the bag (**Tas**). Messages to NPCs moved to T.
 > - **Night monsters**: from 19:00 to 06:00, wild boars and mine bats roam Hutan Utara and attack when you walk
 >   up to them; gathering there can also disturb one. Fight or flee; losing all energy knocks you out until 06:00, with nothing lost on or off chain. The
 >   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,
@@ -163,7 +165,7 @@ Run locally (below), open http://localhost:3000.
 1. Press **Masuk** and sign in with Google or email → you see your house, an energy bar, the season (Semi H1), and
    100 coins. No wallet popup.
 2. Walk to the pond, face the water and press **Space** (the on-screen **A** button on touch screens) → `+1 Ikan`
-   instantly. A hint at the bottom of the screen always shows which key does what for the tile you face. Open **Tas NEAR** (N) → it shows "+1 hari ini" (off-chain,
+   instantly. A hint at the bottom of the screen always shows which key does what for the tile you face. The hotbar at the bottom shows every item with its count; press **E** (or the round E button on phones) to open the **Tas** → it shows "+1 hari ini" (off-chain,
    today).
 3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → prices with a reason under each item. Sell your
    fish.

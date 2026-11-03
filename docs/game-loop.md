@@ -102,7 +102,7 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
 - **Context hint.** When you face something usable, a line at the bottom says which key does what, e.g.
   "Spasi Mancing (−4 energi)" or "Spasi Tanam gandum (1 Gandum, tekan 2x)". Planting needs a second press.
 - **Settings (Pengaturan)** is a gear button in the HUD, also on the Menu button on phones:
-  - **Keybinds:** every action (move ×4, interact/A, message/E, bag, map, Riwayat, NEAR bag, fullscreen, settings)
+  - **Keybinds:** every action (move ×4, interact/A, bag/E, message to an NPC/T, map, Riwayat, fullscreen, settings)
     is listed with its key. Click an action, press a new key, and conflicts are flagged before saving. "Reset ke
     bawaan" (reset to defaults) restores the defaults. Stored in this browser (localStorage).
   - **Text speed** and **reduced motion**. Reduced motion follows the OS setting by default.

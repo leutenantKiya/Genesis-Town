@@ -56,3 +56,27 @@ html.gt-w-berawan #cv{filter:saturate(.86) brightness(.95)}
 html.gt-w-hujan #cv{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
 html.gt-w-salju #cv{filter:saturate(.7) brightness(1.06) hue-rotate(8deg)}
 html.gt-reduced-motion #cv{transition:none}
+
+/* Hotbar: item slots along the bottom of the game view (js/mods/hotbar.js) */
+.gt-hotbar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:3;display:flex;gap:4px;padding:4px;background:rgba(14,15,30,.82);border-radius:6px;box-shadow:0 0 0 2px #000;line-height:1}
+#dlg.on ~ .gt-hotbar,#map.on ~ .gt-hotbar,#dlg.on ~ .gt-slotpop,#map.on ~ .gt-slotpop{display:none!important}
+.gt-slot{position:relative;width:40px;height:40px;padding:0;border:0;border-radius:4px;background:#2a2c48;box-shadow:inset 0 -3px 0 rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:var(--ink);font-family:var(--font)}
+.gt-slot canvas{image-rendering:pixelated;width:24px;height:24px}
+.gt-slot:hover{background:#3a3d66}
+.gt-slot.sel{box-shadow:0 0 0 2px var(--gold),inset 0 -3px 0 rgba(0,0,0,.35)}
+.gt-slot.empty canvas{opacity:.35}
+.gt-slot-n{position:absolute;right:3px;bottom:3px;font-size:8px;color:#fff;text-shadow:1px 1px 0 #000}
+.gt-slot.empty .gt-slot-n{color:var(--dim)}
+.gt-slot-k{position:absolute;left:3px;top:3px;font-size:6px;color:var(--dim)}
+.gt-slot.today::after{content:"";position:absolute;right:3px;top:3px;width:4px;height:4px;border-radius:50%;background:var(--gold)}
+.gt-slot-bag{width:auto;padding:0 9px;font-size:8px;background:var(--btn);color:#fff}
+.gt-slot-bag:hover{background:var(--btn-hi)}
+.gt-slotpop{position:absolute;bottom:62px;z-index:4;width:224px;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:5px;padding:8px 10px;font-size:8px;line-height:1.6;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.gt-slotpop b{font-weight:400}
+.gt-slotpop p{margin:4px 0 6px}
+.gt-slotpop-acts{display:flex;flex-wrap:wrap;gap:6px}
+.gt-slotpop-acts .mbtn{min-height:32px;font-size:8px}
+html.gt-has-hotbar #gt-hint{bottom:60px}
+html.gt-phone .gt-slot{width:36px;height:40px}
+html.gt-phone .gt-slot-k{display:none}
+@media (max-width:360px){html.gt-phone .gt-slot{width:32px}html.gt-phone .gt-hotbar{gap:3px;padding:3px}}

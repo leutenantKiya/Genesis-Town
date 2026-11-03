@@ -2297,6 +2297,7 @@ var GT = {
   // extras
   facing: function(){ return facingTile(); },
   addHudButton: addHudButton, hotkey: hotkey,
+  interact: function(mode){ return interact(mode || 'talk'); },
   addNpc: addNpc, removeNpc: removeNpc, moveNpc: moveNpc, npcTeleport: npcTeleport, npcHide: npcHide, findNpc: findNpc, npcScene: npcSceneOf,
   engageNpc: function(npc){ if (npc) engage(npc); },
   getScene: resolveScene,

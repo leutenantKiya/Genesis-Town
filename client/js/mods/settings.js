@@ -15,8 +15,8 @@
     { id: 'left', canon: 'ArrowLeft', label: 'Jalan ke kiri', keys: ['KeyA', 'ArrowLeft'] },
     { id: 'right', canon: 'ArrowRight', label: 'Jalan ke kanan', keys: ['KeyD', 'ArrowRight'] },
     { id: 'talk', canon: 'Space', label: 'Interaksi (bicara, kumpulkan, kebun)', keys: ['Space', 'Enter'] },
-    { id: 'message', canon: 'KeyE', label: 'Pesan ke NPC', keys: ['KeyE'] },
-    { id: 'bag', canon: 'KeyI', label: 'Tas NEAR', keys: ['KeyI', 'KeyN'] },
+    { id: 'message', canon: 'KeyE', label: 'Pesan ke NPC', keys: ['KeyT'] },
+    { id: 'bag', canon: 'KeyI', label: 'Buka tas', keys: ['KeyE', 'KeyI'] },
     { id: 'history', canon: 'KeyH', label: 'Riwayat', keys: ['KeyH'] },
     { id: 'market', canon: 'KeyK', label: 'Pasar Pemain', keys: ['KeyK'] },
     { id: 'map', canon: 'KeyM', label: 'Peta', keys: ['KeyM'] },
@@ -37,6 +37,12 @@
     var d = { binds: {}, layout: 'auto', reducedMotion: null };
     try { var s = JSON.parse(localStorage.getItem(LS) || 'null'); if (s && typeof s === 'object') Object.assign(d, s); } catch (e) { /* storage blocked */ }
     ACTIONS.forEach(function (a) { if (!Array.isArray(d.binds[a.id])) d.binds[a.id] = a.keys.slice(); });
+    // v2 (2026-11-03): E opens the bag, T sends a message to an NPC. Move a saved E from message to bag once.
+    if (!d.v2) {
+      if (d.binds.message.indexOf('KeyE') >= 0) d.binds.message = d.binds.message.filter(function (k) { return k !== 'KeyE'; }).concat(d.binds.message.indexOf('KeyT') < 0 ? ['KeyT'] : []);
+      if (d.binds.bag.indexOf('KeyE') < 0) d.binds.bag = ['KeyE'].concat(d.binds.bag.filter(function (k) { return k !== 'KeyN'; })).slice(0, 2);
+      d.v2 = true;
+    }
     return d;
   }
   function save() { try { localStorage.setItem(LS, JSON.stringify(st)); } catch (e) { /* storage blocked */ } }
@@ -144,6 +150,7 @@
     opts.push({ label: document.fullscreenElement ? 'Keluar layar penuh' : 'Layar penuh', onPick: toggleFullscreen });
     if (GT.openProfile) opts.push({ label: 'Profil', onPick: function () { GT.openProfile(); } });
     if (document.getElementById('btnJiwa')) opts.push({ label: 'Jiwa', onPick: function () { press('btnJiwa'); } });
+    if (GT.interact) opts.push({ label: 'Pesan ke NPC di depanmu', onPick: function () { GT.interact('message'); } });
     if (document.getElementById('devbtn')) opts.push({ label: 'Dev', onPick: function () { press('devbtn'); } });
     GT.menu('Lainnya', opts);
   }
