@@ -14,14 +14,14 @@
     { id: 'down', canon: 'ArrowDown', label: 'Jalan ke bawah', keys: ['KeyS', 'ArrowDown'] },
     { id: 'left', canon: 'ArrowLeft', label: 'Jalan ke kiri', keys: ['KeyA', 'ArrowLeft'] },
     { id: 'right', canon: 'ArrowRight', label: 'Jalan ke kanan', keys: ['KeyD', 'ArrowRight'] },
-    { id: 'talk', canon: 'Space', label: 'Interaksi (bicara, kumpulkan, kebun)', keys: ['Space', 'Enter'] },
+    { id: 'talk', canon: 'Space', label: 'Interaksi (bicara, kumpulkan, kebun)', keys: ['KeyF', 'Space'] },
     { id: 'message', canon: 'KeyE', label: 'Pesan ke NPC', keys: ['KeyT'] },
     { id: 'bag', canon: 'KeyI', label: 'Buka tas', keys: ['KeyE', 'KeyI'] },
     { id: 'history', canon: 'KeyH', label: 'Riwayat', keys: ['KeyH'] },
     { id: 'market', canon: 'KeyK', label: 'Pasar Pemain', keys: ['KeyK'] },
     { id: 'map', canon: 'KeyM', label: 'Peta', keys: ['KeyM'] },
     { id: 'profile', canon: 'KeyP', label: 'Profil', keys: ['KeyP'] },
-    { id: 'fullscreen', canon: 'KeyF', label: 'Layar penuh', keys: ['KeyF'] },
+    { id: 'fullscreen', canon: 'KeyF', label: 'Layar penuh', keys: ['KeyL'] },
     { id: 'settings', canon: 'KeyO', label: 'Pengaturan', keys: ['KeyO'] }
   ];
   // Engine keys that must not fire on their own once rebound (the engine also listens to KeyZ for interact).
@@ -42,6 +42,12 @@
       if (d.binds.message.indexOf('KeyE') >= 0) d.binds.message = d.binds.message.filter(function (k) { return k !== 'KeyE'; }).concat(d.binds.message.indexOf('KeyT') < 0 ? ['KeyT'] : []);
       if (d.binds.bag.indexOf('KeyE') < 0) d.binds.bag = ['KeyE'].concat(d.binds.bag.filter(function (k) { return k !== 'KeyN'; })).slice(0, 2);
       d.v2 = true;
+    }
+    // v3 (2026-11-03): F interacts (with Space); fullscreen moved to L
+    if (!d.v3) {
+      d.binds.fullscreen = d.binds.fullscreen.map(function (k) { return k === 'KeyF' ? 'KeyL' : k; });
+      if (d.binds.talk.indexOf('KeyF') < 0) d.binds.talk = ['KeyF'].concat(d.binds.talk.filter(function (k) { return k !== 'Enter'; })).slice(0, 2);
+      d.v3 = true;
     }
     return d;
   }

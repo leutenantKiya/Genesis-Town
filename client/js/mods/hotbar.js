@@ -1,8 +1,9 @@
 /*
  * hotbar.js - item slots along the bottom of the game view, like a crafting game's hotbar.
- * Every item the player can hold has a slot with its icon and count (on chain plus today). Left-click (or tap) a
- * slot to use it: food is eaten. Right-click (a long press on phones) or 1-7 opens its menu: send it to a player,
- * list it on the Pasar Pemain, or open the whole bag. E (or I, or the round E button on phones) opens the bag. Reads and acts through window.GT_CHAIN.
+ * Every item the player can hold has a slot with its icon and count (on chain plus today). Like a crafting game, one
+ * slot is in your hand: pick it with a click, 1-7 or the mouse wheel. Right-click in the world, R, or clicking the
+ * held slot again uses it (food is eaten, Gandum is planted on a tilled plot). Left-click and F act on the world
+ * (mouse.js). Right-click on a slot (a long press on phones) opens its menu: send, sell, or the whole bag. E (or I, or the round E button on phones) opens the bag. Reads and acts through window.GT_CHAIN.
  */
 (function () {
   'use strict';
@@ -34,7 +35,11 @@
   }
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-  var bar = null, pop = null, selected = -1;
+  var bar = null, pop = null, selected = -1, label = null;
+  // the item in your hand (like a crafting game's selected slot): right-click or R uses it
+  var held = 4;
+  try { var hv = +localStorage.getItem('gt.hotbar.held'); if (hv >= 0 && hv < SLOTS.length) held = hv; } catch (e) { /* storage blocked */ }
+  function setHeld(i) { held = (i + SLOTS.length) % SLOTS.length; try { localStorage.setItem('gt.hotbar.held', String(held)); } catch (e) { /* storage blocked */ } render(); }
 
   function chain() { return window.GT_CHAIN; }
   function bag() { var c = chain(); return c && c.state.st ? c.state.st.bag : null; }
@@ -48,8 +53,8 @@
       b.appendChild(icon(id, 24));
       b.appendChild($('span', 'gt-slot-n', '0'));
       b.appendChild($('span', 'gt-slot-k', String(i + 1)));
-      // left-click uses the item (food is eaten); right-click or a long press opens its menu
-      b.addEventListener('click', function (e) { e.stopPropagation(); e.currentTarget.blur(); useSlot(i); });
+      // click: hold this item (click it again to use it); right-click or a long press: its menu
+      b.addEventListener('click', function (e) { e.stopPropagation(); e.currentTarget.blur(); closePop(); if (held === i) useHeld(); else setHeld(i); });
       b.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); toggle(i); });
       bar.appendChild(b);
     });
@@ -57,6 +62,8 @@
     open.setAttribute('aria-label', 'Buka tas (E)');
     open.addEventListener('click', function (e) { e.stopPropagation(); e.currentTarget.blur(); closePop(); openBag(); });
     bar.appendChild(open);
+    label = $('div', 'gt-held');
+    screen.appendChild(label);
     screen.appendChild(bar);
     document.documentElement.classList.add('gt-has-hotbar');
   }
@@ -66,6 +73,7 @@
     var c = chain(), b = bag();
     var on = c && c.state.mode !== 'offline' && c.state.mode !== 'loading' && !!c.state.account && !!b;
     bar.style.display = on ? '' : 'none';
+    if (label) label.style.display = on ? '' : 'none';
     document.documentElement.classList.toggle('gt-has-hotbar', on);
     if (!on) { closePop(); return; }
     var names = (c.state.cfg && c.state.cfg.econ && c.state.cfg.econ.items) || {};
@@ -74,21 +82,46 @@
       el.querySelector('.gt-slot-n').textContent = String(n);
       el.classList.toggle('empty', n <= 0);
       el.classList.toggle('today', it.today !== 0);
-      el.classList.toggle('sel', i === selected);
+      el.classList.toggle('sel', i === held);
+      el.classList.toggle('menu', i === selected);
       var nm = (names[id] && names[id].name) || id;
       el.setAttribute('aria-label', nm + ': ' + n + (it.today ? ' (' + (it.today > 0 ? '+' : '') + it.today + ' hari ini)' : ''));
       el.title = nm;
     });
+    if (label && on) {
+      var hid = SLOTS[held], hn = (names[hid] && names[hid].name) || hid, hit = b[hid] || { settled: 0, today: 0 };
+      var how = document.documentElement.classList.contains('gt-phone') ? 'ketuk lagi' : 'klik kanan / R';
+      label.textContent = 'Di tangan: ' + hn + ' (' + (hit.settled + hit.today) + ') · ' + how + ': ' + useVerb(hid);
+    }
     if (pop && selected >= 0) fillPop();
   }
 
   function openBag() { var c = chain(); if (c) c.open('bag'); }
-  function useSlot(i) {
-    var c = chain(), b = bag(), id = SLOTS[i];
-    if (!c || !b) return;
-    var econ = (c.state.cfg && c.state.cfg.econ && c.state.cfg.econ.items[id]) || {}, it = b[id] || { settled: 0, today: 0 };
-    if (econ.energy && it.settled + it.today > 0) { closePop(); c.act({ action: 'eat', token: id }).catch(function () {}); return; }
-    toggle(i); // nothing to use directly: show what can be done with it
+  function useVerb(id) { return id === 'bread' || id === 'meal' ? 'makan' : id === 'wheat' ? 'tanam di petak' : id === 'tool' ? 'dipakai saat menambang' : 'kirim atau jual'; }
+  /** Use the item in your hand. `tile` is where the player right-clicked (optional). */
+  function useHeld(tile) {
+    var c = chain(), b = bag(), id = SLOTS[held];
+    if (!c || !b || GT.isUiOpen()) return;
+    var econ = (c.state.cfg && c.state.cfg.econ && c.state.cfg.econ.items[id]) || {}, it = b[id] || { settled: 0, today: 0 }, n = it.settled + it.today;
+    closePop();
+    if (econ.energy) {
+      if (n <= 0) return GT.toast('Tidak ada ' + (econ.name || id) + ' di tas.');
+      c.act({ action: 'eat', token: id }).catch(function () {});
+      return;
+    }
+    if (id === 'wheat') {
+      // plant on the plot you right-clicked, or the one you face
+      var p = GT.player, d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[p.dir] || [0, 1];
+      var t = tile && Math.abs(tile.x - p.x) + Math.abs(tile.y - p.y) === 1 ? tile : { x: p.x + d[0], y: p.y + d[1] };
+      var pi = GT.scene && GT.scene.kind === 'out' ? c.plotAt(t.x, t.y) : -1, plot = pi >= 0 && c.state.st.plots[pi];
+      if (!plot) return GT.toast('Pegang Gandum, berdiri di sebelah petak kebun yang sudah dicangkul, lalu klik kanan petaknya.');
+      if (plot.state !== 'tilled') return GT.toast(plot.state === 'empty' ? 'Cangkul dulu petaknya (klik atau F).' : 'Petak ini sudah ditanami.');
+      if (n <= 0) return GT.toast('Tidak ada Gandum untuk ditanam.');
+      c.act({ action: 'farm', op: 'plant', plot: pi }).catch(function () {});
+      return;
+    }
+    if (id === 'tool') return GT.toast('Alat dipakai otomatis saat menambang batu.');
+    toggle(held); // raw goods: what you can do with them (send, sell)
   }
 
   function closePop() { if (pop) { pop.remove(); pop = null; } selected = -1; if (bar) [].forEach.call(bar.children, function (x) { x.classList.remove('sel'); }); }
@@ -124,7 +157,8 @@
   function onKey(e) {
     if (e.type !== 'keydown' || e.repeat || GT.isUiOpen()) return false;
     var n = /^Digit([1-7])$/.exec(e.code);
-    if (n && bar && bar.style.display !== 'none') { toggle(+n[1] - 1); return true; }
+    if (n && bar && bar.style.display !== 'none') { closePop(); setHeld(+n[1] - 1); return true; }
+    if (e.code === 'KeyR' && bar && bar.style.display !== 'none') { useHeld(); return true; }
     if (e.code === 'Escape' && pop) { closePop(); return true; }
     return false;
   }
@@ -140,6 +174,18 @@
       if (!GT.isUiOpen()) openBag();
     }, true);
     document.addEventListener('click', function (e) { if (pop && !(bar && bar.contains(e.target))) closePop(); });
+    // right-click in the world uses the item in your hand; the mouse wheel changes it
+    var cv = document.getElementById('cv'), screen = document.getElementById('screen');
+    if (cv) cv.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      if (!bar || bar.style.display === 'none') return;
+      useHeld(GT.screenToTile ? GT.screenToTile(e.clientX, e.clientY) : null);
+    });
+    if (screen) screen.addEventListener('wheel', function (e) {
+      if (!bar || bar.style.display === 'none' || GT.isUiOpen()) return;
+      e.preventDefault();
+      setHeld(held + (e.deltaY > 0 ? 1 : -1));
+    }, { passive: false });
     setInterval(render, 500);
     render();
   }

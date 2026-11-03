@@ -23,10 +23,11 @@
 >   (D-pad, A, E) with a bottom bar for Tas, Pasar, Peta, Riwayat and Lainnya; windows open as bottom sheets; buttons
 >   are 40 px or more. The prototype's thief-role picker no longer appears when the thief feature is off.
 >
-> - **Hotbar and one bag**: item slots along the bottom of the game view (left-click a slot to use it, e.g. eat;
->   right-click or 1–7 for send or sell); **E** opens the bag (**Tas**). Messages to NPCs moved to T.
-> - **Mouse and touch**: left-click (tap) a tile to walk there; click a tree, the water, a stall, a person or a
->   building to walk up to it and use it.
+> - **Controls like a crafting game**: **left-click or F** acts on the world (walk to a tile; chop, mine, fish,
+>   talk, open a stall, go into a building); **right-click or R** uses the item in your hand (eat, plant Gandum).
+>   The hotbar along the bottom shows every item; pick the one in your hand with a click, 1–7 or the mouse wheel;
+>   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen, **T** a message to an NPC.
+>   On phones: tap the world to act, tap a slot to hold it, tap it again to use it.
 > - **Night monsters**: from 19:00 to 06:00, wild boars and mine bats roam Hutan Utara and attack when you walk
 >   up to them; gathering there can also disturb one. Fight or flee; losing all energy knocks you out until 06:00, with nothing lost on or off chain. The
 >   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,

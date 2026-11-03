@@ -301,7 +301,7 @@
   /* ---- Langkah pertama: a newcomer's next step, one at a time, ticked off by what they actually do ---- */
   var GOALS = [
     { id: 'signin', text: 'Tekan Masuk untuk membuat akunmu (Google atau email). Tanpa dompet, tanpa gas.' },
-    { id: 'gather', text: 'Hadap kolam, pohon atau batu, lalu tekan A (Spasi). Hasilnya masuk ke Tas.' },
+    { id: 'gather', text: 'Klik kolam, pohon atau batu (atau hadap lalu tekan F). Hasilnya masuk ke Tas.' },
     { id: 'sell', text: 'Jalan ke Pasar di timur rumahmu dan jual hasilmu ke Sari, Budi, Wati atau Joko.' },
     { id: 'board', text: 'Masuk ke Balai Desa di samping pasar dan lihat papan proyek di rak belakang.' }
   ];
@@ -566,7 +566,7 @@
   function keyLabel() {
     // on a phone (or any touch screen) the interact control is the A button
     if (document.documentElement.classList.contains('gt-phone') || window.matchMedia('(pointer: coarse)').matches) return 'A';
-    return window.GT_SETTINGS ? GT_SETTINGS.label('talk').split(' / ')[0] : 'Spasi';
+    return window.GT_SETTINGS ? GT_SETTINGS.label('talk').split(' / ')[0] : 'F';
   }
   var DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var hintEl = null, hintT = 0;
@@ -1098,6 +1098,6 @@
     renderBanner();
   }
 
-  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, _signedCall: signedCall };
+  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame });
 })();
