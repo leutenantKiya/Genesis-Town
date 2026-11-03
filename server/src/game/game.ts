@@ -92,9 +92,11 @@ export class Game {
     try {
       const last = Number(this.gs.meta('clock.hour') ?? this.clock.hours());
       const now = this.clock.hours();
+      // merchants only spend on crafting on days someone plays (a quiet town keeps its shops' cash)
+      const busy = this.gs.activeAccounts(this.clock.time().settleDay) > 0;
       for (let h = Math.max(last + 1, now - 24); h <= now; h++) {
         this.market.tickAll();
-        this.market.merchantCraft();
+        if (busy) this.market.merchantCraft();
         this.market.townDemand();
       }
       this.gs.setMeta('clock.hour', String(now));

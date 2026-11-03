@@ -138,6 +138,14 @@ project on the Balai Desa board; once it is built, no monster appears (created o
 https://testnet.nearblocks.io/txns/7WZ9hLavZsXKBwQmUHLGp6vcdqVeMRiQTozC54PqeGZU). Player-versus-player combat and theft
 stay switched off: they would either mean nothing or take things from other players.
 
+### When shops fail: quiet days and the village relief fund
+
+A shop pays its 40-coin rent only on days when someone plays (no customers, no rent), and merchants only craft on
+those days, so a quiet town keeps its shops. If every shop is closed anyway, nobody can sell for coin, so the town
+treasury pledges the coin part of each restoration board on chain at the next settlement (the town gets shares like
+any contributor); players still bring the goods. First run on testnet, 2026-11-03, all four boards:
+https://testnet.nearblocks.io/txns/BrYLXT6iUNQQKhaaHyZAAwzuehrpFtDqrGPHVBX9eMBT (Joko) and three more in Riwayat.
+
 ### Weather
 
 Every game day has one weather for every player, from the shared village file: showers in Semi, bright **Terik** sun

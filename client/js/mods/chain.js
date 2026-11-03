@@ -719,67 +719,39 @@
     }, 'primary'));
   }
 
+  var WHERE = { fish: 'mancing di kolam atau sungai', wood: 'tebang pohon', ore: 'nambang di Tambang Utara (butuh Alat)', wheat: 'tanam di kebunmu', bread: 'Meja Kerja: 2 Gandum', meal: 'Meja Kerja: Ikan + Kayu', tool: 'Meja Kerja: 2 Bijih + Kayu', coin: 'jual ke pedagang yang buka, atau Kotak Kirim di rumahmu' };
   function restoreBody(id, m, wrap) {
     var s = (S.shops || []).filter(function (x) { return x.id === id; })[0];
     wrap.appendChild($('p', 'chain-closed', 'TUTUP. ' + m.name + ' tidak sanggup membayar sewa.'));
     if (!s) { wrap.appendChild($('p', null, 'Memuat papan pemulihan…')); return wrap; }
-    wrap.appendChild($('p', null, 'Papan pemulihan: lengkapi semua baris dan toko buka lagi. Penyumbang mendapat saham dan dividen.'));
-    var lines = [];
+    wrap.appendChild($('p', null, 'Bantu buka lagi: lengkapi semua baris di bawah. Penyumbang mendapat saham dan bagian keuntungan toko.'));
+    var lines = [], allDone = true;
     s.need.forEach(function (n) {
       var got = 0; (s.pledged || []).forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
-      var missing = Math.max(0, +n.amount - got);
-      var have = spendable(n.token_id);
-      var row = $('div', 'mrow');
-      row.appendChild($('span', 'grow', item(n.token_id) + ': ' + got + '/' + n.amount));
-      row.appendChild($('span', 'num', 'bisa kamu sumbang ' + have));
+      var missing = Math.max(0, +n.amount - got), have = spendable(n.token_id);
+      var row = $('div', 'mrow chain-item');
+      var info = $('div', 'grow');
+      info.appendChild($('div', null, item(n.token_id) + ': ' + got + '/' + n.amount));
+      if (missing === 0) info.appendChild($('div', 'chain-done', 'Lengkap'));
+      else {
+        allDone = false;
+        info.appendChild($('div', 'num', 'Kurang ' + missing + ' · kamu punya ' + have + (have < missing ? ' · cari: ' + (WHERE[n.token_id] || '') : '')));
+      }
+      row.appendChild(info);
       wrap.appendChild(row);
       if (missing > 0 && have > 0) lines.push({ token_id: n.token_id, amount: String(Math.min(missing, have)) });
     });
     if (s.contributors) wrap.appendChild($('p', 'chain-dim', s.contributors + ' penyumbang sejauh ini.'));
     if (lines.length) {
-      wrap.appendChild(button('Sumbang semua yang bisa (on-chain)', function () {
+      var label = 'Sumbang ' + lines.map(function (l) { return l.amount + ' ' + item(l.token_id); }).join(' + ') + ' (on-chain)';
+      wrap.appendChild(button(label, function () {
         GT.toast('Mengirim sumbangan…');
         signedCall('restore_contribute', { merchant: s.account_id, contribution: lines })
           .then(function () { GT.toast('Terima kasih! Sumbanganmu tercatat on-chain.'); refreshModal(); }, function (e) { GT.toast(e.message); });
       }, 'primary'));
-    } else {
-      wrap.appendChild($('p', 'chain-dim', 'Sumbangan memakai saldo yang sudah settled. Barang hari ini bisa disumbang setelah pukul 06:00.'));
+    } else if (!allDone) {
+      wrap.appendChild($('p', 'chain-dim', 'Kamu belum punya barang yang masih kurang (barang hari ini bisa disumbang setelah pukul 06:00). Kalau semua toko tutup, dana desa ikut menyumbang koinnya pada penyelesaian pukul 06:00.'));
     }
-    return wrap;
-  }
-
-  /* ---- Papan Proyek Desa (Balai Desa): pooled goods and coin build things that open new areas (on-chain) ---- */
-  function spendable(t) { var b = S.st && S.st.bag[t]; return b ? Math.max(0, Math.min(b.settled, b.settled + b.today)) : 0; }
-  function projectBody() {
-    var wrap = $('div');
-    wrap.appendChild($('p', null, 'Warga mengumpulkan bahan bersama. Saat semua baris terpenuhi, bahan dipakai (dibakar on-chain) dan bagian peta baru terbuka untuk semua pemain.'));
-    if (!S.projects) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
-    if (!S.projects.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada proyek.'));
-    S.projects.forEach(function (pj) {
-      wrap.appendChild($('h4', 'chain-h', pj.name + (pj.done ? ' (selesai)' : '')));
-      var lines = [];
-      pj.need.forEach(function (n) {
-        var got = 0; pj.pledged.forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
-        var missing = Math.max(0, +n.amount - got), have = spendable(n.token_id);
-        var row = $('div', 'mrow');
-        row.appendChild($('span', 'grow', item(n.token_id) + ': ' + got + '/' + n.amount));
-        if (!pj.done) row.appendChild($('span', 'num', 'bisa kamu sumbang ' + Math.min(missing, have)));
-        wrap.appendChild(row);
-        if (!pj.done && missing > 0 && have > 0) lines.push({ token_id: n.token_id, amount: String(Math.min(missing, have)) });
-      });
-      var names = pj.contributors.map(function (c) { return c.account_id === S.account ? 'kamu' : String(c.account_id).split('.')[0]; });
-      wrap.appendChild($('p', 'chain-dim', pj.done ? 'Dibangun oleh ' + names.join(', ') + '.' : (names.length ? 'Penyumbang: ' + names.join(', ') + '.' : 'Belum ada penyumbang. Jadilah yang pertama!')));
-      if (pj.done) return;
-      var mine = pj.contributors.filter(function (c) { return c.account_id === S.account; })[0];
-      if (lines.length) wrap.appendChild(button('Sumbang semua yang bisa (on-chain)', function () {
-        GT.toast('Mengirim sumbangan…');
-        signedCall('project_contribute', { id: pj.id, contribution: lines }).then(function () { GT.toast('Terima kasih! Sumbanganmu tercatat on-chain.'); refreshModal(); }, function (e) { GT.toast(e.message); });
-      }, 'primary'));
-      if (mine) wrap.appendChild(button('Tarik sumbanganku', function () {
-        signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast('Sumbangan dikembalikan ke tasmu.'); refreshModal(); }, function (e) { GT.toast(e.message); });
-      }));
-    });
-    wrap.appendChild($('p', 'chain-dim', 'Sumbangan memakai barang yang sudah di rantai (settled) dan belum terpakai hari ini. Bisa ditarik lagi selama proyek belum selesai.'));
     return wrap;
   }
 

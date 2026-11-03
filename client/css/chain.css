@@ -80,3 +80,5 @@ html.gt-has-hotbar #gt-hint{bottom:60px}
 html.gt-phone .gt-slot{width:36px;height:40px}
 html.gt-phone .gt-slot-k{display:none}
 @media (max-width:360px){html.gt-phone .gt-slot{width:32px}html.gt-phone .gt-hotbar{gap:3px;padding:3px}}
+
+.chain-done{color:#2f6b3a}

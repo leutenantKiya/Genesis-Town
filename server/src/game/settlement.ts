@@ -60,8 +60,10 @@ export class Settlement {
     }
     // Rent plus storage (gudang) fees: 0.5 coin per unit held above target stock, burned. Each open shop pays what
     // it can; a shop that cannot pay in full is closed after settlement (the contract re-checks coin < rent).
+    // No players that day means no customers: shops pay no rent and nobody closes, so a quiet town keeps its shops.
     const toClose: string[] = [];
-    for (const id of market.ids()) {
+    const idle = gs.activeAccounts(day) === 0;
+    for (const id of idle ? [] : market.ids()) {
       if (!market.isOpen(id)) continue;
       const acct = market.account(id);
       const d = econ.merchants[id];
@@ -147,7 +149,34 @@ export class Settlement {
         else gs.setSettled(acct, 'coin', gs.settledBalance(acct, 'coin') - amount);
       }
     }
+    await this.relief(day);
     await this.refreshShops();
+  }
+
+  /**
+   * Village relief fund (dana desa): when every shop is closed, nobody can sell for coin, so the town treasury pledges
+   * the coin part of each restoration board on chain (as the town account; the town gets shares like anyone else).
+   * Players still bring the goods. Keeps a reserve for new players' starter kits. At most once per game day.
+   */
+  async relief(day: number) {
+    const { gs, chain, town, econ } = this.d;
+    const shops = await chain.listShops();
+    if (!shops.length || shops.some((s) => s.open) || gs.meta('relief.day') === String(day)) return [];
+    gs.setMeta('relief.day', String(day));
+    const reserve = (econ.starter.coin ?? 100) * 5;
+    const done: Array<{ merchant: string; amount: number; tx: string }> = [];
+    for (const s of shops) {
+      const need = Number(s.need.find((l) => l.token_id === 'coin')?.amount ?? 0) - Number(s.pledged.find((l) => l.token_id === 'coin')?.amount ?? 0);
+      const free = Math.min(gs.settledBalance(town, 'coin'), gs.balance(town, 'coin')) - reserve;
+      const amount = Math.min(need, free);
+      if (amount <= 0) continue;
+      const r = await chain.townPledge(s.account_id, [{ token_id: 'coin', amount: String(amount) }]);
+      if (!r.ok) { console.error('relief', s.account_id, r.error); continue; }
+      gs.setSettled(town, 'coin', gs.settledBalance(town, 'coin') - amount);
+      done.push({ merchant: s.account_id, amount, tx: r.txHash });
+    }
+    if (done.length) gs.setMeta('relief.last', JSON.stringify({ day, pledges: done }));
+    return done;
   }
 
   /** Re-reads settled balances from chain for the given accounts. */

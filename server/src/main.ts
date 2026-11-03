@@ -25,6 +25,7 @@ if (cfg.chainMode === 'mock') {
   const m = new MockChain();
   const base = Object.fromEntries(Object.entries(econ.items).map(([t, i]) => [t, i.base]));
   m.accounts.add(cfg.townAccountId);
+  m.townAccount = cfg.townAccountId;
   m.add(cfg.townAccountId, 'coin', 5000n);
   for (const [id, d] of Object.entries(econ.merchants)) {
     m.addMerchant(`${id}.${cfg.merchantParentId}`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, base);

@@ -319,3 +319,43 @@ test('positions: actions happen where the player stands, and nobody jumps across
   now += 1000;
   game.act(P, { action: 'ship', token: 'bread', qty: 1, pos: L.spawn });
 });
+
+test('a day with no players costs the shops no rent, and nobody closes', async () => {
+  const { game, chain } = await world();
+  await game.devSettle(); // the day with the starter kits (players were active): rent as usual
+  assert.ok(game.gs.dayRows(game.settlement.settledThrough()).some((r) => r.kind === 'rent'));
+  // drain every shop below rent; then a whole day passes with nobody playing
+  const day = game.clock.time().settleDay;
+  for (const id of Object.keys(game.econ.merchants)) { const a = `${id}.gt.test`; game.gs.add(day - 1, a, 'coin', 0, 'noop'); }
+  await game.devSettle();
+  assert.equal(game.gs.dayRows(game.settlement.settledThrough()).filter((r) => r.kind === 'rent').length, 0, 'no rent on an idle day');
+  assert.ok((await chain.listShops()).every((s) => s.open), 'every shop still open');
+});
+
+test('when every shop is closed, the village relief fund pledges the coin part of each board', async () => {
+  const { game, chain } = await world();
+  chain.townAccount = TOWN;
+  const day = game.clock.time().settleDay;
+  // every merchant below rent, nothing to sell to the town
+  for (const id of Object.keys(game.econ.merchants)) {
+    const a = `${id}.gt.test`;
+    game.gs.add(day, a, 'coin', -(bal(game, a, 'coin') - 5), 'test');
+    for (const t of Object.keys(game.econ.items)) if (t !== 'coin' && bal(game, a, t) > 0) game.gs.add(day, a, t, -bal(game, a, t), 'test');
+  }
+  await game.devSettle();
+  const shops = await chain.listShops();
+  assert.ok(shops.every((s) => !s.open), 'all closed');
+  for (const s of shops) {
+    const need = Number(s.need.find((l) => l.token_id === 'coin')!.amount);
+    const got = Number(s.pledged.find((l) => l.token_id === 'coin')?.amount ?? 0);
+    assert.equal(got, need, `${s.name}: the town pledged the coin`);
+  }
+  assert.ok(JSON.parse(game.gs.meta('relief.last')!).pledges.length === shops.length);
+  // players now only bring the goods; one board completes and the shop reopens
+  const sari = shops.find((s) => s.account_id === 'sari.gt.test')!;
+  for (const l of sari.need) if (l.token_id !== 'coin') chain.add(P, l.token_id, BigInt(l.amount));
+  const lines = sari.need.filter((l) => l.token_id !== 'coin');
+  const r = await chain.relay({ delegateAction: { actions: [{ functionCall: { methodName: 'restore_contribute', args: Buffer.from(JSON.stringify({ merchant: sari.account_id, contribution: lines })) } }] } }, P);
+  assert.ok(r.ok, r.error);
+  assert.equal((await chain.listShops()).find((s) => s.account_id === 'sari.gt.test')!.open, true, 'Sari reopened');
+});

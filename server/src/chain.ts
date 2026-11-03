@@ -26,6 +26,8 @@ export interface Chain {
   listListings(limit?: number): Promise<ListingInfo[]>;
   getListing(id: number): Promise<ListingInfo | null>;
   listProjects(): Promise<ProjectInfo[]>;
+  /** The town treasury pledges to a restoration board (village relief fund). */
+  townPledge(merchant: string, contribution: Array<{ token_id: string; amount: string }>): Promise<TxResult>;
   getProject(id: string): Promise<ProjectInfo | null>;
   derivedOwnerKey(sub: string): Promise<string>;
   /** Calls `sign` on the NEAR Auth contract (paid by the relayer); `value` is the base64 result (the MPC signature). */
@@ -49,6 +51,7 @@ export class TestnetChain implements Chain {
   parent: Account;
   settler: Account;
   relayer: Account;
+  town: Account | null;
 
   constructor(cfg: Config) {
     this.cfg = cfg;
@@ -56,6 +59,7 @@ export class TestnetChain implements Chain {
     this.parent = new Account(cfg.playersParentId, this.provider, cfg.playersParentPrivateKey as KeyPairString);
     this.settler = new Account(cfg.settlerAccountId, this.provider, cfg.settlerPrivateKey as KeyPairString);
     this.relayer = new Account(cfg.relayerAccountId, this.provider, cfg.relayerPrivateKeys[0] as KeyPairString);
+    this.town = cfg.townPrivateKey ? new Account(cfg.townAccountId, this.provider, cfg.townPrivateKey as KeyPairString) : null;
   }
 
   private view<T>(method: string, args: Record<string, unknown>): Promise<T> {
@@ -109,6 +113,15 @@ export class TestnetChain implements Chain {
   listListings(limit = 50) { return this.view<ListingInfo[]>('list_listings', { limit }); }
   getListing(id: number) { return this.view<ListingInfo | null>('get_listing', { listing_id: id }); }
   listProjects() { return this.view<ProjectInfo[]>('list_projects', {}); }
+  async townPledge(merchant: string, contribution: Array<{ token_id: string; amount: string }>): Promise<TxResult> {
+    if (!this.town) return { txHash: '', ok: false, error: 'TOWN_PRIVATE_KEY not set' };
+    const o = await this.town.signAndSendTransaction({
+      receiverId: this.cfg.gameContractId,
+      actions: [actions.functionCall('restore_contribute', { merchant, contribution }, teraToGas('100'), 0n)],
+      waitUntil: 'FINAL',
+    });
+    return toResult(o as unknown as Outcome);
+  }
   getProject(id: string) { return this.view<ProjectInfo | null>('get_project', { id }); }
 
   // NEAR Auth `sign` (docs.auth.near.org/home/guides/sign-transactions.md: 300 Tgas, deposit 1 yoctoNEAR in the example).
@@ -361,6 +374,11 @@ export class MockChain implements Chain {
   async listListings(limit = 50) { return [...this.listings.values()].sort((x, y) => y.id - x.id).slice(0, limit).map((l) => ({ ...l })); }
   async getListing(id: number) { const l = this.listings.get(id); return l ? { ...l } : null; }
   async listProjects() { return [...this.projects.values()].map((p) => structuredClone(p)); }
+  townAccount = 'town.gt.test';
+  async townPledge(merchant: string, contribution: Array<{ token_id: string; amount: string }>): Promise<TxResult> {
+    try { this.mockMethod(this.townAccount, 'restore_contribute', { merchant, contribution }); } catch (e) { return { txHash: this.hash(), ok: false, error: (e as Error).message }; }
+    return { txHash: this.hash(), ok: true };
+  }
   async getProject(id: string) { const p = this.projects.get(id); return p ? structuredClone(p) : null; }
   /** Mirrors the owner's `create_project`. */
   addProject(id: string, name: string, chunk: string, need: Record<string, number>) {

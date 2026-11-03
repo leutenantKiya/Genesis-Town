@@ -10,6 +10,8 @@ export interface Config {
   settlerAccountId: string;
   settlerPrivateKey: string;
   townAccountId: string;
+  /** Optional: lets the village relief fund pledge from the town treasury. */
+  townPrivateKey?: string;
   merchantParentId: string;
   devTools: boolean;
   playersParentId: string;
@@ -50,6 +52,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     settlerAccountId: get('SETTLER_ACCOUNT_ID'),
     settlerPrivateKey: get('SETTLER_PRIVATE_KEY'),
     townAccountId: get('TOWN_ACCOUNT_ID'),
+    townPrivateKey: env.TOWN_PRIVATE_KEY || undefined,
     merchantParentId: get('MERCHANT_PARENT_ACCOUNT_ID'),
     devTools: env.DEV_TOOLS === '1',
     playersParentId: get('PLAYERS_PARENT_ACCOUNT_ID'),
