@@ -93,3 +93,32 @@ html.gt-phone .gt-slot-k{display:none}
 #dlg.on ~ .gt-held,#map.on ~ .gt-held{display:none!important}
 html.gt-has-hotbar #gt-hint{bottom:78px}
 .gt-slotpop{bottom:78px}
+
+/* item cards and grids: shop, bag, market (icons shared with the hotbar) */
+.gt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin:4px 0 8px}
+.gt-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 7px;border:0;border-radius:5px;background:#ebe6cc;color:var(--paper-ink);font-family:var(--font);font-size:7px;line-height:1.35;cursor:pointer;box-shadow:inset 0 -3px 0 rgba(0,0,0,.12);min-height:72px}
+.gt-card:hover{background:#e0d9b8}
+.gt-card:active{transform:translateY(1px)}
+.gt-card:focus-visible{outline:2px solid var(--paper-ink);outline-offset:1px}
+.gt-card canvas{width:32px;height:32px;image-rendering:pixelated}
+.gt-card-name{font-size:8px}
+.gt-card-l1{color:#2f6b3a}
+.gt-card-l2{color:var(--paper-edge)}
+.gt-card-n{position:absolute;right:5px;top:4px;font-size:8px;color:var(--paper-ink)}
+.gt-card.accent{background:#dfe9c6}
+.gt-card.sel{box-shadow:0 0 0 2px var(--paper-ink)}
+.gt-card.off{opacity:.45}
+.gt-card.off .gt-card-l1{color:var(--paper-edge)}
+.gt-card-coin{display:inline-block;width:24px;height:24px;margin:4px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px #000}
+.gt-shop-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;font-size:8px}
+.gt-shop-why{min-height:2.6em;margin:4px 0 8px;padding:6px 8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:#ebe6cc;border-radius:4px;font-size:8px;line-height:1.5}
+html.gt-phone .gt-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.gt-detail{margin:2px 0 8px;padding:8px;background:#ebe6cc;border-radius:5px;font-size:8px;line-height:1.6}
+.gt-detail-top{display:flex;gap:10px;align-items:flex-start}
+.gt-detail-top canvas{width:40px;height:40px;image-rendering:pixelated;flex:none}
+.gt-detail-name{font-size:10px;margin-bottom:2px}
+.gt-detail-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.gt-group{display:flex;gap:8px;align-items:center;margin:10px 0 2px;padding:6px 8px;background:#ebe6cc;border-radius:5px;font-size:8px;line-height:1.5}
+.gt-group canvas{width:24px;height:24px;image-rendering:pixelated;flex:none}
+.gt-warn{margin:4px 0;padding:6px 8px;background:#f3d6c8;color:#7a2a14;border-radius:4px;font-size:8px;line-height:1.5}
+.gt-shop-why p{margin:0}

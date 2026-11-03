@@ -28,6 +28,13 @@
 >   The hotbar along the bottom shows every item; pick the one in your hand with a click, 1–7 or the mouse wheel;
 >   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen, **T** a message to an NPC.
 >   On phones: tap the world to act, tap a slot to hold it, tap it again to use it.
+>- **Item windows like a farming or server-economy game**: every window shows items as icon cards (the same icons as
+>   the hotbar). A shop shows what the merchant sells on top and your own items below with what they pay, greyed when
+>   they don't buy it; click to trade 1, Shift-click for 5, right-click to sell up to 10, and the price reason shows
+>   for the item you touched. The **Tas** is a grid with a detail panel (what an item is for, where to get it, which
+>   merchant pays most, Makan / Pegang / Jual / Kirim). **Pasar** groups listings by item, cheapest first, next to the
+>   merchants' prices, shows your listing slots (n/5), and warns when your price after the fee is below what a
+>   merchant would pay.
 > - **Night monsters**: from 19:00 to 06:00, wild boars and mine bats roam Hutan Utara and attack when you walk
 >   up to them; gathering there can also disturb one. Fight or flee; losing all energy knocks you out until 06:00, with nothing lost on or off chain. The
 >   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,
@@ -184,8 +191,8 @@ Run locally (below), open http://localhost:3000.
 2. Walk to the pond, face the water and press **Space** (the on-screen **A** button on touch screens) → `+1 Ikan`
    instantly. A hint at the bottom of the screen always shows which key does what for the tile you face. The hotbar at the bottom shows every item with its count; press **E** (or the round E button on phones) to open the **Tas** → it shows "+1 hari ini" (off-chain,
    today).
-3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → prices with a reason under each item. Sell your
-   fish.
+3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → her goods on top, your items below with her price. Click
+   your fish to sell one.
 4. Inside your house, press Space at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
    Outside, in the fenced field next to your house, press Space on a plot to till, plant (press twice) and water wheat.
 5. Open the Dev panel → **Settle sekarang** → Riwayat (H) shows "Settlement hari N" with a testnet explorer link,

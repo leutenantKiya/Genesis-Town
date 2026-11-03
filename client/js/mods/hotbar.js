@@ -190,5 +190,7 @@
     render();
   }
 
+  // shared with the shop, bag and market windows (js/mods/chain.js), so every item looks the same everywhere
+  window.GT_ITEMS = { icon: icon, SLOTS: SLOTS, hold: function (id) { var i = SLOTS.indexOf(id); if (i >= 0) setHeld(i); }, held: function () { return SLOTS[held]; } };
   GT.register({ id: 'hotbar', init: init, onKey: onKey });
 })();
