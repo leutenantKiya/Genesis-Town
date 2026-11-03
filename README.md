@@ -19,8 +19,9 @@
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow,
 >   run live on testnet 2026-11-03). Sign-out keeps each account's key in the browser.
-> - **Mobile pass**: game windows wrap their price lines and use 40 px buttons on phones; the prototype's
->   thief-role picker no longer appears when the thief feature is off.
+> - **Phone layout** (portrait): the game view fills the screen between a one-line status bar and the thumb zone
+>   (D-pad, A, E) with a bottom bar for Tas, Pasar, Peta, Riwayat and Lainnya; windows open as bottom sheets; buttons
+>   are 40 px or more. The prototype's thief-role picker no longer appears when the thief feature is off.
 >
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
 

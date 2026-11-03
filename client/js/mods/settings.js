@@ -107,13 +107,20 @@
     if (st.layout === 'boxed') return false;
     return window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 900;
   }
+  // Phone (portrait, narrow): the game view fills the screen between a one-line status bar and the thumb zone
+  // (D-pad, A/E, and a bottom bar with the five places players go). css/phone.css lays it out.
+  function wantsPhone() {
+    if (wantsFull() || st.layout === 'boxed') return false;
+    return window.innerWidth <= 700 && window.innerHeight > window.innerWidth;
+  }
   function applyLayout() {
-    var on = wantsFull();
+    var on = wantsFull(), phone = !on && wantsPhone();
     var root = document.documentElement;
-    if (root.classList.contains('gt-full') !== on) {
-      root.classList.toggle('gt-full', on);
-      window.dispatchEvent(new Event('resize'));
-    }
+    var changed = root.classList.contains('gt-full') !== on || root.classList.contains('gt-phone') !== phone;
+    root.classList.toggle('gt-full', on);
+    root.classList.toggle('gt-phone', phone);
+    if (phone) buildTabbar();
+    if (changed) window.dispatchEvent(new Event('resize'));
     var rm = st.reducedMotion == null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : st.reducedMotion;
     root.classList.toggle('gt-reduced-motion', !!rm);
   }
@@ -125,6 +132,42 @@
   }
   document.addEventListener('fullscreenchange', function () { applyLayout(); setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 60); });
   window.addEventListener('resize', function () { if (!document.fullscreenElement) applyLayout(); });
+
+  /* ------------------------------------------------------------ phone bottom bar */
+  // Each tab presses the existing HUD button, so the bar adds no game logic of its own.
+  var tabbar = null;
+  function press(id) { var b = document.getElementById(id); if (b) b.click(); }
+  function moreSheet() {
+    var opts = [];
+    if (document.getElementById('simbtn')) opts.push({ label: 'Simulasi 1 minggu', onPick: function () { press('simbtn'); } });
+    opts.push({ label: 'Pengaturan', onPick: openSettings });
+    opts.push({ label: document.fullscreenElement ? 'Keluar layar penuh' : 'Layar penuh', onPick: toggleFullscreen });
+    if (GT.openProfile) opts.push({ label: 'Profil', onPick: function () { GT.openProfile(); } });
+    if (document.getElementById('btnJiwa')) opts.push({ label: 'Jiwa', onPick: function () { press('btnJiwa'); } });
+    if (document.getElementById('devbtn')) opts.push({ label: 'Dev', onPick: function () { press('devbtn'); } });
+    GT.menu('Lainnya', opts);
+  }
+  function buildTabbar() {
+    if (tabbar) return;
+    var shell = document.querySelector('.shell');
+    if (!shell) return;
+    tabbar = $('nav', 'gt-tabbar'); tabbar.setAttribute('aria-label', 'Menu utama');
+    [['tab-bag', 'Tas', function () { press('chainbtn'); }],
+     ['tab-market', 'Pasar', function () { press('pasarbtn'); }],
+     ['tab-map', 'Peta', function () { press('mapbtn'); }],
+     ['tab-history', 'Riwayat', function () { press('riwayatbtn'); }],
+     ['tab-more', 'Lainnya', moreSheet]].forEach(function (t) {
+      var b = $('button', 'gt-tab', t[1]); b.type = 'button'; b.id = t[0];
+      b.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) t[2](); });
+      tabbar.appendChild(b);
+    });
+    shell.appendChild(tabbar);
+    // the first tab says Masuk until the player is signed in, like the HUD button it presses
+    var first = tabbar.firstChild;
+    function sync() { var acc = document.getElementById('chainbtn'); var t = acc && acc.textContent === 'Masuk' ? 'Masuk' : 'Tas'; if (first.textContent !== t) first.textContent = t; }
+    setInterval(sync, 700); // the account button is created later by chain.js and changes on sign-in
+    sync();
+  }
 
   /* ------------------------------------------------------------ settings modal */
   var modal = null;

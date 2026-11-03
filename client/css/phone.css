@@ -1,0 +1,55 @@
+/* phone.css - portrait phones (html.gt-phone, set by js/mods/settings.js).
+   The screen is one column, read top to bottom and played with the thumbs:
+     status bar (where you are, coins, time, energy)
+     the game view, filling every pixel that is left (engine.js layoutPhone)
+     thumb zone: D-pad on the left, A and E on the right
+     bottom bar: Tas, Pasar, Peta, Riwayat, Lainnya, one tap each
+   Margins 16px; every control at least 44px tall; no frame around the screen, so no space is lost. */
+
+.gt-tabbar{display:none}
+
+html.gt-phone,html.gt-phone body{height:100%}
+html.gt-phone body{padding:0;overflow:hidden}
+html.gt-phone #app{max-width:none;height:100vh;height:100dvh;display:flex;flex-direction:column}
+html.gt-phone .shell{flex:1;min-height:0;display:flex!important;flex-direction:column!important;border-radius:0;padding:env(safe-area-inset-top,0px) 0 0;background:#14152a;box-shadow:none}
+html.gt-phone .brand,html.gt-phone .help,html.gt-phone #acts,html.gt-phone #padmap{display:none!important}
+
+/* status bar: one line for where and when, one for energy and season */
+html.gt-phone .chain-banner{display:block;margin:0;border-radius:0;padding:6px 16px 0;font-size:7px;line-height:1.4;background:transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.gt-phone .hud{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;column-gap:12px;row-gap:4px;margin:0;padding:6px 16px 8px;font-size:9px}
+html.gt-phone .hud .lbl{display:none}
+html.gt-phone .hud .loc .val{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+html.gt-phone .hud .chain-hud{grid-column:1 / -1;grid-row:2}
+html.gt-phone .chain-energy{width:72px}
+
+/* the game view takes all the height that is left; the canvas is centred in it */
+html.gt-phone .bezel{flex:1 1 0;min-height:0;position:relative;padding:0;border-radius:0;background:#0b0c14;box-shadow:none}
+html.gt-phone #fit{position:absolute;inset:0;width:auto;height:auto;display:flex;align-items:center;justify-content:center}
+html.gt-phone #screen{box-shadow:none}
+
+/* thumb zone */
+html.gt-phone .pad{display:flex!important;align-items:center;justify-content:space-between;margin:0;padding:12px 16px 8px;--cell:52px;--bA:76px;--bE:56px}
+html.gt-phone .ab{gap:0}
+html.gt-phone .abrow{gap:14px;align-items:flex-end}
+html.gt-phone #btnE{margin-bottom:calc(var(--bA)*.55)}
+
+/* bottom bar: the five places, labelled, 52px tall, above the home indicator */
+html.gt-phone .gt-tabbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0 8px env(safe-area-inset-bottom,0px);background:#0f1022}
+.gt-tab{min-height:52px;padding:0 2px;border:0;background:transparent;color:var(--ink);font-family:var(--font);font-size:8px;line-height:1.2;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gt-tab:active{background:#1c1d36;color:var(--ink)}
+.gt-tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* windows open as sheets from the bottom, within thumb reach */
+html.gt-phone #mroot .mover{align-items:flex-end;padding:8px 0 0}
+html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:88dvh;border-radius:12px 12px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+
+/* small phones */
+@media (max-width:350px){
+  html.gt-phone .pad{--cell:44px;--bA:64px;--bE:48px;padding-inline:10px}
+  html.gt-phone .gt-tab{font-size:7px}
+}
+/* short phones: tighter thumb zone so the game view keeps its height */
+@media (max-height:640px){
+  html.gt-phone .pad{--cell:44px;--bA:62px;--bE:46px;padding-block:6px 4px}
+  html.gt-phone .gt-tab{min-height:46px}
+}

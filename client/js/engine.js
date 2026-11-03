@@ -2078,7 +2078,29 @@ function layoutFull(){
   ctx.imageSmoothingEnabled = false;
   fxBub.forEach(function(r){ r.w = 0; }); fxTag.forEach(function(r){ r.w = 0; });
 }
+// Phone (html.gt-phone, css/phone.css): the canvas fills the space #fit gets between the status bar and the controls.
+// At least 11 columns at the largest whole-pixel scale; as many rows as the height allows (9 to 24).
+function layoutPhone(){
+  var W = elFit.clientWidth || window.innerWidth, H = elFit.clientHeight || 300;
+  var s = Math.max(1, Math.min(6, Math.floor(W / (11 * T))));
+  if (s > 2 && Math.floor(W / (T * s)) < 13) s--; // prefer a wider view over bigger pixels
+  var cols = Math.max(11, Math.min(40, Math.floor(W / (T * s))));
+  var rows = Math.max(9, Math.min(24, Math.floor(H / (T * s))));
+  S = s; VW = cols * T; VH = rows * T;
+  elCv.width = VW * s; elCv.height = VH * s;
+  elCv.style.width = (VW * s) + 'px'; elCv.style.height = (VH * s) + 'px';
+  elScreen.style.width = (VW * s) + 'px';
+  var fsTable = [10, 8, 10, 12, 14, 16, 18];
+  elScreen.style.setProperty('--fs', fsTable[Math.min(s, 6)] + 'px');
+  elScreen.classList.toggle('short', VH * s < 340);
+  try { var sr = elScreen.getBoundingClientRect(); document.documentElement.style.setProperty('--toastTop', Math.max(8, Math.round(sr.top + 8)) + 'px'); } catch(e){}
+  ctx = elCv.getContext('2d');
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  fxBub.forEach(function(r){ r.w = 0; }); fxTag.forEach(function(r){ r.w = 0; });
+}
 function layout(){
+  if (document.documentElement.classList.contains('gt-phone')) return layoutPhone();
   if (document.documentElement.classList.contains('gt-full')) return layoutFull();
   var avail = elFit.clientWidth || 340;
   var sW = Math.floor(avail / (15 * T)); // prefer ~15 columns
