@@ -263,7 +263,7 @@
     } else {
       jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); }));
     }
-    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); }).catch(function (e) {
+    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); if (S.st && S.st.encounter && !(fightH && fightH.isOpen()) && !GT.isUiOpen()) openFight(); }).catch(function (e) {
       if (e.status === 401) { S.account = null; lsSet(LS_ACC, null); renderBanner(); }
     });
   }
@@ -329,6 +329,60 @@
     head.appendChild(x);
     goalBox.appendChild(head);
     goalBox.appendChild($('p', null, next.text));
+  }
+
+  /* ---- Night monsters (the server decides; this draws them and runs the fight window) ---- */
+  var fightH = null;
+  function drawMonster(ctx, kind, px, py, t) {
+    var bob = Math.round(Math.sin(t * 6) * 1);
+    function R(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(px + x, py + y + bob, w, h); }
+    if (kind === 'bat') {
+      var flap = Math.sin(t * 14) > 0;
+      R(4, 4, 4, 4, '#3a2f4a'); R(5, 5, 1, 1, '#ff5a5a'); R(7, 5, 1, 1, '#ff5a5a');
+      if (flap) { R(0, 2, 4, 3, '#2a2236'); R(8, 2, 4, 3, '#2a2236'); } else { R(0, 5, 4, 3, '#2a2236'); R(8, 5, 4, 3, '#2a2236'); }
+      return;
+    }
+    // wild boar
+    R(1, 4, 9, 5, '#5a3a24'); R(2, 3, 6, 1, '#6e4a2e'); R(8, 5, 3, 3, '#6e4a2e'); R(11, 6, 1, 2, '#c9a27a');
+    R(9, 5, 1, 1, '#ff5a5a'); R(10, 8, 1, 1, '#f0f0e0'); R(2, 9, 1, 2, '#3a2414'); R(7, 9, 1, 2, '#3a2414'); R(0, 5, 1, 1, '#3a2414');
+  }
+  function onDraw(ctx, camX, camY, T) {
+    var e = S.st && S.st.encounter, sc = GT.scene;
+    if (!e || !sc || sc.kind !== 'out') return;
+    drawMonster(ctx, e.kind, e.x * T - camX, e.y * T - camY, performance.now() / 1000);
+  }
+  function fightBody(e) {
+    var wrap = $('div');
+    var hp = ''; for (var i = 0; i < e.maxHp; i++) hp += i < e.hp ? '■ ' : '□ ';
+    wrap.appendChild($('p', null, e.name + ' menghadang di gelap hutan.'));
+    wrap.appendChild($('p', 'num', 'Tenaganya: ' + hp.trim()));
+    wrap.appendChild($('p', 'num', 'Energimu: ' + (S.st ? S.st.energy : '?') + '/' + (S.st ? S.st.energyMax : 100)));
+    wrap.appendChild($('p', 'chain-dim', 'Menang: kamu dapat hasilnya +1 bonus. Energi habis: pingsan sampai pukul 06:00 (tidak ada barang yang hilang). Pos Ronda di Balai Desa membuat hutan aman.'));
+    return wrap;
+  }
+  function openFight() {
+    var e = S.st && S.st.encounter;
+    if (!e) return;
+    if (fightH && fightH.isOpen()) { fightH.setBody(fightBody(e)); return; }
+    var cfg = S.cfg && S.cfg.monsters || {};
+    fightH = GT.modal({ title: e.name + '!', body: fightBody(e), closable: false, actions: [
+      { label: 'Lawan (−' + (cfg.fightEnergy || 6) + ' energi)', primary: true, onClick: function () { fightStep('fight'); return false; } },
+      { label: 'Lari (−' + (cfg.fleeEnergy || 4) + ' energi)', onClick: function () { fightStep('flee'); return false; } }
+    ] });
+  }
+  function fightStep(action) {
+    if (S.busy) return;
+    S.busy = true;
+    act({ action: action }).then(function (r) {
+      if (r && r.state && r.state.encounter) openFight();
+      else if (fightH) { fightH.close('done'); fightH = null; }
+      if (r && r.ko) knockedOut();
+    }, noop).then(function () { S.busy = false; });
+  }
+  function knockedOut() {
+    var sp = GT.world && GT.world.spawn;
+    if (sp && GT.teleportPlayer) GT.teleportPlayer('out', sp.x, sp.y, 'down');
+    GT.toast('Kamu pingsan. Warga membawamu pulang. Istirahat sampai pukul 06:00.');
   }
 
   function act(body, quiet) {
@@ -498,8 +552,10 @@
     var tok = TILE_ITEM[tt];
     if (tok) {
       var verb = { fish: 'Mancing', ore: 'Nambang', wood: 'Tebang' }[tok];
-      var needTool = tok !== 'fish' && S.st && (S.st.bag.tool.settled + S.st.bag.tool.today) < 1;
-      return verb + ' (−4 energi)' + (needTool ? ' · butuh Alat' : '');
+      var needTool = tok === 'ore' && S.st && (S.st.bag.tool.settled + S.st.bag.tool.today) < 1;
+      var L = GT.world && GT.world.layout, night = S.st && S.st.night;
+      var danger = tok !== 'fish' && night && night.now && !night.guarded && L && window.GTVillage && GTVillage.chunkOf(L, x, y).id === 'hutan';
+      return verb + ' (−4 energi)' + (needTool ? ' · butuh Alat' : '') + (danger ? ' · malam: awas monster' : '');
     }
     return null;
   }
@@ -892,7 +948,7 @@
     if (!token) return false;
     if (S.busy) return true;
     S.busy = true;
-    act({ action: 'gather', tile: ctx.tileType, x: ctx.tile.x, y: ctx.tile.y }).catch(noop).then(function () { S.busy = false; });
+    act({ action: 'gather', tile: ctx.tileType, x: ctx.tile.x, y: ctx.tile.y }).then(function () { if (S.st && S.st.encounter) openFight(); }, noop).then(function () { S.busy = false; });
     return true;
   }
 
@@ -920,6 +976,10 @@
           GT.toast('Settlement berjalan…');
           api('/dev/settle', { method: 'POST' }).then(function (r) { GT.toast('Settled sampai hari ' + r.settledThrough); refresh(true); }, function (e) { GT.toast(e.message); });
         }, 'primary'));
+        sec.appendChild($('p', 'mnote', 'Lompat ke pukul 20:00 berikutnya: monster muncul di Hutan Utara pada malam hari.'));
+        sec.appendChild(button('Lompat ke malam', function () {
+          api('/dev/night', { method: 'POST' }).then(function () { GT.toast('Sekarang malam.'); refresh(true); }, function (e) { GT.toast(e.message); });
+        }));
       });
     }).catch(function () { S.mode = 'offline'; }).then(function () {
       renderBanner(); return refresh(true);
@@ -928,5 +988,5 @@
   }
 
   window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, _signedCall: signedCall };
-  GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onFrame: onFrame });
+  GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame });
 })();

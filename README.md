@@ -23,6 +23,10 @@
 >   (D-pad, A, E) with a bottom bar for Tas, Pasar, Peta, Riwayat and Lainnya; windows open as bottom sheets; buttons
 >   are 40 px or more. The prototype's thief-role picker no longer appears when the thief feature is off.
 >
+> - **Night monsters**: from 19:00 to 06:00, gathering in Hutan Utara can meet a wild boar (trees) or mine bats
+>   (rocks). Fight or flee; losing all energy knocks you out until 06:00, with nothing lost on or off chain. The
+>   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. Calmer HUD and a first-steps guide.
+>
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
@@ -116,6 +120,19 @@ it signed through `fast-auth.testnet` and pays the gas. Live run on 2026-11-03: 
 relayed gas-free: https://testnet.nearblocks.io/txns/EQCu9GX2mNWT8YCJVehadGUGjYa1iBa1nY6hmdVdeMr6. Afterwards the
 account has exactly one full-access key (the NEAR Auth key the server stored at sign-up) and two game-only keys.
 
+### Night monsters and Pos Ronda
+
+At night (19:00–06:00) the forest north of the village is dangerous. A gather in Hutan Utara may meet a **Babi hutan**
+(wild boar, at trees) or **Kelelawar tambang** (mine bats, at the rocks; more likely). A small window offers **Lawan**
+(5 energy a round, 70% to hit; the monster hits back while it stands) or **Lari** (4 energy, no gather). Winning gives
+the gather plus one bonus. Running out of energy knocks the player out until 06:00 and sends them home; nothing is
+lost, on chain or off. The server decides every roll (`server/src/game/monsters.ts`, tuning in
+`economy/config.json` → `monsters`), so the cost is real: forest wood and ore are riskier at night.
+The town can end it together: **Pos Ronda di Hutan Utara** (40 Kayu, 10 Bijih, 150 Koin) is a second on-chain town
+project on the Balai Desa board; once it is built, no monster appears (created on testnet:
+https://testnet.nearblocks.io/txns/7WZ9hLavZsXKBwQmUHLGp6vcdqVeMRiQTozC54PqeGZU). Player-versus-player combat and theft
+stay switched off: they would either mean nothing or take things from other players.
+
 ### Town projects (the bridge)
 
 In the Balai Desa, the project board shows **Jembatan ke Dusun Seberang**: 60 Kayu, 20 Bijih, 300 Koin. Players
@@ -153,6 +170,8 @@ Run locally (below), open http://localhost:3000.
    stock and price reason.
 10. Walk into the **Balai Desa** next to the plaza and face the shelf at the back → the project board. Pledge toward
     the bridge to Dusun Seberang (the fogged hamlet across the river). Press **Peta** (M) to see the whole village.
+11. Dev panel → **Lompat ke malam**, then gather at a tree or rock in Hutan Utara (north of the village) until a
+    wild boar or bats appear. Fight with **Lawan** or run with **Lari**.
 
 ## Run locally
 

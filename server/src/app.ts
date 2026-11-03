@@ -111,6 +111,7 @@ export function createApp(deps: AppDeps) {
           dialogue: dialogue.enabled ? 'nearai' : 'local',
           world: game.map?.view() ?? null,
           econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time },
+          monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo } : null,
         });
       }
       if (req.method === 'POST' && p === '/api/auth/register') {
@@ -193,6 +194,14 @@ export function createApp(deps: AppDeps) {
         const seed = Math.floor(Number(b.seed ?? 42)) >>> 0;
         const r = await simulate(days, players, seed);
         return send(res, 200, { ...r, label: 'Simulasi off-chain: rantai tiruan, kode harga dan aturan yang sama (economy/pricing.ts)' });
+      }
+      if (req.method === 'POST' && p === '/api/dev/night') {
+        // Dev panel: jump the game clock to the next 20:00 (night monsters); crossing 06:00 settles as usual
+        if (!deps.cfg.devTools) throw new HttpError(403, 'dev tools are off');
+        const per = game.econ.time.hoursPerDay, h = game.clock.time().hour;
+        game.clock.skipHours((20 - h + per) % per || per);
+        await game.step();
+        return send(res, 200, { time: game.clock.time() });
       }
       if (req.method === 'POST' && p === '/api/dev/settle') {
         if (!deps.cfg.devTools) throw new HttpError(403, 'dev tools are off');

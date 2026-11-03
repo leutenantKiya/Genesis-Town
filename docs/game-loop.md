@@ -113,7 +113,15 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
   your request on 2026-11-01. Because it is a large job, it is scheduled after the economy loop works (see the
   milestone plan in the README).
 
+## Night in the forest
+
+From 19:00 to 06:00, gathering in Hutan Utara can meet a wild boar or mine bats. Fight (energy per round) or flee;
+winning gives the gather plus one; running out of energy knocks you out until 06:00 with nothing lost. It makes
+forest wood and ore riskier, and so worth more, at night. The town project **Pos Ronda** (on chain) ends it for
+everyone. Details: README, "Night monsters and Pos Ronda".
+
 ## What is deliberately not in the loop
 
-Casino, combat, theft, police, curfew and gossip are switched off by default (code kept behind feature flags). They
-pull attention away from the economy, and theft or gambling must never touch on-chain assets.
+Casino, player-versus-player combat, theft, police, curfew and gossip are switched off by default (code kept behind
+feature flags). They pull attention away from the economy, and theft or gambling must never touch on-chain assets.
+The night monsters are the one conflict in the loop: player against the forest, never against another player.

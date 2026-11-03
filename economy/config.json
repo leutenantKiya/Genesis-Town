@@ -125,6 +125,23 @@
     "maxSendAmount": 10
   },
   "projects": [
-    { "id": "jembatan-timur", "name": "Jembatan ke Dusun Seberang", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } }
-  ]
+    { "id": "jembatan-timur", "name": "Jembatan ke Dusun Seberang", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } },
+    { "id": "pos-ronda", "name": "Pos Ronda di Hutan Utara", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 } }
+  ],
+  "monsters": {
+    "chunk": "hutan",
+    "nightFrom": 19,
+    "nightTo": 6,
+    "guardProject": "pos-ronda",
+    "chance": { "tree": 0.15, "rock": 0.25 },
+    "byTile": { "tree": "boar", "rock": "bat" },
+    "kinds": {
+      "boar": { "name": "Babi hutan", "hp": 2, "hit": 4 },
+      "bat": { "name": "Kelelawar tambang", "hp": 2, "hit": 3 }
+    },
+    "fightEnergy": 5,
+    "fleeEnergy": 4,
+    "hitChance": 0.7,
+    "wakeEnergy": 40
+  }
 }

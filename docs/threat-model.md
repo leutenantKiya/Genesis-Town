@@ -84,6 +84,13 @@ rejects the second if the on-chain balance runs out, and the per-account rate li
 - Opening an area does not move anything already built (the generator reuses the closed map's attempt), so the
   ledger's tile coordinates stay valid.
 
+## Night monsters
+
+Every roll (whether a monster appears, each hit) happens on the server, and a pending encounter blocks every other
+action, so a modified client cannot skip a fight or gather past it. A knock-out only blocks actions until 06:00; it
+never removes items or coins. Wins add one item through the normal ledger, so the contract's daily gain caps still
+apply. Pos Ronda is read from the chain (`done`), like the bridge.
+
 ## Merchant dialogue (NEAR AI Cloud)
 
 The player's question and the shop's current prices go to NEAR AI Cloud (private inference in a TEE); the answer is

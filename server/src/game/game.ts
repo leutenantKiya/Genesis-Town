@@ -9,10 +9,11 @@ import { World, type Rng } from './world.ts';
 import { Market } from './market.ts';
 import { Settlement } from './settlement.ts';
 import { WorldMap, Positions, type Pos } from './worldmap.ts';
+import { Monsters } from './monsters.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee'] as const;
 
 export class Game {
   econ: Econ;
@@ -24,6 +25,7 @@ export class Game {
   /** The shared village map; absent in unit tests and the simulator, which use abstract tile coordinates. */
   map: WorldMap | null = null;
   positions: Positions | null = null;
+  monsters: Monsters | null = null;
   now: () => number;
   store: Store;
   chain: Chain;
@@ -45,8 +47,11 @@ export class Game {
     if (o.worldSeed != null) {
       this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
       this.positions = new Positions(this.map);
+      if (this.econ.monsters) this.monsters = new Monsters(this.econ, this.gs, this.clock, this.world, this.map, o.rng ?? Math.random);
     }
   }
+
+  private need<T>(x: T | null): T { if (!x) throw new HttpError(400, 'unknown action'); return x; }
 
   /** A state poll from the player's client, with where they stand (ignored without the shared map). */
   reportPosition(account: string, pos: Pos | null) {
@@ -111,6 +116,11 @@ export class Game {
     if (!(ACTIONS as readonly string[]).includes(a)) throw new HttpError(400, 'unknown action');
     const s = (k: string) => String(body[k] ?? '');
     const n = (k: string, d = 1) => Number(body[k] ?? d);
+    // Knocked out by a monster: nothing works until 06:00. A monster in the way: fight or flee first.
+    if (this.monsters) {
+      this.monsters.checkAwake(account);
+      if (this.monsters.pending.has(account) && a !== 'fight' && a !== 'flee') throw new HttpError(409, `${this.monsters.pending.get(account)!.name} menghadang! Lawan atau lari dulu.`);
+    }
     // With the shared map, every action says where the player stands, and the action must happen there.
     if (this.map && this.positions) {
       const pos = this.positions.report(account, body.pos, this.now());
@@ -122,10 +132,15 @@ export class Game {
     }
     let res: { toast: string };
     switch (a) {
-      case 'gather':
+      case 'gather': {
         this.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
+        const enc = this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
+        if (enc) { res = { toast: `${enc.name} menghadang! Lawan atau lari.` }; break; }
         res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1));
         break;
+      }
+      case 'fight': res = this.need(this.monsters).fight(account); break;
+      case 'flee': res = this.need(this.monsters).flee(account); break;
       case 'craft': res = this.world.craft(account, s('recipe')); break;
       case 'eat': res = this.world.eat(account, s('token')); break;
       case 'farm': res = this.world.farm(account, s('op'), n('plot', -1)); break;
@@ -138,6 +153,7 @@ export class Game {
   }
 
   state(account: string) {
+    const koUntil = this.monsters?.koUntil(account) ?? null; // first: waking up restores energy
     const t = this.clock.time();
     const p = this.world.state(account);
     const bag: Record<string, { settled: number; today: number; name: string }> = {};
@@ -151,6 +167,9 @@ export class Game {
       bag,
       plots: this.world.plots(account).map((x) => ({ idx: x.idx, state: x.state, grown: x.grown, wateredToday: x.watered_day === t.day })),
       world: this.map ? { seed: this.map.seed, unlocked: this.map.unlocked } : null,
+      encounter: this.monsters?.pending.get(account) ?? null,
+      koUntil,
+      night: this.monsters ? { now: this.monsters.isNight(), guarded: this.monsters.guarded() } : null,
     };
   }
 

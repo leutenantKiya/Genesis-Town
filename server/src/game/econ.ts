@@ -1,4 +1,5 @@
 // Loads economy/config.json (the single source of tuning values) with types.
+import type { MonsterConfig } from './monsters.ts';
 import { readFileSync } from 'node:fs';
 import type { PricingConfig, Personality } from '../../../economy/pricing.ts';
 import type { TimeConfig } from '../../../economy/time.ts';
@@ -30,6 +31,7 @@ export interface Econ {
   caps: { dailyGainPerItem: number; dailySends: number; maxSendAmount: number };
   /** Town projects; the contract holds the live state (create_project with these values). */
   projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number> }>;
+  monsters: MonsterConfig;
 }
 
 export function loadEcon(): Econ {
