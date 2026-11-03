@@ -103,6 +103,12 @@ Contract upgrades were deployed in place with a `migrate` init call, keeping eve
 
 ### Player market (Pasar Pemain)
 
+The market has two sides, and nobody needs a shop to use either. In the **Lapak** the seller's name shows, and every
+unit sold earns them a popularity point (titles from Pedagang baru to Legenda Pasar, and a Populer ranking). In the
+**Pasar Gelap** (black market) the seller is anonymous inside the game and earns no popularity; listings and sales stay
+public on chain, and the game says so. The side is the seller's choice when listing; the server keeps it
+(`server/src/game/bazaar.ts`), the contract is unchanged.
+
 Press **Pasar** (K). A player lists up to 50 of an item at their own price; the items move into the contract's escrow
 right away (`list_item`). Another player buys some or all (`buy_listing`, with a `max_price_each` guard); the contract
 pays the seller and burns 5% of the price. The seller can take the rest back at any time (`cancel_listing`). All three

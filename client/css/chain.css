@@ -82,3 +82,7 @@ html.gt-phone .gt-slot-k{display:none}
 @media (max-width:360px){html.gt-phone .gt-slot{width:32px}html.gt-phone .gt-hotbar{gap:3px;padding:3px}}
 
 .chain-done{color:#2f6b3a}
+
+.gt-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.gt-black-row{background:#24202e;color:#e8e2f4;border-radius:4px;padding-inline:8px;border-bottom-color:#3a3448}
+.gt-black-row .chain-dim{color:#a99fbf}

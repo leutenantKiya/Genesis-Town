@@ -11,6 +11,7 @@ import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
+import { Bazaar } from './game/bazaar.ts';
 import type { Game } from './game/game.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
 import { Worker } from 'node:worker_threads';
@@ -80,13 +81,17 @@ export function createApp(deps: AppDeps) {
   const dialogue = deps.dialogue ?? new Dialogue(deps.cfg.nearai);
   const clientRoot = resolve(deps.clientDir);
   const checkSpend = spendGuard(deps.chain, game);
-  const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[]) => {
+  const bazaar = new Bazaar(deps.store.db);
+  const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
     const accts = [sender, ...extra];
     if (method === 'send_item' && typeof args.receiver_id === 'string') accts.push(args.receiver_id);
     if (typeof args.merchant === 'string') accts.push(args.merchant);
     await game.settlement.refresh(accts);
     if (method.startsWith('restore')) await game.settlement.refreshShops();
     if (method === 'project_contribute') await game.syncProjects();
+    // the player market's two sides: remember Lapak or Pasar Gelap for a new listing; a Lapak sale earns popularity
+    if (method === 'list_item') bazaar.recordListing(await deps.chain.listListings(50), sender, args, relayBody.anonymous === true);
+    if (method === 'buy_listing' && extra[0]) bazaar.recordSale(Number(args.listing_id), extra[0], Number(args.amount));
   };
 
   // Off-chain play is signed with the player's session key (src/reqauth.ts); the account header alone proves nothing.
@@ -125,7 +130,9 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, await addDeviceKey(deps, await readJson(req)));
       }
       if (req.method === 'POST' && p === '/api/relay') {
-        return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay, itemName: (t) => game.econ.items[t]?.name ?? t }, await readJson(req)));
+        const body = await readJson(req);
+        const after = (s: string, m: string, a: Record<string, unknown>, e: string[]) => afterRelay(s, m, a, e, body);
+        return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay: after, itemName: (t) => game.econ.items[t]?.name ?? t }, body));
       }
       if (req.method === 'GET' && p === '/api/time') {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null, weather: game.weather() });
@@ -170,8 +177,8 @@ export function createApp(deps: AppDeps) {
       }
       if (req.method === 'GET' && p === '/api/listings') {
         // Player market: open listings read from the contract (escrowed there), newest first.
-        const listings = await deps.chain.listListings(50);
-        return send(res, 200, { listings, feeBps: MARKET_FEE_BPS, contractId: deps.cfg.gameContractId });
+        const listings = bazaar.view(await deps.chain.listListings(50));
+        return send(res, 200, { listings, feeBps: MARKET_FEE_BPS, contractId: deps.cfg.gameContractId, popular: bazaar.top(10) });
       }
       if (req.method === 'GET' && p === '/api/history') {
         const acct = accountOf(req, url);
