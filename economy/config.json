@@ -136,9 +136,11 @@
     "chance": { "tree": 0.15, "rock": 0.25 },
     "byTile": { "tree": "boar", "rock": "bat" },
     "kinds": {
-      "boar": { "name": "Babi hutan", "hp": 2, "hit": 4 },
-      "bat": { "name": "Kelelawar tambang", "hp": 2, "hit": 3 }
+      "boar": { "name": "Babi hutan", "hp": 2, "hit": 4, "drop": "wood" },
+      "bat": { "name": "Kelelawar tambang", "hp": 2, "hit": 3, "drop": "ore" }
     },
+    "roaming": { "boar": 5, "bat": 3 },
+    "reach": 2,
     "fightEnergy": 5,
     "fleeEnergy": 4,
     "hitChance": 0.7,

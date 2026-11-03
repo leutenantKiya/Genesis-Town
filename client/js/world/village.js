@@ -381,6 +381,51 @@
   /** The chunk a tile is in, and whether it's open. */
   function chunkOf(L, x, y) { var c = chunkAt(x, y, L.riverX1); return L.chunks.filter(function (q) { return q.id === c.id; })[0]; }
 
-  var api = { VERSION: VERSION, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR };
+  /* ---------------------------------------------------------------- weather (same for every player on a day) */
+  // Semi: showers; Panas: mostly bright sun; Gugur: rain; Dingin: snow. `wet` days water the farm by themselves.
+  var WEATHER = {
+    semi:   [['cerah', 0.45], ['berawan', 0.25], ['hujan', 0.30]],
+    panas:  [['terik', 0.65], ['cerah', 0.25], ['hujan', 0.10]],
+    gugur:  [['berawan', 0.35], ['hujan', 0.40], ['cerah', 0.25]],
+    dingin: [['salju', 0.55], ['berawan', 0.25], ['cerah', 0.20]]
+  };
+  var WEATHER_LABEL = { cerah: 'Cerah', berawan: 'Berawan', hujan: 'Hujan', terik: 'Terik', salju: 'Salju' };
+  function weather(seed, day, season) {
+    var table = WEATHER[season] || WEATHER.semi, r = hash3(seed | 0, day | 0, 0x3ea7), acc = 0;
+    for (var i = 0; i < table.length; i++) { acc += table[i][1]; if (r < acc) break; }
+    var kind = table[Math.min(i, table.length - 1)][0];
+    return { kind: kind, label: WEATHER_LABEL[kind], wet: kind === 'hujan' };
+  }
+
+  /* ---------------------------------------------------------------- forest monsters (where they roam each hour) */
+  // Boars roam the forest of Hutan Utara, bats hang around the mine. Each game hour every monster stands somewhere
+  // new near its home; the browser animates it wandering around that spot, the server checks fights against it.
+  function monsterCandidates(L) {
+    if (L._mc) return L._mc;
+    var boar = [], bat = [], free = { grass: 1, tallgrass: 1, flower: 1, sand: 1 };
+    var inB = function (x, y) { for (var k = 0; k < L.buildings.length; k++) { var b = L.buildings[k]; if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) return true; } return false; };
+    for (var y = 1; y < L.h - 1; y++) for (var x = 1; x < L.w - 1; x++) {
+      if (!free[L.tiles[y * L.w + x]] || inB(x, y) || chunkOf(L, x, y).id !== 'hutan') continue;
+      var dm = L.mine ? Math.abs(x - L.mine.x) + Math.abs(y - L.mine.y) : 99;
+      if (dm <= 6) bat.push([x, y]); else if (y < 28) boar.push([x, y]);
+    }
+    L._mc = { boar: boar, bat: bat };
+    return L._mc;
+  }
+  function monstersAt(L, hour, counts) {
+    counts = counts || { boar: 5, bat: 3 };
+    var c = monsterCandidates(L), out = [];
+    Object.keys(counts).forEach(function (kind) {
+      var pool = c[kind] || [];
+      if (!pool.length) return;
+      for (var i = 0; i < counts[kind]; i++) {
+        var p = pool[Math.floor(hash3(L.seed | 0, (hour | 0) * 31 + i, kind === 'bat' ? 0xba7 : 0xb0a2) * pool.length)];
+        out.push({ id: kind + '-' + i, kind: kind, x: p[0], y: p[1] });
+      }
+    });
+    return out;
+  }
+
+  var api = { VERSION: VERSION, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt };
   root.GTVillage = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

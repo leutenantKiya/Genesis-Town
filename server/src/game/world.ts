@@ -128,6 +128,22 @@ export class World {
     return out;
   }
 
+  /** Rain waters every planted plot once per rainy day (the weather comes from the shared village file). */
+  rainWater(account: string, wet: boolean): number {
+    if (!wet) return 0;
+    const t = this.clock.time(), f = this.econ.farm;
+    let n = 0;
+    for (const plot of this.plots(account)) {
+      if (plot.state !== 'planted' || plot.watered_day === t.day) continue;
+      plot.watered_day = t.day;
+      if (!f.noGrowthSeasons.includes(t.season)) plot.grown += 1;
+      if (plot.grown >= f.growDays) plot.state = 'ready';
+      this.gs.savePlot(plot);
+      n++;
+    }
+    return n;
+  }
+
   farm(account: string, op: string, idx: number): ActionResult {
     const f = this.econ.farm;
     if (!Number.isInteger(idx) || idx < 0 || idx >= f.plots) throw new HttpError(400, 'Petak tidak ada.');

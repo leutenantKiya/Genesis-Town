@@ -47,3 +47,12 @@
 .gt-goals-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .gt-goals-head b{font-weight:400;color:#2f6b3a}
 .gt-goals-x{border:0;background:transparent;color:var(--paper-edge);font-size:8px;padding:4px 2px;min-height:24px}
+
+/* Weather mood on the game view (outdoors only; set by chain.js from the day's shared weather) */
+#cv{transition:filter .8s}
+html.gt-w-terik #cv{filter:saturate(1.38) contrast(1.06) brightness(1.05)}
+html.gt-w-cerah #cv{filter:saturate(1.12)}
+html.gt-w-berawan #cv{filter:saturate(.86) brightness(.95)}
+html.gt-w-hujan #cv{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
+html.gt-w-salju #cv{filter:saturate(.7) brightness(1.06) hue-rotate(8deg)}
+html.gt-reduced-motion #cv{transition:none}

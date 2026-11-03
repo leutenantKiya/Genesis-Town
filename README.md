@@ -23,9 +23,10 @@
 >   (D-pad, A, E) with a bottom bar for Tas, Pasar, Peta, Riwayat and Lainnya; windows open as bottom sheets; buttons
 >   are 40 px or more. The prototype's thief-role picker no longer appears when the thief feature is off.
 >
-> - **Night monsters**: from 19:00 to 06:00, gathering in Hutan Utara can meet a wild boar (trees) or mine bats
->   (rocks). Fight or flee; losing all energy knocks you out until 06:00, with nothing lost on or off chain. The
->   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. Calmer HUD and a first-steps guide.
+> - **Night monsters**: from 19:00 to 06:00, wild boars and mine bats roam Hutan Utara and attack when you walk
+>   up to them; gathering there can also disturb one. Fight or flee; losing all energy knocks you out until 06:00, with nothing lost on or off chain. The
+>   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,
+>   snow, bright summer sun); rain waters the farm. Calmer HUD and a first-steps guide.
 >
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
 
@@ -122,8 +123,10 @@ account has exactly one full-access key (the NEAR Auth key the server stored at 
 
 ### Night monsters and Pos Ronda
 
-At night (19:00–06:00) the forest north of the village is dangerous. A gather in Hutan Utara may meet a **Babi hutan**
-(wild boar, at trees) or **Kelelawar tambang** (mine bats, at the rocks; more likely). A small window offers **Lawan**
+At night (19:00–06:00) the forest north of the village is dangerous. Five wild boars roam Hutan Utara and three bat
+swarms hang around the mine; walking right up to one makes it attack (beaten, it drops 1 Kayu or 1 Bijih). A gather
+can also disturb a hidden **Babi hutan** (trees) or **Kelelawar tambang** (rocks; more likely). Where the roaming
+monsters stand each game hour comes from the shared village file, so the server checks every fight against it. A small window offers **Lawan**
 (5 energy a round, 70% to hit; the monster hits back while it stands) or **Lari** (4 energy, no gather). Winning gives
 the gather plus one bonus. Running out of energy knocks the player out until 06:00 and sends them home; nothing is
 lost, on chain or off. The server decides every roll (`server/src/game/monsters.ts`, tuning in
@@ -132,6 +135,14 @@ The town can end it together: **Pos Ronda di Hutan Utara** (40 Kayu, 10 Bijih, 1
 project on the Balai Desa board; once it is built, no monster appears (created on testnet:
 https://testnet.nearblocks.io/txns/7WZ9hLavZsXKBwQmUHLGp6vcdqVeMRiQTozC54PqeGZU). Player-versus-player combat and theft
 stay switched off: they would either mean nothing or take things from other players.
+
+### Weather
+
+Every game day has one weather for every player, from the shared village file: showers in Semi, bright **Terik** sun
+most of Panas (the scene is drawn more vivid), rain in Gugur, **Salju** (snow) through most of Dingin. Rain and snow
+fall over the scene; the HUD shows the day's weather beside the season. **Rain waters every planted plot by itself**
+(checked on the server), so a wet week saves energy on the farm. `?cuaca=hujan|salju|terik|berawan|cerah` previews a
+look on your own screen only.
 
 ### Town projects (the bridge)
 

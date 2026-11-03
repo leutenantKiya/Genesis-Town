@@ -22,12 +22,17 @@ const SOLID = new Set(['tree', 'fence', 'sign', 'mailbox', 'rock', 'water', 'bus
 // Walking speed: one tile per 0.15 s in the client (MOVE_T), so at most ~6.7 tiles per second.
 const TILES_PER_SEC = 8, SLACK = 6;
 const dist = (a: Pos, b: Pos) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-interface VillageApi { generate(seed: number, unlocked?: string[]): Layout; chunkOf(L: Layout, x: number, y: number): Chunk; PROJECTS: Record<string, Project> }
+export interface Weather { kind: string; label: string; wet: boolean }
+export interface MonsterSpot { id: string; kind: string; x: number; y: number }
+interface VillageApi {
+  generate(seed: number, unlocked?: string[]): Layout; chunkOf(L: Layout, x: number, y: number): Chunk; PROJECTS: Record<string, Project>;
+  weather(seed: number, day: number, season: string): Weather; monstersAt(L: Layout, hour: number, counts?: Record<string, number>): MonsterSpot[];
+}
 export const Village = (globalThis as unknown as { GTVillage: VillageApi }).GTVillage;
 
 export class WorldMap {
   seed: number;
-  layout: Layout;
+  layout: Layout & { mine?: { x: number; y: number }; seed: number };
   constructor(seed: number, unlocked: string[] = []) {
     this.seed = seed >>> 0;
     this.layout = Village.generate(this.seed, unlocked);
@@ -59,6 +64,8 @@ export class WorldMap {
     const c = this.chunkAt(x, y);
     if (!c.open) throw new HttpError(409, `${c.name} belum dibuka.`);
   }
+  weather(day: number, season: string): Weather { return Village.weather(this.seed, day, season); }
+  monstersAt(hour: number, counts?: Record<string, number>): MonsterSpot[] { return Village.monstersAt(this.layout, hour, counts); }
   /** What the client needs to build the same map. */
   view() { return { seed: this.seed, unlocked: this.layout.unlocked, version: this.layout.version, chunks: this.layout.chunks, projects: this.layout.projects }; }
 }

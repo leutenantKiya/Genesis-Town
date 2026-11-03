@@ -102,7 +102,7 @@
     var v = $('span', 'val');
     var bar = $('span', 'chain-energy'); var fill = $('i'); fill.style.width = Math.round(100 * st.energy / st.energyMax) + '%'; bar.appendChild(fill);
     v.appendChild(bar);
-    v.appendChild(document.createTextNode(' ' + st.energy + ' · ' + SEASON[st.time.season] + ' H' + st.time.dayOfSeason));
+    v.appendChild(document.createTextNode(' ' + st.energy + ' · ' + SEASON[st.time.season] + ' H' + st.time.dayOfSeason + (st.weather ? ' · ' + st.weather.label : '')));
     hudCell.appendChild(v);
     // The engine's coin counter mirrors your NEAR coin (settled + today).
     var coin = st.bag.coin.settled + st.bag.coin.today;
@@ -261,9 +261,9 @@
       if (S.modal && S.modal.kind === 'project') jobs.push(api('/projects').then(function (r) { S.projects = r.projects || []; }));
       if (S.modal && S.modal.kind === 'market') jobs.push(api('/listings').then(function (l) { S.listings = l.listings || []; S.feeBps = l.feeBps; }));
     } else {
-      jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); }));
+      jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); S.weather = t.weather; }));
     }
-    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); if (S.st && S.st.encounter && !(fightH && fightH.isOpen()) && !GT.isUiOpen()) openFight(); }).catch(function (e) {
+    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); applyWeatherClass(); if (S.st && S.st.encounter && !(fightH && fightH.isOpen()) && !GT.isUiOpen()) openFight(); }).catch(function (e) {
       if (e.status === 401) { S.account = null; lsSet(LS_ACC, null); renderBanner(); }
     });
   }
@@ -346,18 +346,59 @@
     R(1, 4, 9, 5, '#5a3a24'); R(2, 3, 6, 1, '#6e4a2e'); R(8, 5, 3, 3, '#6e4a2e'); R(11, 6, 1, 2, '#c9a27a');
     R(9, 5, 1, 1, '#ff5a5a'); R(10, 8, 1, 1, '#f0f0e0'); R(2, 9, 1, 2, '#3a2414'); R(7, 9, 1, 2, '#3a2414'); R(0, 5, 1, 1, '#3a2414');
   }
+  // Roaming monsters this game hour (same list the server checks), each wandering a little around its spot.
+  function roamers() {
+    var st = S.st, L = GT.world && GT.world.layout;
+    if (!st || !st.night || !st.night.now || st.night.guarded || !L || !window.GTVillage || !S.cfg || !S.cfg.monsters) return [];
+    return GTVillage.monstersAt(L, st.time.totalHours, S.cfg.monsters.roaming);
+  }
+  function wander(m, t) { var h = 0; for (var i = 0; i < m.id.length; i++) h = (h * 31 + m.id.charCodeAt(i)) | 0; return { dx: Math.sin(t * 0.7 + h) * 0.45, dy: Math.cos(t * 0.5 + h * 1.3) * 0.35 }; }
   function onDraw(ctx, camX, camY, T) {
-    var e = S.st && S.st.encounter, sc = GT.scene;
-    if (!e || !sc || sc.kind !== 'out') return;
-    drawMonster(ctx, e.kind, e.x * T - camX, e.y * T - camY, performance.now() / 1000);
+    var sc = GT.scene;
+    if (!sc || sc.kind !== 'out') return;
+    var t = performance.now() / 1000, e = S.st && S.st.encounter;
+    roamers().forEach(function (m) {
+      if (e && e.id === m.id) return;
+      var w = wander(m, t);
+      drawMonster(ctx, m.kind, Math.round((m.x + w.dx) * T - camX), Math.round((m.y + w.dy) * T - camY), t + m.x);
+    });
+    if (e) drawMonster(ctx, e.kind, e.x * T - camX, e.y * T - camY, t);
+    drawWeather(ctx, T, t);
+  }
+
+  /* ---- Weather: the same day's weather for everyone (server state, from the shared village file) ---- */
+  var flakes = null;
+  // ?cuaca=hujan|salju|terik|berawan|cerah previews a look on this screen only (the server's weather is unchanged)
+  var previewWeather = (/[?&]cuaca=(cerah|berawan|hujan|terik|salju)\b/.exec(location.search) || [])[1] || null;
+  function weatherKind() { if (previewWeather) return previewWeather; var w = (S.st && S.st.weather) || S.weather; return w ? w.kind : null; }
+  function applyWeatherClass() {
+    var k = weatherKind(), root = document.documentElement;
+    ['cerah', 'berawan', 'hujan', 'terik', 'salju'].forEach(function (x) { root.classList.toggle('gt-w-' + x, k === x && (!GT.scene || GT.scene.kind === 'out')); });
+  }
+  function drawWeather(ctx, T, t) {
+    var k = weatherKind();
+    if (k !== 'hujan' && k !== 'salju') return;
+    var sx = ctx.getTransform().a || 1, W = ctx.canvas.width / sx, H = ctx.canvas.height / sx;
+    var calm = document.documentElement.classList.contains('gt-reduced-motion');
+    ctx.save();
+    ctx.fillStyle = k === 'hujan' ? 'rgba(40,60,90,0.14)' : 'rgba(236,242,255,0.34)'; // grey rain light; snow-covered ground
+    ctx.fillRect(0, 0, W, H);
+    if (!flakes || flakes.k !== k) { flakes = { k: k, p: [] }; for (var i = 0; i < (k === 'hujan' ? 90 : 70); i++) flakes.p.push([Math.random(), Math.random(), 0.6 + Math.random() * 0.8]); }
+    flakes.p.forEach(function (f) {
+      var speed = calm ? 0 : (k === 'hujan' ? 1.6 : 0.18) * f[2];
+      var y = ((f[1] + t * speed) % 1) * H, x = ((f[0] + (k === 'hujan' ? t * speed * 0.25 : Math.sin(t + f[0] * 9) * 0.01)) % 1) * W;
+      if (k === 'hujan') { ctx.fillStyle = 'rgba(190,215,255,0.55)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 4); }
+      else { ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), f[2] > 1.1 ? 2 : 1, f[2] > 1.1 ? 2 : 1); }
+    });
+    ctx.restore();
   }
   function fightBody(e) {
     var wrap = $('div');
     var hp = ''; for (var i = 0; i < e.maxHp; i++) hp += i < e.hp ? '■ ' : '□ ';
-    wrap.appendChild($('p', null, e.name + ' menghadang di gelap hutan.'));
+    wrap.appendChild($('p', null, e.tile ? e.name + ' keluar dari ' + (e.tile === 'rock' ? 'celah batu' : 'balik pohon') + ' dan menghadang.' : e.name + ' menyerang di gelap hutan.'));
     wrap.appendChild($('p', 'num', 'Tenaganya: ' + hp.trim()));
     wrap.appendChild($('p', 'num', 'Energimu: ' + (S.st ? S.st.energy : '?') + '/' + (S.st ? S.st.energyMax : 100)));
-    wrap.appendChild($('p', 'chain-dim', 'Menang: kamu dapat hasilnya +1 bonus. Energi habis: pingsan sampai pukul 06:00 (tidak ada barang yang hilang). Pos Ronda di Balai Desa membuat hutan aman.'));
+    wrap.appendChild($('p', 'chain-dim', (e.tile ? 'Menang: kamu dapat hasilnya +1 bonus.' : 'Menang: ' + (e.kind === 'bat' ? 'kelelawar menjatuhkan 1 Bijih.' : 'babi hutan menjatuhkan 1 Kayu.')) + ' Energi habis: pingsan sampai pukul 06:00 (tidak ada barang yang hilang). Pos Ronda di Balai Desa membuat hutan aman.'));
     return wrap;
   }
   function openFight() {
@@ -559,7 +600,19 @@
     }
     return null;
   }
+  var lastAggro = '';
+  function aggro() {
+    if (S.busy || !S.st || S.st.encounter || GT.isUiOpen() || !GT.scene || GT.scene.kind !== 'out') return;
+    var p = GT.player, hour = S.st.time.totalHours;
+    var m = roamers().filter(function (q) { return Math.abs(q.x - p.x) + Math.abs(q.y - p.y) <= 1; })[0];
+    if (!m || lastAggro === m.id + '@' + hour) return;
+    lastAggro = m.id + '@' + hour;
+    S.busy = true;
+    act({ action: 'engage', monster: m.id }).then(function () { if (S.st && S.st.encounter) openFight(); }, noop).then(function () { S.busy = false; });
+  }
   function onFrame(dt) {
+    aggro();
+    applyWeatherClass();
     stepLife(dt || 0);
     var now = Date.now(); if (now - hintT < 150) return; hintT = now;
     if (!hintEl) { var scr = document.getElementById('screen'); if (!scr) return; hintEl = $('div'); hintEl.id = 'gt-hint'; hintEl.setAttribute('aria-live', 'polite'); scr.appendChild(hintEl); }

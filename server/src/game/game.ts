@@ -13,7 +13,7 @@ import { Monsters } from './monsters.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage'] as const;
 
 export class Game {
   econ: Econ;
@@ -50,6 +50,9 @@ export class Game {
       if (this.econ.monsters) this.monsters = new Monsters(this.econ, this.gs, this.clock, this.world, this.map, o.rng ?? Math.random);
     }
   }
+
+  /** Today's weather on the shared map (the same for every player). */
+  weather() { if (!this.map) return null; const t = this.clock.time(); return this.map.weather(t.day, t.season); }
 
   private need<T>(x: T | null): T { if (!x) throw new HttpError(400, 'unknown action'); return x; }
 
@@ -140,6 +143,11 @@ export class Game {
         break;
       }
       case 'fight': res = this.need(this.monsters).fight(account); break;
+      case 'engage': {
+        const enc = this.need(this.monsters).engage(account, s('monster'), (body.pos ?? {}) as { x: number; y: number });
+        res = { toast: `${enc.name} menyerang! Lawan atau lari.` };
+        break;
+      }
       case 'flee': res = this.need(this.monsters).flee(account); break;
       case 'craft': res = this.world.craft(account, s('recipe')); break;
       case 'eat': res = this.world.eat(account, s('token')); break;
@@ -155,6 +163,8 @@ export class Game {
   state(account: string) {
     const koUntil = this.monsters?.koUntil(account) ?? null; // first: waking up restores energy
     const t = this.clock.time();
+    const weather = this.weather();
+    if (weather) this.world.rainWater(account, weather.wet); // rain waters the farm by itself
     const p = this.world.state(account);
     const bag: Record<string, { settled: number; today: number; name: string }> = {};
     for (const [token, def] of Object.entries(this.econ.items)) {
@@ -170,6 +180,7 @@ export class Game {
       encounter: this.monsters?.pending.get(account) ?? null,
       koUntil,
       night: this.monsters ? { now: this.monsters.isNight(), guarded: this.monsters.guarded() } : null,
+      weather,
     };
   }
 

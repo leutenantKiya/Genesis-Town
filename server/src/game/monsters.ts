@@ -13,13 +13,13 @@ import type { Clock } from './clock.ts';
 import type { World, Rng } from './world.ts';
 import type { WorldMap } from './worldmap.ts';
 
-export interface MonsterDef { name: string; hp: number; hit: number }
+export interface MonsterDef { name: string; hp: number; hit: number; drop: string }
 export interface MonsterConfig {
   chunk: string; nightFrom: number; nightTo: number; guardProject: string;
-  chance: Record<string, number>; kinds: Record<string, MonsterDef>; byTile: Record<string, string>;
+  chance: Record<string, number>; kinds: Record<string, MonsterDef>; byTile: Record<string, string>; roaming: Record<string, number>; reach: number;
   fightEnergy: number; fleeEnergy: number; hitChance: number; wakeEnergy: number;
 }
-export interface Encounter { kind: string; name: string; hp: number; maxHp: number; tile: string; x: number; y: number }
+export interface Encounter { kind: string; name: string; hp: number; maxHp: number; tile: string | null; x: number; y: number; id?: string }
 
 export class Monsters {
   pending = new Map<string, Encounter>();
@@ -65,6 +65,24 @@ export class Monsters {
     return e;
   }
 
+  /** Where the roaming monsters stand this game hour (none by day or once Pos Ronda guards the forest). */
+  roaming(hour = this.clock.hours()) {
+    if (this.guarded() || !this.isNight(this.clock.time().hour)) return [];
+    return this.map.monstersAt(hour, this.cfg.roaming);
+  }
+
+  /** The player walked into a roaming monster: it attacks. Checked against where it stands this hour (or last). */
+  engage(account: string, id: string, pos: { x: number; y: number }): Encounter {
+    if (this.pending.has(account)) return this.pending.get(account)!;
+    const h = this.clock.hours();
+    const m = [...this.roaming(h), ...this.roaming(h - 1)].find((q) => q.id === id && Math.abs(q.x - pos.x) + Math.abs(q.y - pos.y) <= this.cfg.reach);
+    if (!m) throw new HttpError(409, 'Tidak ada apa-apa di sini.');
+    const d = this.cfg.kinds[m.kind];
+    const e = { kind: m.kind, name: d.name, hp: d.hp, maxHp: d.hp, tile: null, x: m.x, y: m.y, id: m.id };
+    this.pending.set(account, e);
+    return e;
+  }
+
   private knockOut(account: string) {
     const t = this.clock.time();
     const per = this.econ.time.hoursPerDay;
@@ -95,13 +113,20 @@ export class Monsters {
       this.pending.delete(account);
       // the way is clear: gather as usual, plus one for the trouble
       let toast = `${e.name} kabur!`;
-      try {
-        const g = this.world.gather(account, e.tile, e.x, e.y);
-        const token = this.econ.gather.tiles[e.tile];
-        this.gs.add(this.clock.time().day, account, token, 1, 'monster_bonus', e.kind);
-        toast += ` ${g.toast} +1 bonus.`;
-      } catch (err) {
-        toast += ' ' + (err as Error).message;
+      const day = this.clock.time().day;
+      if (e.tile) {
+        try {
+          const g = this.world.gather(account, e.tile, e.x, e.y);
+          this.gs.add(day, account, this.econ.gather.tiles[e.tile], 1, 'monster_bonus', e.kind);
+          toast += ` ${g.toast} +1 bonus.`;
+        } catch (err) {
+          toast += ' ' + (err as Error).message;
+        }
+      } else {
+        // a roaming monster leaves something behind
+        const drop = d.drop;
+        this.gs.add(day, account, drop, 1, 'monster_drop', e.kind);
+        toast += ` Ia menjatuhkan 1 ${this.econ.items[drop]?.name ?? drop}.`;
       }
       return { toast, won: true };
     }

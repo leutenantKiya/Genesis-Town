@@ -90,3 +90,54 @@ test('fleeing costs a little energy and gathers nothing; a finished Pos Ronda ke
   w.rolls([0.1]);
   assert.match(w.gather().toast, /Kayu/);
 });
+
+test('roaming monsters: walking into one starts a fight, beating it drops wood or ore; far away nothing happens', async () => {
+  const w = await world();
+  w.advanceTo(12);
+  assert.deepEqual(w.game.monsters!.roaming(), [], 'none by day');
+  w.advanceTo(21);
+  const ms = w.game.monsters!.roaming();
+  assert.equal(ms.length, 8);
+  const boar = ms.find((m) => m.kind === 'boar')!;
+  const near = [[0, 1], [0, -1], [1, 0], [-1, 0], [0, 0]].map(([dx, dy]) => ({ x: boar.x + dx, y: boar.y + dy })).find((p) => w.game.map!.walkable(p.x, p.y))!;
+  w.nowAdd(3_600_000); // walking there takes a while
+  w.advanceTo(21);
+  const at = w.game.monsters!.roaming().find((m) => m.id === boar.id)!;
+  const stand = [[0, 1], [0, -1], [1, 0], [-1, 0], [0, 0]].map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })).find((p) => w.game.map!.walkable(p.x, p.y))!;
+  assert.ok(near);
+  w.rolls([0.1, 0.1]);
+  const r = w.game.act(P, { action: 'engage', monster: at.id, pos: stand }) as { toast: string };
+  assert.match(r.toast, /Babi hutan menyerang/);
+  const wood0 = w.game.gs.balance(P, 'wood');
+  w.game.act(P, { action: 'fight', pos: stand });
+  const won = w.game.act(P, { action: 'fight', pos: stand }) as { won?: boolean; toast: string };
+  assert.equal(won.won, true);
+  assert.match(won.toast, /menjatuhkan 1 Kayu/);
+  assert.equal(w.game.gs.balance(P, 'wood'), wood0 + 1);
+  // a monster that is not next to you cannot be engaged
+  const far = w.game.monsters!.roaming().find((m) => Math.abs(m.x - stand.x) + Math.abs(m.y - stand.y) > 2);
+  if (far) assert.throws(() => w.game.act(P, { action: 'engage', monster: far.id, pos: stand }), /Tidak ada apa-apa/);
+});
+
+test('rain waters planted plots by itself, once per rainy day', async () => {
+  const w = await world();
+  const L = w.game.map!.layout;
+  const farm = (L as unknown as { farm: { plots: Array<{ x: number; y: number }> } }).farm;
+  const plot = farm.plots[0];
+  const stand = [[0, 1], [0, -1], [1, 0], [-1, 0]].map(([dx, dy]) => ({ x: plot.x + dx, y: plot.y + dy })).find((p) => w.game.map!.walkable(p.x, p.y)) ?? { x: plot.x, y: plot.y + 1 };
+  // find a dry day in a growing season to plant, then wait for rain
+  let guard = 0;
+  while ((w.game.weather()!.wet || w.game.clock.time().season === 'dingin') && guard++ < 200) w.nowAdd(w.econ.time.realMsPerGameHour * 24);
+  w.nowAdd(60_000);
+  w.game.act(P, { action: 'farm', op: 'till', plot: 0, pos: stand });
+  w.nowAdd(1000);
+  w.game.act(P, { action: 'farm', op: 'plant', plot: 0, pos: stand });
+  guard = 0;
+  while (!w.game.weather()!.wet && guard++ < 200) w.nowAdd(w.econ.time.realMsPerGameHour * 24);
+  assert.ok(w.game.weather()!.wet, 'a rainy day came');
+  const s1 = w.game.state(P) as { plots: Array<{ grown: number; wateredToday: boolean }>; weather: { label: string } };
+  assert.equal(s1.weather.label, 'Hujan');
+  assert.equal(s1.plots[0].wateredToday, true);
+  const g = s1.plots[0].grown;
+  assert.equal((w.game.state(P) as { plots: Array<{ grown: number }> }).plots[0].grown, g, 'only once per day');
+});

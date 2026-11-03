@@ -111,7 +111,7 @@ export function createApp(deps: AppDeps) {
           dialogue: dialogue.enabled ? 'nearai' : 'local',
           world: game.map?.view() ?? null,
           econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time },
-          monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo } : null,
+          monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, reach: game.econ.monsters.reach } : null,
         });
       }
       if (req.method === 'POST' && p === '/api/auth/register') {
@@ -128,7 +128,7 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay, itemName: (t) => game.econ.items[t]?.name ?? t }, await readJson(req)));
       }
       if (req.method === 'GET' && p === '/api/time') {
-        return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null });
+        return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null, weather: game.weather() });
       }
       if (req.method === 'GET' && p === '/api/state') {
         const acct = accountOf(req, url);
