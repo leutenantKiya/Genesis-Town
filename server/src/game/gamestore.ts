@@ -152,6 +152,10 @@ export class GameStore {
   }
 
   /** Units a merchant bought from players today (for the daily buy cap). */
+  /** Sum of one kind of ledger row for an account on a day (e.g. village seeds handed out). */
+  sumKind(day: number, account: string, token: string, kind: string): number {
+    return (this.db.prepare('SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND account = ? AND token = ? AND kind = ? AND delta > 0').get(day, account, token, kind) as { s: number }).s;
+  }
   boughtToday(merchant: string, token: string, day: number): number {
     return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND account = ? AND token = ? AND kind = 'trade' AND delta > 0").get(day, merchant, token) as { s: number }).s;
   }

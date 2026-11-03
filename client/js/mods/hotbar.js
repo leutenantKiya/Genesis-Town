@@ -116,7 +116,6 @@
       var pi = GT.scene && GT.scene.kind === 'out' ? c.plotAt(t.x, t.y) : -1, plot = pi >= 0 && c.state.st.plots[pi];
       if (!plot) return GT.toast('Pegang Gandum, berdiri di sebelah petak kebun yang sudah dicangkul, lalu klik kanan petaknya.');
       if (plot.state !== 'tilled') return GT.toast(plot.state === 'empty' ? 'Cangkul dulu petaknya (klik atau F).' : 'Petak ini sudah ditanami.');
-      if (n <= 0) return GT.toast('Tidak ada Gandum untuk ditanam.');
       c.act({ action: 'farm', op: 'plant', plot: pi }).catch(function () {});
       return;
     }

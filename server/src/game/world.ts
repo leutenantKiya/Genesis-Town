@@ -159,10 +159,18 @@ export class World {
     } else if (op === 'plant') {
       if (plot.state !== 'tilled') throw new HttpError(409, 'Cangkul dulu petaknya.');
       if (f.noGrowthSeasons.includes(t.season)) throw new HttpError(409, 'Gandum tidak tumbuh di musim dingin.');
-      this.need(account, f.seed, 1);
+      // Seeds can't run out for good: with no Gandum left, the village hands out a few seeds a day (net zero on
+      // chain, since the seed goes straight into the ground). Otherwise a town whose bakery is closed can't farm.
+      let gift = false;
+      const seeds = f.villageSeedsPerDay ?? 0;
+      if (this.gs.balance(account, f.seed) < 1 && this.gs.sumKind(t.settleDay, account, f.seed, 'village-seed') < seeds) {
+        this.gs.add(t.settleDay, account, f.seed, 1, 'village-seed');
+        gift = true;
+      }
+      if (this.gs.balance(account, f.seed) < 1) throw new HttpError(409, `Kamu tidak punya benih Gandum, dan benih desa hari ini sudah habis (${seeds} per hari). Coba lagi besok, atau beli Gandum.`);
       this.gs.add(t.settleDay, account, f.seed, -1, 'plant');
       Object.assign(plot, { state: 'planted', planted_day: t.day, grown: 0, watered_day: -1 });
-      toast = 'Benih gandum ditanam. Siram setiap hari.';
+      toast = gift ? 'Desa memberimu 1 benih gandum, dan langsung ditanam. Siram setiap hari.' : 'Benih gandum ditanam. Siram setiap hari.';
     } else if (op === 'water') {
       if (plot.state !== 'planted') throw new HttpError(409, 'Tidak ada yang perlu disiram.');
       if (plot.watered_day === t.day) throw new HttpError(409, 'Sudah disiram hari ini.');

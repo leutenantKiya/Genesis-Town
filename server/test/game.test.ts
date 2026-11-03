@@ -91,6 +91,22 @@ test('farm: till, plant, water once a day, harvest after 3 watered days', async 
   assert.equal(bal(game, P, 'wheat'), 5);
 });
 
+test('farm: with no Gandum left the village gives a few seeds a day, so farming never dead-ends', async () => {
+  const { game, econ, clock } = await world();
+  econ.farm.villageSeedsPerDay = 2;
+  for (let i = 0; i < 6; i++) game.act(P, { action: 'farm', op: 'till', plot: i });
+  for (let i = 0; i < 3; i++) game.act(P, { action: 'farm', op: 'plant', plot: i }); // the starter kit's 3 seeds
+  assert.equal(bal(game, P, 'wheat'), 0);
+  const r = game.act(P, { action: 'farm', op: 'plant', plot: 3 }) as { toast: string };
+  assert.match(r.toast, /Desa memberimu 1 benih/);
+  game.act(P, { action: 'farm', op: 'plant', plot: 4 });
+  assert.equal(bal(game, P, 'wheat'), 0);
+  assert.throws(() => game.act(P, { action: 'farm', op: 'plant', plot: 5 }), /benih desa hari ini sudah habis/);
+  clock.advanceHours(24);
+  game.act(P, { action: 'farm', op: 'plant', plot: 5 });
+  assert.equal(game.state(P).plots[5].state, 'planted');
+});
+
 test('selling to a merchant moves items and coin, prices react with a reason, daily cap holds', async () => {
   const { game, clock } = await world();
   for (let i = 0; i < 3; i++) for (let k = 0; k < 4; k++) game.act(P, { action: 'gather', tile: 'water', x: i, y: 9 });

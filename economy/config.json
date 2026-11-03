@@ -36,7 +36,8 @@
     "growDays": 3,
     "harvest": 3,
     "noGrowthSeasons": ["dingin"],
-    "energyCost": 2
+    "energyCost": 2,
+    "villageSeedsPerDay": 3
   },
   "seasons": {
     "semi":   { "yield": { "fish": 1.0, "ore": 1.0, "wood": 1.2 }, "demand": { "bread": 1.2, "meal": 1.0, "tool": 1.0, "wood": 1.0 } },

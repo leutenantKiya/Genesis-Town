@@ -555,7 +555,7 @@
     // Planting spends 1 Gandum, so it needs a second press within 2 seconds.
     if (op === 'plant' && !(pendingPlant && pendingPlant.idx === idx && Date.now() - pendingPlant.t < 2000)) {
       pendingPlant = { idx: idx, t: Date.now() };
-      GT.toast('Tekan ' + keyLabel() + ' sekali lagi untuk menanam (pakai 1 Gandum).');
+      GT.toast('Tekan ' + keyLabel() + ' sekali lagi untuk menanam ' + (have('wheat') > 0 ? '(pakai 1 Gandum).' : '(Gandummu habis: desa memberi benih gratis, 3 per hari).'));
       return;
     }
     pendingPlant = null;
@@ -588,7 +588,7 @@
     if (pi >= 0) {
       var p = S.st && S.st.plots[pi]; if (!p) return 'Petak kebun (masuk dulu)';
       if (p.state === 'empty') return 'Cangkul (−2 energi)';
-      if (p.state === 'tilled') return 'Tanam gandum (1 Gandum, tekan 2x)';
+      if (p.state === 'tilled') return have('wheat') > 0 ? 'Tanam gandum (1 Gandum, tekan 2x)' : 'Tanam (benih gratis dari desa, tekan 2x)';
       if (p.state === 'ready') return 'Panen gandum';
       return p.wateredToday ? 'Sudah disiram hari ini' : 'Siram (−2 energi)';
     }
@@ -757,7 +757,7 @@
     }, 'primary'));
   }
 
-  var WHERE = { fish: 'mancing di kolam atau sungai', wood: 'tebang pohon', ore: 'nambang di Tambang Utara (butuh Alat)', wheat: 'tanam di kebunmu', bread: 'Meja Kerja: 2 Gandum', meal: 'Meja Kerja: Ikan + Kayu', tool: 'Meja Kerja: 2 Bijih + Kayu', coin: 'jual ke pedagang yang buka, atau Kotak Kirim di rumahmu' };
+  var WHERE = { fish: 'mancing di kolam atau sungai', wood: 'tebang pohon', ore: 'nambang di Tambang Utara (butuh Alat)', wheat: 'tanam di kebunmu (kalau Gandummu habis, desa memberi 3 benih gratis per hari)', bread: 'Meja Kerja: 2 Gandum', meal: 'Meja Kerja: Ikan + Kayu', tool: 'Meja Kerja: 2 Bijih + Kayu', coin: 'jual ke pedagang yang buka, atau Kotak Kirim di rumahmu' };
   function restoreBody(id, m, wrap) {
     var s = (S.shops || []).filter(function (x) { return x.id === id; })[0];
     wrap.appendChild($('p', 'chain-closed', 'TUTUP. ' + m.name + ' tidak sanggup membayar sewa.'));

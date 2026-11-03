@@ -194,7 +194,8 @@ Run locally (below), open http://localhost:3000.
 3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → her goods on top, your items below with her price. Click
    your fish to sell one.
 4. Inside your house, press Space at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
-   Outside, in the fenced field next to your house, press Space on a plot to till, plant (press twice) and water wheat.
+   Outside, in the fenced field next to your house, press Space on a plot to till, plant (press twice) and water wheat. With no Gandum left, the village gives
+   up to 3 free seeds a day (planted straight away), so farming never dead-ends when the bakery is closed.
 5. Open the Dev panel → **Settle sekarang** → Riwayat (H) shows "Settlement hari N" with a testnet explorer link,
    and everything from step 2 now points to it.
 6. Press **Simulasi** → 7 game days play in about 60 seconds: price charts per item, merchant cash, money supply.
