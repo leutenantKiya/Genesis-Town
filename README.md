@@ -18,8 +18,8 @@
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >
->   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow;
->   covered by tests, not yet run with a live NEAR Auth approval). Sign-out keeps each account's key in the browser.
+>   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow,
+>   run live on testnet 2026-11-03). Sign-out keeps each account's key in the browser.
 >
 > Not done yet: the rest of M4 (removing the game account's full-access key before
 > submission, a mobile pass) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
@@ -106,6 +106,14 @@ Testnet run of `node server/scripts/e2e-market.ts` (2026-11-02, MARKET E2E PASS)
 - A lists 3 Gandum at 10 coin each (escrowed): https://testnet.nearblocks.io/txns/DkeDjhqdqTFRiqCyjvhcyeyPSsT841ur5Huu1D7SjsVP
 - B buys 2 for 20 coin; 19 go to A, 1 is burned: https://testnet.nearblocks.io/txns/6qCrnA2NKRyDs28gb6B7qR1YYWRyXVNYwrLmP9n7zDzF
 - A cancels the last one and gets it back: https://testnet.nearblocks.io/txns/86QeWJ4kKZkxg2QhEZGj37fxJGQSEGuVUsdTGst76vRx
+
+### New device (adding a game key with NEAR Auth)
+
+A returning player on a browser without their game key presses **Setujui di NEAR Auth** once. Their own NEAR Auth key
+signs a delegate action that adds a new function-call key (game contract only, no NEAR transfers); the relayer has
+it signed through `fast-auth.testnet` and pays the gas. Live run on 2026-11-03: the AddKey for a real Google login,
+relayed gas-free: https://testnet.nearblocks.io/txns/EQCu9GX2mNWT8YCJVehadGUGjYa1iBa1nY6hmdVdeMr6. Afterwards the
+account has exactly one full-access key (the NEAR Auth key the server stored at sign-up) and two game-only keys.
 
 ### Town projects (the bridge)
 

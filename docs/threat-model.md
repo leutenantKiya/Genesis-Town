@@ -103,6 +103,7 @@ anything else: another account, another receiver, named methods, more than one a
 a long expiry, or a delegate not signed by the owner key stored when the account was created. The MPC signature is
 checked against that owner key before anything is submitted. Each attempt costs the relayer a `sign` call, so it is
 limited per IP. The server can never add a key by itself: it holds no key of any player account.
+Run live on testnet on 2026-11-03 (AddKey relayed: EQCu9GX2mNWT8YCJVehadGUGjYa1iBa1nY6hmdVdeMr6).
 
 ## Session keys and shared browsers
 
