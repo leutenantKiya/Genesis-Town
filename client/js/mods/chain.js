@@ -263,7 +263,7 @@
     } else {
       jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); }));
     }
-    return Promise.all(jobs).then(function () { renderHud(); redraw(); }).catch(function (e) {
+    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); }).catch(function (e) {
       if (e.status === 401) { S.account = null; lsSet(LS_ACC, null); renderBanner(); }
     });
   }
@@ -298,6 +298,39 @@
     if (sc && sc.kind !== 'out' && sc.house) return { x: sc.house.dx, y: sc.house.dy + 1 };
     return { x: p.x, y: p.y };
   }
+  /* ---- Langkah pertama: a newcomer's next step, one at a time, ticked off by what they actually do ---- */
+  var GOALS = [
+    { id: 'signin', text: 'Tekan Masuk untuk membuat akunmu (Google atau email). Tanpa dompet, tanpa gas.' },
+    { id: 'gather', text: 'Hadap kolam, pohon atau batu, lalu tekan A (Spasi). Hasilnya masuk ke Tas.' },
+    { id: 'sell', text: 'Jalan ke Pasar di timur rumahmu dan jual hasilmu ke Sari, Budi, Wati atau Joko.' },
+    { id: 'board', text: 'Masuk ke Balai Desa di samping pasar dan lihat papan proyek di rak belakang.' }
+  ];
+  var goalBox = null;
+  function goalKey() { return 'gt.chain.goals.' + (S.account || 'guest'); }
+  function goalsDone() { try { return JSON.parse(lsGet(goalKey()) || '{}') || {}; } catch (e) { return {}; } }
+  function markGoal(id) { var d = goalsDone(); if (d[id]) return; d[id] = 1; lsSet(goalKey(), JSON.stringify(d)); renderGoals(); }
+  function renderGoals() {
+    var screen = document.getElementById('screen');
+    if (!screen || S.mode === 'loading') return;
+    if (!goalBox) { goalBox = $('div', 'gt-goals'); goalBox.setAttribute('role', 'status'); screen.appendChild(goalBox); }
+    var d = goalsDone();
+    if (S.account) d.signin = 1;
+    if (S.history && S.history.some(function (h) { return h.kind === 'gather'; })) d.gather = 1;
+    if (S.history && S.history.some(function (h) { return h.kind === 'sell'; })) d.sell = 1;
+    var next = GOALS.filter(function (g) { return !d[g.id]; })[0];
+    var hidden = lsGet('gt.chain.goalsHidden') === '1';
+    goalBox.style.display = !next || hidden || S.mode === 'offline' ? 'none' : '';
+    if (!next) return;
+    goalBox.textContent = '';
+    var head = $('div', 'gt-goals-head');
+    head.appendChild($('b', null, 'Langkah pertama · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
+    var x = $('button', 'gt-goals-x', 'Tutup'); x.type = 'button'; x.setAttribute('aria-label', 'Sembunyikan langkah pertama');
+    x.addEventListener('click', function (e) { e.stopPropagation(); lsSet('gt.chain.goalsHidden', '1'); renderGoals(); });
+    head.appendChild(x);
+    goalBox.appendChild(head);
+    goalBox.appendChild($('p', null, next.text));
+  }
+
   function act(body, quiet) {
     if (S.mode === 'offline') {
       if (body.action === 'gather') { OFF.gather(TILE_ITEM[body.tile]); GT.toast('+1 ' + item(TILE_ITEM[body.tile]) + ' (offline)'); return Promise.resolve(); }
@@ -307,6 +340,7 @@
     body.pos = standPos();
     return api('/act', { method: 'POST', body: body }).then(function (r) {
       S.st = r.state; renderHud(); redraw();
+      if (body.action === 'gather' || body.action === 'sell') markGoal(body.action);
       if (!quiet) GT.toast(r.toast);
       return r;
     }).catch(function (e) { GT.toast(e.message); throw e; });
@@ -816,6 +850,7 @@
   var BODIES = { bag: bagBody, history: historyBody, craft: craftBody, ship: shipBody, market: marketBody, project: projectBody };
   function open(kind, arg) {
     if (S.mode !== 'offline' && !S.account && kind !== 'shop') { login(); return; }
+    if (kind === 'project') markGoal('board');
     var title = kind === 'bag' ? 'Tas NEAR' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? 'Riwayat' : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
     var body = kind === 'shop' ? shopBody(arg) : BODIES[kind]();
     var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; } });

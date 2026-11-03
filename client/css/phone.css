@@ -53,3 +53,10 @@ html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:
   html.gt-phone .pad{--cell:44px;--bA:62px;--bE:46px;padding-block:6px 4px}
   html.gt-phone .gt-tab{min-height:46px}
 }
+
+/* Desktop and tablet HUD (not phone): five places in view plus Lainnya, in the order players need them */
+html:not(.gt-phone) #acts > button{display:none!important}
+html:not(.gt-phone) #acts > #chainbtn,html:not(.gt-phone) #acts > #pasarbtn,html:not(.gt-phone) #acts > #mapbtn,
+html:not(.gt-phone) #acts > #riwayatbtn,html:not(.gt-phone) #acts > #simbtn,html:not(.gt-phone) #acts > #gt-morebtn{display:inline-block!important}
+#acts > #chainbtn{order:1}#acts > #pasarbtn{order:2}#acts > #mapbtn{order:3}#acts > #riwayatbtn{order:4}#acts > #simbtn{order:5}#acts > #gt-morebtn{order:6}
+#acts > #chainbtn{background:var(--btn);color:#fff}

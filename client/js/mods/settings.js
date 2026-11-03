@@ -261,6 +261,9 @@
     init: function () {
       GT.addHudButton({ id: 'setbtn', label: 'Atur', onClick: openSettings, secondary: false });
       GT.addHudButton({ id: 'fsbtn', label: 'Layar', onClick: toggleFullscreen, secondary: false });
+      // A calmer HUD: Tas, Pasar, Peta, Riwayat and Simulasi stay in view; everything else lives in Lainnya
+      // (css/phone.css hides the rest). Their keyboard shortcuts still work.
+      GT.addHudButton({ id: 'gt-morebtn', label: 'Lainnya', onClick: moreSheet, secondary: false });
       renderHelp();
       applyLayout();
     }

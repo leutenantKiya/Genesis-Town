@@ -40,3 +40,10 @@
   .chain-field input{min-height:36px;font-size:16px}
   .chain-talk input, .mbody input[type=text]{min-height:40px;font-size:16px}
 }
+
+/* Langkah pertama: the newcomer's next step, top-left of the game view, on paper like the dialogs */
+.gt-goals{position:absolute;left:8px;top:8px;max-width:min(300px,calc(100% - 16px));z-index:3;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:5px;padding:7px 9px;font-size:8px;line-height:1.6;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.gt-goals p{margin:4px 0 0}
+.gt-goals-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.gt-goals-head b{font-weight:400;color:#2f6b3a}
+.gt-goals-x{border:0;background:transparent;color:var(--paper-edge);font-size:8px;padding:4px 2px;min-height:24px}
