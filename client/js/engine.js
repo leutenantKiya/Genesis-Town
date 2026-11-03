@@ -2298,6 +2298,12 @@ var GT = {
   facing: function(){ return facingTile(); },
   addHudButton: addHudButton, hotkey: hotkey,
   interact: function(mode){ return interact(mode || 'talk'); },
+  // A point on the screen (e.g. a mouse click) to the map tile under it, in the current scene
+  screenToTile: function(clientX, clientY){
+    var r = elCv.getBoundingClientRect(); if (!r.width) return null;
+    var wx = (clientX - r.left) * (VW / r.width) + camX, wy = (clientY - r.top) * (VH / r.height) + camY;
+    return { x: Math.floor(wx / T), y: Math.floor(wy / T) };
+  },
   addNpc: addNpc, removeNpc: removeNpc, moveNpc: moveNpc, npcTeleport: npcTeleport, npcHide: npcHide, findNpc: findNpc, npcScene: npcSceneOf,
   engageNpc: function(npc){ if (npc) engage(npc); },
   getScene: resolveScene,
@@ -2343,6 +2349,8 @@ function reachableReport(){
 }
 function exposeDebug(){
   var g = {
+    // run n frames of game updates by hand (tests; a hidden browser tab gets no animation frames)
+    step: function(n, dt){ for (var i = 0; i < (n || 1); i++) update(dt || 0.016); render(); updateHud(); },
     regen: function(s){ return regen(s); },
 
     reachable: reachableReport,

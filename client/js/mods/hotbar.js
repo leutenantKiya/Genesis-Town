@@ -1,8 +1,8 @@
 /*
  * hotbar.js - item slots along the bottom of the game view, like a crafting game's hotbar.
- * Every item the player can hold has a slot with its icon and count (on chain plus today). Tap a slot, or press 1-7,
- * for what you can do with it right there: eat it, send it to a player, list it on the Pasar Pemain, or open the whole
- * bag. E (or I, or the round E button on phones) opens the bag. Reads and acts through window.GT_CHAIN.
+ * Every item the player can hold has a slot with its icon and count (on chain plus today). Left-click (or tap) a
+ * slot to use it: food is eaten. Right-click (a long press on phones) or 1-7 opens its menu: send it to a player,
+ * list it on the Pasar Pemain, or open the whole bag. E (or I, or the round E button on phones) opens the bag. Reads and acts through window.GT_CHAIN.
  */
 (function () {
   'use strict';
@@ -48,7 +48,9 @@
       b.appendChild(icon(id, 24));
       b.appendChild($('span', 'gt-slot-n', '0'));
       b.appendChild($('span', 'gt-slot-k', String(i + 1)));
-      b.addEventListener('click', function (e) { e.stopPropagation(); e.currentTarget.blur(); toggle(i); });
+      // left-click uses the item (food is eaten); right-click or a long press opens its menu
+      b.addEventListener('click', function (e) { e.stopPropagation(); e.currentTarget.blur(); useSlot(i); });
+      b.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); toggle(i); });
       bar.appendChild(b);
     });
     var open = $('button', 'gt-slot gt-slot-bag', 'Tas'); open.type = 'button';
@@ -81,6 +83,13 @@
   }
 
   function openBag() { var c = chain(); if (c) c.open('bag'); }
+  function useSlot(i) {
+    var c = chain(), b = bag(), id = SLOTS[i];
+    if (!c || !b) return;
+    var econ = (c.state.cfg && c.state.cfg.econ && c.state.cfg.econ.items[id]) || {}, it = b[id] || { settled: 0, today: 0 };
+    if (econ.energy && it.settled + it.today > 0) { closePop(); c.act({ action: 'eat', token: id }).catch(function () {}); return; }
+    toggle(i); // nothing to use directly: show what can be done with it
+  }
 
   function closePop() { if (pop) { pop.remove(); pop = null; } selected = -1; if (bar) [].forEach.call(bar.children, function (x) { x.classList.remove('sel'); }); }
   function toggle(i) {
