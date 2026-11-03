@@ -18,7 +18,8 @@
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >
->   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow).
+>   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow;
+>   covered by tests, not yet run with a live NEAR Auth approval). Sign-out keeps each account's key in the browser.
 >
 > Not done yet: the rest of M4 (removing the game account's full-access key before
 > submission, a mobile pass) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
