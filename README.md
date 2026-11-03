@@ -40,7 +40,18 @@
 >   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,
 >   snow, bright summer sun); rain waters the farm. Calmer HUD and a first-steps guide.
 >
-> Not done yet: the rest of M4 (removing the game account's full-access key before submission) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
+> Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
+> and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
+>
+> **M4.5 Online** *(planned, target 2026-11-07)*: a public HTTPS URL anyone can play on testnet.
+> - Host: one long-running Node 24 process (the game loop ticks every 2 s, one game hour is one real minute,
+>   settlement every 24 real minutes), serving the client and the API from the same origin. Provider to be chosen
+>   by the owner; no paid service or personal account is added without their OK.
+> - Database: keep SQLite on a persistent disk if the host has one; otherwise migrate to Postgres (the store is
+>   synchronous `node:sqlite` today, about 60 statements in `db.ts`, `gamestore.ts` and `bazaar.ts`, so this means
+>   making the store async). Copy the current testnet DB over so balances, shops and history carry on.
+> - Secrets only as the host's environment variables; NEAR Auth login checked on the new origin (from its docs);
+>   relayer balance and rate limits reviewed for public traffic.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
