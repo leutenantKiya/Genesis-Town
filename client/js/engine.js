@@ -2079,13 +2079,14 @@ function layoutFull(){
   fxBub.forEach(function(r){ r.w = 0; }); fxTag.forEach(function(r){ r.w = 0; });
 }
 // Phone (html.gt-phone, css/phone.css): the canvas fills the space #fit gets between the status bar and the controls.
-// At least 11 columns at the largest whole-pixel scale; as many rows as the height allows (9 to 24).
+// At least 11 columns at the largest whole-pixel scale; as many rows as the height allows (9 to 32, so tall phones
+// such as a Pro Max or a Pixel get no empty bands).
 function layoutPhone(){
   var W = elFit.clientWidth || window.innerWidth, H = elFit.clientHeight || 300;
   var s = Math.max(1, Math.min(6, Math.floor(W / (11 * T))));
   if (s > 2 && Math.floor(W / (T * s)) < 13) s--; // prefer a wider view over bigger pixels
   var cols = Math.max(11, Math.min(40, Math.floor(W / (T * s))));
-  var rows = Math.max(9, Math.min(24, Math.floor(H / (T * s))));
+  var rows = Math.max(9, Math.min(32, Math.floor(H / (T * s))));
   S = s; VW = cols * T; VH = rows * T;
   elCv.width = VW * s; elCv.height = VH * s;
   elCv.style.width = (VW * s) + 'px'; elCv.style.height = (VH * s) + 'px';
