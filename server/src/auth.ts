@@ -48,7 +48,7 @@ export function isEd25519Key(s: unknown): s is string {
   try { PublicKey.from(s); return true; } catch { return false; }
 }
 
-export interface RegisterResult { accountId: string; created: boolean; txHashes: string[] }
+export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsKey?: boolean; ownerPublicKey?: string }
 
 export async function register(
   deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; onNewPlayer?: (accountId: string) => void },
@@ -65,7 +65,9 @@ export async function register(
     // Same login again. Adding another session key needs the owner's NEAR Auth signature (planned, M4).
     const owner = deps.store.sessionKeyOwner(body.sessionPublicKey);
     if (owner === existing.account_id) return { accountId: existing.account_id, created: false, txHashes: [] };
-    throw new HttpError(409, 'account exists; this device has no session key yet (new-device flow is planned for M4)');
+    // Same login on a new device: the browser adds a session key signed by the player's NEAR Auth key
+    // (POST /api/auth/add-key, src/newdevice.ts).
+    return { accountId: existing.account_id, created: false, txHashes: [], needsKey: true, ownerPublicKey: existing.owner_pk };
   }
   // A session key belongs to exactly one account. A second login in the same browser must bring a fresh key.
   if (deps.store.sessionKeyOwner(body.sessionPublicKey)) throw new HttpError(409, 'session key already belongs to another account');

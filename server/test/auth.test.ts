@@ -29,9 +29,12 @@ test('register: verifies token, uses the server-derived owner key, creates accou
   // Same login and same device: no new account.
   const again = await register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|42'), sessionPublicKey: session });
   assert.equal(again.created, false);
-  // Same login, new device: refused until the M4 new-device flow.
+  // Same login, new device: no key is added here; the answer says to run the new-device flow with the owner key.
   const other = near.KeyPair.fromRandom('ed25519').getPublicKey().toString();
-  await assert.rejects(register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|42'), sessionPublicKey: other }), (e: { status: number }) => e.status === 409);
+  const nd = await register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|42'), sessionPublicKey: other });
+  assert.equal(nd.needsKey, true);
+  assert.equal(nd.ownerPublicKey, await s.chain.derivedOwnerKey('google-oauth2|42'));
+  assert.equal(s.store.sessionKeyOwner(other), undefined);
   // A different login in the same browser must not reuse the first account's session key.
   await assert.rejects(register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|43'), sessionPublicKey: session }), /already belongs to another account/);
   assert.equal(s.store.playerBySub('google-oauth2|43'), undefined, 'no account created');

@@ -10,6 +10,7 @@ import { relay, RateLimiter } from './relayer.ts';
 import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
+import { addDeviceKey } from './newdevice.ts';
 import type { Game } from './game/game.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
 import { Worker } from 'node:worker_threads';
@@ -74,7 +75,8 @@ export function createApp(deps: AppDeps) {
   const limiter = new RateLimiter(deps.cfg.relay.perMinute, deps.cfg.relay.perDay);
   const actLimiter = new RateLimiter(60, 5000); // off-chain actions per account
   const ipLimiter = new RateLimiter(10, 200); // account creation per IP
-  const talkLimiter = new RateLimiter(6, 150); // merchant questions per account (each may be one NEAR AI call)
+  const talkLimiter = new RateLimiter(6, 150);
+  const deviceLimiter = new RateLimiter(3, 20); // new-device key additions per IP (each costs the relayer a NEAR Auth sign call) // merchant questions per account (each may be one NEAR AI call)
   const dialogue = deps.dialogue ?? new Dialogue(deps.cfg.nearai);
   const clientRoot = resolve(deps.clientDir);
   const checkSpend = spendGuard(deps.chain, game);
@@ -115,6 +117,11 @@ export function createApp(deps: AppDeps) {
         const ip = req.socket.remoteAddress ?? '?';
         if (!ipLimiter.take(ip)) throw new HttpError(429, 'too many sign-ups from this address');
         return send(res, 200, await register({ ...deps, onNewPlayer: (a) => game.onNewPlayer(a) }, await readJson(req)));
+      }
+      if (req.method === 'POST' && p === '/api/auth/add-key') {
+        const ip = req.socket.remoteAddress ?? '?';
+        if (!deviceLimiter.take(ip)) throw new HttpError(429, 'too many new-device requests');
+        return send(res, 200, await addDeviceKey(deps, await readJson(req)));
       }
       if (req.method === 'POST' && p === '/api/relay') {
         return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay, itemName: (t) => game.econ.items[t]?.name ?? t }, await readJson(req)));

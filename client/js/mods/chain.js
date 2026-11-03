@@ -15,6 +15,9 @@
 (function () {
   'use strict';
   var LS_ACC = 'gt.chain.account', LS_KEY = 'gt.chain.sessionKey', LS_OFF = 'gt.chain.offline';
+  // Game keys of every account that played in this browser ({account: secret key}), so signing out and back in (or
+  // switching accounts) never loses a key. LS_KEY holds the key for the next sign-in until the server confirms it.
+  var LS_KEYS = 'gt.chain.keys', LS_FORCE = 'gt.chain.chooseAccount';
   var TILE_ITEM = { water: 'fish', rock: 'ore', tree: 'wood' };
   var MERCHANTS = [
     { id: 'sari', pal: 3, dx: 3, dy: 2, tag: 'Sari · Ikan' },
@@ -108,7 +111,12 @@
   }
 
   /* ------------------------------------------------------------ session key + login */
+  function keyRing() { try { return JSON.parse(lsGet(LS_KEYS) || '{}') || {}; } catch (e) { return {}; } }
+  function keepKey(account, kp) { var k = keyRing(); k[account] = kp.toString(); lsSet(LS_KEYS, JSON.stringify(k)); lsSet(LS_KEY, null); }
+  function keyOf(account) { var s = keyRing()[account]; if (!s) return null; try { return window.NearLib.KeyPair.fromString(s); } catch (e) { return null; } }
   function sessionKey() {
+    var mine = S.account && keyOf(S.account);
+    if (mine) return mine;
     var L = window.NearLib, s = lsGet(LS_KEY);
     if (s) { try { return L.KeyPair.fromString(s); } catch (e) { /* regenerate */ } }
     var kp = L.KeyPair.fromRandom('ed25519');
@@ -116,21 +124,97 @@
     return kp;
   }
 
-  function finishLogin(idToken, retried) {
+  // New device (M4): this login has an account, but this browser has no session key for it. The player's own NEAR
+  // Auth key signs a delegate action that adds a fresh game-only key; the server has it signed by the MPC and relays
+  // it (server/src/newdevice.ts). The approval popup must come from a click, so it sits behind a button.
+  function newDevice(provider, r, idToken) {
+    var L = window.NearLib;
+    lsSet(LS_KEY, null);
+    var kp = sessionKey();
+    var body = $('div');
+    body.appendChild($('p', null, 'Akunmu (' + r.accountId.split('.')[0] + ') belum punya kunci game di perangkat ini.'));
+    body.appendChild($('p', null, 'Setujui satu kali di jendela NEAR Auth, lalu kunci baru ditambahkan ke akunmu di testnet. Kunci ini hanya bisa memanggil kontrak game, tidak bisa memindahkan NEAR. Gas dibayar game.'));
+    return new Promise(function (resolve, reject) {
+      GT.modal({ title: 'Perangkat baru', body: body, onClose: function (why) { if (why !== 'action') reject(new Error('Dibatalkan')); }, actions: [{ label: 'Setujui di NEAR Auth', primary: true, onClick: function (h) {
+        var prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl }), da;
+        GT.toast('Membuka NEAR Auth…');
+        Promise.all([prov.viewAccessKey({ accountId: r.accountId, publicKey: L.PublicKey.from(r.ownerPublicKey) }), prov.viewBlock({ finality: 'final' })])
+          .catch(function () { throw new Error('Kunci NEAR Auth-mu tidak ditemukan di akun ini.'); })
+          .then(function (x) {
+            da = L.buildDelegateAction({
+              senderId: r.accountId, receiverId: r.accountId,
+              actions: [L.actions.addFunctionCallAccessKey(kp.getPublicKey(), S.cfg.gameContractId, [], 0n)],
+              nonce: BigInt(x[0].nonce) + 1n, maxBlockHeight: BigInt(x[1].header.height) + 1500n, publicKey: L.PublicKey.from(r.ownerPublicKey)
+            });
+            return provider.requestDelegateActionSignature({ delegateAction: da });
+          })
+          .then(function () { return provider.getSignatureRequest(); })
+          .then(function (res) {
+            GT.toast('Menambahkan kunci ke akunmu…');
+            var sr = res.signatureRequest;
+            return api('/auth/add-key', { method: 'POST', body: {
+              idToken: idToken,
+              delegateAction: b64(L.encodeDelegateAction(da).slice(4)), // plain borsh DelegateAction (without the NEP-461 prefix)
+              signatureRequest: { guardId: sr.guardId, verifyPayload: sr.verifyPayload, signPayload: Array.from(sr.signPayload), algorithm: sr.algorithm || 'eddsa' }
+            } });
+          })
+          .then(function (out) { h.close('action'); resolve(out); }, function (e) { GT.toast('Gagal: ' + (e && e.message || e)); });
+        return false;
+      } }] });
+    });
+  }
+
+  function finishLogin(idToken, retried, provider) {
     var kp = sessionKey();
     GT.toast('Membuat akunmu di NEAR testnet…');
     return api('/auth/register', { method: 'POST', body: { idToken: idToken, sessionPublicKey: kp.getPublicKey().toString() } })
       .catch(function (e) {
         // This browser's key belongs to another login: make a fresh key for this one and try once more.
-        if (!retried && /already belongs to another account/.test(e.message)) { lsSet(LS_KEY, null); return finishLogin(idToken, true).then(function () { return null; }); }
+        if (!retried && /already belongs to another account/.test(e.message)) { lsSet(LS_KEY, null); return finishLogin(idToken, true, provider).then(function () { return null; }); }
         throw e;
       })
       .then(function (r) {
         if (r === null) return;
+        if (r.needsKey) {
+          var needProvider = function () { if (!provider) throw new Error('Akun ini perlu kunci baru; masuk dengan NEAR Auth.'); };
+          // a key for this account from an earlier sign-in in this browser: use it instead of adding a new one
+          var known = keyOf(r.accountId);
+          if (known && known.getPublicKey().toString() !== kp.getPublicKey().toString()) {
+            return api('/auth/register', { method: 'POST', body: { idToken: idToken, sessionPublicKey: known.getPublicKey().toString() } }).then(function (r2) {
+              if (r2.needsKey) { needProvider(); return newDevice(provider, r, idToken).then(function () { signedIn(r.accountId, sessionKey(), 'Kunci baru ditambahkan. Selamat datang kembali!'); }); }
+              return signedIn(r2.accountId, known, 'Selamat datang kembali!');
+            });
+          }
+          needProvider();
+          return newDevice(provider, r, idToken).then(function () { return signedIn(r.accountId, sessionKey(), 'Kunci baru ditambahkan. Selamat datang kembali!'); });
+        }
+        keepKey(r.accountId, kp);
         S.account = r.accountId; lsSet(LS_ACC, r.accountId); renderBanner();
         GT.toast(r.created ? 'Akun dibuat! Paket awal: 100 koin, 1 Alat, 3 Roti, 3 Gandum.' : 'Selamat datang kembali!');
         return refresh(true);
       });
+  }
+
+  function signedIn(account, kp, msg) {
+    keepKey(account, kp);
+    S.account = account; lsSet(LS_ACC, account); renderBanner();
+    GT.toast(msg);
+    return refresh(true);
+  }
+
+  // Sign out: forget the account in this browser and clear the NEAR Auth login cache (no redirect). The game key stays
+  // in the key ring, so signing back in as the same account needs no new-device step. The next sign-in asks for the
+  // account again instead of reusing the last one.
+  function signOut() {
+    if (S.modal && S.modal.h) S.modal.h.close('signout');
+    S.account = null; S.st = null; S.history = []; S.shops = null; S.listings = null; S.projects = null;
+    lsSet(LS_ACC, null); lsSet(LS_FORCE, '1');
+    if (window.NearLib && S.cfg && S.cfg.fastAuth && !S.cfg.devLogin) {
+      try { new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: S.cfg.fastAuth.clientId }).logout({ openUrl: false }).catch(noop); } catch (e) { /* cache only */ }
+    }
+    renderBanner(); renderHud();
+    GT.toast('Kamu sudah keluar. Tekan Masuk untuk masuk lagi.');
+    return refresh(true);
   }
 
   function login() {
@@ -139,11 +223,12 @@
     if (!window.NearLib) { GT.toast('Pustaka NEAR belum dimuat (jalankan build klien).'); return; }
     S.busy = true;
     var provider = new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: S.cfg.fastAuth.clientId });
-    provider.login()
-      .then(function () { return provider.client.getIdTokenClaims(); })
+    var choose = lsGet(LS_FORCE) === '1';
+    provider.login(undefined, choose)
+      .then(function () { lsSet(LS_FORCE, null); return provider.client.getIdTokenClaims(); })
       .then(function (claims) {
         if (!claims || !claims.__raw) throw new Error('Login tidak memberi token');
-        return finishLogin(claims.__raw);
+        return finishLogin(claims.__raw, false, provider);
       })
       .catch(function (e) { GT.toast('Gagal masuk: ' + (e && e.message || e)); })
       .then(function () { S.busy = false; });
@@ -575,6 +660,7 @@
     });
     wrap.appendChild($('p', 'chain-dim', '"hari ini" = perubahan off-chain yang ditulis ke chain pada settlement pukul 06:00. Kirim ke pemain lain memakai saldo settled dan langsung on-chain.'));
     wrap.appendChild($('p', 'chain-dim', 'Alat: ' + S.st.tool.uses + '/' + S.st.tool.durability + ' pemakaian.'));
+    wrap.appendChild(button('Keluar (ganti akun)', function () { signOut(); }));
     return wrap;
   }
 
@@ -788,6 +874,7 @@
       // One shared world: the server's seed and the chunks opened by town projects.
       if (cfg.world && GT.setWorld) GT.setWorld(cfg.world.seed, cfg.world.unlocked);
       S.account = lsGet(LS_ACC);
+      if (S.account && lsGet(LS_KEY) && !keyRing()[S.account] && window.NearLib) { try { keepKey(S.account, window.NearLib.KeyPair.fromString(lsGet(LS_KEY))); } catch (e) { /* bad key */ } }
       if (cfg.devTools) GT.addDevSection('NEAR settlement', function (sec) {
         sec.appendChild($('p', 'mnote', 'Lompat ke pukul 06:00 berikutnya dan tulis hari ini ke chain sekarang.'));
         sec.appendChild(button('Settle sekarang', function () {
@@ -801,6 +888,6 @@
     renderBanner();
   }
 
-  window.GT_CHAIN = { state: S, refresh: refresh, login: login, open: open, act: act, _signedCall: signedCall };
+  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onFrame: onFrame });
 })();

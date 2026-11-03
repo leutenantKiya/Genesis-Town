@@ -28,6 +28,8 @@ export interface Chain {
   listProjects(): Promise<ProjectInfo[]>;
   getProject(id: string): Promise<ProjectInfo | null>;
   derivedOwnerKey(sub: string): Promise<string>;
+  /** Calls `sign` on the NEAR Auth contract (paid by the relayer); `value` is the base64 result (the MPC signature). */
+  fastAuthSign(args: { guard_id: string; verify_payload: string; sign_payload: number[]; algorithm: string }): Promise<TxResult & { value?: string }>;
 }
 
 interface Outcome { transaction: { hash: string }; status: unknown }
@@ -108,6 +110,18 @@ export class TestnetChain implements Chain {
   getListing(id: number) { return this.view<ListingInfo | null>('get_listing', { listing_id: id }); }
   listProjects() { return this.view<ProjectInfo[]>('list_projects', {}); }
   getProject(id: string) { return this.view<ProjectInfo | null>('get_project', { id }); }
+
+  // NEAR Auth `sign` (docs.auth.near.org/home/guides/sign-transactions.md: 300 Tgas, deposit 1 yoctoNEAR in the example).
+  async fastAuthSign(args: { guard_id: string; verify_payload: string; sign_payload: number[]; algorithm: string }) {
+    const o = (await this.relayer.signAndSendTransaction({
+      receiverId: this.cfg.fastAuth.contractId,
+      actions: [actions.functionCall('sign', args, teraToGas('300'), 1n)],
+      waitUntil: 'FINAL',
+    })) as unknown as Outcome;
+    const r = toResult(o);
+    const st = o.status as { SuccessValue?: string };
+    return { ...r, value: r.ok && typeof st.SuccessValue === 'string' && st.SuccessValue ? st.SuccessValue : undefined, error: r.error ?? (r.ok && !st.SuccessValue ? 'empty result' : undefined) };
+  }
 
   // The NEAR Auth key for a login is derived by the MPC contract at path `jwt#https://<domain>/#<sub>` with
   // predecessor fast-auth.testnet (docs.auth.near.org protocol/concepts/auth0.md, contracts/fast-auth.md).
@@ -351,6 +365,13 @@ export class MockChain implements Chain {
   /** Mirrors the owner's `create_project`. */
   addProject(id: string, name: string, chunk: string, need: Record<string, number>) {
     this.projects.set(id, { id, name, chunk, need: Object.entries(need).map(([token_id, n]) => ({ token_id, amount: String(n) })), pledged: [], contributors: [], done: false, done_ns: 0 });
+  }
+  /** Tests set this to stand in for the MPC: it signs the sign_payload with the player's owner key. */
+  mpcSign: ((payload: Uint8Array) => Uint8Array) | null = null;
+  async fastAuthSign(args: { guard_id: string; verify_payload: string; sign_payload: number[]; algorithm: string }) {
+    if (!this.mpcSign) return { txHash: this.hash(), ok: false, error: 'no MPC in mock mode' };
+    const signature = Array.from(this.mpcSign(Uint8Array.from(args.sign_payload)));
+    return { txHash: this.hash(), ok: true, value: Buffer.from(JSON.stringify({ scheme: 'Ed25519', signature })).toString('base64') };
   }
   async derivedOwnerKey(sub: string): Promise<string> {
     const { createHash } = await import('node:crypto');

@@ -93,6 +93,17 @@ use only the listed prices, and the UI says the answer comes from the shop's rea
 200 characters and 6 per minute per account. Without `NEARAI_API_KEY`, or on error or timeout (8 s), the server
 answers with a line built from the same facts.
 
+## New device (adding a session key)
+
+A returning player on a browser without their session key adds a new one with their own NEAR Auth key
+(`server/src/newdevice.ts`): the browser builds a delegate action AddKey(new key, function-call access to the game
+contract only, no methods named) on the player's account; the player approves it in one NEAR Auth popup; the
+relayer calls `sign` on `fast-auth.testnet` with that JWT and submits the signed delegate. The server refuses
+anything else: another account, another receiver, named methods, more than one action, a key that is already in use,
+a long expiry, or a delegate not signed by the owner key stored when the account was created. The MPC signature is
+checked against that owner key before anything is submitted. Each attempt costs the relayer a `sign` call, so it is
+limited per IP. The server can never add a key by itself: it holds no key of any player account.
+
 ## Session keys and shared browsers
 
 A session key belongs to exactly one account. If a second person signs in on the same browser, the server refuses

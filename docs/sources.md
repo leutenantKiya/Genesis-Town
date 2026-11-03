@@ -25,6 +25,8 @@ in a doc is listed under "Open checks" and is not assumed.
 - Testnet RPC `https://test.rpc.fastnear.com` (FastNear, public, free tier), chosen from the providers table on
   2026-11-02 after `rpc.testnet.near.org` started answering HTTP 429 with a deprecation notice: https://docs.near.org/api/rpc/providers
 - Testnet contracts and shared client id (`fast-auth.testnet`, `v1.signer-prod.testnet`, RPC `https://rpc.testnet.near.org`, explorer `testnet.nearblocks.io`): https://docs.auth.near.org/resources/testnet.md
+- New-device flow (requestDelegateActionSignature, getSignatureRequest, `sign` on the NEAR Auth contract, the
+  FastAuthSignature result format) also read from the installed SDK source in client/build/node_modules/@fast-auth-near
 - Signing transactions and delegate actions (each signature means an Auth0 popup or redirect): https://docs.auth.near.org/home/guides/sign-transactions.md
 - Relayer concept: https://docs.auth.near.org/protocol/concepts/relayer.md
 - Alternative considered: Privy, https://docs.near.org/web3-apps/tutorials/privy.md (needs the team's own Privy account)

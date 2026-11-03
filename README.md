@@ -18,7 +18,9 @@
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >
-> Not done yet: the rest of M4 (a new-device login flow, removing the game account's full-access key before
+>   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow).
+>
+> Not done yet: the rest of M4 (removing the game account's full-access key before
 > submission, a mobile pass) and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
