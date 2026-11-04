@@ -29,6 +29,12 @@
 >   The hotbar along the bottom shows every item; pick the one in your hand with a click, 1–7 or the mouse wheel;
 >   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen (also in Pengaturan), **T** a message to an NPC.
 >   On phones: tap the world to act, tap a slot to hold it, tap it again to use it.
+> - **Fishing as a skill game**: ripples mark where fish gather (they move every two game hours; bites come faster
+>   there). Cast, wait for the "!", press in time, then hold to keep the fish inside the green zone until the catch
+>   bar fills. The screen is clean while fishing (only the reel bar and one button). The catch is the normal gather
+>   action, so energy and node charges work as before; a fish that gets away costs nothing.
+> - **Riwayat in plain words**: grouped by day, item icons, repeats folded ("+1 Ikan ×3"), friendly titles; each
+>   on-chain row has "Detail ↗" to the block explorer for the full record.
 > - **Crafting costs**: simple recipes cost energy (Roti 5, Ikan Bakar 8), complex ones cost coin (Alat 3 coin).
 >   Merchants still pay their own 2-coin crafting fee.
 > - **Riwayat per item**: in the Tas, each item's panel has a Riwayat button that lists only that item's history;
@@ -208,8 +214,8 @@ Run locally (below), open http://localhost:3000.
 
 1. Press **Masuk** and sign in with Google or email → you see your house, an energy bar, the current season and day, and
    100 coins. No wallet popup.
-2. Click the pond (or face the water and press **F**; the on-screen **A** button on touch screens) → `+1 Ikan`
-   instantly. A hint at the bottom of the screen always shows which key does what for the tile you face. The hotbar at the bottom shows every item with its count; press **E** (or the round E button on phones) to open the **Tas** → it shows "+1 hari ini" (off-chain,
+2. Click the pond (or face the water and press **F**; the on-screen **A** button on touch screens), wait for the
+   "!", press, and hold to keep the fish in the green zone → `+1 Ikan`. A hint at the bottom of the screen always shows which key does what for the tile you face. The hotbar at the bottom shows every item with its count; press **E** (or the round E button on phones) to open the **Tas** → it shows "+1 hari ini" (off-chain,
    today).
 3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → her goods on top, your items below with her price. Click
    your fish to sell one.

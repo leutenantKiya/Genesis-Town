@@ -101,7 +101,7 @@
   /** Use the item in your hand. `tile` is where the player right-clicked (optional). */
   function useHeld(tile) {
     var c = chain(), b = bag(), id = SLOTS[held];
-    if (!c || !b || GT.isUiOpen()) return;
+    if (!c || !b || GT.isUiOpen() || (window.GT_FISH && GT_FISH.active())) return;
     var econ = (c.state.cfg && c.state.cfg.econ && c.state.cfg.econ.items[id]) || {}, it = b[id] || { settled: 0, today: 0 }, n = it.settled + it.today;
     closePop();
     if (econ.energy) {

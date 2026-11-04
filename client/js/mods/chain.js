@@ -641,6 +641,8 @@
       var needTool = tok === 'ore' && S.st && (S.st.bag.tool.settled + S.st.bag.tool.today) < 1;
       var L = GT.world && GT.world.layout, night = S.st && S.st.night;
       var danger = tok !== 'fish' && night && night.now && !night.guarded && L && window.GTVillage && GTVillage.chunkOf(L, x, y).id === 'hutan';
+      var spot = tok === 'fish' && window.GT_FISH && GT_FISH.isSpot(x, y);
+      if (tok === 'fish') return spot ? 'Mancing di riak air: ikan berkumpul di sini' : 'Mancing (lebih cepat di riak air)';
       return verb + ' (−4 energi)' + (needTool ? ' · butuh Alat' : '') + (danger ? ' · malam: awas monster' : '');
     }
     return null;
@@ -1134,16 +1136,38 @@
     setTimeout(function () { price.focus(); price.select(); }, 50);
   }
 
-  var ST_LABEL = { pending: '…', ok: '✓', failed: '✗', mock: 'mock', offchain: 'menunggu 06:00' };
+  // Riwayat in plain words: what happened, with the item's icon, grouped by day; repeats are folded ("+1 Ikan ×5").
+  // Anyone who wants the technical record follows "Detail ↗" to the block explorer.
+  var ST_LABEL = { pending: 'diproses…', ok: 'tersimpan', failed: 'gagal', mock: 'tiruan', offchain: 'disimpan 06:00' };
+  var KIND_ICON = { account: 'coin', storage: 'coin', device: 'coin', settle: 'coin', buy: 'coin', sell: 'coin', ship: 'coin', fight: 'tool', engage: 'tool' };
+  function shortName(a) { a = String(a || ''); var p = a.split('.')[0]; return p.length > 12 ? p.slice(0, 10) + '…' : p; }
+  function projName(id) { var pj = (S.projects || []).filter(function (x) { return x.id === id; })[0]; return pj ? pj.name : id; }
+  function merchName(id) { return id ? id.charAt(0).toUpperCase() + id.slice(1) : ''; }
+  function friendly(h) {
+    var t = String(h.summary || ''), m, sub = null;
+    var tok = (h.tokens || '').split(',').filter(function (x) { return x && x !== 'coin'; })[0] || KIND_ICON[h.kind] || null;
+    if (h.kind === 'settle' && (m = /^Settlement hari (\d+):?\s*(.*)$/.exec(t))) { t = 'Hasil hari ' + m[1] + ' disimpan permanen'; sub = m[2] || null; }
+    else if (h.kind === 'account') t = 'Akunmu dibuat';
+    else if (h.kind === 'storage') t = 'Akunmu siap dipakai di game';
+    else if (h.kind === 'device') t = 'Perangkat baru bisa main dengan akunmu';
+    else if (h.kind === 'send_item' && (m = /^Kirim (\d+) (\w+) ke (.+)$/.exec(t))) t = 'Kirim ' + m[1] + ' ' + item(m[2]) + ' ke ' + shortName(m[3]);
+    else if (h.kind === 'restore_contribute' && (m = /^Sumbang ke papan pemulihan (\w+): (.*)$/.exec(t))) { t = 'Sumbang untuk buka lagi toko ' + merchName(m[1]); sub = m[2]; }
+    else if ((h.kind === 'project_contribute') && (m = /^Sumbang ke proyek desa ([\w-]+): (.*)$/.exec(t))) { t = 'Sumbang ke ' + projName(m[1]); sub = m[2]; }
+    else if (h.kind === 'project_withdraw' && (m = /proyek desa ([\w-]+)/.exec(t))) t = 'Tarik sumbangan dari ' + projName(m[1]);
+    else if (h.kind === 'buy_listing' && (m = /^Beli (\d+) dari lapak/.exec(t))) t = 'Beli ' + m[1] + ' barang dari lapak pemain';
+    else if (h.kind === 'cancel_listing') t = 'Barangmu ditarik dari Pasar Pemain';
+    else if (h.kind === 'list_item') t = t.replace(/ di Pasar Pemain, /, ' di Pasar: ');
+    return { icon: tok, title: t, sub: sub };
+  }
+  function dayLabel(d) {
+    var now = new Date(), y = new Date(now); y.setDate(now.getDate() - 1);
+    if (d.toDateString() === now.toDateString()) return 'Hari ini';
+    if (d.toDateString() === y.toDateString()) return 'Kemarin';
+    return d.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][d.getMonth()];
+  }
+  function clock(d) { return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
   function historyBody(token) {
-    var wrap = $('div'), details = chainUI();
-    var tog = $('label', 'chain-field gt-details');
-    var cb = $('input'); cb.type = 'checkbox'; cb.checked = details;
-    cb.addEventListener('change', function () { setChainUI(cb.checked); redraw(); });
-    tog.appendChild(cb); tog.appendChild($('span', null, ' Tampilkan detail blockchain (akun, bukti transaksi di explorer)'));
-    wrap.appendChild(tog);
-    if (!details && S.mode === 'testnet') wrap.appendChild($('p', 'chain-dim', 'Barang dan koinmu tersimpan di NEAR testnet. Nyalakan detail untuk melihat akun dan bukti tiap transaksi.'));
-    if (details && S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
+    var wrap = $('div', 'gt-hist'), details = chainUI();
     var rows = S.history;
     if (token) {
       if (S.mode === 'offline') rows = S.history.filter(function (h) { return (h.tokens || '').indexOf(',' + token + ',') >= 0; });
@@ -1154,20 +1178,42 @@
       wrap.appendChild(nav);
     }
     if (!rows) wrap.appendChild($('p', null, 'Memuat…'));
-    else if (!rows.length) wrap.appendChild($('p', null, token ? 'Belum ada riwayat untuk barang ini.' : 'Belum ada transaksi.'));
+    else if (!rows.length) wrap.appendChild($('p', null, token ? 'Belum ada riwayat untuk barang ini.' : 'Belum ada kegiatan. Coba mancing di kolam!'));
+    // fold consecutive identical off-chain rows (same text, same day, no transaction to link)
+    var items = [];
     (rows || []).forEach(function (h) {
-      var row = $('div', 'mrow');
-      var t = new Date(h.created_at);
-      row.appendChild($('span', 'num', ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2)));
-      row.appendChild($('span', 'grow', h.summary));
-      row.appendChild($('span', 'chain-st ' + h.status, ST_LABEL[h.status] || h.status));
-      if (h.tx_hash && S.mode === 'testnet' && details) {
-        var a = $('a', 'chain-link', 'lihat ↗'); a.href = S.cfg.explorerTxUrl + encodeURIComponent(h.tx_hash); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = h.tx_hash;
+      var last = items[items.length - 1], d = new Date(h.created_at);
+      if (last && !h.tx_hash && !last.h.tx_hash && last.h.summary === h.summary && last.h.status === h.status && dayLabel(last.d) === dayLabel(d)) { last.n++; last.first = d; return; }
+      items.push({ h: h, d: d, first: d, n: 1 });
+    });
+    var day = null;
+    items.forEach(function (it) {
+      var h = it.h, f = friendly(h), lbl = dayLabel(it.d);
+      if (lbl !== day) { day = lbl; wrap.appendChild($('h4', 'gt-hist-day', lbl)); }
+      var row = $('div', 'gt-hist-row' + (h.status === 'failed' ? ' bad' : ''));
+      var ic = $('span', 'gt-hist-ic');
+      if (f.icon && f.icon !== 'coin' && window.GT_ITEMS) ic.appendChild(GT_ITEMS.icon(f.icon, 20)); else ic.appendChild($('span', 'gt-card-coin'));
+      row.appendChild(ic);
+      var txt = $('div', 'grow');
+      txt.appendChild($('div', 'gt-hist-t', f.title + (it.n > 1 ? ' ×' + it.n : '')));
+      var meta = (it.n > 1 && clock(it.first) !== clock(it.d) ? clock(it.first) + '–' + clock(it.d) : clock(it.d)) + (ST_LABEL[h.status] && h.status !== 'mock' ? ' · ' + ST_LABEL[h.status] : '');
+      txt.appendChild($('div', 'gt-hist-s', (f.sub ? f.sub + ' · ' : '') + meta));
+      row.appendChild(txt);
+      if (h.tx_hash && S.mode === 'testnet') {
+        var a = $('a', 'chain-link', 'Detail ↗'); a.href = S.cfg.explorerTxUrl + encodeURIComponent(h.tx_hash); a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.title = 'Buka catatan lengkap transaksi ini di browser (NEAR explorer)';
         row.appendChild(a);
       }
       wrap.appendChild(row);
     });
-    if (S.st) wrap.appendChild($('p', 'chain-dim', (details ? 'Settlement terakhir: hari ' : 'Terakhir disimpan: hari ') + S.st.time.settledThrough + '. Berikutnya pukul 06:00 (hari ' + (S.st.time.day + (S.st.time.hour >= 6 ? 1 : 0)) + ').'));
+    if (S.st) wrap.appendChild($('p', 'chain-dim', 'Kegiatan hari ini disimpan permanen pukul 06:00 (hari ' + (S.st.time.day + (S.st.time.hour >= 6 ? 1 : 0)) + '). "Detail ↗" membuka catatan lengkapnya di browser.'));
+    // technical mode (account name, on-chain labels elsewhere in the game) stays available, out of the way
+    var tog = $('label', 'chain-field gt-details');
+    var cb = $('input'); cb.type = 'checkbox'; cb.checked = details;
+    cb.addEventListener('change', function () { setChainUI(cb.checked); redraw(); });
+    tog.appendChild(cb); tog.appendChild($('span', null, ' Mode teknis (nama akun dan label on-chain di seluruh game)'));
+    wrap.appendChild(tog);
+    if (details && S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
     return wrap;
   }
 
@@ -1216,8 +1262,26 @@
     var token = TILE_ITEM[ctx.tileType];
     if (!token) return false;
     if (S.busy) return true;
-    S.busy = true;
-    act({ action: 'gather', tile: ctx.tileType, x: ctx.tile.x, y: ctx.tile.y }).then(function () { if (S.st && S.st.encounter) openFight(); }, noop).then(function () { S.busy = false; });
+    var tx = ctx.tile.x, ty = ctx.tile.y, tt = ctx.tileType;
+    function gather() {
+      S.busy = true;
+      return act({ action: 'gather', tile: tt, x: tx, y: ty }).then(function () { if (S.st && S.st.encounter) openFight(); }, function (e) {
+        // an emptied pond tile: remember it so its ripples go away until it refills
+        var m = /Kembali sekitar (\d+) jam/.exec(e && e.message || '');
+        if (m && tt === 'water') { S.emptyWater = S.emptyWater || {}; S.emptyWater[tx + ',' + ty] = Date.now() + (+m[1] || 1) * S.cfg.econ.time.realMsPerGameHour; }
+      }).then(function () { S.busy = false; });
+    }
+    // Fishing is a small skill game (js/mods/fishing.js); the catch is the same gather action.
+    if (tt === 'water' && window.GT_FISH && S.mode !== 'offline') {
+      if (!S.account) { GT.toast('Masuk dulu (tombol Masuk) untuk memancing.'); return true; }
+      var cost = (S.cfg.econ.gather && S.cfg.econ.gather.energyCost) || 0;
+      if (S.st && S.st.energy < cost) { GT.toast('Energimu habis. Makan dulu atau tunggu besok.'); return true; }
+      var em = S.emptyWater && S.emptyWater[tx + ',' + ty];
+      if (em && em > Date.now()) { GT.toast('Ikan di sini sudah habis. Cari riak air di tempat lain.'); return true; }
+      GT_FISH.start({ tile: { x: tx, y: ty }, onCatch: gather });
+      return true;
+    }
+    gather();
     return true;
   }
 

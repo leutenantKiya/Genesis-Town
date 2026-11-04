@@ -123,3 +123,38 @@ html.gt-phone .gt-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .gt-shop-why p{margin:0}
 .chain-banner[hidden]{display:none!important}
 .gt-details{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:8px;cursor:pointer}
+.gt-hist-day{margin:10px 0 4px;font-size:8px;color:var(--paper-edge)}
+.gt-hist-row{display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#ebe6cc;border-radius:5px;font-size:8px;line-height:1.5}
+.gt-hist-row.bad{background:#f3d6c8}
+.gt-hist-ic{flex:none;width:24px;display:flex;justify-content:center}
+.gt-hist-ic canvas{width:20px;height:20px;image-rendering:pixelated}
+.gt-hist-ic .gt-card-coin{width:14px;height:14px;margin:3px}
+.gt-hist-t{font-size:9px}
+.gt-hist-s{color:var(--paper-edge)}
+
+/* Fishing (js/mods/fishing.js): while the line is out the screen is clean, only the reel bar and one button */
+html.gt-fishing #hud, html.gt-fishing .chain-banner, html.gt-fishing .gt-hotbar, html.gt-fishing .gt-held,
+html.gt-fishing .gt-goals, html.gt-fishing #gt-hint, html.gt-fishing .gt-slotpop, html.gt-fishing .gt-tabbar,
+html.gt-fishing #pad, html.gt-fishing #acts, html.gt-fishing #dlg{visibility:hidden !important}
+.gt-fish{position:absolute;inset:0;pointer-events:none;z-index:6;line-height:1.2}
+.gt-fish[hidden]{display:none}
+.gt-fish-meter{position:absolute;right:6%;top:12%;bottom:22%;width:46px;display:flex;gap:6px;padding:6px;border-radius:10px;
+  background:rgba(20,22,42,.55);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.gt-fish-meter[hidden]{display:none}
+.gt-fish-track{position:relative;flex:1;border-radius:6px;background:linear-gradient(#2a6fa8,#17507e);overflow:hidden}
+.gt-fish-zone{position:absolute;left:0;right:0;border-radius:4px;background:rgba(124,194,62,.55);box-shadow:inset 0 0 0 2px #a8d84a}
+.gt-fish-zone.on{background:rgba(168,216,74,.8)}
+.gt-fish-fish{position:absolute;left:50%;width:14px;height:12px;margin-left:-7px;border-radius:50% 40% 40% 50%;background:#f0a040;box-shadow:0 0 0 2px #3a2414}
+.gt-fish-fish::after{content:"";position:absolute;right:-5px;top:3px;border:3px solid transparent;border-left:5px solid #f0a040}
+.gt-fish-prog{position:relative;width:8px;border-radius:4px;background:rgba(0,0,0,.45);overflow:hidden}
+.gt-fish-fill{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#ffd84a,#e8a13c)}
+.gt-fish-btn{pointer-events:auto;position:absolute;left:50%;bottom:6%;transform:translateX(-50%);min-width:132px;min-height:52px;padding:10px 18px;
+  border:0;border-radius:26px;font-family:var(--font);font-size:11px;color:#fff;text-shadow:0 1px 0 #000;cursor:pointer;touch-action:none;
+  -webkit-user-select:none;user-select:none;background:rgba(255,255,255,.16);-webkit-backdrop-filter:blur(14px) saturate(1.5);backdrop-filter:blur(14px) saturate(1.5);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 0 0 1px rgba(255,255,255,.3),0 4px 16px rgba(0,0,0,.35)}
+.gt-fish-btn.hot{background:rgba(232,80,60,.75);animation:gt-fish-pulse .35s ease-in-out infinite alternate}
+.gt-fish-btn.down{background:rgba(124,194,62,.6)}
+@keyframes gt-fish-pulse{to{transform:translateX(-50%) scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.gt-fish-btn.hot{animation:none}}
+html.gt-phone .gt-fish-btn{min-width:160px;min-height:64px;font-size:13px}
+.gt-details{justify-content:flex-start;margin-top:8px}
