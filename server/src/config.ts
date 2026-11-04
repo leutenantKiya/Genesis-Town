@@ -14,6 +14,8 @@ export interface Config {
   townPrivateKey?: string;
   merchantParentId: string;
   devTools: boolean;
+  /** Behind a hosting proxy: take the client address from the proxy's X-Forwarded-For (last entry) for rate limits. */
+  trustProxy: boolean;
   playersParentId: string;
   playersParentPrivateKey: string;
   playerInitialNear: bigint; // yoctoNEAR sent to each new player account
@@ -55,6 +57,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     townPrivateKey: env.TOWN_PRIVATE_KEY || undefined,
     merchantParentId: get('MERCHANT_PARENT_ACCOUNT_ID'),
     devTools: env.DEV_TOOLS === '1',
+    trustProxy: env.TRUST_PROXY === '1',
     playersParentId: get('PLAYERS_PARENT_ACCOUNT_ID'),
     playersParentPrivateKey: get('PLAYERS_PARENT_PRIVATE_KEY'),
     playerInitialNear: BigInt(env.PLAYER_INITIAL_YOCTO ?? '10000000000000000000000'), // 0.01 NEAR

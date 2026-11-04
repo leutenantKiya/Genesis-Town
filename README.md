@@ -68,6 +68,9 @@
 >   making the store async). Copy the current testnet DB over so balances, shops and history carry on.
 > - Secrets only as the host's environment variables; NEAR Auth login checked on the new origin (from its docs);
 >   relayer balance and rate limits reviewed for public traffic.
+> - Ready in the repo: `Dockerfile`, [docs/deploy.md](docs/deploy.md) (host requirements, env var names, DB move,
+>   checks), `GET /api/health`, and `TRUST_PROXY=1` so per-address limits see each visitor behind the host's proxy.
+>   Waiting on: the host (owner's account) and NEAR Auth accepting the public domain.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.

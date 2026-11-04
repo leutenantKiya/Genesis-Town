@@ -109,6 +109,16 @@ export function createApp(deps: AppDeps) {
     return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
   }
 
+  /** The visitor's address for per-address limits. Behind a hosting proxy every request comes from the proxy, so with
+   *  TRUST_PROXY=1 the address the proxy appended (the last X-Forwarded-For entry, which a client cannot forge) is used. */
+  function clientIp(req: IncomingMessage) {
+    const direct = req.socket.remoteAddress ?? '?';
+    if (!deps.cfg.trustProxy) return direct;
+    const xff = req.headers['x-forwarded-for'];
+    const list = (Array.isArray(xff) ? xff.join(',') : xff ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    return list[list.length - 1] ?? direct;
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const p = url.pathname;
@@ -128,13 +138,18 @@ export function createApp(deps: AppDeps) {
           monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, reach: game.econ.monsters.reach } : null,
         });
       }
+      if (req.method === 'GET' && p === '/api/health') {
+        // for the host's health check: the process is up and the game clock and settlement are where they should be
+        const t = game.clock.time();
+        return send(res, 200, { ok: true, chain: deps.chain.mode, day: t.day, hour: t.hour, settledThrough: game.settlement.settledThrough() });
+      }
       if (req.method === 'POST' && p === '/api/auth/register') {
-        const ip = req.socket.remoteAddress ?? '?';
+        const ip = clientIp(req);
         if (!ipLimiter.take(ip)) throw new HttpError(429, 'too many sign-ups from this address');
         return send(res, 200, await register({ ...deps, onNewPlayer: (a) => game.onNewPlayer(a) }, await readJson(req)));
       }
       if (req.method === 'POST' && p === '/api/auth/add-key') {
-        const ip = req.socket.remoteAddress ?? '?';
+        const ip = clientIp(req);
         if (!deviceLimiter.take(ip)) throw new HttpError(429, 'too many new-device requests');
         return send(res, 200, await addDeviceKey(deps, await readJson(req)));
       }
