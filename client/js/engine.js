@@ -1176,10 +1176,16 @@ function updateDialog(dt){
 /* ---------- toasts ---------- */
 function toast(text){
   if (text == null || !elToasts) return;
-  var t = el('div', 'toast', String(text).slice(0, 120));
+  var msg = String(text).slice(0, 120);
+  // the same message again just stays up longer instead of stacking copies
+  for (var i = 0; i < elToasts.children.length; i++){
+    var c = elToasts.children[i];
+    if (c.textContent === msg){ clearTimeout(c._gtT); c._gtT = setTimeout(function(){ if (c.parentNode) c.parentNode.removeChild(c); }, 2400); emit('toast', msg); return; }
+  }
+  var t = el('div', 'toast', msg);
   elToasts.appendChild(t);
   while (elToasts.children.length > 3) elToasts.removeChild(elToasts.firstChild);
-  setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2400);
+  t._gtT = setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2400);
   emit('toast', String(text));
 }
 

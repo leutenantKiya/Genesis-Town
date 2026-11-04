@@ -1,12 +1,12 @@
 /* chain.css - banner and Riwayat styles for the NEAR layer (chain.js) */
-.chain-banner{margin:0 2px 8px;padding:5px 8px;border-radius:3px;font-size:8px;line-height:1.5;overflow-wrap:anywhere;box-shadow:0 0 0 2px #000}
+.chain-banner{margin:0 2px 8px;padding:5px 8px;border-radius:3px;font-size:calc(14px*var(--ts));line-height:1.5;overflow-wrap:anywhere;box-shadow:0 0 0 2px #000}
 .chain-banner.net{background:#1f4d36;color:#d9ffe6}
 .chain-banner.mock{background:#5a4a14;color:#fff3c4}
 .chain-banner.off{background:#5a1f2a;color:#ffe0e6}
-.chain-dim{color:#6b6e8f;font-size:8px}
-.chain-link{color:#2d5fb3;font-size:8px;white-space:nowrap}
+.chain-dim{color:#6b6e8f;font-size:calc(14px*var(--ts))}
+.chain-link{color:#2d5fb3;font-size:calc(14px*var(--ts));white-space:nowrap}
 .chain-link:focus-visible{outline:3px solid #2d7ad6;outline-offset:2px}
-.chain-st{font-size:8px;white-space:nowrap;padding:1px 4px;border-radius:3px;background:#e4e6ee}
+.chain-st{font-size:calc(14px*var(--ts));white-space:nowrap;padding:1px 4px;border-radius:3px;background:#e4e6ee}
 .chain-st.ok{background:#cdeccf}
 .chain-st.failed{background:#f6c9cf}
 .chain-st.pending{background:#f6ecc0}
@@ -14,13 +14,13 @@
 .chain-hud .val{display:flex;align-items:center;gap:6px}
 .chain-energy{display:inline-block;width:46px;height:7px;background:#15162a;box-shadow:0 0 0 1px #000;border-radius:2px;overflow:hidden}
 .chain-energy i{display:block;height:100%;background:linear-gradient(90deg,#f2c94c,#b8d94a)}
-.chain-reason{font-size:8px;color:#4a4d75;line-height:1.5;margin-top:2px}
+.chain-reason{font-size:calc(14px*var(--ts));color:#4a4d75;line-height:1.5;margin-top:2px}
 .chain-item .mbtn{min-width:56px}
 .chain-today{color:#9c6a14}
 .chain-closed{color:#8a2f3a}
 .chain-st.offchain{background:#e9e2f6}
 
-.chain-h{margin:10px 0 4px;font-size:10px;color:#b4572e}
+.chain-h{margin:10px 0 4px;font-size:calc(16px*var(--ts));color:#b4572e}
 .chain-field{display:flex;align-items:center;gap:8px;margin:6px 0}
 .chain-field input{width:110px}
 .chain-talk{max-height:220px;overflow-y:auto;margin-bottom:8px}
@@ -42,11 +42,11 @@
 }
 
 /* Langkah pertama: the newcomer's next step, top-left of the game view, on paper like the dialogs */
-.gt-goals{position:absolute;left:8px;top:8px;max-width:min(300px,calc(100% - 16px));z-index:3;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:5px;padding:7px 9px;font-size:8px;line-height:1.6;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.gt-goals{position:absolute;left:8px;top:8px;max-width:min(300px,calc(100% - 16px));z-index:3;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:5px;padding:7px 9px;font-size:calc(14px*var(--ts));line-height:1.6;box-shadow:0 2px 0 rgba(0,0,0,.35)}
 .gt-goals p{margin:4px 0 0}
 .gt-goals-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .gt-goals-head b{font-weight:400;color:#2f6b3a}
-.gt-goals-x{border:0;background:transparent;color:var(--paper-edge);font-size:8px;padding:4px 2px;min-height:24px}
+.gt-goals-x{border:0;background:transparent;color:var(--paper-edge);font-size:calc(14px*var(--ts));padding:4px 2px;min-height:24px}
 
 /* Weather mood on the game view (outdoors only; set by chain.js from the day's shared weather) */
 #cv{transition:filter .8s}
@@ -65,17 +65,17 @@ html.gt-reduced-motion #cv{transition:none}
 .gt-slot.sel{box-shadow:0 0 0 2px var(--gold),inset 0 -3px 0 rgba(0,0,0,.35);background:#3a3d66}
 .gt-slot.menu{outline:2px dashed var(--paper);outline-offset:1px}
 .gt-slot.empty canvas{opacity:.35}
-.gt-slot-n{position:absolute;right:3px;bottom:3px;font-size:8px;color:#fff;text-shadow:1px 1px 0 #000}
+.gt-slot-n{position:absolute;right:3px;bottom:3px;font-size:calc(14px*var(--ts));color:#fff;text-shadow:1px 1px 0 #000}
 .gt-slot.empty .gt-slot-n{color:var(--dim)}
-.gt-slot-k{position:absolute;left:3px;top:3px;font-size:6px;color:var(--dim)}
+.gt-slot-k{position:absolute;left:3px;top:3px;font-size:calc(11px*var(--ts));color:var(--dim)}
 .gt-slot.today::after{content:"";position:absolute;right:3px;top:3px;width:4px;height:4px;border-radius:50%;background:var(--gold)}
-.gt-slot-bag{width:auto;padding:0 9px;font-size:8px;background:var(--btn);color:#fff}
+.gt-slot-bag{width:auto;padding:0 9px;font-size:calc(14px*var(--ts));background:var(--btn);color:#fff}
 .gt-slot-bag:hover{background:var(--btn-hi)}
-.gt-slotpop{position:absolute;bottom:62px;z-index:4;width:224px;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:5px;padding:8px 10px;font-size:8px;line-height:1.6;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.gt-slotpop{position:absolute;bottom:62px;z-index:4;width:224px;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:5px;padding:8px 10px;font-size:calc(14px*var(--ts));line-height:1.6;box-shadow:0 2px 0 rgba(0,0,0,.35)}
 .gt-slotpop b{font-weight:400}
 .gt-slotpop p{margin:4px 0 6px}
 .gt-slotpop-acts{display:flex;flex-wrap:wrap;gap:6px}
-.gt-slotpop-acts .mbtn{min-height:32px;font-size:8px}
+.gt-slotpop-acts .mbtn{min-height:32px;font-size:calc(14px*var(--ts))}
 html.gt-has-hotbar #gt-hint{bottom:60px}
 html.gt-phone .gt-slot{width:36px;height:40px}
 html.gt-phone .gt-slot-k{display:none}
@@ -88,48 +88,48 @@ html.gt-phone .gt-slot-k{display:none}
 .gt-black-row .chain-dim{color:#a99fbf}
 
 /* what is in your hand, above the hotbar */
-.gt-held{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);z-index:3;background:rgba(14,15,30,.78);color:var(--ink);font-size:7px;line-height:1.4;padding:3px 8px;border-radius:3px;white-space:nowrap;pointer-events:none}
+.gt-held{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);z-index:3;background:rgba(14,15,30,.78);color:var(--ink);font-size:calc(12px*var(--ts));line-height:1.4;padding:3px 8px;border-radius:3px;white-space:nowrap;pointer-events:none}
 #dlg.on ~ .gt-held,#map.on ~ .gt-held{display:none!important}
 html.gt-has-hotbar #gt-hint{bottom:78px}
 .gt-slotpop{bottom:78px}
 
 /* item cards and grids: shop, bag, market (icons shared with the hotbar) */
 .gt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin:4px 0 8px}
-.gt-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 7px;border:0;border-radius:5px;background:#ebe6cc;color:var(--paper-ink);font-family:var(--font);font-size:7px;line-height:1.35;cursor:pointer;box-shadow:inset 0 -3px 0 rgba(0,0,0,.12);min-height:72px}
+.gt-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 7px;border:0;border-radius:5px;background:#ebe6cc;color:var(--paper-ink);font-family:var(--font);font-size:calc(12px*var(--ts));line-height:1.35;cursor:pointer;box-shadow:inset 0 -3px 0 rgba(0,0,0,.12);min-height:72px}
 .gt-card:hover{background:#e0d9b8}
 .gt-card:active{transform:translateY(1px)}
 .gt-card:focus-visible{outline:2px solid var(--paper-ink);outline-offset:1px}
 .gt-card canvas{width:32px;height:32px;image-rendering:pixelated}
-.gt-card-name{font-size:8px}
+.gt-card-name{font-size:calc(14px*var(--ts))}
 .gt-card-l1{color:#2f6b3a}
 .gt-card-l2{color:var(--paper-edge)}
-.gt-card-n{position:absolute;right:5px;top:4px;font-size:8px;color:var(--paper-ink)}
+.gt-card-n{position:absolute;right:5px;top:4px;font-size:calc(14px*var(--ts));color:var(--paper-ink)}
 .gt-card.accent{background:#dfe9c6}
 .gt-card.sel{box-shadow:0 0 0 2px var(--paper-ink)}
 .gt-card.off{opacity:.45}
 .gt-card.off .gt-card-l1{color:var(--paper-edge)}
 .gt-card-coin{display:inline-block;width:24px;height:24px;margin:4px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px #000}
-.gt-shop-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;font-size:8px}
-.gt-shop-why{min-height:2.6em;margin:4px 0 8px;padding:6px 8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:#ebe6cc;border-radius:4px;font-size:8px;line-height:1.5}
+.gt-shop-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;font-size:calc(14px*var(--ts))}
+.gt-shop-why{min-height:2.6em;margin:4px 0 8px;padding:6px 8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:#ebe6cc;border-radius:4px;font-size:calc(14px*var(--ts));line-height:1.5}
 html.gt-phone .gt-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-.gt-detail{margin:2px 0 8px;padding:8px;background:#ebe6cc;border-radius:5px;font-size:8px;line-height:1.6}
+.gt-detail{margin:2px 0 8px;padding:8px;background:#ebe6cc;border-radius:5px;font-size:calc(14px*var(--ts));line-height:1.6}
 .gt-detail-top{display:flex;gap:10px;align-items:flex-start}
 .gt-detail-top canvas{width:40px;height:40px;image-rendering:pixelated;flex:none}
-.gt-detail-name{font-size:10px;margin-bottom:2px}
+.gt-detail-name{font-size:calc(16px*var(--ts));margin-bottom:2px}
 .gt-detail-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.gt-group{display:flex;gap:8px;align-items:center;margin:10px 0 2px;padding:6px 8px;background:#ebe6cc;border-radius:5px;font-size:8px;line-height:1.5}
+.gt-group{display:flex;gap:8px;align-items:center;margin:10px 0 2px;padding:6px 8px;background:#ebe6cc;border-radius:5px;font-size:calc(14px*var(--ts));line-height:1.5}
 .gt-group canvas{width:24px;height:24px;image-rendering:pixelated;flex:none}
-.gt-warn{margin:4px 0;padding:6px 8px;background:#f3d6c8;color:#7a2a14;border-radius:4px;font-size:8px;line-height:1.5}
+.gt-warn{margin:4px 0;padding:6px 8px;background:#f3d6c8;color:#7a2a14;border-radius:4px;font-size:calc(14px*var(--ts));line-height:1.5}
 .gt-shop-why p{margin:0}
 .chain-banner[hidden]{display:none!important}
-.gt-details{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:8px;cursor:pointer}
-.gt-hist-day{margin:10px 0 4px;font-size:8px;color:var(--paper-edge)}
-.gt-hist-row{display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#ebe6cc;border-radius:5px;font-size:8px;line-height:1.5}
+.gt-details{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:calc(14px*var(--ts));cursor:pointer}
+.gt-hist-day{margin:10px 0 4px;font-size:calc(14px*var(--ts));color:var(--paper-edge)}
+.gt-hist-row{display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#ebe6cc;border-radius:5px;font-size:calc(14px*var(--ts));line-height:1.5}
 .gt-hist-row.bad{background:#f3d6c8}
 .gt-hist-ic{flex:none;width:24px;display:flex;justify-content:center}
 .gt-hist-ic canvas{width:20px;height:20px;image-rendering:pixelated}
 .gt-hist-ic .gt-card-coin{width:14px;height:14px;margin:3px}
-.gt-hist-t{font-size:9px}
+.gt-hist-t{font-size:calc(15px*var(--ts))}
 .gt-hist-s{color:var(--paper-edge)}
 
 /* Fishing (js/mods/fishing.js): while the line is out the screen is clean, only the reel bar and one button */
@@ -149,7 +149,7 @@ html.gt-fishing #pad, html.gt-fishing #acts, html.gt-fishing #dlg{visibility:hid
 .gt-fish-prog{position:relative;width:8px;border-radius:4px;background:rgba(0,0,0,.45);overflow:hidden}
 .gt-fish-fill{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#ffd84a,#e8a13c)}
 .gt-fish-btn{pointer-events:auto;position:absolute;left:50%;bottom:6%;transform:translateX(-50%);min-width:132px;min-height:52px;padding:10px 18px;
-  border:0;border-radius:26px;font-family:var(--font);font-size:11px;color:#fff;text-shadow:0 1px 0 #000;cursor:pointer;touch-action:none;
+  border:0;border-radius:26px;font-family:var(--font);font-size:calc(18px*var(--ts));color:#fff;text-shadow:0 1px 0 #000;cursor:pointer;touch-action:none;
   -webkit-user-select:none;user-select:none;background:rgba(255,255,255,.16);-webkit-backdrop-filter:blur(14px) saturate(1.5);backdrop-filter:blur(14px) saturate(1.5);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 0 0 1px rgba(255,255,255,.3),0 4px 16px rgba(0,0,0,.35)}
 .gt-fish-btn.hot{background:rgba(232,80,60,.75);animation:gt-fish-pulse .35s ease-in-out infinite alternate}
@@ -158,3 +158,18 @@ html.gt-fishing #pad, html.gt-fishing #acts, html.gt-fishing #dlg{visibility:hid
 @media (prefers-reduced-motion:reduce){.gt-fish-btn.hot{animation:none}}
 html.gt-phone .gt-fish-btn{min-width:160px;min-height:64px;font-size:13px}
 .gt-details{justify-content:flex-start;margin-top:8px}
+
+/* Title card (signed out): the game stays visible behind a dim veil; one card says what it is and how to start */
+.gt-title{position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(10,11,20,.55);line-height:1.4}
+.gt-title[hidden]{display:none}
+.gt-title-card{width:min(100%,520px);padding:22px 24px 18px;background:var(--paper);color:var(--paper-ink);border-radius:6px;box-shadow:0 0 0 3px var(--paper-ink)}
+.gt-title h1{margin:0 0 12px;font-family:var(--font-display);font-weight:400;font-size:calc(24px*var(--ts));line-height:1.2;color:var(--paper-ink)}
+.gt-title-lead{margin:0 0 10px;font-size:calc(18px*var(--ts))}
+.gt-title-live{margin:0 0 16px;padding:8px 10px;background:#e8e2c4;border-radius:4px;font-size:calc(15px*var(--ts))}
+.gt-title-acts{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.gt-title-acts .mbtn{min-height:44px;padding:10px 16px;font-size:calc(16px*var(--ts))}
+.gt-title-note{margin:0;font-size:calc(14px*var(--ts));color:var(--paper-edge)}
+html.gt-titlecard .gt-goals{display:none}
+html.gt-phone .gt-title h1{font-size:calc(16px*var(--ts))}
+html.gt-phone .gt-title-card{padding:18px 16px 14px}
+html.gt-phone .gt-title-lead{font-size:calc(16px*var(--ts))}
