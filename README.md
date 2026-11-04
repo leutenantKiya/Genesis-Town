@@ -29,6 +29,7 @@
 >   The hotbar along the bottom shows every item; pick the one in your hand with a click, 1–7 or the mouse wheel;
 >   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen (also in Pengaturan), **T** a message to an NPC.
 >   On phones: tap the world to act, tap a slot to hold it, tap it again to use it.
+> - **Chopping has a swing**: the axe slashes into the tree with a white trail, wood chips fly and leaves drift down.
 > - **Fishing as a skill game**: ripples mark where fish gather (they move every two game hours; bites come faster
 >   there). Cast, wait for the "!", press in time, then hold to keep the fish inside the green zone until the catch
 >   bar fills. The screen is clean while fishing (only the reel bar and one button). The catch is the normal gather
