@@ -158,7 +158,19 @@ export class Game {
       case 'sell': res = this.market.sell(account, s('merchant'), s('token'), n('qty')); break;
       default: res = this.market.buy(account, s('merchant'), s('token'), n('qty')); break;
     }
-    if (a !== 'farm') this.store.addHistory(account, a, res.toast, 'offchain');
+    if (a !== 'farm') {
+      const tags = new Set<string>(Object.keys((res as { gained?: Record<string, number> }).gained ?? {}));
+      if (body.token) tags.add(String(body.token));
+      if (a === 'craft') {
+        const r = this.econ.recipes[s('recipe')];
+        for (const t of Object.keys(r.inputs)) tags.add(t);
+        tags.add(r.output);
+        if (r.fee > 0) tags.add('coin');
+      }
+      if (a === 'gather' && this.econ.gather.tiles[s('tile')]) tags.add(this.econ.gather.tiles[s('tile')]);
+      if (a === 'buy' || a === 'sell') tags.add('coin');
+      this.store.addHistory(account, a, res.toast, 'offchain', null, null, [...tags].filter((t) => t in this.econ.items));
+    }
     return { ...res, state: this.state(account) };
   }
 

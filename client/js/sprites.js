@@ -1006,7 +1006,9 @@
     _problems: problems,
     // art.js (art pass 1) extends the tile table and reuses the painter
     _T: T,
-    _paint: paint
+    _paint: paint,
+    // drop the built tiles after a palette change (snow on or off)
+    _clearTiles: function () { tileCache = {}; }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 

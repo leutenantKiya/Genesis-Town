@@ -31,6 +31,32 @@
   };
   S.PAL = PAL;
 
+  /* Snow: swap the ground palettes in place (originals kept) and drop the baked ground tiles. */
+  var SNOW_PAL = {
+    grass: ['#b8c6d8', '#e8eef5', '#f4f7fb', '#ffffff'],
+    path: ['#8a7f78', '#c8c3c0', '#d9d6d4', '#ecebea'],
+    plaza: ['#7d8290', '#b9bfcc', '#d7dce6', '#f1f4f8']
+  };
+  var NORMAL_PAL = { grass: PAL.grass.slice(), path: PAL.path.slice(), plaza: PAL.plaza.slice() };
+  S.snow = false;
+  S.setSnow = function (on) {
+    on = !!on;
+    if (on === S.snow) return false;
+    var src = on ? SNOW_PAL : NORMAL_PAL;
+    ['grass', 'path', 'plaza'].forEach(function (k) { for (var i = 0; i < src[k].length; i++) PAL[k][i] = src[k][i]; });
+    // tall grass pokes through the snow as dry stalks; flowers are buried (pale frosted tips)
+    var T = S._T;
+    if (T && T.tallgrass) { if (!NORMAL_PAL.tall) NORMAL_PAL.tall = T.tallgrass.pal; T.tallgrass.pal = on ? { d: '#7f8f86', l: '#c9d4cf' } : NORMAL_PAL.tall; }
+    if (T && T.flower) {
+      if (!NORMAL_PAL.flower) NORMAL_PAL.flower = T.flower.pal;
+      T.flower.pal = on ? function () { return { r: '#cfd8e2', p: '#e2e8ef', w: '#ffffff', s: '#8a9aa0', y: '#eef2f6' }; } : NORMAL_PAL.flower;
+    }
+    if (S._clearTiles) S._clearTiles();
+    groundCache = {};
+    S.snow = on;
+    return true;
+  };
+
   /* ------------------------------------------------------------------ ground variants */
   var groundCache = {};
   function buildGround(type, v) {
@@ -41,7 +67,8 @@
       for (i = 0; i < 10; i++) { R(g, Math.floor(r() * 12), Math.floor(r() * 12), 1, 1, r() < 0.5 ? p[0] : p[2]); }
       if (v === 1) { x = 2 + Math.floor(r() * 6); y = 4 + Math.floor(r() * 5); R(g, x, y, 1, 3, p[0]); R(g, x + 2, y - 1, 1, 4, p[0]); R(g, x + 1, y, 1, 3, p[2]); R(g, x + 4, y + 1, 1, 2, p[0]); }
       if (v === 2) { x = 2 + Math.floor(r() * 7); y = 3 + Math.floor(r() * 6); R(g, x, y, 2, 1, '#b8b0a0'); R(g, x + 1, y + 1, 1, 1, '#8a8478'); R(g, x + 5, y + 3, 1, 1, '#b8b0a0'); }
-      if (v === 3) { x = 2 + Math.floor(r() * 7); y = 2 + Math.floor(r() * 7); R(g, x, y, 1, 1, r() < 0.5 ? '#f6f0e0' : '#ffd84a'); R(g, x + 4, y + 3, 1, 1, '#f6f0e0'); R(g, x + 1, y + 1, 1, 1, p[3]); }
+      if (v === 3 && S.snow) { x = 2 + Math.floor(r() * 7); y = 2 + Math.floor(r() * 7); R(g, x, y, 3, 1, '#9fb0c6'); R(g, x + 1, y + 1, 2, 1, '#b8c6d8'); R(g, x + 5, y + 4, 1, 1, '#9fb0c6'); }
+      else if (v === 3) { x = 2 + Math.floor(r() * 7); y = 2 + Math.floor(r() * 7); R(g, x, y, 1, 1, r() < 0.5 ? '#f6f0e0' : '#ffd84a'); R(g, x + 4, y + 3, 1, 1, '#f6f0e0'); R(g, x + 1, y + 1, 1, 1, p[3]); }
     } else if (type === 'path') {
       p = PAL.path; R(g, 0, 0, TILE, TILE, p[1]);
       for (i = 0; i < 14; i++) R(g, Math.floor(r() * 12), Math.floor(r() * 12), 1, 1, r() < 0.55 ? p[0] : p[2]);

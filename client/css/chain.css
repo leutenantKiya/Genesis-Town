@@ -54,7 +54,6 @@ html.gt-w-terik #cv{filter:saturate(1.38) contrast(1.06) brightness(1.05)}
 html.gt-w-cerah #cv{filter:saturate(1.12)}
 html.gt-w-berawan #cv{filter:saturate(.86) brightness(.95)}
 html.gt-w-hujan #cv{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
-html.gt-w-salju #cv{filter:saturate(.7) brightness(1.06) hue-rotate(8deg)}
 html.gt-reduced-motion #cv{transition:none}
 
 /* Hotbar: item slots along the bottom of the game view (js/mods/hotbar.js) */

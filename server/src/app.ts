@@ -191,7 +191,9 @@ export function createApp(deps: AppDeps) {
       }
       if (req.method === 'GET' && p === '/api/history') {
         const acct = accountOf(req, url);
-        return send(res, 200, { history: deps.store.history(acct), explorerTxUrl: deps.cfg.explorerTxUrl });
+        const token = url.searchParams.get('token') ?? undefined;
+        if (token && !(token in game.econ.items)) throw new HttpError(400, 'unknown item');
+        return send(res, 200, { history: deps.store.history(acct, 50, token), explorerTxUrl: deps.cfg.explorerTxUrl });
       }
       const m = /^\/api\/ledger\/(\d+)$/.exec(p);
       if (req.method === 'GET' && m) {

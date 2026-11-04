@@ -10,6 +10,8 @@ export interface HistoryRow {
   summary: string;
   tx_hash: string | null;
   status: 'pending' | 'ok' | 'failed' | 'mock' | 'offchain';
+  /** Items this row is about, as ',fish,wood,' (null on rows from before tagging). */
+  tokens: string | null;
   created_at: number;
 }
 
@@ -40,6 +42,7 @@ export class Store {
         tx_hash TEXT,
         status TEXT NOT NULL,
         ref TEXT,
+        tokens TEXT,
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS history_by_account ON history(account_id, id);
@@ -60,6 +63,9 @@ export class Store {
         created_at INTEGER NOT NULL
       );
     `);
+    // Older databases have no tokens column on history.
+    const cols = this.db.prepare('PRAGMA table_info(history)').all() as unknown as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === 'tokens')) this.db.exec('ALTER TABLE history ADD COLUMN tokens TEXT');
   }
 
   playerBySub(sub: string) {
@@ -85,10 +91,11 @@ export class Store {
     return r?.account_id;
   }
 
-  addHistory(accountId: string, kind: string, summary: string, status: HistoryRow['status'], txHash: string | null = null, ref: string | null = null): number {
+  addHistory(accountId: string, kind: string, summary: string, status: HistoryRow['status'], txHash: string | null = null, ref: string | null = null, tokens: string[] = []): number {
+    const tags = tokens.length ? `,${[...new Set(tokens)].join(',')},` : null;
     const r = this.db.prepare(
-      'INSERT INTO history (account_id, kind, summary, tx_hash, status, ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).run(accountId, kind, summary, txHash, status, ref, Date.now());
+      'INSERT INTO history (account_id, kind, summary, tx_hash, status, ref, tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(accountId, kind, summary, txHash, status, ref, tags, Date.now());
     return Number(r.lastInsertRowid);
   }
 
@@ -101,7 +108,11 @@ export class Store {
     this.db.prepare("UPDATE history SET status = ?, tx_hash = ? WHERE account_id = ? AND status = 'offchain'").run(status, txHash, accountId);
   }
 
-  history(accountId: string, limit = 50): HistoryRow[] {
+  history(accountId: string, limit = 50, token?: string): HistoryRow[] {
+    if (token) {
+      return this.db.prepare('SELECT * FROM history WHERE account_id = ? AND tokens LIKE ? ORDER BY id DESC LIMIT ?')
+        .all(accountId, `%,${token},%`, limit) as unknown as HistoryRow[];
+    }
     return this.db.prepare('SELECT * FROM history WHERE account_id = ? ORDER BY id DESC LIMIT ?')
       .all(accountId, limit) as unknown as HistoryRow[];
   }

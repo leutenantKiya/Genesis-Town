@@ -20,14 +20,23 @@
 >   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow,
 >   run live on testnet 2026-11-03). Sign-out keeps each account's key in the browser.
 > - **Phone layout** (portrait): the game view fills the screen between a one-line status bar and the thumb zone
->   (D-pad, A, E) with a bottom bar for Tas, Pasar, Peta, Riwayat and Lainnya; windows open as bottom sheets; buttons
+>   (D-pad, A, E, drawn as translucent glass with an opaque fallback) with a bottom bar for Tas, Pasar, Peta and
+>   Lainnya; windows open as bottom sheets; buttons
 >   are 40 px or more. The prototype's thief-role picker no longer appears when the thief feature is off.
 >
 > - **Controls like a crafting game**: **left-click or F** acts on the world (walk to a tile; chop, mine, fish,
 >   talk, open a stall, go into a building); **right-click or R** uses the item in your hand (eat, plant Gandum).
 >   The hotbar along the bottom shows every item; pick the one in your hand with a click, 1–7 or the mouse wheel;
->   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen, **T** a message to an NPC.
+>   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen (also in Pengaturan), **T** a message to an NPC.
 >   On phones: tap the world to act, tap a slot to hold it, tap it again to use it.
+> - **Crafting costs**: simple recipes cost energy (Roti 5, Ikan Bakar 8), complex ones cost coin (Alat 3 coin).
+>   Merchants still pay their own 2-coin crafting fee.
+> - **Riwayat per item**: in the Tas, each item's panel has a Riwayat button that lists only that item's history;
+>   "Semua riwayat" (or H) shows everything. History rows are tagged with the items they touch.
+> - **Installable (PWA)**: web app manifest, icons and a network-first service worker (never caches `/api/*`, so game
+>   code is never stale online). On iPhone, fullscreen comes from "Tambah ke Layar Utama"; the settings say so.
+> - **Winter is white**: in Dingin (and on snowy days) the ground, roads and plaza are snow-covered and grass and
+>   flowers are frosted; the old hazy filter is gone, snowflakes still fall.
 >- **Item windows like a farming or server-economy game**: every window shows items as icon cards (the same icons as
 >   the hotbar). A shop shows what the merchant sells on top and your own items below with what they pay, greyed when
 >   they don't buy it; click to trade 1, Shift-click for 5, right-click to sell up to 10, and the price reason shows
@@ -204,11 +213,11 @@ Run locally (below), open http://localhost:3000.
    today).
 3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → her goods on top, your items below with her price. Click
    your fish to sell one.
-4. Inside your house, press F at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
+4. Inside your house, press F at the table to craft (2 Gandum → Roti, costs 5 energy), and at the chest to use the Kotak Kirim.
    Outside, in the fenced field next to your house, press F on a plot to till, plant (press twice) and water wheat
    (not in Dingin: wheat doesn't grow in winter). With no Gandum left, the village gives
    up to 3 free seeds a day (planted straight away), so farming never dead-ends when the bakery is closed.
-5. Open the Dev panel → **Settle sekarang** → Riwayat (H) → tick **Tampilkan detail blockchain** → "Settlement hari N"
+5. Open the Dev panel → **Settle sekarang** → Riwayat (H, or Tas → Semua riwayat) → tick **Tampilkan detail blockchain** → "Settlement hari N"
    with a testnet explorer link, and everything from step 2 now points to it. With the box unticked (the default) the
    game hardly mentions the chain: no account banner, no "on-chain" labels and no explorer links; one line in
    Riwayat says the items are kept on NEAR testnet.

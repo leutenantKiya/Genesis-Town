@@ -62,18 +62,29 @@ test('ore and wood need a tool, and the tool breaks after 20 uses', async () => 
   assert.equal(bal(game, P, 'tool'), 0);
 });
 
-test('crafting consumes inputs and burns the fee; eating restores energy', async () => {
+test('crafting: simple recipes cost energy, complex ones cost coin; eating restores energy', async () => {
   const { game } = await world();
   game.gs.add(0, P, 'wheat', 1, 'test'); // 3 + 1 = 4 wheat
   game.act(P, { action: 'craft', recipe: 'bread' });
   assert.equal(bal(game, P, 'wheat'), 2);
   assert.equal(bal(game, P, 'bread'), 4);
-  assert.equal(bal(game, P, 'coin'), 98);
+  assert.equal(bal(game, P, 'coin'), 100);
+  assert.equal(game.state(P).energy, 95);
   assert.throws(() => game.act(P, { action: 'craft', recipe: 'tool' }), /kurang/);
-  assert.throws(() => game.act(P, { action: 'eat', token: 'bread' }), /penuh/);
-  game.act(P, { action: 'gather', tile: 'water', x: 1, y: 1 });
+  game.gs.add(0, P, 'ore', 2, 'test');
+  game.gs.add(0, P, 'wood', 1, 'test');
+  const tools = bal(game, P, 'tool');
+  game.act(P, { action: 'craft', recipe: 'tool' });
+  assert.equal(bal(game, P, 'coin'), 97);
+  assert.equal(bal(game, P, 'tool'), tools + 1);
+  // Too tired to craft bread.
+  const p = game.world.state(P);
+  p.energy = 4;
+  game.gs.savePlayer(p);
+  game.gs.add(0, P, 'wheat', 2, 'test');
+  assert.throws(() => game.act(P, { action: 'craft', recipe: 'bread' }), /Energi kurang/);
   game.act(P, { action: 'eat', token: 'bread' });
-  assert.equal(game.state(P).energy, 100);
+  assert.equal(game.state(P).energy, 29);
 });
 
 test('farm: till, plant, water once a day, harvest after 3 watered days', async () => {

@@ -114,13 +114,13 @@
 
   /* ------------------------------------------------------------ layout + fullscreen */
   function wantsFull() {
-    if (document.fullscreenElement) return true;
+    if (fsElement()) return true;
     if (st.layout === 'full') return true;
     if (st.layout === 'boxed') return false;
     return window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 900;
   }
   // Phone (portrait, narrow): the game view fills the screen between a one-line status bar and the thumb zone
-  // (D-pad, A/E, and a bottom bar with the five places players go). css/phone.css lays it out.
+  // (D-pad, A/E, and a bottom bar with the four places players go). css/phone.css lays it out.
   function wantsPhone() {
     if (wantsFull() || st.layout === 'boxed') return false;
     return window.innerWidth <= 700 && window.innerHeight > window.innerWidth;
@@ -136,14 +136,25 @@
     var rm = st.reducedMotion == null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : st.reducedMotion;
     root.classList.toggle('gt-reduced-motion', !!rm);
   }
+  // Standard API first, then the WebKit-prefixed one (iPad Safari). iPhone Safari has neither.
+  function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function fsSupported() { var el = document.documentElement; return !!(el.requestFullscreen || el.webkitRequestFullscreen); }
   function toggleFullscreen() {
-    if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); return; }
+    if (fsElement()) {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      return;
+    }
     var el = document.documentElement;
     if (el.requestFullscreen) el.requestFullscreen().catch(function () { GT.toast('Browser menolak layar penuh. Coba tekan F11.'); });
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (window.GT_PWA && GT_PWA.iphone()) GT.toast('Di iPhone: ketuk Bagikan lalu "Tambah ke Layar Utama" untuk layar penuh.');
     else GT.toast('Browser ini tidak mendukung layar penuh. Coba tekan F11.');
   }
-  document.addEventListener('fullscreenchange', function () { applyLayout(); setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 60); });
-  window.addEventListener('resize', function () { if (!document.fullscreenElement) applyLayout(); });
+  function onFsChange() { applyLayout(); redraw(); setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 60); }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+  window.addEventListener('resize', function () { if (!fsElement()) applyLayout(); });
 
   /* ------------------------------------------------------------ phone bottom bar */
   // Each tab presses the existing HUD button, so the bar adds no game logic of its own.
@@ -153,7 +164,6 @@
     var opts = [];
     if (document.getElementById('simbtn')) opts.push({ label: 'Simulasi 1 minggu', onPick: function () { press('simbtn'); } });
     opts.push({ label: 'Pengaturan', onPick: openSettings });
-    opts.push({ label: document.fullscreenElement ? 'Keluar layar penuh' : 'Layar penuh', onPick: toggleFullscreen });
     if (GT.openProfile) opts.push({ label: 'Profil', onPick: function () { GT.openProfile(); } });
     if (document.getElementById('btnJiwa')) opts.push({ label: 'Jiwa', onPick: function () { press('btnJiwa'); } });
     if (GT.interact) opts.push({ label: 'Pesan ke NPC di depanmu', onPick: function () { GT.interact('message'); } });
@@ -168,7 +178,6 @@
     [['tab-bag', 'Tas', function () { press('chainbtn'); }],
      ['tab-market', 'Pasar', function () { press('pasarbtn'); }],
      ['tab-map', 'Peta', function () { press('mapbtn'); }],
-     ['tab-history', 'Riwayat', function () { press('riwayatbtn'); }],
      ['tab-more', 'Lainnya', moreSheet]].forEach(function (t) {
       var b = $('button', 'gt-tab', t[1]); b.type = 'button'; b.id = t[0];
       b.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) t[2](); });
@@ -217,10 +226,21 @@
       lab.appendChild(inp); lab.appendChild($('span', null, o[1])); seg.appendChild(lab);
     });
     wrap.appendChild(seg);
+    var pwa = window.GT_PWA;
     var fs = $('div', 'dbtns');
-    var fsb = $('button', 'mbtn primary', document.fullscreenElement ? 'Keluar layar penuh' : 'Layar penuh (' + label('fullscreen') + ')'); fsb.type = 'button';
-    fsb.addEventListener('click', function () { toggleFullscreen(); });
-    fs.appendChild(fsb); wrap.appendChild(fs);
+    if (fsSupported()) {
+      var fsb = $('button', 'mbtn primary', fsElement() ? 'Keluar layar penuh' : 'Layar penuh (' + label('fullscreen') + ')'); fsb.type = 'button';
+      fsb.addEventListener('click', function () { toggleFullscreen(); });
+      fs.appendChild(fsb);
+    }
+    if (pwa && pwa.canInstall()) {
+      var inst = $('button', 'mbtn', 'Pasang aplikasi'); inst.type = 'button';
+      inst.addEventListener('click', function () { pwa.install().then(function () { redraw(); }); });
+      fs.appendChild(inst);
+    }
+    if (fs.firstChild) wrap.appendChild(fs);
+    if (pwa && pwa.standalone()) wrap.appendChild($('p', 'mnote', 'Sudah terpasang sebagai aplikasi.'));
+    else if (pwa && pwa.iphone()) wrap.appendChild($('p', 'mnote', 'Di iPhone: ketuk Bagikan lalu "Tambah ke Layar Utama" untuk layar penuh.'));
 
     wrap.appendChild($('h3', null, 'Kota'));
     var shared = window.GT_CHAIN && GT_CHAIN.state.mode !== 'offline' && GT_CHAIN.state.cfg && GT_CHAIN.state.cfg.world;
@@ -273,8 +293,7 @@
     id: 'settings',
     init: function () {
       GT.addHudButton({ id: 'setbtn', label: 'Atur', onClick: openSettings, secondary: false });
-      GT.addHudButton({ id: 'fsbtn', label: 'Layar', onClick: toggleFullscreen, secondary: false });
-      // A calmer HUD: Tas, Pasar, Peta, Riwayat and Simulasi stay in view; everything else lives in Lainnya
+      // A calmer HUD: Tas, Pasar, Peta and Simulasi stay in view; everything else lives in Lainnya
       // (css/phone.css hides the rest). Their keyboard shortcuts still work.
       GT.addHudButton({ id: 'gt-morebtn', label: 'Lainnya', onClick: moreSheet, secondary: false });
       renderHelp();

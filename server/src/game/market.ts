@@ -145,10 +145,10 @@ export class Market {
       for (const out of d.crafts) {
         const r = this.econ.recipes[out];
         if (!r || this.gs.balance(acct, out) >= (d.target[out] ?? 0)) continue;
-        if (!Object.entries(r.inputs).every(([t, n]) => this.gs.balance(acct, t) >= n) || this.gs.balance(acct, 'coin') < r.fee) continue;
+        if (!Object.entries(r.inputs).every(([t, n]) => this.gs.balance(acct, t) >= n) || this.gs.balance(acct, 'coin') < this.econ.craft.merchantFee) continue;
         for (const [t, n] of Object.entries(r.inputs)) this.gs.add(day, acct, t, -n, 'm_craft', out);
         this.gs.add(day, acct, out, 1, 'm_craft', out);
-        this.gs.add(day, acct, 'coin', -r.fee, 'fee', out);
+        this.gs.add(day, acct, 'coin', -this.econ.craft.merchantFee, 'fee', out);
       }
     }
   }

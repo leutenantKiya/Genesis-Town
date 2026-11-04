@@ -64,7 +64,8 @@ can plan. They are config values in `economy/config.json`, used by both live pla
   | Joko | general store | wood, wheat, fish | wood, bread | generous: spread 12%, never bids under 90% of base, buys up to 3× target a day, ignores his cash; starts with 350 coin |
 
   Merchants also craft: Wati bakes bread from wheat she holds, Sari cooks meals, and Budi forges tools. Each merchant
-  has a daily crafting capacity (default 10 crafts per day), and crafting uses the same recipes and fees as players.
+  has a daily crafting capacity (default 10 crafts per day), and crafting uses the same recipes as players. Merchants pay a 2-coin fee per craft
+  (`craft.merchantFee`); players pay energy for food (Roti 5, Ikan Bakar 8) and coin for tools (Alat 3).
 - **Town (townsfolk).** These are not individual accounts. The `town` account buys finished goods from open merchants
   every game hour, which is the demand side of the economy (§3).
 - **Town treasury.** The `town` account also holds a fixed pre-minted coin stock. It pays starter kits and starts out
@@ -87,7 +88,7 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 | --- | --- | --- |
 | Shop rent | merchant `coin` | R = 40 per merchant per game day, while the shop is open |
 | Storage (gudang) fee | merchant `coin` | 0.5 per unit held above target stock per day, paid with the rent |
-| Crafting fee | player or merchant `coin` | 2 per craft |
+| Crafting cost | simple recipes (bread, meal) cost the player energy (5 / 8); complex ones (tool) cost 3 `coin`; merchants pay a flat 2 `coin` per craft | see `recipes` and `craft` in config |
 | Player-market fee | seller `coin` | 5% of each player-market sale |
 | Shipping box | items sold to the town at 70% of base price | counted inside the town faucet `W_day` (it is town demand, at a worse price) |
 | Food | `bread`, `meal` | eaten by players, and bought (then burned) by the town |

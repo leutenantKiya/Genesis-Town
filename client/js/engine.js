@@ -280,7 +280,8 @@ function buildWorldCache(m){
     Sp.drawGround(g, gt, x*T, y*T, gt === 'grass' ? (hv < 6 ? 0 : hv < 8 ? 1 : hv < 9 ? 2 : 3) : hv & 3);
     if (gt === 'grass'){
       var n = valueNoise(m.seed, x / 5, y / 5) - 0.5;
-      g.fillStyle = n < 0 ? 'rgba(20,60,30,' + (-n * 0.45).toFixed(3) + ')' : 'rgba(220,240,120,' + (n * 0.28).toFixed(3) + ')';
+      if (Sp.snow) g.fillStyle = n < 0 ? 'rgba(120,140,180,' + (-n * 0.35).toFixed(3) + ')' : 'rgba(255,255,255,' + (n * 0.4).toFixed(3) + ')';
+      else g.fillStyle = n < 0 ? 'rgba(20,60,30,' + (-n * 0.45).toFixed(3) + ')' : 'rgba(220,240,120,' + (n * 0.28).toFixed(3) + ')';
       g.fillRect(x*T, y*T, T, T);
     }
   }
@@ -2268,6 +2269,10 @@ var GT = {
     worldUnlocked = u; regen(s);
     if (keepPos && keepPos.scene === 'out' && world.walk[keepPos.y*world.w + keepPos.x]){ P.x = P.fx = keepPos.x; P.y = P.fy = keepPos.y; }
     return true;
+  },
+  // Snowy ground (art.js palette swap); rebuilds the baked world only when it changed.
+  setSnow: function(on){
+    if (window.SPRITES && SPRITES.setSnow && SPRITES.setSnow(on) && world) buildWorldCache(world);
   },
   version: 2,
   state: state,

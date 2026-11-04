@@ -65,7 +65,7 @@
     load: function () { try { return JSON.parse(lsGet(LS_OFF) || 'null') || { bal: {}, hist: [], n: 0 }; } catch (e) { return { bal: {}, hist: [], n: 0 }; } },
     gather: function (t) {
       var d = OFF.load(); d.bal[t] = (d.bal[t] || 0) + 1;
-      d.hist.unshift({ id: ++d.n, kind: 'gather', summary: '+1 ' + item(t), status: 'mock', tx_hash: null, created_at: Date.now() });
+      d.hist.unshift({ id: ++d.n, kind: 'gather', summary: '+1 ' + item(t), tokens: ',' + t + ',', status: 'mock', tx_hash: null, created_at: Date.now() });
       d.hist = d.hist.slice(0, 50); lsSet(LS_OFF, JSON.stringify(d)); return d;
     }
   };
@@ -264,11 +264,15 @@
       var sp = standPos();
       jobs.push(api('/state?x=' + sp.x + '&y=' + sp.y).then(function (st) { S.st = st; syncClock(st.time); followWorld(st.world); }));
       if (full || S.modal) jobs.push(api('/history').then(function (h) { S.history = h.history || []; }));
+      if (S.modal && S.modal.kind === 'history' && S.modal.arg) {
+        var ht = S.modal.arg;
+        jobs.push(api('/history?token=' + encodeURIComponent(ht)).then(function (h) { S.itemHistory = { token: ht, rows: h.history || [] }; }));
+      }
       if (full || (S.modal && S.modal.kind === 'shop')) jobs.push(api('/shops').then(function (s) { S.shops = s.shops; }));
       if (S.modal && S.modal.kind === 'project') jobs.push(api('/projects').then(function (r) { S.projects = r.projects || []; }));
       if (S.modal && S.modal.kind === 'market') jobs.push(api('/listings').then(function (l) { S.listings = l.listings || []; S.feeBps = l.feeBps; S.popular = l.popular || []; }), myTag());
     } else {
-      jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); S.weather = t.weather; }));
+      jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); S.weather = t.weather; S.season = t.season; }));
     }
     return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); applyWeatherClass(); if (S.st && S.st.encounter && !(fightH && fightH.isOpen()) && !GT.isUiOpen()) openFight(); }).catch(function (e) {
       if (e.status === 401) { S.account = null; lsSet(LS_ACC, null); renderBanner(); }
@@ -404,8 +408,15 @@
   // ?cuaca=hujan|salju|terik|berawan|cerah previews a look on this screen only (the server's weather is unchanged)
   var previewWeather = (/[?&]cuaca=(cerah|berawan|hujan|terik|salju)\b/.exec(location.search) || [])[1] || null;
   function weatherKind() { if (previewWeather) return previewWeather; var w = (S.st && S.st.weather) || S.weather; return w ? w.kind : null; }
+  // Winter, snowy weather or the ?musim=dingin preview turns the baked ground white (art.js palette swap)
+  var previewWinter = /[?&]musim=dingin\b/.test(location.search);
+  function snowOn() {
+    var season = (S.st && S.st.time && S.st.time.season) || S.season;
+    return previewWinter || season === 'dingin' || weatherKind() === 'salju';
+  }
   function applyWeatherClass() {
     var k = weatherKind(), root = document.documentElement;
+    if (GT.setSnow) GT.setSnow(snowOn());
     ['cerah', 'berawan', 'hujan', 'terik', 'salju'].forEach(function (x) { root.classList.toggle('gt-w-' + x, k === x && (!GT.scene || GT.scene.kind === 'out')); });
   }
   function drawWeather(ctx, T, t) {
@@ -414,8 +425,7 @@
     var sx = ctx.getTransform().a || 1, W = ctx.canvas.width / sx, H = ctx.canvas.height / sx;
     var calm = document.documentElement.classList.contains('gt-reduced-motion');
     ctx.save();
-    ctx.fillStyle = k === 'hujan' ? 'rgba(40,60,90,0.14)' : 'rgba(236,242,255,0.34)'; // grey rain light; snow-covered ground
-    ctx.fillRect(0, 0, W, H);
+    if (k === 'hujan') { ctx.fillStyle = 'rgba(40,60,90,0.14)'; ctx.fillRect(0, 0, W, H); } // grey rain light; snow has no tint
     if (!flakes || flakes.k !== k) { flakes = { k: k, p: [] }; for (var i = 0; i < (k === 'hujan' ? 90 : 70); i++) flakes.p.push([Math.random(), Math.random(), 0.6 + Math.random() * 0.8]); }
     flakes.p.forEach(function (f) {
       var speed = calm ? 0 : (k === 'hujan' ? 1.6 : 0.18) * f[2];
@@ -892,6 +902,7 @@
     wrap.appendChild(bagDetail(sel));
     wrap.appendChild($('p', 'chain-dim', (document.documentElement.classList.contains('gt-phone') ? 'Ketuk barang untuk melihatnya, lalu Pegang untuk menaruhnya di tangan. ' : 'Klik barang untuk melihatnya, klik kanan untuk memegangnya. ') + '"Hari ini" disimpan permanen pukul 06:00' + (chainUI() ? ' (dicatat di NEAR)' : '') + '; Kirim dan Pasar memakai barang yang sudah tersimpan.'));
     if (S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
+    wrap.appendChild(button('Semua riwayat', function () { open('history'); }));
     wrap.appendChild(button('Keluar (ganti akun)', function () { signOut(); }));
     return wrap;
   }
@@ -918,6 +929,7 @@
     if (window.GT_ITEMS && GT_ITEMS.held() !== t) row.appendChild(button('Pegang', function () { GT_ITEMS.hold(t); redraw(); }));
     if (can > 0) row.appendChild(button('Jual ke pemain', function () { askList(t, can); }));
     if (can > 0) row.appendChild(button('Kirim', function () { askSend(t); }));
+    row.appendChild(button('Riwayat', function () { open('history', t); }));
     if (row.children.length) box.appendChild(row);
     return box;
   }
@@ -939,11 +951,12 @@
 
   function craftBody() {
     var wrap = $('div');
-    wrap.appendChild($('p', null, 'Meja kerja. Setiap resep memakai bahan dari tasmu dan biaya 2 koin.'));
+    wrap.appendChild($('p', null, 'Meja kerja. Resep sederhana memakai energi, resep rumit memakai koin.'));
     Object.keys(S.cfg.econ.recipes).forEach(function (id) {
       var r = S.cfg.econ.recipes[id];
       var row = $('div', 'mrow');
       row.appendChild($('span', 'grow', item(r.output) + ' ← ' + Object.keys(r.inputs).map(function (t) { return r.inputs[t] + ' ' + item(t); }).join(' + ')));
+      row.appendChild($('span', 'chain-dim', r.energy ? r.energy + ' energi' : r.fee + ' koin'));
       row.appendChild(button('Buat', function () { act({ action: 'craft', recipe: id }).then(refreshModal, noop); }, 'primary'));
       wrap.appendChild(row);
     });
@@ -1122,7 +1135,7 @@
   }
 
   var ST_LABEL = { pending: '…', ok: '✓', failed: '✗', mock: 'mock', offchain: 'menunggu 06:00' };
-  function historyBody() {
+  function historyBody(token) {
     var wrap = $('div'), details = chainUI();
     var tog = $('label', 'chain-field gt-details');
     var cb = $('input'); cb.type = 'checkbox'; cb.checked = details;
@@ -1131,8 +1144,18 @@
     wrap.appendChild(tog);
     if (!details && S.mode === 'testnet') wrap.appendChild($('p', 'chain-dim', 'Barang dan koinmu tersimpan di NEAR testnet. Nyalakan detail untuk melihat akun dan bukti tiap transaksi.'));
     if (details && S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
-    if (!S.history.length) wrap.appendChild($('p', null, 'Belum ada transaksi.'));
-    S.history.forEach(function (h) {
+    var rows = S.history;
+    if (token) {
+      if (S.mode === 'offline') rows = S.history.filter(function (h) { return (h.tokens || '').indexOf(',' + token + ',') >= 0; });
+      else rows = S.itemHistory && S.itemHistory.token === token ? S.itemHistory.rows : null;
+      var nav = $('div', 'gt-detail-acts');
+      nav.appendChild(button('Semua riwayat', function () { open('history'); }));
+      nav.appendChild(button('Kembali ke Tas', function () { var h = S.modal && S.modal.h; if (h) h.close(); open('bag'); }));
+      wrap.appendChild(nav);
+    }
+    if (!rows) wrap.appendChild($('p', null, 'Memuat…'));
+    else if (!rows.length) wrap.appendChild($('p', null, token ? 'Belum ada riwayat untuk barang ini.' : 'Belum ada transaksi.'));
+    (rows || []).forEach(function (h) {
       var row = $('div', 'mrow');
       var t = new Date(h.created_at);
       row.appendChild($('span', 'num', ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2)));
@@ -1151,16 +1174,17 @@
   var BODIES = { bag: bagBody, history: historyBody, craft: craftBody, ship: shipBody, market: marketBody, project: projectBody };
   function open(kind, arg) {
     if (S.mode !== 'offline' && !S.account && kind !== 'shop') { login(); return; }
+    if (S.modal && S.modal.h && S.modal.h.isOpen()) S.modal.h.close('switch'); // one window at a time (Tas → Riwayat)
     if (kind === 'project') markGoal('board');
-    var title = kind === 'bag' ? 'Tas' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? 'Riwayat' : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
-    var body = kind === 'shop' ? shopBody(arg) : BODIES[kind]();
+    var title = kind === 'bag' ? 'Tas' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? (arg ? 'Riwayat · ' + item(arg) : 'Riwayat') : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
+    var body = kind === 'shop' ? shopBody(arg) : BODIES[kind](arg);
     var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; } });
     S.modal = { kind: kind, arg: arg, h: h };
     refresh(true);
   }
   function redraw() {
     if (!S.modal || !S.modal.h || !S.modal.h.isOpen()) return;
-    S.modal.h.setBody(S.modal.kind === 'shop' ? shopBody(S.modal.arg) : BODIES[S.modal.kind]());
+    S.modal.h.setBody(S.modal.kind === 'shop' ? shopBody(S.modal.arg) : BODIES[S.modal.kind](S.modal.arg));
   }
   function refreshModal() { return refresh(true); }
   function noop() {}
@@ -1201,7 +1225,7 @@
 
   function init() {
     accBtn = GT.addHudButton({ id: 'chainbtn', label: 'Masuk', key: 'N', secondary: false, onClick: function () { open('bag'); } });
-    GT.addHudButton({ id: 'riwayatbtn', label: 'Riwayat', key: 'H', onClick: function () { open('history'); } });
+    GT.hotkey('H', function () { open('history'); });
     GT.addHudButton({ id: 'pasarbtn', label: 'Pasar', key: 'K', onClick: function () { if (S.mode === 'offline') GT.toast('Pasar Pemain butuh server game.'); else open('market'); } });
     // The old local bag (play items) is replaced by the NEAR bag: hide its button and point the I key here.
     var oldBag = document.getElementById('bagbtn'); if (oldBag) oldBag.style.display = 'none';

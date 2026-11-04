@@ -122,7 +122,7 @@ export class Settlement {
     for (const a of touched.filter((x) => x.includes('.players.'))) {
       const tx = txByAccount.get(a) ?? null;
       store.settleOffchain(a, status, tx);
-      store.addHistory(a, 'settle', `Settlement hari ${day}: ${entries.filter((e) => e.account_id === a).map((e) => `${Number(e.delta) > 0 ? '+' : ''}${e.delta} ${this.d.econ.items[e.token_id]?.name ?? e.token_id}`).join(', ')}`, status, tx);
+      store.addHistory(a, 'settle', `Settlement hari ${day}: ${entries.filter((e) => e.account_id === a).map((e) => `${Number(e.delta) > 0 ? '+' : ''}${e.delta} ${this.d.econ.items[e.token_id]?.name ?? e.token_id}`).join(', ')}`, status, tx, null, [...new Set(entries.filter((e) => e.account_id === a).map((e) => e.token_id))]);
     }
     await this.shops(day, open);
     gs.setMeta('settle.through', String(day));

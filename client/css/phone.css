@@ -3,7 +3,8 @@
      status bar (where you are, coins, time, energy)
      the game view, filling every pixel that is left (engine.js layoutPhone)
      thumb zone: D-pad on the left, A and E on the right
-     bottom bar: Tas, Pasar, Peta, Riwayat, Lainnya, one tap each
+     bottom bar: Tas, Pasar, Peta, Lainnya, one tap each
+     controls (D-pad, A, E, bottom bar) are frosted glass over the game's dark backdrop; opaque when transparency is off
    Margins 16px; every control at least 44px tall; no frame around the screen, so no space is lost. */
 
 .gt-tabbar{display:none}
@@ -11,7 +12,7 @@
 html.gt-phone,html.gt-phone body{height:100%}
 html.gt-phone body{padding:0;overflow:hidden}
 html.gt-phone #app{max-width:none;height:100vh;height:100dvh;display:flex;flex-direction:column}
-html.gt-phone .shell{flex:1;min-height:0;display:flex!important;flex-direction:column!important;border-radius:0;padding:env(safe-area-inset-top,0px) 0 0;background:#14152a;box-shadow:none}
+html.gt-phone .shell{flex:1;min-height:0;display:flex!important;flex-direction:column!important;border-radius:0;padding:env(safe-area-inset-top,0px) 0 0;background:radial-gradient(120% 70% at 50% 100%,#2a2c52 0%,#14152a 70%);box-shadow:none}
 html.gt-phone .brand,html.gt-phone .help,html.gt-phone #acts,html.gt-phone #padmap{display:none!important}
 
 /* status bar: one line for where and when, one for energy and season */
@@ -33,8 +34,31 @@ html.gt-phone .ab{gap:0}
 html.gt-phone .abrow{gap:14px;align-items:flex-end}
 html.gt-phone #btnE{margin-bottom:calc(var(--bA)*.55)}
 
-/* bottom bar: the five places, labelled, 52px tall, above the home indicator */
-html.gt-phone .gt-tabbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0 8px env(safe-area-inset-bottom,0px);background:#0f1022}
+/* glass controls */
+html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnA,html.gt-phone #btnE,html.gt-phone .gt-tabbar{
+  background:rgba(255,255,255,.14);
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);
+  border:1px solid rgba(255,255,255,.28);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 16px rgba(0,0,0,.35);
+  color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+html.gt-phone #btnA{background:rgba(156,47,85,.55);background:color-mix(in srgb,var(--btn) 55%,transparent)}
+html.gt-phone #btnE{background:rgba(61,95,156,.55);background:color-mix(in srgb,#3d5f9c 55%,transparent)}
+html.gt-phone .dp::after{filter:none}
+html.gt-phone .dp.up::after{border-bottom-color:rgba(255,255,255,.9)}
+html.gt-phone .dp.dn::after{border-top-color:rgba(255,255,255,.9)}
+html.gt-phone .dp.left::after{border-right-color:rgba(255,255,255,.9)}
+html.gt-phone .dp.right::after{border-left-color:rgba(255,255,255,.9)}
+html.gt-phone .dp:active,html.gt-phone .dp.down,html.gt-phone #btnA:active,html.gt-phone #btnA.down,html.gt-phone #btnE:active,html.gt-phone #btnE.down{background:rgba(255,255,255,.28)}
+html.gt-phone .gt-tabbar{border-width:1px 0 0}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnA,html.gt-phone #btnE,html.gt-phone .gt-tabbar{background:#2a2c4a;border:1px solid rgba(255,255,255,.28)}
+}
+@media (prefers-reduced-transparency:reduce){
+  html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnA,html.gt-phone #btnE,html.gt-phone .gt-tabbar{background:#2a2c4a;border:1px solid rgba(255,255,255,.28);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+
+/* bottom bar: the four places, labelled, 52px tall, above the home indicator */
+html.gt-phone .gt-tabbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:0 8px env(safe-area-inset-bottom,0px)}
 .gt-tab{min-height:52px;padding:0 2px;border:0;background:transparent;color:var(--ink);font-family:var(--font);font-size:8px;line-height:1.2;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gt-tab:active{background:#1c1d36;color:var(--ink)}
 .gt-tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
@@ -54,9 +78,9 @@ html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:
   html.gt-phone .gt-tab{min-height:46px}
 }
 
-/* Desktop and tablet HUD (not phone): five places in view plus Lainnya, in the order players need them */
+/* Desktop and tablet HUD (not phone): four places in view plus Lainnya, in the order players need them */
 html:not(.gt-phone) #acts > button{display:none!important}
 html:not(.gt-phone) #acts > #chainbtn,html:not(.gt-phone) #acts > #pasarbtn,html:not(.gt-phone) #acts > #mapbtn,
-html:not(.gt-phone) #acts > #riwayatbtn,html:not(.gt-phone) #acts > #simbtn,html:not(.gt-phone) #acts > #gt-morebtn{display:inline-block!important}
-#acts > #chainbtn{order:1}#acts > #pasarbtn{order:2}#acts > #mapbtn{order:3}#acts > #riwayatbtn{order:4}#acts > #simbtn{order:5}#acts > #gt-morebtn{order:6}
+html:not(.gt-phone) #acts > #simbtn,html:not(.gt-phone) #acts > #gt-morebtn{display:inline-block!important}
+#acts > #chainbtn{order:1}#acts > #pasarbtn{order:2}#acts > #mapbtn{order:3}#acts > #simbtn{order:4}#acts > #gt-morebtn{order:5}
 #acts > #chainbtn{background:var(--btn);color:#fff}

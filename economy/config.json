@@ -18,10 +18,11 @@
     "tool":  { "name": "Alat",       "kind": "crafted",  "base": 45, "durability": 20 }
   },
   "recipes": {
-    "bread": { "inputs": { "wheat": 2 }, "output": "bread", "fee": 2 },
-    "meal":  { "inputs": { "fish": 1, "wood": 1 }, "output": "meal", "fee": 2 },
-    "tool":  { "inputs": { "ore": 2, "wood": 1 }, "output": "tool", "fee": 2 }
+    "bread": { "inputs": { "wheat": 2 }, "output": "bread", "fee": 0, "energy": 5 },
+    "meal":  { "inputs": { "fish": 1, "wood": 1 }, "output": "meal", "fee": 0, "energy": 8 },
+    "tool":  { "inputs": { "ore": 2, "wood": 1 }, "output": "tool", "fee": 3 }
   },
+  "craft": { "merchantFee": 2 },
   "gather": {
     "tiles": { "water": "fish", "rock": "ore", "tree": "wood" },
     "charges": 4,

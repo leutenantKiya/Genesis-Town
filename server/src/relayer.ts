@@ -95,6 +95,15 @@ const SUMMARY: Record<string, (a: Record<string, unknown>, n: (t: unknown) => st
   project_withdraw: (a) => `Tarik sumbangan dari proyek desa ${a.id}`,
 };
 
+/** Items a relayed method is about (buy_listing doesn't say which item; it only moves coin). */
+export function relayTokens(method: string, args: Record<string, unknown>): string[] {
+  const out = new Set<string>();
+  if (typeof args.token_id === 'string') out.add(args.token_id);
+  if (Array.isArray(args.contribution)) for (const l of args.contribution as Array<{ token_id?: unknown }>) if (typeof l?.token_id === 'string') out.add(l.token_id);
+  if (method === 'buy_listing' || method === 'claim_dividends') out.add('coin');
+  return [...out];
+}
+
 export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown }) {
   if (typeof body.signedDelegate !== 'string') throw new HttpError(400, 'signedDelegate (base64) required');
   const { sd, bytes } = decodeSignedDelegate(body.signedDelegate);
@@ -126,7 +135,7 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
   const summary = SUMMARY[fc.methodName]?.(args, name) ?? fc.methodName;
   const extra = (await deps.checkSpend?.(da.senderId, fc.methodName, args)) ?? [];
   deps.store.relayPut(hash, da.senderId, 'pending', null);
-  const hid = deps.store.addHistory(da.senderId, fc.methodName, summary, 'pending');
+  const hid = deps.store.addHistory(da.senderId, fc.methodName, summary, 'pending', null, null, relayTokens(fc.methodName, args));
   try {
     const r = await deps.chain.relay(sd, da.senderId);
     const status = r.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed';

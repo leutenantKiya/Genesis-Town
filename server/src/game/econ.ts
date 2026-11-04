@@ -5,7 +5,7 @@ import type { PricingConfig, Personality } from '../../../economy/pricing.ts';
 import type { TimeConfig } from '../../../economy/time.ts';
 
 export interface ItemDef { name: string; kind: 'currency' | 'raw' | 'crafted'; base: number; needsTool?: boolean; energy?: number; durability?: number }
-export interface Recipe { inputs: Record<string, number>; output: string; fee: number }
+export interface Recipe { inputs: Record<string, number>; output: string; fee: number; energy?: number }
 export interface MerchantDef {
   name: string; shop: string; personality: string;
   buys: string[]; sells: string[]; target: Record<string, number>; crafts: string[];
@@ -18,6 +18,8 @@ export interface Econ {
   time: TimeConfig;
   items: Record<string, ItemDef>;
   recipes: Record<string, Recipe>;
+  /** Merchants have no energy; they pay this coin fee per crafted unit. */
+  craft: { merchantFee: number };
   gather: { tiles: Record<string, string>; charges: number; respawnGameHours: number; energyCost: number; energyMax: number; energyRegenPerHour: number };
   farm: { plots: number; seed: string; growDays: number; harvest: number; noGrowthSeasons: string[]; energyCost: number; villageSeedsPerDay?: number };
   seasons: Record<string, SeasonDef>;

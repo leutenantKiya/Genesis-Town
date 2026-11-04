@@ -99,12 +99,19 @@ export class World {
     const r = this.econ.recipes[recipeId];
     if (!r) throw new HttpError(400, 'Resep tidak dikenal.');
     for (const [t, n] of Object.entries(r.inputs)) this.need(account, t, n);
-    this.need(account, 'coin', r.fee);
+    if (r.fee > 0) this.need(account, 'coin', r.fee);
+    const p = r.energy ? this.state(account) : null;
+    if (p && r.energy) {
+      if (p.energy < r.energy) throw new HttpError(409, `Energi kurang (punya ${Math.floor(p.energy)}, perlu ${r.energy}). Makan dulu atau istirahat.`);
+      p.energy -= r.energy;
+    }
     const day = this.clock.time().settleDay;
     for (const [t, n] of Object.entries(r.inputs)) this.gs.add(day, account, t, -n, 'craft', recipeId);
     this.gs.add(day, account, r.output, 1, 'craft', recipeId);
-    this.gs.add(day, account, 'coin', -r.fee, 'fee', recipeId);
-    return { toast: `+1 ${this.name(r.output)} (biaya ${r.fee} koin)`, gained: { [r.output]: 1 } };
+    if (r.fee > 0) this.gs.add(day, account, 'coin', -r.fee, 'fee', recipeId);
+    if (p) this.gs.savePlayer(p);
+    const cost = r.energy ? `−${r.energy} energi` : `biaya ${r.fee} koin`;
+    return { toast: `+1 ${this.name(r.output)} (${cost})`, gained: { [r.output]: 1 } };
   }
 
   eat(account: string, token: string): ActionResult {
