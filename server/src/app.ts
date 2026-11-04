@@ -100,6 +100,15 @@ export function createApp(deps: AppDeps) {
     return verifyRequest({ sessionKeyOwner: (k) => deps.store.sessionKeyOwner(k), replay }, req.headers, req.method ?? 'GET', url.pathname + url.search, raw);
   }
 
+  /** Dev tools (clock jump, forced settlement) only answer the owner's own machine: DEV_TOOLS=1 and a direct loopback
+   *  request with no proxy header. On a public host they stay closed even if the flag is left on by mistake. */
+  function devAllowed(req: IncomingMessage) {
+    if (!deps.cfg.devTools) return false;
+    if (req.headers['x-forwarded-for'] || req.headers['forwarded'] || req.headers['x-real-ip']) return false;
+    const ip = req.socket.remoteAddress ?? '';
+    return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const p = url.pathname;
@@ -112,7 +121,7 @@ export function createApp(deps: AppDeps) {
           rpcUrl: deps.cfg.rpcUrl,
           fastAuth: deps.cfg.fastAuth,
           devLogin: deps.cfg.devLogin,
-          devTools: deps.cfg.devTools,
+          devTools: devAllowed(req),
           dialogue: dialogue.enabled ? 'nearai' : 'local',
           world: game.map?.view() ?? null,
           econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time },
@@ -204,14 +213,14 @@ export function createApp(deps: AppDeps) {
       }
       if (req.method === 'POST' && p === '/api/dev/night') {
         // Dev panel: jump the game clock to the next 20:00 (night monsters); crossing 06:00 settles as usual
-        if (!deps.cfg.devTools) throw new HttpError(403, 'dev tools are off');
+        if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
         const per = game.econ.time.hoursPerDay, h = game.clock.time().hour;
         game.clock.skipHours((20 - h + per) % per || per);
         await game.step();
         return send(res, 200, { time: game.clock.time() });
       }
       if (req.method === 'POST' && p === '/api/dev/settle') {
-        if (!deps.cfg.devTools) throw new HttpError(403, 'dev tools are off');
+        if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
         return send(res, 200, await game.devSettle());
       }
       throw new HttpError(404, 'no such route');

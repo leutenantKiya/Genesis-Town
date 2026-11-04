@@ -122,3 +122,5 @@ html.gt-phone .gt-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .gt-group canvas{width:24px;height:24px;image-rendering:pixelated;flex:none}
 .gt-warn{margin:4px 0;padding:6px 8px;background:#f3d6c8;color:#7a2a14;border-radius:4px;font-size:8px;line-height:1.5}
 .gt-shop-why p{margin:0}
+.chain-banner[hidden]{display:none!important}
+.gt-details{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:8px;cursor:pointer}

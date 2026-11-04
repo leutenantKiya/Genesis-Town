@@ -46,6 +46,7 @@ export class Market {
       item: token, itemName: it.name, base: it.base,
       stock: this.gs.balance(acct, token), target: d.target[token] ?? 10,
       bought: row.bought, sold: row.sold, cash: this.gs.balance(acct, 'coin'), rent: this.econ.shops.rent,
+      buys: d.buys.includes(token),
     };
   }
 

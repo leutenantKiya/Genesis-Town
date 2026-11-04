@@ -97,7 +97,7 @@ Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [wo
 | Relayer (pays players' gas, NEP-366) | [`relayer.genesistown.testnet`](https://testnet.nearblocks.io/address/relayer.genesistown.testnet) | |
 | Settler (function-call key: `settle_day`, `register_player`, `close_shop`, `pay_dividend` only) | [`minter.genesistown.testnet`](https://testnet.nearblocks.io/address/minter.genesistown.testnet) | runs the daily settlement |
 | Town treasury (starter kits, initial shop shares) | [`town.genesistown.testnet`](https://testnet.nearblocks.io/address/town.genesistown.testnet) | |
-| Merchants Sari, Budi, Wati, Joko | [`sari`](https://testnet.nearblocks.io/address/sari.genesistown.testnet) · [`budi`](https://testnet.nearblocks.io/address/budi.genesistown.testnet) · [`wati`](https://testnet.nearblocks.io/address/wati.genesistown.testnet) · [`joko`](https://testnet.nearblocks.io/address/joko.genesistown.testnet) `.genesistown.testnet` | real accounts; the server holds no keys for them, so their balances change only through settlement rules |
+| Merchants Sari, Budi, Wati, Joko | [`sari`](https://testnet.nearblocks.io/address/sari.genesistown.testnet) · [`budi`](https://testnet.nearblocks.io/address/budi.genesistown.testnet) · [`wati`](https://testnet.nearblocks.io/address/wati.genesistown.testnet) · [`joko`](https://testnet.nearblocks.io/address/joko.genesistown.testnet) `.genesistown.testnet` | real accounts holding their own coin and stock as NEP-245 balances. The merchants don't sign: the server holds no keys for them, and the settler applies their trades by the contract's settlement rules |
 | Player accounts | `p<hash>.players.genesistown.testnet` | full-access key = the player's NEAR Auth key; plus a game-only session key |
 
 Contract methods: NEP-245 `mt_transfer`, `mt_batch_transfer`, `mt_transfer_call`, `mt_batch_transfer_call`,
@@ -197,18 +197,22 @@ Testnet run of `node server/scripts/e2e-project.ts` (2026-11-02, PROJECT E2E PAS
 
 Run locally (below), open http://localhost:3000.
 
-1. Press **Masuk** and sign in with Google or email → you see your house, an energy bar, the season (Semi H1), and
+1. Press **Masuk** and sign in with Google or email → you see your house, an energy bar, the current season and day, and
    100 coins. No wallet popup.
-2. Walk to the pond, face the water and press **Space** (the on-screen **A** button on touch screens) → `+1 Ikan`
+2. Click the pond (or face the water and press **F**; the on-screen **A** button on touch screens) → `+1 Ikan`
    instantly. A hint at the bottom of the screen always shows which key does what for the tile you face. The hotbar at the bottom shows every item with its count; press **E** (or the round E button on phones) to open the **Tas** → it shows "+1 hari ini" (off-chain,
    today).
 3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → her goods on top, your items below with her price. Click
    your fish to sell one.
-4. Inside your house, press Space at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
-   Outside, in the fenced field next to your house, press Space on a plot to till, plant (press twice) and water wheat. With no Gandum left, the village gives
+4. Inside your house, press F at the table to craft (2 Gandum → Roti), and at the chest to use the Kotak Kirim.
+   Outside, in the fenced field next to your house, press F on a plot to till, plant (press twice) and water wheat
+   (not in Dingin: wheat doesn't grow in winter). With no Gandum left, the village gives
    up to 3 free seeds a day (planted straight away), so farming never dead-ends when the bakery is closed.
-5. Open the Dev panel → **Settle sekarang** → Riwayat (H) shows "Settlement hari N" with a testnet explorer link,
-   and everything from step 2 now points to it.
+5. Open the Dev panel → **Settle sekarang** → Riwayat (H) → tick **Tampilkan detail blockchain** → "Settlement hari N"
+   with a testnet explorer link, and everything from step 2 now points to it. With the box unticked (the default) the
+   game hardly mentions the chain: no account banner, no "on-chain" labels and no explorer links; one line in
+   Riwayat says the items are kept on NEAR testnet.
+   The Dev panel only appears on the machine running the server (`DEV_TOOLS=1` and a direct local request).
 6. Press **Simulasi** → 7 game days play in about 60 seconds: price charts per item, merchant cash, money supply.
    Joko goes bankrupt on day 4 and players restore him on day 6 (off-chain simulation of the same game code, labelled).
 7. When a shop shows TUTUP, talk to its merchant → restoration board → **Sumbang** (on-chain) → the shop reopens and
@@ -286,8 +290,6 @@ NEP-245 contract (`/contracts`), and shared economy code (`/economy`).
 - Pure offline mode (`?mode=offline`) supports gathering only. For the full game without testnet, run `npm run dev:mock`.
 - Merchant dialogue needs `NEARAI_API_KEY` for NEAR AI Cloud; without it the server uses local lines. The model's
   text is display-only and can't trigger trades. Chat signatures (TEE attestation) are not verified in the client yet.
-- Signing in as a second person in the same browser replaces the stored session key, so the first account can't be
-  used from that browser again until the new-device flow (planned for M4).
 - Testnet only. NEAR Intents has no testnet, so it is out of scope unless approved as a mainnet stretch.
 
 ## License

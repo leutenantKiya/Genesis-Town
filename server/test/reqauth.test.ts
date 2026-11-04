@@ -51,3 +51,23 @@ test('the HTTP server refuses the old account header and accepts signed requests
     server.close();
   }
 });
+
+test('dev tools answer only a direct request from this machine, never one through a proxy', async () => {
+  const s = setup();
+  s.cfg.devTools = true;
+  const game = new Game(s.store, s.chain, { merchantParent: 'gt.test', town: 'town.gt.test' });
+  await game.init();
+  const { server } = createApp({ ...s, game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  try {
+    assert.equal((await (await fetch(base + '/api/config')).json()).devTools, true);
+    const proxied = { 'x-forwarded-for': '203.0.113.7' };
+    assert.equal((await (await fetch(base + '/api/config', { headers: proxied })).json()).devTools, false);
+    assert.equal((await fetch(base + '/api/dev/night', { method: 'POST', headers: proxied })).status, 403);
+    assert.equal((await fetch(base + '/api/dev/settle', { method: 'POST', headers: proxied })).status, 403);
+    assert.equal((await fetch(base + '/api/dev/night', { method: 'POST' })).status, 200);
+  } finally {
+    server.close();
+  }
+});

@@ -72,6 +72,12 @@
 
   /* ------------------------------------------------------------ banner + HUD */
   var banner = null, accBtn = null, hudCell = null;
+  // Chain details (account name, "on-chain" labels, explorer links) stay out of the way unless the player turns them
+  // on in Riwayat. Everything is still recorded on NEAR either way; this only changes what the screens mention.
+  var LS_DETAILS = 'gt.chain.details';
+  function chainUI() { try { return localStorage.getItem(LS_DETAILS) === '1'; } catch (e) { return false; } }
+  function setChainUI(on) { try { localStorage.setItem(LS_DETAILS, on ? '1' : '0'); } catch (e) { /* storage blocked */ } renderBanner(); }
+  function oc() { return chainUI() ? ' (on-chain)' : ''; }
   function renderBanner() {
     if (!banner) {
       banner = $('div', 'chain-banner'); banner.setAttribute('role', 'status');
@@ -84,6 +90,7 @@
     else if (S.mode === 'testnet') { txt = 'NEAR testnet' + (S.account ? ' · ' + S.account : ' · belum masuk'); cls += 'net'; }
     else { txt = 'Menghubungkan…'; cls += 'mock'; }
     banner.className = cls; banner.textContent = txt;
+    banner.hidden = S.mode === 'testnet' && !chainUI(); // mock and offline banners are warnings and always show
     if (accBtn) accBtn.textContent = S.account || S.mode === 'offline' ? 'Tas' : 'Masuk';
   }
 
@@ -166,7 +173,7 @@
 
   function finishLogin(idToken, retried, provider) {
     var kp = sessionKey();
-    GT.toast('Membuat akunmu di NEAR testnet…');
+    GT.toast(chainUI() ? 'Membuat akunmu di NEAR testnet…' : 'Menyiapkan akunmu…');
     return api('/auth/register', { method: 'POST', body: { idToken: idToken, sessionPublicKey: kp.getPublicKey().toString() } })
       .catch(function (e) {
         // This browser's key belongs to another login: make a fresh key for this one and try once more.
@@ -319,16 +326,42 @@
     if (S.history && S.history.some(function (h) { return h.kind === 'sell'; })) d.sell = 1;
     var next = GOALS.filter(function (g) { return !d[g.id]; })[0];
     var hidden = lsGet('gt.chain.goalsHidden') === '1';
+    // Every shop closed: nobody can sell, so say what the easiest board still needs (beats the first-steps guide).
+    var rescue = closedHint();
+    if (rescue && lsGet('gt.chain.rescueHidden') !== String(S.st && S.st.time.day)) { next = rescue; hidden = false; }
     goalBox.style.display = !next || hidden || S.mode === 'offline' ? 'none' : '';
     if (!next) return;
     goalBox.textContent = '';
     var head = $('div', 'gt-goals-head');
-    head.appendChild($('b', null, 'Langkah pertama · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
-    var x = $('button', 'gt-goals-x', 'Tutup'); x.type = 'button'; x.setAttribute('aria-label', 'Sembunyikan langkah pertama');
-    x.addEventListener('click', function (e) { e.stopPropagation(); lsSet('gt.chain.goalsHidden', '1'); renderGoals(); });
+    head.appendChild($('b', null, next.rescue ? 'Semua toko tutup' : 'Langkah pertama · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
+    var x = $('button', 'gt-goals-x', 'Tutup'); x.type = 'button'; x.setAttribute('aria-label', next.rescue ? 'Sembunyikan untuk hari ini' : 'Sembunyikan langkah pertama');
+    x.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (next.rescue) lsSet('gt.chain.rescueHidden', String(S.st && S.st.time.day)); else lsSet('gt.chain.goalsHidden', '1');
+      renderGoals();
+    });
     head.appendChild(x);
     goalBox.appendChild(head);
     goalBox.appendChild($('p', null, next.text));
+  }
+
+  // When every shop is closed: the board that needs the fewest goods, and what is still missing on it.
+  function closedHint() {
+    if (!S.account || !S.shops || !S.shops.length || S.shops.some(function (x) { return x.open; })) return null;
+    var best = null;
+    S.shops.forEach(function (sh) {
+      var miss = [], total = 0;
+      (sh.need || []).forEach(function (n) {
+        if (n.token_id === 'coin') return;
+        var got = 0; (sh.pledged || []).forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
+        var m = Math.max(0, +n.amount - got);
+        if (m > 0) { miss.push(m + ' ' + item(n.token_id)); total += m; }
+      });
+      if (!best || total < best.total) best = { name: String(sh.name || sh.id).split(' ').pop(), miss: miss, total: total };
+    });
+    if (!best) return null;
+    var what = best.miss.length ? 'masih kurang ' + best.miss.join(', ') : 'tinggal kurang koin';
+    return { rescue: true, text: 'Bantu buka lagi toko ' + best.name + ': ' + what + '. Kumpulkan barangnya, lalu bicara dengan ' + best.name + ' di pasar dan pilih Sumbang. Penyumbang dapat saham toko.' };
   }
 
   /* ---- Night monsters (the server decides; this draws them and runs the fight window) ---- */
@@ -751,7 +784,7 @@
     if (!s || !s.holding || s.holding.shares === '0') return;
     var p = $('p', 'chain-dim', 'Sahammu: ' + s.holding.shares + ' dari ' + s.holding.total_shares + ' · dividen siap diambil: ' + s.holding.claimable + ' koin');
     wrap.appendChild(p);
-    if (s.holding.claimable !== '0') wrap.appendChild(button('Ambil dividen (on-chain)', function () {
+    if (s.holding.claimable !== '0') wrap.appendChild(button('Ambil dividen' + oc(), function () {
       GT.toast('Mengambil dividen…');
       signedCall('claim_dividends', { merchant: s.account_id }).then(function () { GT.toast('Dividen masuk!'); refreshModal(); }, function (e) { GT.toast(e.message); });
     }, 'primary'));
@@ -781,11 +814,11 @@
     });
     if (s.contributors) wrap.appendChild($('p', 'chain-dim', s.contributors + ' penyumbang sejauh ini.'));
     if (lines.length) {
-      var label = 'Sumbang ' + lines.map(function (l) { return l.amount + ' ' + item(l.token_id); }).join(' + ') + ' (on-chain)';
+      var label = 'Sumbang ' + lines.map(function (l) { return l.amount + ' ' + item(l.token_id); }).join(' + ') + oc();
       wrap.appendChild(button(label, function () {
         GT.toast('Mengirim sumbangan…');
         signedCall('restore_contribute', { merchant: s.account_id, contribution: lines })
-          .then(function () { GT.toast('Terima kasih! Sumbanganmu tercatat on-chain.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+          .then(function () { GT.toast(chainUI() ? 'Terima kasih! Sumbanganmu tercatat on-chain.' : 'Terima kasih! Sumbanganmu tercatat.'); refreshModal(); }, function (e) { GT.toast(e.message); });
       }, 'primary'));
     } else if (!allDone) {
       wrap.appendChild($('p', 'chain-dim', 'Kamu belum punya barang yang masih kurang (barang hari ini bisa disumbang setelah pukul 06:00). Kalau semua toko tutup, dana desa ikut menyumbang koinnya pada penyelesaian pukul 06:00.'));
@@ -797,7 +830,7 @@
   function spendable(t) { var b = S.st && S.st.bag[t]; return b ? Math.max(0, Math.min(b.settled, b.settled + b.today)) : 0; }
   function projectBody() {
     var wrap = $('div');
-    wrap.appendChild($('p', null, 'Warga mengumpulkan bahan bersama. Saat semua baris terpenuhi, bahan dipakai (dibakar on-chain) dan bagian peta baru terbuka untuk semua pemain.'));
+    wrap.appendChild($('p', null, 'Warga mengumpulkan bahan bersama. Saat semua baris terpenuhi, bahan dipakai habis' + (chainUI() ? ' (dibakar on-chain)' : '') + ' dan bagian peta baru terbuka untuk semua pemain.'));
     if (!S.projects) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
     if (!S.projects.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada proyek.'));
     S.projects.forEach(function (pj) {
@@ -816,15 +849,15 @@
       wrap.appendChild($('p', 'chain-dim', pj.done ? 'Dibangun oleh ' + names.join(', ') + '.' : (names.length ? 'Penyumbang: ' + names.join(', ') + '.' : 'Belum ada penyumbang. Jadilah yang pertama!')));
       if (pj.done) return;
       var mine = pj.contributors.filter(function (c) { return c.account_id === S.account; })[0];
-      if (lines.length) wrap.appendChild(button('Sumbang semua yang bisa (on-chain)', function () {
+      if (lines.length) wrap.appendChild(button('Sumbang semua yang bisa' + oc(), function () {
         GT.toast('Mengirim sumbangan…');
-        signedCall('project_contribute', { id: pj.id, contribution: lines }).then(function () { GT.toast('Terima kasih! Sumbanganmu tercatat on-chain.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+        signedCall('project_contribute', { id: pj.id, contribution: lines }).then(function () { GT.toast(chainUI() ? 'Terima kasih! Sumbanganmu tercatat on-chain.' : 'Terima kasih! Sumbanganmu tercatat.'); refreshModal(); }, function (e) { GT.toast(e.message); });
       }, 'primary'));
       if (mine) wrap.appendChild(button('Tarik sumbanganku', function () {
         signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast('Sumbangan dikembalikan ke tasmu.'); refreshModal(); }, function (e) { GT.toast(e.message); });
       }));
     });
-    wrap.appendChild($('p', 'chain-dim', 'Sumbangan memakai barang yang sudah di rantai (settled) dan belum terpakai hari ini. Bisa ditarik lagi selama proyek belum selesai.'));
+    wrap.appendChild($('p', 'chain-dim', 'Sumbangan memakai barang yang sudah tersimpan (lewat pukul 06:00) dan belum terpakai hari ini. Bisa ditarik lagi selama proyek belum selesai.'));
     return wrap;
   }
 
@@ -857,7 +890,7 @@
     });
     wrap.appendChild(grid);
     wrap.appendChild(bagDetail(sel));
-    wrap.appendChild($('p', 'chain-dim', (document.documentElement.classList.contains('gt-phone') ? 'Ketuk barang untuk melihatnya, lalu Pegang untuk menaruhnya di tangan. ' : 'Klik barang untuk melihatnya, klik kanan untuk memegangnya. ') + '"Hari ini" tercatat di NEAR saat penyelesaian pukul 06:00; Kirim dan Pasar memakai barang yang sudah tercatat.'));
+    wrap.appendChild($('p', 'chain-dim', (document.documentElement.classList.contains('gt-phone') ? 'Ketuk barang untuk melihatnya, lalu Pegang untuk menaruhnya di tangan. ' : 'Klik barang untuk melihatnya, klik kanan untuk memegangnya. ') + '"Hari ini" disimpan permanen pukul 06:00' + (chainUI() ? ' (dicatat di NEAR)' : '') + '; Kirim dan Pasar memakai barang yang sudah tersimpan.'));
     if (S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
     wrap.appendChild(button('Keluar (ganti akun)', function () { signOut(); }));
     return wrap;
@@ -891,7 +924,7 @@
 
   function askSend(token) {
     var body = $('div');
-    body.appendChild($('p', null, 'Kirim 1 ' + item(token) + ' ke pemain lain. Langsung on-chain, tanpa dompet, tanpa gas.'));
+    body.appendChild($('p', null, 'Kirim 1 ' + item(token) + ' ke pemain lain.' + (chainUI() ? ' Langsung on-chain, tanpa dompet, tanpa gas.' : ' Langsung sampai.')));
     var input = $('input'); input.type = 'text'; input.placeholder = 'akun penerima (…players…testnet)'; input.maxLength = 64;
     body.appendChild(input);
     GT.modal({ title: 'Kirim ' + item(token), body: body, actions: [{ label: 'Kirim', primary: true, onClick: function (h) {
@@ -1011,7 +1044,7 @@
       if (!named.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada lapak. Jadilah yang pertama!'));
       byItem(named, wrap);
     } else if (tab === 'gelap') {
-      wrap.appendChild($('p', null, 'Pasar Gelap: jual tanpa nama. Pembeli tidak tahu siapa penjualnya, tapi kamu juga tidak dapat popularitas. Anonim di dalam game saja: transaksi di rantai tetap publik.'));
+      wrap.appendChild($('p', null, 'Pasar Gelap: jual tanpa nama. Pembeli tidak tahu siapa penjualnya, tapi kamu juga tidak dapat popularitas. Anonim di dalam game saja: catatan transaksinya tetap publik.'));
       var anon = S.listings.filter(function (l) { return l.anonymous; });
       if (!anon.length) wrap.appendChild($('p', 'chain-dim', 'Pasar Gelap sedang sepi.'));
       byItem(anon, wrap);
@@ -1036,13 +1069,13 @@
       if (can > 0) any = true;
       grid.appendChild(itemCard(t, can > 0 ? 'bisa jual ' + can : 'belum ada', bb ? 'pedagang ' + bb.bid : null, {
         off: can <= 0 || mine >= 5, accent: can > 0 && mine < 5,
-        title: mine >= 5 ? 'Lapakmu penuh (5). Tarik satu dulu.' : can > 0 ? 'Pasang ' + item(t) : 'Barang yang sudah tercatat di NEAR saja yang bisa dijual ke pemain.',
+        title: mine >= 5 ? 'Lapakmu penuh (5). Tarik satu dulu.' : can > 0 ? 'Pasang ' + item(t) : 'Hanya barang yang sudah tersimpan (lewat pukul 06:00) yang bisa dijual ke pemain.',
         onClick: function () { if (can > 0 && mine < 5) askList(t, can, tab === 'gelap'); }
       }));
     });
     wrap.appendChild(grid);
     if (!any) wrap.appendChild($('p', 'chain-dim', 'Belum ada barang yang bisa dijual di sini.'));
-    wrap.appendChild($('p', 'chain-dim', 'Barang hari ini bisa dijual setelah pukul 06:00. Maks 5 barang dipasang per pemain. Setiap penjualan membakar ' + feePct() + '% dari harga. Langsung on-chain, tanpa dompet dan tanpa gas.'));
+    wrap.appendChild($('p', 'chain-dim', 'Barang hari ini bisa dijual setelah pukul 06:00. Maks 5 barang dipasang per pemain. Setiap penjualan membakar ' + feePct() + '% dari harga.' + (chainUI() ? ' Langsung on-chain, tanpa dompet dan tanpa gas.' : '')));
     return wrap;
   }
 
@@ -1088,9 +1121,16 @@
     setTimeout(function () { price.focus(); price.select(); }, 50);
   }
 
-  var ST_LABEL = { pending: '…', ok: '✓', failed: '✗', mock: 'mock', offchain: 'menunggu settlement' };
+  var ST_LABEL = { pending: '…', ok: '✓', failed: '✗', mock: 'mock', offchain: 'menunggu 06:00' };
   function historyBody() {
-    var wrap = $('div');
+    var wrap = $('div'), details = chainUI();
+    var tog = $('label', 'chain-field gt-details');
+    var cb = $('input'); cb.type = 'checkbox'; cb.checked = details;
+    cb.addEventListener('change', function () { setChainUI(cb.checked); redraw(); });
+    tog.appendChild(cb); tog.appendChild($('span', null, ' Tampilkan detail blockchain (akun, bukti transaksi di explorer)'));
+    wrap.appendChild(tog);
+    if (!details && S.mode === 'testnet') wrap.appendChild($('p', 'chain-dim', 'Barang dan koinmu tersimpan di NEAR testnet. Nyalakan detail untuk melihat akun dan bukti tiap transaksi.'));
+    if (details && S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
     if (!S.history.length) wrap.appendChild($('p', null, 'Belum ada transaksi.'));
     S.history.forEach(function (h) {
       var row = $('div', 'mrow');
@@ -1098,13 +1138,13 @@
       row.appendChild($('span', 'num', ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2)));
       row.appendChild($('span', 'grow', h.summary));
       row.appendChild($('span', 'chain-st ' + h.status, ST_LABEL[h.status] || h.status));
-      if (h.tx_hash && S.mode === 'testnet') {
+      if (h.tx_hash && S.mode === 'testnet' && details) {
         var a = $('a', 'chain-link', 'lihat ↗'); a.href = S.cfg.explorerTxUrl + encodeURIComponent(h.tx_hash); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = h.tx_hash;
         row.appendChild(a);
       }
       wrap.appendChild(row);
     });
-    if (S.st) wrap.appendChild($('p', 'chain-dim', 'Settlement terakhir: hari ' + S.st.time.settledThrough + '. Berikutnya pukul 06:00 (hari ' + (S.st.time.day + (S.st.time.hour >= 6 ? 1 : 0)) + ').'));
+    if (S.st) wrap.appendChild($('p', 'chain-dim', (details ? 'Settlement terakhir: hari ' : 'Terakhir disimpan: hari ') + S.st.time.settledThrough + '. Berikutnya pukul 06:00 (hari ' + (S.st.time.day + (S.st.time.hour >= 6 ? 1 : 0)) + ').'));
     return wrap;
   }
 

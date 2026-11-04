@@ -30,6 +30,7 @@ export interface MarketInputs {
   sold: number;          // decayed units the merchant sold recently
   cash: number;          // merchant's coins
   rent: number;          // daily rent
+  buys?: boolean;        // does this merchant buy the item from players? (default yes; the cash note is only about bids)
 }
 
 export type ReasonCode = 'stock_high' | 'stock_low' | 'demand_up' | 'demand_down' | 'cash_low' | 'steady';
@@ -98,15 +99,10 @@ export function explain(prevMid: number, mid: number, fs: number, fd: number, fc
   const demandEffect = Math.abs(Math.log(fd));
   let code: ReasonCode;
   let why: string;
-  if (fc < 0.95 && changePct <= 0) {
-    code = 'cash_low';
-    why = `Kas saya tipis (${Math.round(m.cash)} koin), jadi saya hanya bisa menawar rendah.`;
-    return { code, text: `${why} ${dir}${tail}.`, changePct, clamped };
-  }
   if (stockEffect < 0.03 && demandEffect < 0.03 && changePct === 0) {
-    return { code: 'steady', text: `Stok ${n} saya pas (${Math.round(m.stock)}, target ${m.target}). Harga tetap.`, changePct, clamped };
-  }
-  if (stockEffect >= demandEffect) {
+    code = 'steady';
+    why = `Stok ${n} saya pas (${Math.round(m.stock)}, target ${m.target}).`;
+  } else if (stockEffect >= demandEffect) {
     code = fs < 1 ? 'stock_high' : 'stock_low';
     why = fs < 1
       ? `Stok ${n} saya ${Math.round(m.stock)}, targetnya ${m.target}.`
@@ -114,6 +110,12 @@ export function explain(prevMid: number, mid: number, fs: number, fd: number, fc
   } else {
     code = fd > 1 ? 'demand_up' : 'demand_down';
     why = fd > 1 ? `Banyak yang beli ${n} akhir-akhir ini.` : `Banyak yang jual ${n} ke saya akhir-akhir ini.`;
+  }
+  // Short on cash only lowers what the merchant pays, so it is mentioned (after the item's own reason) only for items
+  // the merchant buys. Every item then still says something about itself.
+  if (fc < 0.95 && m.buys !== false) {
+    if (changePct <= 0) code = 'cash_low';
+    why += ` Kas saya tipis (${Math.round(m.cash)} koin), jadi tawaran beli saya rendah.`;
   }
   return { code, text: `${why} ${dir}${tail}.`, changePct, clamped };
 }
