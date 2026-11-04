@@ -29,6 +29,10 @@
 >   The hotbar along the bottom shows every item; pick the one in your hand with a click, 1–7 or the mouse wheel;
 >   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen (also in Pengaturan), **T** a message to an NPC.
 >   On phones: tap the world to act, tap a slot to hold it, tap it again to use it.
+> - **Fights play out in the world**: a slim battle bar (Lawan / Lari, F / Esc) replaces the pop-up; each attack swings
+>   the axe at the monster (sparks and a white flash on a hit, "Meleset!" on a miss, the damage rising over it), then the
+>   monster lunges back with a red flash, the energy it cost and a small shake. The server still decides every round.
+> - **A bigger farm**: the fenced field next to your house has 15 plots (5 × 3) instead of 6.
 > - **Readable UI**: text is set in Pixelify Sans at 12–18px (the blocky Press Start 2P only for big titles), with a
 >   text-size setting (Normal / Besar / Lebih besar); a title card tells first-time visitors what the game is, shows one
 >   live line from the market and offers "Main sekarang"; portrait tablets get the full-screen phone layout.
@@ -230,7 +234,7 @@ Run locally (below), open http://localhost:3000.
    Outside, in the fenced field next to your house, press F on a plot to till, plant (press twice) and water wheat
    (not in Dingin: wheat doesn't grow in winter). With no Gandum left, the village gives
    up to 3 free seeds a day (planted straight away), so farming never dead-ends when the bakery is closed.
-5. Open the Dev panel → **Settle sekarang** → Riwayat (H, or Tas → Semua riwayat) → tick **Tampilkan detail blockchain** → "Settlement hari N"
+5. Open the Dev panel → **Settle sekarang** → Riwayat (H, or Tas → Semua riwayat) → tick **Mode teknis** → "Settlement hari N"
    with a testnet explorer link, and everything from step 2 now points to it. With the box unticked (the default) the
    game hardly mentions the chain: no account banner, no "on-chain" labels and no explorer links; one line in
    Riwayat says the items are kept on NEAR testnet.
@@ -246,7 +250,10 @@ Run locally (below), open http://localhost:3000.
 10. Walk into the **Balai Desa** next to the plaza and face the shelf at the back → the project board. Pledge toward
     the bridge to Dusun Seberang (the fogged hamlet across the river). Press **Peta** (M) to see the whole village.
 11. Dev panel → **Lompat ke malam**, then gather at a tree or rock in Hutan Utara (north of the village) until a
-    wild boar or bats appear. Fight with **Lawan** or run with **Lari**.
+    wild boar or bats appear, or walk up to one roaming at night. Fight with **Lawan** (F) or run with **Lari** (Esc).
+12. Finish a town project quickly (mock server only, `npm run dev:mock`): Dev panel → **Beri bahan (mock)**, then the
+    project board → **Sumbang semua yang bisa** under the bridge → "Proyek desa selesai! Dusun Seberang sekarang
+    terbuka", the bridge appears and the map opens the hamlet across the river for everyone.
 
 ## Run locally
 

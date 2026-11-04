@@ -173,3 +173,19 @@ html.gt-titlecard .gt-goals{display:none}
 html.gt-phone .gt-title h1{font-size:calc(16px*var(--ts))}
 html.gt-phone .gt-title-card{padding:18px 16px 14px}
 html.gt-phone .gt-title-lead{font-size:calc(16px*var(--ts))}
+
+/* Fight (night monsters): a slim battle bar at the bottom of the game view; the fight itself plays out in the world */
+html.gt-fighting .gt-hotbar, html.gt-fighting .gt-held, html.gt-fighting #gt-hint, html.gt-fighting .gt-goals,
+html.gt-fighting .gt-slotpop, html.gt-fighting #pad{visibility:hidden !important}
+.gt-fight{position:absolute;left:8px;right:8px;bottom:8px;z-index:6;margin:0 auto;max-width:560px;padding:10px 12px 12px;
+  background:var(--paper);color:var(--paper-ink);border-radius:6px;box-shadow:0 0 0 3px var(--paper-ink);line-height:1.35}
+.gt-fight[hidden]{display:none}
+.gt-fight-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.gt-fight-foe{display:flex;align-items:baseline;gap:8px;font-size:calc(16px*var(--ts))}
+.gt-fight-foe b{font-weight:700}
+.gt-fight-hp{color:#b3261e;letter-spacing:2px}
+.gt-fight-me{display:flex;align-items:center;gap:8px;font-size:calc(14px*var(--ts))}
+.gt-fight-note{margin:6px 0 8px;font-size:calc(15px*var(--ts))}
+.gt-fight-acts{display:flex;gap:8px;flex-wrap:wrap}
+.gt-fight-acts .mbtn{min-height:44px;flex:1 1 auto;font-size:calc(15px*var(--ts))}
+html.gt-phone .gt-fight{left:6px;right:6px;bottom:6px}

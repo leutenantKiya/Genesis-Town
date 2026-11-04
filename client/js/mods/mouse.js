@@ -52,7 +52,7 @@
   }
 
   function onClick(e) {
-    if (e.button !== 0 || GT.isUiOpen() || (window.GT_FISH && GT_FISH.active())) return;
+    if (e.button !== 0 || GT.isUiOpen() || (window.GT_FISH && GT_FISH.active()) || document.documentElement.classList.contains('gt-fighting')) return;
     var sc = GT.scene, t = GT.screenToTile && GT.screenToTile(e.clientX, e.clientY);
     if (!sc || !t) return;
     var p = GT.player, m = sc.map;

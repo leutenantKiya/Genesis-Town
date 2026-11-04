@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { MARKET_FEE_BPS, type Config } from './config.ts';
-import type { Chain } from './chain.ts';
+import { MockChain, type Chain } from './chain.ts';
 import type { Store } from './db.ts';
 import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
@@ -235,6 +235,20 @@ export function createApp(deps: AppDeps) {
         game.clock.skipHours((20 - h + per) % per || per);
         await game.step();
         return send(res, 200, { time: game.clock.time() });
+      }
+      if (req.method === 'POST' && p === '/api/dev/grant') {
+        // Mock chain only, from this machine only: put settled goods in a player's bag to try out town projects,
+        // shop rescues and the market without hours of gathering. Never available on testnet.
+        if (!devAllowed(req) || !(deps.chain instanceof MockChain)) throw new HttpError(403, 'dev grant is mock-only');
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        const items = (parseJson(raw) as { items?: Record<string, unknown> }).items ?? {};
+        for (const [t, n] of Object.entries(items)) {
+          if (!game.econ.items[t] || !Number.isInteger(n) || (n as number) < 1 || (n as number) > 1000) throw new HttpError(400, 'bad item or amount');
+          deps.chain.add(acct, t, BigInt(n as number));
+        }
+        await game.settlement.refresh([acct]);
+        return send(res, 200, { ok: true, state: game.state(acct) });
       }
       if (req.method === 'POST' && p === '/api/dev/settle') {
         if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');

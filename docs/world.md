@@ -33,7 +33,7 @@ is there, but nobody can walk or gather in them.
 3. **Landmarks**, most important first, each on the best free lot whose door is at most 4 tiles above a road:
    Balai Desa (5×4), Gereja Desa (5×5), Kantor Makelar, Kantor Pos, Puskesmas, Warung Kopi (4×3 each). Lots are scored
    by distance to the plaza (the church prefers to stand a little north of it).
-4. **Your house and farm** in Ladang Barat near the main road (the farm is a fenced 3×2 plot, as before), then houses
+4. **Your house and farm** in Ladang Barat near the main road (the farm is a fenced field with 5×3 plots and a walking row), then houses
    in the core, the fields, the hamlet and a forest hut.
 5. **Market**: the plaza with the four stalls (Sari, Budi, Wati, Joko).
 6. **Nature** from value noise per chunk biome: forest, village trees and flowers, fields, meadows, a lake; the mine
