@@ -262,7 +262,7 @@
     var jobs = [api('/market').then(function (m) { S.market = m.merchants; })];
     if (S.account) {
       var sp = standPos();
-      jobs.push(api('/state?x=' + sp.x + '&y=' + sp.y).then(function (st) { S.st = st; syncClock(st.time); followWorld(st.world); }));
+      jobs.push(api('/state?x=' + sp.x + '&y=' + sp.y + '&world=' + encodeURIComponent(worldNow())).then(function (st) { S.st = st; syncClock(st.time); followWorld(st.world); }));
       if (full || S.modal) jobs.push(api('/history').then(function (h) { S.history = h.history || []; }));
       if (S.modal && S.modal.kind === 'history' && S.modal.arg) {
         var ht = S.modal.arg;
@@ -303,6 +303,8 @@
     S.poll = setTimeout(function () { refresh(false).then(schedulePoll); }, 5000);
   }
 
+  // 'public' or 'IS-<id>': which outdoor world the player is in (islands.js switches it).
+  function worldNow() { return (GT.worldId && GT.worldId()) || 'public'; }
   // Where the player stands for the server's checks: the tile outdoors, or the door front of the building they are in.
   function standPos() {
     var sc = GT.scene, p = GT.player;
@@ -386,6 +388,7 @@
   // Roaming monsters this game hour (same list the server checks), each wandering a little around its spot.
   function roamers() {
     var st = S.st, L = GT.world && GT.world.layout;
+    if (worldNow() !== 'public') return []; // no monsters on Private Islands
     if (!st || !st.night || !st.night.now || st.night.guarded || !L || !window.GTVillage || !S.cfg || !S.cfg.monsters) return [];
     return GTVillage.monstersAt(L, st.time.totalHours, S.cfg.monsters.roaming);
   }
@@ -476,6 +479,7 @@
     }
     if (!S.account) { GT.toast('Masuk dulu (tombol Masuk).'); return Promise.resolve(); }
     body.pos = standPos();
+    if (!body.world) body.world = worldNow();
     return api('/act', { method: 'POST', body: body }).then(function (r) {
       S.st = r.state; renderHud(); redraw();
       if (body.action === 'gather' || body.action === 'sell') markGoal(body.action);
@@ -571,7 +575,7 @@
   function findPlots() {
     var own = GT.world && GT.world.own, sc = GT.getScene('out');
     if (!own || !sc) return;
-    if (GT.world.farm && GT.world.farm.plots.length) { S.plots = GT.world.farm.plots.slice(0, 6); return; }
+    if (GT.world.farm && GT.world.farm.plots.length) { S.plots = GT.world.farm.plots.slice(0, 12); return; }
     var m = sc.map, out = [], sp = GT.world.spawn;
     for (var r = 1; r <= 5 && out.length < 6; r++) {
       for (var y = own.y - r; y <= own.y + 2 + r && out.length < 6; y++) {
@@ -640,7 +644,7 @@
       var verb = { fish: 'Mancing', ore: 'Nambang', wood: 'Tebang' }[tok];
       var needTool = tok === 'ore' && S.st && (S.st.bag.tool.settled + S.st.bag.tool.today) < 1;
       var L = GT.world && GT.world.layout, night = S.st && S.st.night;
-      var danger = tok !== 'fish' && night && night.now && !night.guarded && L && window.GTVillage && GTVillage.chunkOf(L, x, y).id === 'hutan';
+      var danger = tok !== 'fish' && night && night.now && !night.guarded && L && worldNow() === 'public' && window.GTVillage && GTVillage.chunkOf(L, x, y).id === 'hutan';
       var spot = tok === 'fish' && window.GT_FISH && GT_FISH.isSpot(x, y);
       if (tok === 'fish') return spot ? 'Mancing di riak air: ikan berkumpul di sini' : 'Mancing (lebih cepat di riak air)';
       return verb + ' (−4 energi)' + (needTool ? ' · butuh Alat' : '') + (danger ? ' · malam: awas monster' : '');
@@ -904,6 +908,7 @@
     wrap.appendChild(bagDetail(sel));
     wrap.appendChild($('p', 'chain-dim', (document.documentElement.classList.contains('gt-phone') ? 'Ketuk barang untuk melihatnya, lalu Pegang untuk menaruhnya di tangan. ' : 'Klik barang untuk melihatnya, klik kanan untuk memegangnya. ') + '"Hari ini" disimpan permanen pukul 06:00' + (chainUI() ? ' (dicatat di NEAR)' : '') + '; Kirim dan Pasar memakai barang yang sudah tersimpan.'));
     if (S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
+    if (window.GT_ISLANDS && GT_ISLANDS.bagSection) { var isl = GT_ISLANDS.bagSection(); if (isl) wrap.appendChild(isl); }
     wrap.appendChild(button('Semua riwayat', function () { open('history'); }));
     wrap.appendChild(button('Keluar (ganti akun)', function () { signOut(); }));
     return wrap;
@@ -1288,7 +1293,11 @@
     return true;
   }
 
-  function onWorld() { S.npcs = {}; placeMerchants(); findPlots(); spawnVillagers(); }
+  function onWorld() {
+    S.npcs = {}; villagers = []; S.plots = [];
+    if (worldNow() === 'public') { placeMerchants(); spawnVillagers(); } // islands have no merchants or townsfolk
+    findPlots();
+  }
 
   function init() {
     accBtn = GT.addHudButton({ id: 'chainbtn', label: 'Masuk', key: 'N', secondary: false, onClick: function () { open('bag'); } });
