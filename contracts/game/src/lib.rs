@@ -137,6 +137,7 @@ pub struct Contract {
     islands: LookupMap<u32, islands::Island>,
     broker_id: AccountId,
     voucher_pk: Vec<u8>,
+    island_ids: Vec<u32>,
 }
 
 impl Contract {
@@ -270,6 +271,7 @@ impl Contract {
             islands: LookupMap::new(StorageKey::Islands),
             broker_id: town_id.clone(),
             voucher_pk: vec![],
+            island_ids: vec![],
         };
         c.registered.insert(town_id.clone());
         if treasury_coin.0 > 0 {
