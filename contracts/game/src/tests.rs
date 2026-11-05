@@ -521,3 +521,243 @@ fn done_projects_take_nothing() {
     c.project_contribute("jembatan-timur".into(), vec![line("coin", 50)]);
     c.project_contribute("jembatan-timur".into(), vec![line("coin", 1)]);
 }
+
+/* ------------------------------------------------------------------ islands (v5) */
+
+use ed25519_dalek::{Signer, SigningKey};
+use near_sdk::json_types::{Base64VecU8, U64};
+use near_sdk::{CurveType, PublicKey};
+
+fn makelar() -> AccountId { acc("makelar.testnet") }
+const EXPIRES: u64 = 10_000;
+
+fn signing_key() -> SigningKey {
+    SigningKey::from_bytes(&[7u8; 32])
+}
+fn voucher_pk() -> PublicKey {
+    PublicKey::from_parts(CurveType::ED25519, signing_key().verifying_key().to_bytes().to_vec()).unwrap()
+}
+fn sign(msg: &str) -> Base64VecU8 {
+    Base64VecU8(signing_key().sign(msg.as_bytes()).to_bytes().to_vec())
+}
+fn spec(size: u8, fert: u8) -> IslandSpec {
+    IslandSpec { seed: 7101, size_level: size, fertility_level: fert }
+}
+fn buy_msg(id: u32, buyer: &AccountId, price: u128, s: &IslandSpec, exp: u64) -> String {
+    format!("GT-ISLAND-BUY|game.testnet|{id}|{buyer}|{price}|{}|{}|{}|{exp}", s.seed, s.size_level, s.fertility_level)
+}
+fn save_msg(id: u32, owner: &AccountId, from: u32, s: &IslandSpec, exp: u64) -> String {
+    format!("GT-ISLAND-SAVE|game.testnet|{id}|{owner}|{from}|{}|{}|{}|{exp}", s.seed, s.size_level, s.fertility_level)
+}
+
+/// bob holds 500 coin, the broker is registered, the voucher key is set.
+fn island_setup() -> Contract {
+    let mut c = market_setup();
+    ctx(owner(), 0);
+    c.set_broker(makelar());
+    c.set_voucher_key(voucher_pk());
+    c
+}
+
+fn buy(c: &mut Contract, who: AccountId, id: u32, price: u128) {
+    let s = spec(1, 1);
+    let sig = sign(&buy_msg(id, &who, price, &s, EXPIRES));
+    ctx(who, 0);
+    c.buy_island(id, s, U128(price), U64(EXPIRES), sig);
+}
+
+fn save(c: &mut Contract, who: AccountId, id: u32, from: u32, s: IslandSpec) {
+    let sig = sign(&save_msg(id, &who, from, &s, EXPIRES));
+    ctx(who, 0);
+    c.save_island(id, from, s, U64(EXPIRES), sig);
+}
+
+#[test]
+fn buy_island_mints_via_broker_and_burns_price() {
+    let mut c = island_setup();
+    let coin0 = c.mt_supply("coin".into()).unwrap().0;
+    buy(&mut c, bob(), 1, 300);
+    assert_eq!(bal(&c, bob(), "IS-1-1"), 1);
+    assert_eq!(bal(&c, makelar(), "IS-1-1"), 0);
+    assert_eq!(bal(&c, bob(), "coin"), 200);
+    assert_eq!(bal(&c, makelar(), "coin"), 0, "price burned from the broker");
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, coin0 - 300);
+    assert_eq!(c.mt_supply("IS-1-1".into()).unwrap().0, 1);
+    let v = c.get_island(1).unwrap();
+    assert_eq!((v.owner_id, v.version, v.token_id.as_str(), v.spec), (bob(), 1, "IS-1-1", spec(1, 1)));
+    assert_eq!(c.mt_token(vec!["IS-1-1".into()])[0].as_ref().unwrap().owner_id, Some(bob()));
+    let logs = get_logs().join("\n");
+    assert!(logs.contains(r#""event":"mt_mint""#) && logs.contains(r#""event":"mt_burn""#) && logs.contains(r#""event":"mt_transfer""#));
+    assert!(logs.contains(r#""standard":"genesis-town""#) && logs.contains(r#""event":"island""#) && logs.contains(r#""what":"bought""#));
+}
+
+#[test]
+#[should_panic(expected = "island already sold")]
+fn buy_island_rejects_reused_voucher() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    buy(&mut c, bob(), 1, 100);
+}
+
+#[test]
+#[should_panic(expected = "bad voucher signature")]
+fn buy_island_rejects_wrong_signer() {
+    let mut c = island_setup();
+    let s = spec(1, 1);
+    let other = SigningKey::from_bytes(&[8u8; 32]);
+    let sig = Base64VecU8(other.sign(buy_msg(1, &bob(), 100, &s, EXPIRES).as_bytes()).to_bytes().to_vec());
+    ctx(bob(), 0);
+    c.buy_island(1, s, U128(100), U64(EXPIRES), sig);
+}
+
+#[test]
+#[should_panic(expected = "voucher expired")]
+fn buy_island_rejects_expired() {
+    let mut c = island_setup();
+    let s = spec(1, 1);
+    let sig = sign(&buy_msg(1, &bob(), 100, &s, 999));
+    ctx(bob(), 0); // block timestamp is 1_000
+    c.buy_island(1, s, U128(100), U64(999), sig);
+}
+
+#[test]
+#[should_panic(expected = "bad voucher signature")]
+fn buy_island_rejects_other_buyer_voucher() {
+    let mut c = island_setup();
+    let s = spec(1, 1);
+    let sig = sign(&buy_msg(1, &bob(), 100, &s, EXPIRES)); // issued for bob
+    ctx(alice(), 0);
+    c.buy_island(1, s, U128(100), U64(EXPIRES), sig);
+}
+
+#[test]
+#[should_panic(expected = "bad voucher signature")]
+fn buy_island_rejects_changed_spec() {
+    let mut c = island_setup();
+    let s = spec(1, 1);
+    let sig = sign(&buy_msg(1, &bob(), 100, &s, EXPIRES));
+    ctx(bob(), 0);
+    c.buy_island(1, spec(3, 5), U128(100), U64(EXPIRES), sig);
+}
+
+#[test]
+#[should_panic(expected = "not enough coin")]
+fn buy_island_needs_the_coin() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 501);
+}
+
+#[test]
+fn save_island_swaps_version() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    save(&mut c, bob(), 1, 1, spec(1, 2));
+    assert_eq!(bal(&c, bob(), "IS-1-1"), 0);
+    assert_eq!(c.mt_supply("IS-1-1".into()).unwrap().0, 0);
+    assert_eq!(bal(&c, bob(), "IS-1-2"), 1);
+    assert_eq!(c.mt_supply("IS-1-2".into()).unwrap().0, 1);
+    let v = c.get_island(1).unwrap();
+    assert_eq!((v.version, v.spec, v.token_id.as_str()), (2, spec(1, 2), "IS-1-2"));
+    assert!(get_logs().join("\n").contains(r#""what":"saved""#));
+}
+
+#[test]
+#[should_panic(expected = "stale island version")]
+fn save_island_rejects_stale_version() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    save(&mut c, bob(), 1, 1, spec(1, 2));
+    save(&mut c, bob(), 1, 1, spec(1, 3));
+}
+
+#[test]
+#[should_panic(expected = "upgrades cannot be lowered")]
+fn save_island_rejects_downgrade() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    save(&mut c, bob(), 1, 1, spec(1, 2));
+    save(&mut c, bob(), 1, 2, spec(1, 1));
+}
+
+#[test]
+#[should_panic(expected = "only the island owner")]
+fn save_island_only_by_owner() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    save(&mut c, alice(), 1, 1, spec(1, 2));
+}
+
+#[test]
+fn island_owner_follows_transfers() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    ctx(bob(), 1);
+    c.mt_transfer(alice(), "IS-1-1".into(), U128(1), None, None);
+    assert_eq!(c.get_island(1).unwrap().owner_id, alice());
+    save(&mut c, alice(), 1, 1, spec(1, 2));
+    assert_eq!(bal(&c, alice(), "IS-1-2"), 1);
+}
+
+#[test]
+#[should_panic(expected = "unknown token IS-1-1")]
+fn old_version_not_transferable() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    save(&mut c, bob(), 1, 1, spec(1, 2));
+    ctx(bob(), 1);
+    c.mt_transfer(alice(), "IS-1-1".into(), U128(1), None, None);
+}
+
+#[test]
+#[should_panic(expected = "unknown token IS-1-1")]
+fn settle_cannot_touch_islands() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    settle(&mut c, 2, 0, vec![d(bob(), "IS-1-1", -1), d(alice(), "IS-1-1", 1)]);
+}
+
+#[test]
+#[should_panic(expected = "unknown token IS-9-1")]
+fn settle_cannot_mint_islands() {
+    let mut c = island_setup();
+    settle(&mut c, 2, 0, vec![d(alice(), "IS-9-1", 1)]);
+}
+
+#[test]
+fn migrate_from_v4_keeps_state() {
+    let mut old = project_setup();
+    ctx(alice(), 0);
+    let listing = old.list_item("fish".into(), U128(5), U128(8));
+    // flush cached writes, then store the v4 layout exactly as the deployed contract has it
+    old.balances.flush();
+    old.supply.flush();
+    old.listings.flush();
+    old.projects.flush();
+    old.shops.flush();
+    old.shares.flush();
+    old.open_listings.flush();
+    let v4 = islands::ContractV4 {
+        owner_id: old.owner_id, settler_id: old.settler_id, town_id: old.town_id, paused: old.paused, tokens: old.tokens, limits: old.limits,
+        balances: old.balances, supply: old.supply, registered: old.registered, registered_count: old.registered_count, applied: old.applied,
+        roots: old.roots, last_settled_day: old.last_settled_day, gain_caps: old.gain_caps, day_faucet: old.day_faucet, send_caps: old.send_caps,
+        storage_paid: old.storage_paid, merchants: old.merchants, shops: old.shops, shares: old.shares, dividends_paid: old.dividends_paid,
+        listings: old.listings, next_listing_id: old.next_listing_id, open_listings: old.open_listings, market_fee_bps: old.market_fee_bps,
+        projects: old.projects, project_ids: old.project_ids,
+    };
+    env::state_write(&v4);
+    let new_tokens = vec![
+        TokenMeta { token_id: "emas".into(), name: "Emas".into(), kind: TokenKind::Raw, base: U128(40) },
+        TokenMeta { token_id: "permata".into(), name: "Permata".into(), kind: TokenKind::Raw, base: U128(120) },
+    ];
+    let c = Contract::migrate(makelar(), voucher_pk(), new_tokens);
+    assert_eq!(bal(&c, bob(), "coin"), 500);
+    assert_eq!(bal(&c, alice(), "fish"), 15);
+    assert_eq!(c.get_listing(listing).unwrap().amount.0, 5);
+    assert_eq!(c.list_projects().len(), 1);
+    assert_eq!(c.get_config().tokens.len(), 7);
+    assert!(c.get_config().tokens.iter().any(|t| t.token_id == "permata"));
+    assert!(c.is_registered(makelar()));
+    assert!(c.get_island(1).is_none());
+    assert_eq!(c.broker_id, makelar());
+    assert_eq!(c.voucher_pk.len(), 32);
+}

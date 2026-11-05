@@ -39,3 +39,16 @@ const merchants = Object.entries(cfg.merchants).map(([id, m]) => ({
 writeFileSync(new URL('../contracts/game/init-testnet.json', import.meta.url), JSON.stringify(init, null, 2) + '\n');
 writeFileSync(new URL('../contracts/game/merchants-testnet.json', import.meta.url), JSON.stringify(merchants, null, 2) + '\n');
 console.log(`wrote init (${init.tokens.length} tokens) and ${merchants.length} merchants for ${parent}`);
+
+// v4 -> v5 migration arguments (islands): the broker, the voucher signer's public key (the server's settler key,
+// replace the placeholder), and the new registry tokens.
+const migrate = {
+  broker_id: `makelar.${parent}`,
+  voucher_key: 'ed25519:REPLACE_WITH_SETTLER_PUBLIC_KEY',
+  new_tokens: [
+    { token_id: 'emas', name: 'Emas', kind: 'Raw', base: '40' },
+    { token_id: 'permata', name: 'Permata', kind: 'Raw', base: '120' },
+  ],
+};
+writeFileSync(new URL('../contracts/game/migrate-v5-testnet.json', import.meta.url), JSON.stringify(migrate, null, 2) + '\n');
+console.log(`wrote migrate-v5-testnet.json (broker ${migrate.broker_id})`);

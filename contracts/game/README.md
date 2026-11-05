@@ -23,18 +23,21 @@ cargo-near.
 | `create_project(id, name, chunk, need)` | owner | a town project that opens map area `chunk` when complete (max 20) |
 | `project_contribute(id, contribution)` | player, **no deposit** | pledges goods or coin; only what is still needed is taken; when every line is met the pledges are burned and the project is done |
 | `project_withdraw(id)` | player | takes a pledge back while the project is not done |
-| `migrate()` | the contract itself (deploy with init call) | v3 → v4 upgrade: keeps all state, adds the empty project list (the v2 → v3 market migration was deployed earlier and removed) |
+| `buy_island(island_id, spec, price, expires_ns, signature)` | player, **no deposit** | buys a Private Island with a server voucher (ed25519 over `GT-ISLAND-BUY\|contract\|id\|buyer\|price\|seed\|size\|fertility\|expires_ns`, key from `set_voucher_key`). Coin buyer → broker, burned from the broker, `IS-<id>-1` minted to the broker and moved to the buyer, in one call. An island id can be bought once |
+| `save_island(island_id, from_version, spec, expires_ns, signature)` | island owner, **no deposit** | Save World: burns `IS-<id>-<v>`, mints `IS-<id>-<v+1>` with the upgraded spec (same seed, levels never lower). Voucher message `GT-ISLAND-SAVE\|contract\|id\|owner\|from_version\|seed\|size\|fertility\|expires_ns` |
+| `set_voucher_key(public_key)`, `set_broker(broker_id)` | owner | voucher signer (ed25519) and the broker account (gets registered) |
+| `migrate(broker_id, voucher_key, new_tokens)` | the contract itself (deploy with init call) | v4 → v5 upgrade: keeps all state, adds islands, the broker, the voucher key and any new registry tokens (Emas, Permata). `scripts/make-init.mjs` writes `migrate-v5-testnet.json` with the arguments |
 | `set_settler`, `set_paused`, `set_limits` | owner | admin |
-| `get_config`, `is_registered`, `get_day_root`, `is_chunk_applied`, `faucet_status`, `get_shop`, `list_shops`, `get_holding`, `get_listing`, `list_listings(limit)`, `market_fee_bps`, `get_project`, `list_projects` | view | |
+| `get_config`, `is_registered`, `get_day_root`, `is_chunk_applied`, `faucet_status`, `get_shop`, `list_shops`, `get_holding`, `get_listing`, `list_listings(limit)`, `market_fee_bps`, `get_project`, `list_projects`, `get_island(island_id)` | view | |
 
 Events follow NEP-245 / NEP-297 (`EVENT_JSON:` with `standard: "nep245"`, `version: "1.0.0"`). Settlement chunks and
-shop changes, market actions and town projects also emit `standard: "genesis-town"` events (`settle`, `shop`, `market`,
-`project`). Market fees and finished projects emit `mt_burn`.
+shop changes, market actions, town projects and islands also emit `standard: "genesis-town"` events (`settle`, `shop`, `market`,
+`project`, `island`). Market fees and finished projects emit `mt_burn`.
 
 Upgrading a deployed v2 contract in place:
 
 ```bash
-near contract deploy game.genesistown.testnet use-file target/near/game.wasm with-init-call migrate json-args '{}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-legacy-keychain send
+near contract deploy game.genesistown.testnet use-file target/near/game.wasm with-init-call migrate json-args-file migrate-v5-testnet.json prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-legacy-keychain send
 ```
 
 ```bash

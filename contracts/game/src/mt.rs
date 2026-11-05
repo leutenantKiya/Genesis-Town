@@ -131,7 +131,14 @@ impl Contract {
     pub fn mt_token(&self, token_ids: Vec<TokenId>) -> Vec<Option<Token>> {
         token_ids
             .into_iter()
-            .map(|t| self.token(&t).map(|m| Token { token_id: m.token_id.clone(), owner_id: None }))
+            .map(|t| {
+                if let Some(m) = self.token(&t) {
+                    return Some(Token { token_id: m.token_id.clone(), owner_id: None });
+                }
+                let (id, v) = crate::islands::parse_island(&t)?;
+                let i = self.islands.get(&id).filter(|i| i.version == v)?;
+                Some(Token { token_id: t, owner_id: Some(i.owner.clone()) })
+            })
             .collect()
     }
 
@@ -144,7 +151,9 @@ impl Contract {
     }
 
     pub fn mt_supply(&self, token_id: TokenId) -> Option<U128> {
-        self.token(&token_id).map(|_| U128(self.supply.get(&token_id).copied().unwrap_or(0)))
+        let known = self.token(&token_id).is_some()
+            || crate::islands::parse_island(&token_id).is_some_and(|(id, v)| self.islands.get(&id).is_some_and(|i| v <= i.version));
+        known.then(|| U128(self.supply.get(&token_id).copied().unwrap_or(0)))
     }
 
     pub fn mt_batch_supply(&self, token_ids: Vec<TokenId>) -> Vec<Option<U128>> {
