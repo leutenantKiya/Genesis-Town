@@ -59,7 +59,7 @@ export class World {
     }
   }
 
-  gather(account: string, tile: string, x: number, y: number): ActionResult {
+  gather(account: string, tile: string, x: number, y: number, nodePrefix = ''): ActionResult {
     const g = this.econ.gather;
     const token = g.tiles[tile];
     if (!token) throw new HttpError(400, 'Tidak ada yang bisa dikumpulkan di sini.');
@@ -67,7 +67,7 @@ export class World {
     const def = this.econ.items[token];
     if (def.needsTool) this.need(account, 'tool', 1);
     const t = this.clock.time();
-    const key = `${tile}:${x},${y}`;
+    const key = `${nodePrefix}${tile}:${x},${y}`;
     const node = this.gs.node(key);
     let charges = node && t.totalHours < node.refill_hour ? node.charges : g.charges;
     if (charges <= 0) {
@@ -126,10 +126,10 @@ export class World {
     return { toast: `Nyam! Energi +${e}.` };
   }
 
-  plots(account: string): Plot[] {
+  plots(account: string, count = this.econ.farm.plots): Plot[] {
     const have = this.gs.plots(account);
     const out: Plot[] = [];
-    for (let i = 0; i < this.econ.farm.plots; i++) {
+    for (let i = 0; i < count; i++) {
       out.push(have.find((p) => p.idx === i) ?? { account, idx: i, state: 'empty', planted_day: 0, grown: 0, watered_day: -1 });
     }
     return out;
@@ -151,10 +151,11 @@ export class World {
     return n;
   }
 
-  farm(account: string, op: string, idx: number): ActionResult {
-    const f = this.econ.farm;
+  /** `field` replaces the village farm with an island's: its own plot rows, plot count, growth days and extra yield. */
+  farm(account: string, op: string, idx: number, field?: { plotAccount: string; count: number; growDays: number; yieldBonus: number }): ActionResult {
+    const f = { ...this.econ.farm, plots: field?.count ?? this.econ.farm.plots, growDays: field?.growDays ?? this.econ.farm.growDays };
     if (!Number.isInteger(idx) || idx < 0 || idx >= f.plots) throw new HttpError(400, 'Petak tidak ada.');
-    const plot = this.plots(account)[idx];
+    const plot = this.plots(field?.plotAccount ?? account, f.plots)[idx];
     const t = this.clock.time();
     const p = this.state(account);
     let toast: string;
@@ -188,7 +189,7 @@ export class World {
       toast = plot.state === 'ready' ? 'Gandum siap dipanen!' : `Disiram (${plot.grown}/${f.growDays} hari).`;
     } else if (op === 'harvest') {
       if (plot.state !== 'ready') throw new HttpError(409, 'Belum siap dipanen.');
-      const n = f.harvest + (this.econ.seasons[t.season]?.harvestBonus ?? 0);
+      const n = f.harvest + (this.econ.seasons[t.season]?.harvestBonus ?? 0) + (field?.yieldBonus ?? 0);
       this.gs.add(t.settleDay, account, f.seed, n, 'harvest');
       Object.assign(plot, { state: 'tilled', grown: 0, watered_day: -1 });
       toast = `+${n} Gandum`;

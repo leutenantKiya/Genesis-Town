@@ -190,6 +190,10 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     r.min = Math.min(r.min, v); r.max = Math.max(r.max, v); priceRange[t] = r;
   }
   const ms = frames.map((f) => f.moneySupply);
+  // what a bot holds at the end: coin, and coin plus its goods at base price
+  const worth = players.map((p) => Object.keys(econ.items).reduce((sum, t) => sum + bal(p.id, t) * (t === 'coin' ? 1 : econ.items[t].base), 0));
+  const coins = players.map((p) => bal(p.id, 'coin'));
+  const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const k = Math.min(econ.town.maxK, 1 + Math.floor(o.players / econ.town.activePlayerDivisor));
   return {
     options: o, frames, events,
@@ -199,6 +203,8 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       bankruptcies: events.filter((e) => e.kind === 'closed').length,
       recoveries: events.filter((e) => e.kind === 'reopened').length,
       settlements: events.filter((e) => e.kind === 'settled').length,
+      avgPlayerCoin: avg(coins), avgPlayerWorth: avg(worth),
+      coinPerDayByRole: Object.fromEntries([...new Set(ROLES)].map((r) => [r, avg(coins.filter((_, i) => players[i].role === r)) / o.days])),
     },
   };
 }

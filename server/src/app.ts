@@ -89,6 +89,7 @@ export function createApp(deps: AppDeps) {
     await game.settlement.refresh(accts);
     if (method.startsWith('restore')) await game.settlement.refreshShops();
     if (method === 'project_contribute') await game.syncProjects();
+    if (method === 'buy_island' || method === 'save_island') await game.islands.syncOne(Number(args.island_id));
     // the player market's two sides: remember Lapak or Pasar Gelap for a new listing; a Lapak sale earns popularity
     if (method === 'list_item') bazaar.recordListing(await deps.chain.listListings(50), sender, args, relayBody.anonymous === true);
     if (method === 'buy_listing' && extra[0]) bazaar.recordSale(Number(args.listing_id), extra[0], Number(args.amount));
@@ -109,10 +110,36 @@ export function createApp(deps: AppDeps) {
     return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
   }
 
+  /** Private Islands: /api/islands, /api/islands/voucher|layout|invite, and the dev coin grant. Returns true when it answered. */
+  async function islandsApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
+    if (p === '/api/dev/grant' && req.method === 'POST') {
+      const raw = await readRaw(req);
+      const acct = accountOf(req, url, raw);
+      if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
+      send(res, 200, await game.devGrant(acct, Math.floor(Number(parseJson(raw).coin))));
+      return true;
+    }
+    if (p !== '/api/islands' && !p.startsWith('/api/islands/')) return false;
+    if (req.method === 'GET' && p === '/api/islands') {
+      send(res, 200, await game.islands.view(accountOf(req, url)));
+    } else if (req.method === 'GET' && p === '/api/islands/layout') {
+      send(res, 200, game.islands.layout(accountOf(req, url), Number(url.searchParams.get('island_id'))));
+    } else if (req.method === 'POST' && (p === '/api/islands/voucher' || p === '/api/islands/invite')) {
+      const raw = await readRaw(req);
+      const acct = accountOf(req, url, raw);
+      if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
+      const b = parseJson(raw), id = Number(b.island_id);
+      if (p === '/api/islands/voucher') send(res, 200, await game.islands.voucher(acct, String(b.kind ?? ''), id));
+      else send(res, 200, { invite: game.islands.setInvites(acct, id, Array.isArray(b.accounts) ? b.accounts.map(String) : []) });
+    } else throw new HttpError(404, 'no such route');
+    return true;
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const p = url.pathname;
     if (p.startsWith('/api/')) {
+      if (await islandsApi(req, res, url, p)) return;
       if (req.method === 'GET' && p === '/api/config') {
         return send(res, 200, {
           chainMode: deps.chain.mode,
@@ -149,7 +176,7 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/state') {
         const acct = accountOf(req, url);
         const qx = url.searchParams.get('x'), qy = url.searchParams.get('y');
-        if (qx !== null && qy !== null) game.reportPosition(acct, { x: Number(qx), y: Number(qy) });
+        if (qx !== null && qy !== null) game.reportPosition(acct, { x: Number(qx), y: Number(qy) }, url.searchParams.get('world') ?? 'public');
         return send(res, 200, game.state(acct));
       }
       if (req.method === 'POST' && p === '/api/act') {

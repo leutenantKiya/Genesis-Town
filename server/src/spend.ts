@@ -16,6 +16,7 @@ export function spendGuard(chain: Chain, game: Game) {
     const extra: string[] = [];
     if (method === 'send_item' || method === 'list_item') add(args.token_id, args.amount);
     else if (method === 'restore_contribute' || method === 'project_contribute') for (const l of (args.contribution as Array<{ token_id: string; amount: string }>) ?? []) add(l.token_id, l.amount);
+    else if (method === 'buy_island') add('coin', args.price);
     else if (method === 'buy_listing') {
       const l = await chain.getListing(Number(args.listing_id));
       if (!l) throw new HttpError(404, 'Lapak itu sudah tidak ada (terjual atau ditarik).');

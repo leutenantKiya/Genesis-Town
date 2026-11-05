@@ -13,6 +13,8 @@ export interface Config {
   /** Optional: lets the village relief fund pledge from the town treasury. */
   townPrivateKey?: string;
   merchantParentId: string;
+  /** Keyless account the island NFTs pass through on a purchase: makelar.<merchant parent>. */
+  brokerAccountId: string;
   devTools: boolean;
   playersParentId: string;
   playersParentPrivateKey: string;
@@ -54,6 +56,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     townAccountId: get('TOWN_ACCOUNT_ID'),
     townPrivateKey: env.TOWN_PRIVATE_KEY || undefined,
     merchantParentId: get('MERCHANT_PARENT_ACCOUNT_ID'),
+    brokerAccountId: 'makelar.' + get('MERCHANT_PARENT_ACCOUNT_ID'),
     devTools: env.DEV_TOOLS === '1',
     playersParentId: get('PLAYERS_PARENT_ACCOUNT_ID'),
     playersParentPrivateKey: get('PLAYERS_PARENT_PRIVATE_KEY'),
@@ -92,4 +95,4 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 // Must match the contract's market_fee_bps (set in `new`/`migrate`, readable with the `market_fee_bps` view).
 export const MARKET_FEE_BPS = 500;
 
-export const RELAY_METHODS = ['send_item', 'restore_contribute', 'restore_withdraw', 'claim_dividends', 'list_item', 'buy_listing', 'cancel_listing', 'project_contribute', 'project_withdraw'] as const;
+export const RELAY_METHODS = ['send_item', 'restore_contribute', 'restore_withdraw', 'claim_dividends', 'list_item', 'buy_listing', 'cancel_listing', 'project_contribute', 'project_withdraw', 'buy_island', 'save_island'] as const;
