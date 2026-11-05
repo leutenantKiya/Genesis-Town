@@ -4,10 +4,10 @@ var CACHE = 'gt-shell-v3';
 var SHELL = [
   '/', '/manifest.json',
   '/css/game.css', '/css/chain.css', '/css/settings.css', '/css/sim.css', '/css/phone.css',
-  '/js/pwa.js', '/js/flags.js', '/js/sprites.js', '/js/art.js', '/js/buildings.js', '/js/world/village.js', '/js/engine.js',
+  '/js/pwa.js', '/js/flags.js', '/js/sprites.js', '/js/art.js', '/js/buildings.js', '/js/world/village.js', '/js/world/island.js', '/js/engine.js',
   '/js/mods/casino.js', '/js/mods/thief.js', '/js/mods/police.js', '/js/mods/combat.js', '/js/mods/curfew.js',
   '/js/mods/gossip.js', '/js/mods/agent.js', '/js/mods/soul.js', '/js/mods/social.js', '/js/mods/settings.js',
-  '/vendor/near.js', '/js/mods/chain.js', '/js/mods/fishing.js', '/js/mods/actfx.js', '/js/mods/hotbar.js', '/js/mods/mouse.js', '/js/mods/sim.js',
+  '/vendor/near.js', '/js/mods/chain.js', '/js/mods/presence.js', '/js/mods/islands.js', '/js/mods/fishing.js', '/js/mods/actfx.js', '/js/mods/hotbar.js', '/js/mods/mouse.js', '/js/mods/sim.js',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'
 ];
 

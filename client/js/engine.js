@@ -311,6 +311,7 @@ function buildWorldCache(m){
     else if (PUBLIC_KINDS[b.kind] && Sp.drawPublic) Sp.drawPublic(g, b.kind, b.x*T, b.y*T, b.w, b.h);
     else Sp.drawHouse(g, b.x*T, b.y*T, b.style, !b.invited);
   });
+  if (m.dock) drawDock(g, m);
   if (m.locked){
     // fog over areas that are not open yet, a little lighter along the edge so the border reads as mist
     for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
@@ -322,6 +323,25 @@ function buildWorldCache(m){
   }
   m.layered = true;
   m.cache = c;
+}
+/** The dock (Dermaga): wooden planks on the shore tile and a short pier over the water next to it, with two posts. */
+function drawDock(g, m){
+  var d = m.dock, x0 = d.x*T, y0 = d.y*T, dirs = [[0,-1],[1,0],[0,1],[-1,0]], k;
+  function planks(px, py){
+    g.fillStyle = '#8a5a2b'; g.fillRect(px, py, T, T);
+    g.fillStyle = '#a8743c'; for (var r = 0; r < T; r += 4) g.fillRect(px, py + r, T, 3);
+    g.fillStyle = '#5e3a18'; g.fillRect(px, py, 1, T); g.fillRect(px + T - 1, py, 1, T);
+  }
+  planks(x0, y0);
+  for (k = 0; k < 4; k++){
+    var nx = d.x + dirs[k][0], ny = d.y + dirs[k][1];
+    if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h || m.tiles[ny*m.w + nx] !== 'water') continue;
+    planks(nx*T, ny*T);
+    g.fillStyle = '#3d2610'; g.fillRect(nx*T, ny*T, 2, 3); g.fillRect(nx*T + T - 2, ny*T + T - 3, 2, 3);
+    break;
+  }
+  g.fillStyle = '#3d2610'; g.fillRect(x0 + 1, y0 + 1, 2, 4); g.fillRect(x0 + T - 3, y0 + 1, 2, 4);
+  g.fillStyle = '#f2d36b'; g.fillRect(x0 + 1, y0, 2, 1); g.fillRect(x0 + T - 3, y0, 2, 1);
 }
 function buildCache(m){
   if (m.kind === 'world' && SPRITES.drawGround) return buildWorldCache(m);
@@ -344,7 +364,11 @@ function buildCache(m){
 // runs the same file, so every player sees the same map. `worldUnlocked` lists chunks opened by town projects.
 // The old block-grid generator (tryWorld) stays as the fallback when village.js is missing.
 var worldUnlocked = [];
+// Islands (2026-11-06): the outdoor world is the public village or a Private Island built from a layout the server
+// gave us (GT.switchWorld). worldId is 'public' or 'IS-<id>'; the village seed stays in `seed` the whole time.
+var worldId = 'public', islandLayout = null;
 function genWorld(seed){
+  if (islandLayout) return fromLayout(islandLayout);
   if (window.GTVillage) return fromLayout(GTVillage.generate(seed, worldUnlocked));
   for (var att = 0; att < 40; att++){
     var w = tryWorld(seed, att);
@@ -582,6 +606,7 @@ function tryWorld(seed, att){
 }
 
 var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1 };
+function layoutChunk(L, x, y){ return L.chunks.length === 1 && window.GTIsland ? GTIsland.chunkOf(L) : GTVillage.chunkOf(L, x, y); }
 function fromLayout(L){
   var R = makeR((L.seed ^ 0x9e3779b9) >>> 0), x, y, i;
   var m = newMap(L.w, L.h, 'grass', 'world');
@@ -610,10 +635,11 @@ function fromLayout(L){
   m.market = { stalls: L.market.stalls.map(function(s){ return { x:s.x, y:s.y, seat:{x:s.seat.x, y:s.seat.y}, color:s.color }; }) };
   m.farm = { plots: L.farm.plots.slice(), gate: L.farm.gate };
   m.spawn = { x:L.spawn.x, y:L.spawn.y };
+  m.dock = islandLayout ? { x:L.dock.x, y:L.dock.y } : (GTVillage.dockOf ? GTVillage.dockOf(L) : null);
   finalize(m);
   // locked chunks: generated and drawn under fog, but nobody walks there until a town project opens them
   m.locked = new Uint8Array(m.w * m.h);
-  for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++) if (!GTVillage.chunkOf(L, x, y).open){ m.locked[y*m.w + x] = 1; m.walk[y*m.w + x] = 0; }
+  for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++) if (!layoutChunk(L, x, y).open){ m.locked[y*m.w + x] = 1; m.walk[y*m.w + x] = 0; }
   var reserved = new Set();
   for (y = L.plaza.y0; y <= L.plaza.y1; y++) for (x = L.plaza.x0; x <= L.plaza.x1; x++) reserved.add(y*m.w + x);
   for (y = L.farm.y0; y <= L.farm.y1 + 1; y++) for (x = L.farm.x0; x <= L.farm.x1; x++) reserved.add(y*m.w + x);
@@ -637,9 +663,10 @@ function fromLayout(L){
 function areaName(x, y){
   var m = world, L = m && m.layout;
   if (!L) return 'Blok (' + Math.floor(x / BS) + ',' + Math.floor(y / BS) + ')';
+  if (islandLayout) return layoutChunk(L, x, y).name;
   if (L.plaza && x >= L.plaza.x0 - 1 && x <= L.plaza.x1 + 1 && y >= L.plaza.y0 - 1 && y <= L.plaza.y1 + 1) return 'Pasar Genesis';
   for (var k = 0; k < m.buildings.length; k++){ var b = m.buildings[k]; if (b.name && Math.abs(x - b.dx) <= 2 && y >= b.dy && y <= b.dy + 2) return b.name; }
-  return GTVillage.chunkOf(L, x, y).name;
+  return layoutChunk(L, x, y).name;
 }
 
 /* street lamps: solid 'lamp' tiles on road-side grass.  Own PRNG (the v1 random stream is untouched).  Each lamp is only kept if the
@@ -729,6 +756,7 @@ function genHouseInterior(h){
   if (R.chance(0.6)){ m.tiles[I(1,6)] = 'plant'; m.info.set(I(1,6), names.plant); }
   if (R.chance(0.6)){ m.tiles[I(8,6)] = 'plant'; m.info.set(I(8,6), names.plant); }
   // storage chest on a free back-wall slot (row 1 is always reachable from row 2); separate PRNG keeps the layout above unchanged
+  if (worldId !== 'public' && h.own){ m.islandBoard = {x:slots[1], y:1}; m.info.set(I(slots[1],1), 'Papan pulau. Tingkatkan pulaumu dan simpan hasilnya (Save World) di sini.'); }
   var free = slots.slice(5), RK = makeR((h.iseed ^ 0x5eed1234) >>> 0);
   var cxs = RK.pick(free);
   m.tiles[I(cxs,1)] = 'chest'; m.chest = {x:cxs, y:1};
@@ -780,6 +808,7 @@ function genPublicInterior(b){
     put(2, 1, 'shelf', 'Rak paket.'); put(9, 1, 'shelf', 'Rak paket.'); put(10, 6, 'plant');
   } else if (k === 'broker'){
     put(3, 2, 'table', 'Meja makelar. Daftar lapak Pasar Pemain ada di sini.'); put(4, 2, 'table', 'Meja makelar.'); m.board = {x:3, y:2};
+    put(5, 2, 'table', 'Meja makelar pulau. Pulau Pribadi dijual di sini.'); m.board2 = {x:5, y:2};
     put(3, 3, 'chair'); put(8, 1, 'bookshelf', 'Buku catatan transaksi.'); put(9, 1, 'bookshelf', 'Buku catatan transaksi.'); put(1, 6, 'plant');
   } else {
     put(3, 2, 'counter', 'Kopi tubruk dan pisang goreng.'); put(4, 2, 'counter'); put(5, 2, 'counter');
@@ -878,7 +907,7 @@ var hudDirty = true;
 var modals = [];
 
 function makeOutScene(){
-  var npcs = [], sp = world.npcSpawns, n = 0;
+  var npcs = [], sp = islandLayout ? [] : world.npcSpawns, n = 0; // Private Islands start without townsfolk
   for (var i = 0; i < sp.length && npcs.length < 8; i++){
     var x = sp[i][0], y = sp[i][1];
     // keep NPCs spread out: not too close to another NPC
@@ -912,6 +941,17 @@ function regen(s){
     emit('scene', scene);
   }
   return seed;
+}
+
+/** Swaps the outdoor world: 'public' (the village) or 'IS-<id>' with the layout from /api/islands/layout. Fires onWorld
+    for every mod (remote players and island-only things die with the old scenes). The caller places the player. */
+function switchWorld(id, layout){
+  id = String(id || 'public');
+  if (id !== 'public' && !(layout && layout.tiles && window.GTIsland)) return false;
+  held.length = 0;
+  worldId = id; islandLayout = id === 'public' ? null : layout;
+  regen(seed);
+  return true;
 }
 
 function houseScene(b){
@@ -2265,6 +2305,7 @@ function findNpc(key){ var r = null; allScenes().forEach(function(sc){ sc.npcs.f
 var GT = {
   // Shared world from the server: same seed and opened chunks for every player. No-op when nothing changed.
   setWorld: function(s, unlocked){
+    if (worldId !== 'public') return false; // the village follows the server only while we stand in it
     var u = (unlocked || []).slice().sort();
     if (world && seed === (s >>> 0) && u.join(',') === worldUnlocked.join(',')) return false;
     var keepPos = world && seed === (s >>> 0) ? {x:P.x, y:P.y, scene:scene && scene.kind} : null;
@@ -2273,6 +2314,8 @@ var GT = {
     return true;
   },
   // Snowy ground (art.js palette swap); rebuilds the baked world only when it changed.
+  worldId: function(){ return worldId; },
+  switchWorld: switchWorld,
   setSnow: function(on){
     if (window.SPRITES && SPRITES.setSnow && SPRITES.setSnow(on) && world) buildWorldCache(world);
   },
