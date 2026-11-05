@@ -173,6 +173,7 @@ impl Contract {
             islands: LookupMap::new(StorageKey::Islands),
             broker_id,
             voucher_pk: raw_key(&voucher_key),
+            island_ids: vec![],
         }
     }
 
@@ -206,6 +207,7 @@ impl Contract {
         let broker = self.broker_id.clone();
         let token = island_token(island_id, 1);
         self.islands.insert(island_id, Island { owner: broker.clone(), version: 1, spec, created_ns: env::block_timestamp() });
+        self.island_ids.push(island_id);
         // coin buyer -> broker, then burned
         self.internal_transfer(COIN, &buyer, &broker, price.0);
         events::mt_transfer(buyer.as_str(), broker.as_str(), &[COIN.to_string()], &[price], Some("island"));
@@ -223,6 +225,7 @@ impl Contract {
     pub fn save_island(&mut self, island_id: u32, from_version: u32, spec: IslandSpec, expires_ns: U64, signature: Base64VecU8) {
         self.require_not_paused();
         let owner = env::predecessor_account_id();
+        self.require_registered(&owner);
         let island = self.islands.get(&island_id).cloned().unwrap_or_else(|| env::panic_str("no such island"));
         require!(island.owner == owner, "only the island owner");
         require!(from_version == island.version, "stale island version");

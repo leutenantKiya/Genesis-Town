@@ -699,6 +699,30 @@ fn island_owner_follows_transfers() {
 }
 
 #[test]
+#[should_panic(expected = "island owners cannot unregister")]
+fn unregister_refused_while_owning_island() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    ctx(bob(), 1);
+    c.storage_unregister(None);
+}
+
+#[test]
+fn unregister_allowed_after_island_transferred() {
+    let mut c = island_setup();
+    buy(&mut c, bob(), 1, 100);
+    ctx(bob(), 1);
+    c.mt_transfer(alice(), "IS-1-1".into(), U128(1), None, None);
+    let rest = bal(&c, bob(), COIN);
+    if rest > 0 {
+        ctx(bob(), 1);
+        c.mt_transfer(alice(), COIN.into(), U128(rest), None, None);
+    }
+    ctx(bob(), 1);
+    assert!(c.storage_unregister(None));
+}
+
+#[test]
 #[should_panic(expected = "unknown token IS-1-1")]
 fn old_version_not_transferable() {
     let mut c = island_setup();

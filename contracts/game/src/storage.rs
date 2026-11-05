@@ -63,6 +63,10 @@ impl Contract {
         if !self.registered.contains(&account_id) {
             return false;
         }
+        require!(
+            !self.island_ids.iter().any(|id| self.islands.get(id).is_some_and(|i| i.owner == account_id)),
+            "island owners cannot unregister"
+        );
         let ids: Vec<String> = self.tokens.iter().map(|t| t.token_id.clone()).collect();
         require!(ids.iter().all(|t| self.balance(t, &account_id) == 0), "balances must be zero");
         self.registered.remove(&account_id);
