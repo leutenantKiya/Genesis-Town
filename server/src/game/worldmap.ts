@@ -140,6 +140,8 @@ export class Positions {
     if (world === 'public') this.worlds.delete(account); else this.worlds.set(account, world);
     this.last.set(account, { ...at, t: now });
   }
+  /** Back to the public island with no remembered position (the next report starts fresh). */
+  reset(account: string) { this.worlds.delete(account); this.last.delete(account); }
   /** `world` is the world the client says it is in, `map` that world's map (the caller already checked access to it). */
   report(account: string, raw: unknown, now: number, world = 'public', map: GameMap = this.map): Pos {
     const r = raw as { x?: unknown; y?: unknown } | null;
@@ -147,7 +149,10 @@ export class Positions {
     if (!r || !Number.isInteger(p.x) || !Number.isInteger(p.y)) throw new HttpError(400, 'posisi pemain tidak ada');
     if (world !== this.worldOf(account)) {
       const pub = this.map.layout.spawn;
+      const here = map.layout, dock = map.dock();
       if (world === 'public' && p.x === pub.x && p.y === pub.y) { this.worlds.delete(account); this.last.delete(account); }
+      // the server forgot this player (restart): believe a report from an island's spawn or dock, the caller checked access
+      else if (world !== 'public' && !this.worlds.has(account) && !this.last.has(account) && ((p.x === here.spawn.x && p.y === here.spawn.y) || (p.x === dock.x && p.y === dock.y))) this.worlds.set(account, world);
       else throw new HttpError(409, 'Pindah pulau lewat dermaga.');
     }
     if (!map.walkable(p.x, p.y)) throw new HttpError(409, 'Posisi tidak valid.');

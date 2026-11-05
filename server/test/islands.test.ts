@@ -355,6 +355,7 @@ test('act_on_foreign_island_refused', async () => {
   }
   assert.equal(h.game.gs.balance(Q, 'wood'), before);
   // the owner is not on the island according to the server either: claiming it without a boat is refused
+  h.game.reportPosition(P, h.game.map!.layout.spawn); // the server knows P walks on the public island
   assert.throws(() => h.game.act(P, { action: 'craft', recipe: 'bread', world: 'IS-1', pos: spawn }), /dermaga/);
   assert.throws(() => h.game.act(P, { action: 'craft', recipe: 'bread', world: 'IS-7', pos: spawn }), /belum dibeli/);
   assert.throws(() => h.game.act(P, { action: 'craft', recipe: 'bread', world: 'nowhere', pos: spawn }), /Dunia/);
@@ -480,5 +481,135 @@ test('state_with_bad_world_records_nothing', async () => {
     assert.equal(r.status, 400);
     assert.equal(h.game.positions!.worldOf(P), where);
     assert.equal(ledgerRows(h), rows);
+  } finally { http.close(); }
+});
+
+/* ------------------------------------------------------------ review fixes */
+
+test('sync_all_survives_one_failing_island', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900 });
+  await buy(h, P, 1);
+  const real = h.chain.getIsland.bind(h.chain);
+  h.chain.getIsland = async (id: number) => { if (id === 2) throw new Error('rpc down'); return real(id); };
+  h.game.islands.lastSync = 0;
+  const v = await h.game.islands.view(P); // must not reject
+  assert.equal(v.mine.length, 1, 'cached row kept');
+  assert.equal(h.game.islands.lastSync, 0, 'a partial sync does not count as done');
+  await h.game.init(); // a failing chain must not stop startup
+});
+
+test('old_owner_loses_access_after_chain_transfer', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900, wood: 100 });
+  await buy(h, P, 1);
+  const map = onIsland(h, P, 1);
+  h.chain.transferIsland(1, Q);
+  const body = { action: 'island_upgrade', island_id: 1, attr: 'fertility', world: 'IS-1', pos: map.layout.spawn };
+  await h.game.prepare(P, body); // within the TTL: still the cached owner
+  assert.equal(h.game.gs.island(1)!.owner, P);
+  h.clock.advanceHours(0.5); // 30 s
+  await h.game.prepare(P, body);
+  assert.equal(h.game.gs.island(1)!.owner, Q);
+  assert.throws(() => h.game.act(P, body), (e: { status?: number }) => e.status === 409);
+  assert.equal(h.game.positions!.worldOf(P), 'public', 'the old owner is moved back to the public island');
+});
+
+test('stream_ends_when_guest_is_uninvited', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900 });
+  await buy(h, P, 1);
+  h.game.islands.setInvites(P, 1, [Q]);
+  const kp = near.KeyPair.fromRandom('ed25519');
+  h.store.addSessionKey(kp.getPublicKey().toString(), Q);
+  const { server } = createApp({ cfg: h.cfg, chain: h.chain, store: h.store, game: h.game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const path = '/api/stream?world=IS-1', ts = String(Date.now());
+  const sig = kp.sign(new TextEncoder().encode(requestMessage('GET', path, ts, ''))).signature;
+  const ac = new AbortController();
+  try {
+    const res = await fetch(base + path, { headers: { 'x-account-id': Q, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') }, signal: ac.signal });
+    assert.equal(res.status, 200);
+    const reader = res.body!.getReader();
+    await reader.read();
+    h.game.islands.setInvites(P, 1, []);
+    const t0 = Date.now();
+    let ended = false;
+    while (Date.now() - t0 < 3000) {
+      const r = await reader.read();
+      if (r.done) { ended = true; break; }
+    }
+    assert.ok(ended, 'the stream is closed once the guest is not invited');
+  } finally { ac.abort(); server.closeAllConnections(); server.close(); }
+});
+
+test('world_resets_or_recovers_when_server_memory_differs', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900 });
+  await buy(h, P, 1);
+  h.game.islands.setInvites(P, 1, [Q]);
+  const dock = h.game.map!.dock();
+  const isl = h.game.islands.map(h.game.gs.island(1)!);
+  // 1. a guest is uninvited while standing on the island: back to public at once
+  h.game.act(Q, { action: 'travel', to: 'IS-1', pos: dock });
+  assert.equal(h.game.positions!.worldOf(Q), 'IS-1');
+  h.game.islands.setInvites(P, 1, []);
+  step(h);
+  assert.equal(h.game.state(Q).worldId, 'public');
+  assert.equal(h.game.positions!.worldOf(Q), 'public');
+  // 2. server restart: no memory of P; the client says it is on its island at the spawn
+  h.game.positions!.worlds.clear(); h.game.positions!.last.clear();
+  const r = h.game.act(P, { action: 'craft', recipe: 'bread', world: 'IS-1', pos: isl.layout.spawn });
+  assert.ok(r, 'accepted');
+  assert.equal(h.game.positions!.worldOf(P), 'IS-1');
+  // ... but not from the middle of nowhere, and not for a stranger
+  h.game.positions!.worlds.clear(); h.game.positions!.last.clear();
+  assert.throws(() => h.game.act(P, { action: 'craft', recipe: 'bread', world: 'IS-1', pos: { x: isl.layout.spawn.x + 3, y: isl.layout.spawn.y } }), /dermaga/);
+  assert.throws(() => h.game.act(Q, { action: 'craft', recipe: 'bread', world: 'IS-1', pos: isl.layout.spawn }), (e: { status?: number }) => e.status === 409);
+});
+
+test('non_canonical_world_ids_are_refused', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900 });
+  await buy(h, P, 1);
+  const dock = h.game.map!.dock();
+  for (const to of ['IS-001', 'IS-01', 'IS-1 ', 'is-1']) {
+    assert.throws(() => h.game.act(P, { action: 'travel', to, pos: dock }), /Dunia/, to);
+    assert.equal(h.game.positions!.worldOf(P), 'public');
+  }
+});
+
+test('invite_by_display_name', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900 });
+  await buy(h, P, 1);
+  h.store.setName(Q, 'Budi');
+  const http = await httpFor(h, P);
+  try {
+    let r = await http.call('POST', '/api/islands/invite', { island_id: 1, accounts: ['budi'] });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.json.invite, [{ account: Q, name: 'Budi' }]);
+    assert.deepEqual(h.game.gs.invites(1), [Q]);
+    r = await http.call('POST', '/api/islands/invite', { island_id: 1, accounts: ['Budi', 'Siapa', 'Entah'] });
+    assert.equal(r.status, 400);
+    assert.match(r.json.error, /Siapa/); assert.match(r.json.error, /Entah/);
+    assert.deepEqual(h.game.gs.invites(1), [Q], 'unchanged after the refusal');
+    r = await http.call('GET', '/api/islands');
+    assert.deepEqual(r.json.mine[0].guests, [{ account: Q, name: 'Budi' }]);
+  } finally { http.close(); }
+});
+
+test('invited_islands_listed_for_guest', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900 });
+  await buy(h, P, 1);
+  h.store.setName(P, 'Ayu');
+  h.game.islands.setInvites(P, 1, [Q]);
+  const http = await httpFor(h, Q);
+  try {
+    const r = await http.call('GET', '/api/islands');
+    assert.deepEqual(r.json.invited, [{ island_id: 1, name: h.game.islands.state(h.game.gs.island(1)!).name, owner_name: 'Ayu' }]);
+    assert.deepEqual(r.json.mine, []);
   } finally { http.close(); }
 });

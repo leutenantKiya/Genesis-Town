@@ -77,6 +77,15 @@ export class Store {
     return (this.db.prepare('SELECT name FROM names WHERE account = ?').get(account) as { name: string } | undefined)?.name ?? null;
   }
 
+  /** The account that uses this display name (ignoring case), if any. */
+  accountByName(name: string): string | null {
+    return (this.db.prepare('SELECT account FROM names WHERE name = ?').get(name) as { account: string } | undefined)?.account ?? null;
+  }
+
+  isPlayer(account: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM players WHERE account_id = ?').get(account);
+  }
+
   /** Sets (or changes) the display name; names are unique ignoring case. */
   setName(account: string, name: string) {
     try {

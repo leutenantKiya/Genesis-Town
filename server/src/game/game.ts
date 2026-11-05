@@ -13,6 +13,7 @@ import { Islands, parseWorld, worldId, type VoucherSigner } from './islands.ts';
 import type { IslandRow } from './gamestore.ts';
 import { MockChain } from '../chain.ts';
 import { Monsters } from './monsters.ts';
+import { worldIdOk } from '../presence.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number; contractId?: string; voucherSigner?: VoucherSigner }
 
@@ -48,7 +49,7 @@ export class Game {
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
-    this.islands = new Islands({ econ: this.econ, gs: this.gs, chain, contractId: o.contractId ?? 'game.genesistown.testnet', signer: o.voucherSigner });
+    this.islands = new Islands({ econ: this.econ, gs: this.gs, chain, contractId: o.contractId ?? 'game.genesistown.testnet', signer: o.voucherSigner, now: this.now, players: { nameOf: (a) => store.nameOf(a), accountByName: (n) => store.accountByName(n), isPlayer: (a) => store.isPlayer(a) } });
     if (o.worldSeed != null) {
       this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
       this.positions = new Positions(this.map);
@@ -64,6 +65,7 @@ export class Game {
   /** A state poll from the player's client, with where they stand (ignored without the shared map). */
   reportPosition(account: string, pos: Pos | null, world = 'public') {
     if (!this.positions || !pos) return;
+    this.fixWorld(account);
     try { this.positions.report(account, pos, this.now(), world, this.worldFor(account, world, false).map ?? undefined); } catch { /* a bad poll is not an action; the next action is checked */ }
   }
 
@@ -71,11 +73,30 @@ export class Game {
   worldFor(account: string, wid: string, ownerOnly: boolean): { map: GameMap | null; row: IslandRow | null } {
     if (wid === 'public') return { map: this.map, row: null };
     const id = parseWorld(wid);
-    if (id === null) throw new HttpError(400, 'Dunia tidak dikenal.');
+    if (id === null || !worldIdOk(wid) || wid !== worldId(id)) throw new HttpError(400, 'Dunia tidak dikenal.');
     if (!this.map) throw new HttpError(409, 'Dunia pulau belum aktif.');
     const { row, owner } = this.islands.access(account, id);
     if (ownerOnly && !owner) throw new HttpError(409, 'Ini bukan pulaumu. Tamu hanya boleh jalan-jalan.');
     return { map: this.islands.map(row), row };
+  }
+
+  /** Async part of a request: re-reads the islands it touches from the chain when the cached owner is older than 10 s. */
+  async prepare(account: string, body: { world?: unknown; island_id?: unknown }) {
+    const ids = new Set<number>();
+    const w = typeof body.world === 'string' ? parseWorld(body.world) : null;
+    if (w) ids.add(w);
+    const w2 = this.positions ? parseWorld(this.positions.worldOf(account)) : null;
+    if (w2) ids.add(w2);
+    const i = Number(body.island_id);
+    if (Number.isInteger(i) && i > 0) ids.add(i);
+    for (const id of ids) await this.islands.touch(id);
+  }
+
+  /** A player who may no longer be in the world the server has them in (island sold, guest uninvited) goes back to public. */
+  fixWorld(account: string) {
+    const w = this.positions?.worldOf(account);
+    if (!this.positions || !w || w === 'public') return;
+    try { this.worldFor(account, w, false); } catch { this.positions.reset(account); }
   }
 
   /** Boat trip from a dock: to the public island (arrive at its dock) or to an island you own or are invited to. */
@@ -128,7 +149,7 @@ export class Game {
     await this.settlement.refresh([this.town, ...this.market.ids().map((id) => this.market.account(id))]);
     await this.settlement.refreshShops();
     await this.syncProjects();
-    await this.islands.syncAll(true); // island ownership comes from the chain, not from the last run's database
+    try { await this.islands.syncAll(true); } catch (e) { console.error('islands: first sync failed, continuing with the database copy:', (e as Error).message); } // ownership comes from the chain, not from the last run's database
     if (!this.gs.meta('clock.hour')) this.gs.setMeta('clock.hour', String(this.clock.hours()));
   }
 
@@ -165,6 +186,7 @@ export class Game {
   /** Off-chain action from the player. Every one is logged in Riwayat as "waiting for settlement". */
   act(account: string, body: Record<string, unknown>) {
     const a = String(body.action ?? '');
+    this.fixWorld(account);
     if (!(ACTIONS as readonly string[]).includes(a)) throw new HttpError(400, 'unknown action');
     const s = (k: string) => String(body[k] ?? '');
     const n = (k: string, d = 1) => Number(body[k] ?? d);
@@ -230,6 +252,7 @@ export class Game {
   }
 
   state(account: string) {
+    this.fixWorld(account);
     const koUntil = this.monsters?.koUntil(account) ?? null; // first: waking up restores energy
     const t = this.clock.time();
     const weather = this.weather();

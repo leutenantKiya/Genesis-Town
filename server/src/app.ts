@@ -151,14 +151,20 @@ export function createApp(deps: AppDeps) {
     if (req.method === 'GET' && p === '/api/islands') {
       send(res, 200, await game.islands.view(accountOf(req, url)));
     } else if (req.method === 'GET' && p === '/api/islands/layout') {
-      send(res, 200, game.islands.layout(accountOf(req, url), Number(url.searchParams.get('island_id'))));
+      const acct = accountOf(req, url), iid = Number(url.searchParams.get('island_id'));
+      await game.prepare(acct, { island_id: iid });
+      send(res, 200, game.islands.layout(acct, iid));
     } else if (req.method === 'POST' && (p === '/api/islands/voucher' || p === '/api/islands/invite')) {
       const raw = await readRaw(req);
       const acct = accountOf(req, url, raw);
       if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
       const b = parseJson(raw), id = Number(b.island_id);
       if (p === '/api/islands/voucher') send(res, 200, await game.islands.voucher(acct, String(b.kind ?? ''), id));
-      else send(res, 200, { invite: game.islands.setInvites(acct, id, Array.isArray(b.accounts) ? b.accounts.map(String) : []) });
+      else {
+        await game.prepare(acct, { island_id: id });
+        game.islands.setInvites(acct, id, Array.isArray(b.accounts) ? b.accounts.map(String) : []);
+        send(res, 200, { invite: game.islands.guestsOf(id) });
+      }
     } else throw new HttpError(404, 'no such route');
     return true;
   }
@@ -206,6 +212,7 @@ export function createApp(deps: AppDeps) {
         const qx = url.searchParams.get('x'), qy = url.searchParams.get('y');
         if (qx !== null && qy !== null) {
           const w = worldOf(url.searchParams.get('world')); // validate before anything is recorded
+          await game.prepare(acct, { world: w });
           game.reportPosition(acct, { x: Number(qx), y: Number(qy) }, w);
           feedPresence(acct, w, { x: qx, y: qy }, url.searchParams.get('dir'), url.searchParams.get('scene'));
         }
@@ -217,6 +224,7 @@ export function createApp(deps: AppDeps) {
         if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
         const ab = parseJson(raw);
         const w = worldOf(ab.world); // a bad world id must fail before the action changes any state
+        await game.prepare(acct, ab); // owner changes on chain show up here, before the act checks who owns what
         const out = game.act(acct, ab) as { world?: string; arrive?: { x: number; y: number } } & Record<string, unknown>;
         // after a boat trip the player stands at the arrival tile of the new world
         feedPresence(acct, typeof out?.world === 'string' ? out.world : w, out?.arrive ?? (ab.pos as { x?: unknown; y?: unknown } | undefined), ab.dir, ab.scene);
@@ -236,6 +244,7 @@ export function createApp(deps: AppDeps) {
         // (headers; the client reads it with fetch, since EventSource cannot set headers).
         const acct = accountOf(req, url);
         const world = worldOf(url.searchParams.get('world'));
+        await game.prepare(acct, { world });
         if (!presence.access(acct, world)) throw new HttpError(409, 'Kamu tidak boleh ke sana.');
         if ((streams.get(acct) ?? 0) >= 4) throw new HttpError(429, 'terlalu banyak koneksi');
         streams.set(acct, (streams.get(acct) ?? 0) + 1);
@@ -243,11 +252,21 @@ export function createApp(deps: AppDeps) {
         const emit = (ev: string, data: unknown) => { res.write(`event: ${ev}\ndata: ${JSON.stringify(data)}\n\n`); };
         res.write('retry: 2000\n\n');
         for (const m of presence.recent(world)) emit('chat', { ...m, backlog: true });
-        const tick = () => emit('presence', { players: presence.others(world, acct) });
+        let closed = false;
+        let unsub = () => {};
+        const timer = setInterval(() => tick(), 500);
+        const close = () => {
+          if (closed) return;
+          closed = true; clearInterval(timer); unsub(); streams.set(acct, Math.max(0, (streams.get(acct) ?? 1) - 1));
+        };
+        const tick = () => {
+          // a guest who is no longer invited (or an owner who sold the island) stops hearing the island at once
+          if (!presence.access(acct, world)) { close(); res.end(); return; }
+          emit('presence', { players: presence.others(world, acct) });
+        };
         tick();
-        const timer = setInterval(tick, 500);
-        const unsub = presence.subscribe(world, (m) => emit('chat', m));
-        req.on('close', () => { clearInterval(timer); unsub(); streams.set(acct, Math.max(0, (streams.get(acct) ?? 1) - 1)); });
+        unsub = presence.subscribe(world, (m) => { if (!closed) emit('chat', m); });
+        req.on('close', close);
         return;
       }
       if (req.method === 'POST' && p === '/api/chat') {
@@ -256,6 +275,7 @@ export function createApp(deps: AppDeps) {
         if (!chatIpLimiter.take(req.socket.remoteAddress ?? '?')) throw new HttpError(429, 'terlalu cepat');
         const b = parseJson(raw), world = worldOf(b.world);
         if (!deps.store.nameOf(acct)) throw new HttpError(409, 'Pilih nama dulu.');
+        await game.prepare(acct, { world });
         if (!presence.access(acct, world)) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
         return send(res, 200, { message: presence.chat(acct, world, b.text) });
       }

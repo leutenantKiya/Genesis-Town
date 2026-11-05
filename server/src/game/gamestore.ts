@@ -222,6 +222,10 @@ export class GameStore {
   invites(id: number): string[] {
     return (this.db.prepare('SELECT account FROM island_invites WHERE island_id = ? ORDER BY account').all(id) as unknown as Array<{ account: string }>).map((r) => r.account);
   }
+  /** Islands whose invite list holds this account. */
+  invitedIslands(account: string): IslandRow[] {
+    return this.db.prepare('SELECT i.* FROM islands i JOIN island_invites v ON v.island_id = i.island_id WHERE v.account = ? ORDER BY i.island_id').all(account) as unknown as IslandRow[];
+  }
   setInvites(id: number, accounts: string[]) {
     this.db.prepare('DELETE FROM island_invites WHERE island_id = ?').run(id);
     const st = this.db.prepare('INSERT OR IGNORE INTO island_invites (island_id, account) VALUES (?, ?)');
