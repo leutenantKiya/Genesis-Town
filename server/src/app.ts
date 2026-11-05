@@ -11,6 +11,7 @@ import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
+import { Presence, validName, worldIdOk } from './presence.ts';
 import { Bazaar } from './game/bazaar.ts';
 import type { Game } from './game/game.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
@@ -44,6 +45,7 @@ export interface AppDeps {
   currentBlockHeight: () => Promise<bigint>;
   clientDir: string;
   dialogue?: Dialogue;
+  presence?: Presence;
 }
 
 const MIME: Record<string, string> = {
@@ -76,6 +78,7 @@ export function createApp(deps: AppDeps) {
   const limiter = new RateLimiter(deps.cfg.relay.perMinute, deps.cfg.relay.perDay);
   const actLimiter = new RateLimiter(60, 5000); // off-chain actions per account
   const ipLimiter = new RateLimiter(10, 200); // account creation per IP
+  const posLimiter = new RateLimiter(240, 100000);
   const talkLimiter = new RateLimiter(6, 150);
   const deviceLimiter = new RateLimiter(3, 20); // new-device key additions per IP (each costs the relayer a NEAR Auth sign call) // merchant questions per account (each may be one NEAR AI call)
   const dialogue = deps.dialogue ?? new Dialogue(deps.cfg.nearai);
@@ -93,6 +96,20 @@ export function createApp(deps: AppDeps) {
     if (method === 'list_item') bazaar.recordListing(await deps.chain.listListings(50), sender, args, relayBody.anonymous === true);
     if (method === 'buy_listing' && extra[0]) bazaar.recordSale(Number(args.listing_id), extra[0], Number(args.amount));
   };
+
+  // Live presence and chat (src/presence.ts): in memory, per world.
+  const presence = deps.presence ?? new Presence((a) => deps.store.nameOf(a));
+  const chatIpLimiter = new RateLimiter(30, 2000);
+  const streams = new Map<string, number>();
+  const worldOf = (v: unknown) => (v == null || v === '' ? 'public' : worldIdOk(v) ? v : (() => { throw new HttpError(400, 'bad world'); })());
+  /** Records where a player says they stand (position already validated by the caller or checked here). */
+  function feedPresence(acct: string, world: string, pos: { x?: unknown; y?: unknown } | null | undefined, dir: unknown, scene: unknown) {
+    const x = Number(pos?.x), y = Number(pos?.y);
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 255 || y > 255) return;
+    if (world === 'public' && game.map && !game.map.walkable(x, y)) return;
+    if (!presence.access(acct, world)) return;
+    presence.update(acct, world, { x, y }, String(dir ?? ''), String(scene ?? 'out'));
+  }
 
   // Off-chain play is signed with the player's session key (src/reqauth.ts); the account header alone proves nothing.
   const replay = new ReplayCache();
@@ -149,14 +166,60 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/state') {
         const acct = accountOf(req, url);
         const qx = url.searchParams.get('x'), qy = url.searchParams.get('y');
-        if (qx !== null && qy !== null) game.reportPosition(acct, { x: Number(qx), y: Number(qy) });
-        return send(res, 200, game.state(acct));
+        if (qx !== null && qy !== null) { game.reportPosition(acct, { x: Number(qx), y: Number(qy) }); feedPresence(acct, worldOf(url.searchParams.get('world')), { x: qx, y: qy }, url.searchParams.get('dir'), url.searchParams.get('scene')); }
+        return send(res, 200, { ...game.state(acct), name: deps.store.nameOf(acct) });
       }
       if (req.method === 'POST' && p === '/api/act') {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
         if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
-        return send(res, 200, game.act(acct, parseJson(raw)));
+        const ab = parseJson(raw), out = game.act(acct, ab);
+        feedPresence(acct, worldOf(ab.world), ab.pos as { x?: unknown; y?: unknown } | undefined, ab.dir, ab.scene);
+        return send(res, 200, out);
+      }
+      if (req.method === 'POST' && p === '/api/pos') {
+        // Light position report for presence only (no game action): { world, x, y, dir, scene }
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        if (!posLimiter.take(acct)) throw new HttpError(429, 'terlalu sering');
+        const b = parseJson(raw);
+        feedPresence(acct, worldOf(b.world), b as { x?: unknown; y?: unknown }, b.dir, b.scene);
+        return send(res, 200, { ok: true });
+      }
+      if (req.method === 'GET' && p === '/api/stream') {
+        // Server-Sent Events: `presence` {players} twice a second and `chat` {account,name,text,t}. Signed like /api/state
+        // (headers; the client reads it with fetch, since EventSource cannot set headers).
+        const acct = accountOf(req, url);
+        const world = worldOf(url.searchParams.get('world'));
+        if (!presence.access(acct, world)) throw new HttpError(409, 'Kamu tidak boleh ke sana.');
+        if ((streams.get(acct) ?? 0) >= 4) throw new HttpError(429, 'terlalu banyak koneksi');
+        streams.set(acct, (streams.get(acct) ?? 0) + 1);
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no' });
+        const emit = (ev: string, data: unknown) => { res.write(`event: ${ev}\ndata: ${JSON.stringify(data)}\n\n`); };
+        res.write('retry: 2000\n\n');
+        for (const m of presence.recent(world)) emit('chat', { ...m, backlog: true });
+        const tick = () => emit('presence', { players: presence.others(world, acct) });
+        tick();
+        const timer = setInterval(tick, 500);
+        const unsub = presence.subscribe(world, (m) => emit('chat', m));
+        req.on('close', () => { clearInterval(timer); unsub(); streams.set(acct, Math.max(0, (streams.get(acct) ?? 1) - 1)); });
+        return;
+      }
+      if (req.method === 'POST' && p === '/api/chat') {
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        if (!chatIpLimiter.take(req.socket.remoteAddress ?? '?')) throw new HttpError(429, 'terlalu cepat');
+        const b = parseJson(raw), world = worldOf(b.world);
+        if (!deps.store.nameOf(acct)) throw new HttpError(409, 'Pilih nama dulu.');
+        if (!presence.access(acct, world)) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
+        return send(res, 200, { message: presence.chat(acct, world, b.text) });
+      }
+      if (req.method === 'POST' && p === '/api/name') {
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        const name = validName(parseJson(raw).name);
+        deps.store.setName(acct, name);
+        return send(res, 200, { name });
       }
       if (req.method === 'GET' && p === '/api/market') {
         return send(res, 200, { merchants: game.merchants() });

@@ -2,6 +2,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { HttpError } from './auth.ts';
 
 export interface HistoryRow {
   id: number;
@@ -53,6 +54,10 @@ export class Store {
         status TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS names (
+        account TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE
+      );
       CREATE TABLE IF NOT EXISTS pending_mints (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         account_id TEXT NOT NULL,
@@ -66,6 +71,20 @@ export class Store {
     // Older databases have no tokens column on history.
     const cols = this.db.prepare('PRAGMA table_info(history)').all() as unknown as Array<{ name: string }>;
     if (!cols.some((c) => c.name === 'tokens')) this.db.exec('ALTER TABLE history ADD COLUMN tokens TEXT');
+  }
+
+  nameOf(account: string): string | null {
+    return (this.db.prepare('SELECT name FROM names WHERE account = ?').get(account) as { name: string } | undefined)?.name ?? null;
+  }
+
+  /** Sets (or changes) the display name; names are unique ignoring case. */
+  setName(account: string, name: string) {
+    try {
+      this.db.prepare('INSERT INTO names (account, name) VALUES (?, ?) ON CONFLICT(account) DO UPDATE SET name = excluded.name').run(account, name);
+    } catch (e) {
+      if (/UNIQUE/i.test(String((e as Error).message))) throw new HttpError(409, 'Nama itu sudah dipakai pemain lain');
+      throw e;
+    }
   }
 
   playerBySub(sub: string) {

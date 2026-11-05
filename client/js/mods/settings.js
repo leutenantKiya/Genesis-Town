@@ -19,13 +19,14 @@
     { id: 'bag', canon: 'KeyI', label: 'Buka tas', keys: ['KeyE', 'KeyI'] },
     { id: 'history', canon: 'KeyH', label: 'Riwayat', keys: ['KeyH'] },
     { id: 'market', canon: 'KeyK', label: 'Pasar Pemain', keys: ['KeyK'] },
+    { id: 'chat', canon: 'KeyC', label: 'Chat dengan pemain lain', keys: ['KeyC'] },
     { id: 'map', canon: 'KeyM', label: 'Peta', keys: ['KeyM'] },
     { id: 'profile', canon: 'KeyP', label: 'Profil', keys: ['KeyP'] },
     { id: 'fullscreen', canon: 'KeyF', label: 'Layar penuh', keys: ['KeyL'] },
     { id: 'settings', canon: 'KeyO', label: 'Pengaturan', keys: ['KeyO'] }
   ];
   // Engine keys that must not fire on their own once rebound (the engine also listens to KeyZ for interact).
-  var ENGINE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'Enter', 'KeyZ', 'KeyE', 'KeyM', 'KeyI', 'KeyP', 'KeyN', 'KeyH', 'KeyK', 'KeyF', 'KeyO'];
+  var ENGINE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'Enter', 'KeyZ', 'KeyE', 'KeyM', 'KeyI', 'KeyP', 'KeyN', 'KeyH', 'KeyK', 'KeyF', 'KeyO', 'KeyC'];
 
   var st = load();
   var translate = {};  // pressed code -> canonical code
@@ -163,6 +164,7 @@
   function moreSheet() {
     var opts = [];
     if (document.getElementById('simbtn')) opts.push({ label: 'Simulasi 1 minggu', onPick: function () { press('simbtn'); } });
+    if (window.GT_PRESENCE) opts.push({ label: 'Chat', onPick: function () { GT_PRESENCE.openChat(); } });
     opts.push({ label: 'Pengaturan', onPick: openSettings });
     if (GT.openProfile) opts.push({ label: 'Profil', onPick: function () { GT.openProfile(); } });
     if (document.getElementById('btnJiwa')) opts.push({ label: 'Jiwa', onPick: function () { press('btnJiwa'); } });
