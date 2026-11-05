@@ -92,6 +92,7 @@ export function createApp(deps: AppDeps) {
     await game.settlement.refresh(accts);
     if (method.startsWith('restore')) await game.settlement.refreshShops();
     if (method === 'project_contribute') await game.syncProjects();
+    if (method === 'buy_island' || method === 'save_island') await game.islands.syncOne(Number(args.island_id));
     // the player market's two sides: remember Lapak or Pasar Gelap for a new listing; a Lapak sale earns popularity
     if (method === 'list_item') bazaar.recordListing(await deps.chain.listListings(50), sender, args, relayBody.anonymous === true);
     if (method === 'buy_listing' && extra[0]) bazaar.recordSale(Number(args.listing_id), extra[0], Number(args.amount));
@@ -99,6 +100,11 @@ export function createApp(deps: AppDeps) {
 
   // Live presence and chat (src/presence.ts): in memory, per world.
   const presence = deps.presence ?? new Presence((a) => deps.store.nameOf(a));
+  // Private Islands: only the owner and invited guests may stream, chat or show up there.
+  presence.access = (a, w) => {
+    if (w === 'public') return true;
+    try { game.worldFor(a, w, false); return true; } catch { return false; }
+  };
   const chatIpLimiter = new RateLimiter(30, 2000);
   const streams = new Map<string, number>();
   const worldOf = (v: unknown) => (v == null || v === '' ? 'public' : worldIdOk(v) ? v : (() => { throw new HttpError(400, 'bad world'); })());
@@ -106,8 +112,14 @@ export function createApp(deps: AppDeps) {
   function feedPresence(acct: string, world: string, pos: { x?: unknown; y?: unknown } | null | undefined, dir: unknown, scene: unknown) {
     const x = Number(pos?.x), y = Number(pos?.y);
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 255 || y > 255) return;
-    if (world === 'public' && game.map && !game.map.walkable(x, y)) return;
     if (!presence.access(acct, world)) return;
+    // Only show a player in the world the server has them in (worlds change only by sailing), on a walkable tile.
+    if (game.positions && game.positions.worldOf(acct) !== world) return;
+    if (game.map) {
+      let m: { walkable(x: number, y: number): boolean } | null = null;
+      try { m = game.worldFor(acct, world, false).map; } catch { return; }
+      if (m && !m.walkable(x, y)) return;
+    }
     presence.update(acct, world, { x, y }, String(dir ?? ''), String(scene ?? 'out'));
   }
 
@@ -126,10 +138,36 @@ export function createApp(deps: AppDeps) {
     return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
   }
 
+  /** Private Islands: /api/islands, /api/islands/voucher|layout|invite, and the dev coin grant. Returns true when it answered. */
+  async function islandsApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
+    if (p === '/api/dev/grant' && req.method === 'POST') {
+      const raw = await readRaw(req);
+      const acct = accountOf(req, url, raw);
+      if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
+      send(res, 200, await game.devGrant(acct, Math.floor(Number(parseJson(raw).coin))));
+      return true;
+    }
+    if (p !== '/api/islands' && !p.startsWith('/api/islands/')) return false;
+    if (req.method === 'GET' && p === '/api/islands') {
+      send(res, 200, await game.islands.view(accountOf(req, url)));
+    } else if (req.method === 'GET' && p === '/api/islands/layout') {
+      send(res, 200, game.islands.layout(accountOf(req, url), Number(url.searchParams.get('island_id'))));
+    } else if (req.method === 'POST' && (p === '/api/islands/voucher' || p === '/api/islands/invite')) {
+      const raw = await readRaw(req);
+      const acct = accountOf(req, url, raw);
+      if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
+      const b = parseJson(raw), id = Number(b.island_id);
+      if (p === '/api/islands/voucher') send(res, 200, await game.islands.voucher(acct, String(b.kind ?? ''), id));
+      else send(res, 200, { invite: game.islands.setInvites(acct, id, Array.isArray(b.accounts) ? b.accounts.map(String) : []) });
+    } else throw new HttpError(404, 'no such route');
+    return true;
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const p = url.pathname;
     if (p.startsWith('/api/')) {
+      if (await islandsApi(req, res, url, p)) return;
       if (req.method === 'GET' && p === '/api/config') {
         return send(res, 200, {
           chainMode: deps.chain.mode,
@@ -166,15 +204,22 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/state') {
         const acct = accountOf(req, url);
         const qx = url.searchParams.get('x'), qy = url.searchParams.get('y');
-        if (qx !== null && qy !== null) { game.reportPosition(acct, { x: Number(qx), y: Number(qy) }); feedPresence(acct, worldOf(url.searchParams.get('world')), { x: qx, y: qy }, url.searchParams.get('dir'), url.searchParams.get('scene')); }
+        if (qx !== null && qy !== null) {
+          const w = worldOf(url.searchParams.get('world')); // validate before anything is recorded
+          game.reportPosition(acct, { x: Number(qx), y: Number(qy) }, w);
+          feedPresence(acct, w, { x: qx, y: qy }, url.searchParams.get('dir'), url.searchParams.get('scene'));
+        }
         return send(res, 200, { ...game.state(acct), name: deps.store.nameOf(acct) });
       }
       if (req.method === 'POST' && p === '/api/act') {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
         if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
-        const ab = parseJson(raw), out = game.act(acct, ab);
-        feedPresence(acct, worldOf(ab.world), ab.pos as { x?: unknown; y?: unknown } | undefined, ab.dir, ab.scene);
+        const ab = parseJson(raw);
+        const w = worldOf(ab.world); // a bad world id must fail before the action changes any state
+        const out = game.act(acct, ab) as { world?: string; arrive?: { x: number; y: number } } & Record<string, unknown>;
+        // after a boat trip the player stands at the arrival tile of the new world
+        feedPresence(acct, typeof out?.world === 'string' ? out.world : w, out?.arrive ?? (ab.pos as { x?: unknown; y?: unknown } | undefined), ab.dir, ab.scene);
         return send(res, 200, out);
       }
       if (req.method === 'POST' && p === '/api/pos') {

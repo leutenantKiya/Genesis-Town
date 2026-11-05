@@ -3,6 +3,7 @@
 // Gathering is checked against it: the tile must really be that kind, inside an open area. (Checking the player's
 // own position is planned for M4.)
 import '../../../client/js/world/village.js';
+import '../../../client/js/world/island.js';
 import { HttpError } from '../auth.ts';
 
 export interface Chunk { id: string; name: string; cx: number; cy: number; biome: string; open: boolean; project: string | null }
@@ -28,9 +29,28 @@ interface VillageApi {
   generate(seed: number, unlocked?: string[]): Layout; chunkOf(L: Layout, x: number, y: number): Chunk; PROJECTS: Record<string, Project>;
   weather(seed: number, day: number, season: string): Weather; monstersAt(L: Layout, hour: number, counts?: Record<string, number>): MonsterSpot[];
 }
-export const Village = (globalThis as unknown as { GTVillage: VillageApi }).GTVillage;
+export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos } }).GTVillage;
 
-export class WorldMap {
+/** A Private Island (client/js/world/island.js), the same generator the browser runs. */
+export interface IslandLayout {
+  seed: number; w: number; h: number; tiles: string[]; chunks: Chunk[];
+  buildings: Layout['buildings']; farm: Layout['farm']; spawn: Pos; dock: Pos; market: { stalls: Array<{ x: number; y: number }> };
+}
+export interface IslandSpecLevels { size_level: number; fertility_level: number }
+const Island = (globalThis as unknown as { GTIsland: { generate(seed: number, spec: IslandSpecLevels): IslandLayout } }).GTIsland;
+
+/** What a world map offers to the game: the public village and islands answer the same questions. */
+export interface GameMap {
+  layout: { spawn: Pos };
+  walkable(x: number, y: number): boolean;
+  nearStall(p: Pos, d?: number): boolean;
+  nearPlot(p: Pos, idx: number): boolean;
+  atOwnHouse(p: Pos): boolean;
+  checkGather(tile: string, x: number, y: number): void;
+  dock(): Pos;
+}
+
+export class WorldMap implements GameMap {
   seed: number;
   layout: Layout & { mine?: { x: number; y: number }; seed: number };
   constructor(seed: number, unlocked: string[] = []) {
@@ -38,6 +58,8 @@ export class WorldMap {
     this.layout = Village.generate(this.seed, unlocked);
   }
   get unlocked() { return this.layout.unlocked; }
+  /** Where boats leave from: the shore tile next to the water closest to the plaza (a village.js helper). */
+  dock(): Pos { return Village.dockOf(this.layout); }
   tileAt(x: number, y: number): string | null {
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= this.layout.w || y >= this.layout.h) return null;
     return this.layout.tiles[y * this.layout.w + x];
@@ -70,24 +92,67 @@ export class WorldMap {
   view() { return { seed: this.seed, unlocked: this.layout.unlocked, version: this.layout.version, chunks: this.layout.chunks, projects: this.layout.projects }; }
 }
 
+export class IslandMap implements GameMap {
+  seed: number;
+  layout: IslandLayout;
+  constructor(seed: number, spec: IslandSpecLevels) {
+    this.seed = seed >>> 0;
+    this.layout = Island.generate(this.seed, spec);
+  }
+  tileAt(x: number, y: number): string | null {
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= this.layout.w || y >= this.layout.h) return null;
+    return this.layout.tiles[y * this.layout.w + x];
+  }
+  walkable(x: number, y: number): boolean {
+    const t = this.tileAt(x, y);
+    if (t === null || SOLID.has(t)) return false;
+    return !this.layout.buildings.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  }
+  nearStall() { return false; } // no merchants on a Private Island
+  nearPlot(p: Pos, idx: number) { const q = this.layout.farm.plots[idx]; return !!q && dist(p, q) <= 1; }
+  atOwnHouse(p: Pos) { const h = this.layout.buildings.find((b) => b.own); return !!h && dist(p, { x: h.dx, y: h.dy + 1 }) <= 1; }
+  checkGather(tile: string, x: number, y: number) {
+    const t = this.tileAt(x, y);
+    if (t === null) throw new HttpError(400, 'bad tile');
+    if (t !== tile) throw new HttpError(409, 'Tidak ada yang bisa dikumpulkan di sini.');
+  }
+  dock(): Pos { return this.layout.dock; }
+}
+
 /**
  * Where each player stands, as reported by their own (signed) client: with every action and every state poll.
  * Indoors the client reports the tile in front of the building's door. A report must be a walkable tile in an open
  * area, and the move since the last report must fit the walking speed (the spawn is always allowed: that is where a
  * player appears after loading the page). This stops gathering, trading and farming from across the map; a modified
  * client can still walk anywhere a player could walk.
+ * Each player is in one world (the public island or a Private Island). Only `travel` changes it; the one exception is a
+ * page reload, which puts the client back on the public spawn.
  */
 export class Positions {
   last = new Map<string, Pos & { t: number }>();
+  /** Which world each player is in (absent = the public island). */
+  worlds = new Map<string, string>();
   map: WorldMap;
   constructor(map: WorldMap) { this.map = map; }
-  report(account: string, raw: unknown, now: number): Pos {
+  worldOf(account: string): string { return this.worlds.get(account) ?? 'public'; }
+  /** Moves a player to another world at a tile the server chose. */
+  setWorld(account: string, world: string, at: Pos, now: number) {
+    if (world === 'public') this.worlds.delete(account); else this.worlds.set(account, world);
+    this.last.set(account, { ...at, t: now });
+  }
+  /** `world` is the world the client says it is in, `map` that world's map (the caller already checked access to it). */
+  report(account: string, raw: unknown, now: number, world = 'public', map: GameMap = this.map): Pos {
     const r = raw as { x?: unknown; y?: unknown } | null;
     const p = { x: Number(r?.x), y: Number(r?.y) };
     if (!r || !Number.isInteger(p.x) || !Number.isInteger(p.y)) throw new HttpError(400, 'posisi pemain tidak ada');
-    if (!this.map.walkable(p.x, p.y)) throw new HttpError(409, 'Posisi tidak valid.');
+    if (world !== this.worldOf(account)) {
+      const pub = this.map.layout.spawn;
+      if (world === 'public' && p.x === pub.x && p.y === pub.y) { this.worlds.delete(account); this.last.delete(account); }
+      else throw new HttpError(409, 'Pindah pulau lewat dermaga.');
+    }
+    if (!map.walkable(p.x, p.y)) throw new HttpError(409, 'Posisi tidak valid.');
     const prev = this.last.get(account);
-    const sp = this.map.layout.spawn;
+    const sp = map.layout.spawn;
     if (prev && !(p.x === sp.x && p.y === sp.y)) {
       const allowed = ((now - prev.t) / 1000) * TILES_PER_SEC + SLACK;
       if (dist(prev, p) > allowed) throw new HttpError(409, 'Posisi melompat terlalu jauh. Muat ulang halaman.');

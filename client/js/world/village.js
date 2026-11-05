@@ -426,6 +426,38 @@
     return out;
   }
 
-  var api = { VERSION: VERSION, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt };
+  /* ---------------------------------------------------------------- dock (travel to islands) */
+  // The walkable shore tile (next to water) closest to the plaza that the spawn can reach. Computed after generation
+  // from the finished layout: no RNG, no tile is changed, so existing maps stay exactly as they were.
+  function dockOf(L) {
+    if (L._dock) return L._dock;
+    var w = L.w, h = L.h, walk = new Uint8Array(w * h), i, x, y;
+    for (i = 0; i < w * h; i++) walk[i] = SOLID[L.tiles[i]] ? 0 : 1;
+    L.buildings.forEach(function (b) { for (var yy = b.y; yy < b.y + b.h; yy++) for (var xx = b.x; xx < b.x + b.w; xx++) walk[yy * w + xx] = 0; });
+    for (i = 0; i < w * h; i++) if (walk[i] && !chunkOf(L, i % w, (i / w) | 0).open) walk[i] = 0;
+    var seen = new Uint8Array(w * h), q = [L.spawn.x, L.spawn.y], head = 0;
+    seen[L.spawn.y * w + L.spawn.x] = 1;
+    while (head < q.length) {
+      x = q[head++]; y = q[head++];
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) {
+        var nx = x + d[0], ny = y + d[1], ni = ny * w + nx;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[ni] || !walk[ni]) return;
+        seen[ni] = 1; q.push(nx, ny);
+      });
+    }
+    var px = (L.plaza.x0 + L.plaza.x1) / 2, py = (L.plaza.y0 + L.plaza.y1) / 2, best = null, bd = Infinity;
+    for (y = 1; y < h - 1; y++) for (x = 1; x < w - 1; x++) {
+      i = y * w + x;
+      var t = L.tiles[i];
+      if (!seen[i] || t === 'bridge' || t === 'bridgeway') continue;
+      if (L.tiles[i + 1] !== 'water' && L.tiles[i - 1] !== 'water' && L.tiles[i + w] !== 'water' && L.tiles[i - w] !== 'water') continue;
+      var d = Math.abs(x - px) + Math.abs(y - py);
+      if (d < bd) { bd = d; best = { x: x, y: y }; }
+    }
+    L._dock = best;
+    return best;
+  }
+
+  var api = { VERSION: VERSION, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf };
   root.GTVillage = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

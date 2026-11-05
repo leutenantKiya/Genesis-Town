@@ -2,6 +2,7 @@
 // contract's rules in memory for tests and for running without testnet (labelled "mock" everywhere it shows up).
 import { Account, JsonRpcProvider, actions, teraToGas, PublicKey, type KeyPairString } from 'near-api-js';
 import type { Config } from './config.ts';
+import { buyMessage, saveMessage } from './game/islands.ts';
 
 export interface TxResult { txHash: string; ok: boolean; error?: string }
 export interface DeltaEntry { account_id: string; token_id: string; delta: string }
@@ -9,6 +10,9 @@ export interface ShopInfo { account_id: string; name: string; open: boolean; coi
 export interface HoldingInfo { shares: string; total_shares: string; claimable: string }
 export interface ProjectInfo { id: string; name: string; chunk: string; need: Array<{ token_id: string; amount: string }>; pledged: Array<{ token_id: string; amount: string }>; contributors: Array<{ account_id: string; lines: Array<{ token_id: string; amount: string }> }>; done: boolean; done_ns: number }
 export interface ListingInfo { id: number; seller: string; token_id: string; amount: string; price_each: string; created_ns: number }
+
+export interface IslandSpec { seed: number; size_level: number; fertility_level: number }
+export interface IslandInfo { island_id: number; token_id: string; owner_id: string; version: number; spec: IslandSpec }
 
 export interface Chain {
   readonly mode: 'testnet' | 'mock';
@@ -26,6 +30,8 @@ export interface Chain {
   listListings(limit?: number): Promise<ListingInfo[]>;
   getListing(id: number): Promise<ListingInfo | null>;
   listProjects(): Promise<ProjectInfo[]>;
+  /** A Private Island as the contract holds it (owner, current version, saved spec), or null while nobody bought it. */
+  getIsland(id: number): Promise<IslandInfo | null>;
   /** The town treasury pledges to a restoration board (village relief fund). */
   townPledge(merchant: string, contribution: Array<{ token_id: string; amount: string }>): Promise<TxResult>;
   getProject(id: string): Promise<ProjectInfo | null>;
@@ -113,6 +119,7 @@ export class TestnetChain implements Chain {
   listListings(limit = 50) { return this.view<ListingInfo[]>('list_listings', { limit }); }
   getListing(id: number) { return this.view<ListingInfo | null>('get_listing', { listing_id: id }); }
   listProjects() { return this.view<ProjectInfo[]>('list_projects', {}); }
+  getIsland(id: number) { return this.view<IslandInfo | null>('get_island', { island_id: id }); }
   async townPledge(merchant: string, contribution: Array<{ token_id: string; amount: string }>): Promise<TxResult> {
     if (!this.town) return { txHash: '', ok: false, error: 'TOWN_PRIVATE_KEY not set' };
     const o = await this.town.signAndSendTransaction({
@@ -163,6 +170,12 @@ export class MockChain implements Chain {
   listings = new Map<number, ListingInfo>();
   projects = new Map<string, ProjectInfo>();
   nextListing = 0;
+  islands = new Map<number, IslandInfo>();
+  /** Public key the mock trusts for island vouchers (the contract's `voucher_pk`). */
+  voucherKey: PublicKey | null = null;
+  brokerId = 'makelar.genesistown.mock';
+  /** Block time in nanoseconds; tests move it to check voucher expiry. */
+  nowNs = () => BigInt(Date.now()) * 1_000_000n;
   contractId = 'game.genesistown.mock';
   n = 0;
   failNext = false;
@@ -333,10 +346,49 @@ export class MockChain implements Chain {
         this.add(this.contractId, l.token_id, -BigInt(l.amount)); this.add(sender, l.token_id, BigInt(l.amount));
         const e = p.pledged.find((x) => x.token_id === l.token_id)!; e.amount = String(Number(e.amount) - Number(l.amount));
       }
+    } else if (method === 'buy_island' || method === 'save_island') {
+      this.mockIsland(sender, method, a);
     } else if (method === 'claim_dividends') {
       const s = this.shops.get(String(a.merchant));
       const c = s?.claimable.get(sender) ?? 0;
       if (s && c > 0) { this.add(sender, 'coin', BigInt(c)); s.claimable.set(sender, 0); }
+    }
+  }
+
+  /** Mirrors `buy_island` and `save_island`: voucher checked against the voucher key, then the token moves. */
+  private mockIsland(sender: string, method: string, a: Record<string, unknown>) {
+    const r = a as { island_id: number; from_version?: number; spec: IslandSpec; price?: string; expires_ns: string; signature: string };
+    const id = r.island_id, spec = r.spec;
+    if (!Number.isInteger(id) || id < 1) throw new Error('bad island id');
+    if (!this.voucherKey) throw new Error('voucher key not set');
+    if (this.nowNs() > BigInt(r.expires_ns)) throw new Error('voucher expired');
+    const sig = new Uint8Array(Buffer.from(String(r.signature), 'base64'));
+    if (method === 'buy_island') {
+      if (!this.accounts.has(sender) || this.shops.has(sender)) throw new Error('not a registered player');
+      if (this.islands.has(id)) throw new Error('island already exists');
+      const price = BigInt(r.price ?? '0');
+      if (price <= 0n) throw new Error('price must be positive');
+      const msg = buyMessage(this.contractId, id, sender, price, spec, BigInt(r.expires_ns));
+      if (!this.voucherKey.verify(new TextEncoder().encode(msg), sig)) throw new Error('bad voucher signature');
+      this.add(sender, 'coin', -price);
+      this.add(this.brokerId, 'coin', price); // buyer -> broker, then burned from the broker
+      this.add(this.brokerId, 'coin', -price);
+      this.add(this.brokerId, `IS-${id}-1`, 1n); // minted to the broker, then handed to the buyer
+      this.add(this.brokerId, `IS-${id}-1`, -1n);
+      this.add(sender, `IS-${id}-1`, 1n);
+      this.islands.set(id, { island_id: id, token_id: `IS-${id}-1`, owner_id: sender, version: 1, spec: { ...spec } });
+    } else {
+      const isl = this.islands.get(id);
+      if (!isl || isl.owner_id !== sender) throw new Error('not the owner');
+      if (r.from_version !== isl.version) throw new Error('stale version');
+      if (spec.seed !== isl.spec.seed || spec.size_level < isl.spec.size_level || spec.fertility_level < isl.spec.fertility_level) throw new Error('spec must not go down');
+      const msg = saveMessage(this.contractId, id, sender, isl.version, spec, BigInt(r.expires_ns));
+      if (!this.voucherKey.verify(new TextEncoder().encode(msg), sig)) throw new Error('bad voucher signature');
+      this.add(sender, isl.token_id, -1n);
+      isl.version += 1;
+      isl.token_id = `IS-${id}-${isl.version}`;
+      isl.spec = { ...spec };
+      this.add(sender, isl.token_id, 1n);
     }
   }
 
@@ -379,6 +431,7 @@ export class MockChain implements Chain {
     try { this.mockMethod(this.townAccount, 'restore_contribute', { merchant, contribution }); } catch (e) { return { txHash: this.hash(), ok: false, error: (e as Error).message }; }
     return { txHash: this.hash(), ok: true };
   }
+  async getIsland(id: number) { const i = this.islands.get(id); return i ? structuredClone(i) : null; }
   async getProject(id: string) { const p = this.projects.get(id); return p ? structuredClone(p) : null; }
   /** Mirrors the owner's `create_project`. */
   addProject(id: string, name: string, chunk: string, need: Record<string, number>) {

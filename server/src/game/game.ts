@@ -8,12 +8,15 @@ import { Clock } from './clock.ts';
 import { World, type Rng } from './world.ts';
 import { Market } from './market.ts';
 import { Settlement } from './settlement.ts';
-import { WorldMap, Positions, type Pos } from './worldmap.ts';
+import { WorldMap, Positions, type GameMap, type Pos } from './worldmap.ts';
+import { Islands, parseWorld, worldId, type VoucherSigner } from './islands.ts';
+import type { IslandRow } from './gamestore.ts';
+import { MockChain } from '../chain.ts';
 import { Monsters } from './monsters.ts';
 
-export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
+export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number; contractId?: string; voucherSigner?: VoucherSigner }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'island_upgrade'] as const;
 
 export class Game {
   econ: Econ;
@@ -26,6 +29,7 @@ export class Game {
   map: WorldMap | null = null;
   positions: Positions | null = null;
   monsters: Monsters | null = null;
+  islands: Islands;
   now: () => number;
   store: Store;
   chain: Chain;
@@ -44,6 +48,7 @@ export class Game {
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
+    this.islands = new Islands({ econ: this.econ, gs: this.gs, chain, contractId: o.contractId ?? 'game.genesistown.testnet', signer: o.voucherSigner });
     if (o.worldSeed != null) {
       this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
       this.positions = new Positions(this.map);
@@ -57,9 +62,50 @@ export class Game {
   private need<T>(x: T | null): T { if (!x) throw new HttpError(400, 'unknown action'); return x; }
 
   /** A state poll from the player's client, with where they stand (ignored without the shared map). */
-  reportPosition(account: string, pos: Pos | null) {
+  reportPosition(account: string, pos: Pos | null, world = 'public') {
     if (!this.positions || !pos) return;
-    try { this.positions.report(account, pos, this.now()); } catch { /* a bad poll is not an action; the next action is checked */ }
+    try { this.positions.report(account, pos, this.now(), world, this.worldFor(account, world, false).map ?? undefined); } catch { /* a bad poll is not an action; the next action is checked */ }
+  }
+
+  /** The map a request is about. Islands: the owner (or, for walking only, an invited guest) is let in; anyone else gets 409. */
+  worldFor(account: string, wid: string, ownerOnly: boolean): { map: GameMap | null; row: IslandRow | null } {
+    if (wid === 'public') return { map: this.map, row: null };
+    const id = parseWorld(wid);
+    if (id === null) throw new HttpError(400, 'Dunia tidak dikenal.');
+    if (!this.map) throw new HttpError(409, 'Dunia pulau belum aktif.');
+    const { row, owner } = this.islands.access(account, id);
+    if (ownerOnly && !owner) throw new HttpError(409, 'Ini bukan pulaumu. Tamu hanya boleh jalan-jalan.');
+    return { map: this.islands.map(row), row };
+  }
+
+  /** Boat trip from a dock: to the public island (arrive at its dock) or to an island you own or are invited to. */
+  private travel(account: string, from: string, fromMap: GameMap | null, to: string, pos: Pos): { toast: string; world: string; arrive: Pos } {
+    if (!this.map || !this.positions || !fromMap) throw new HttpError(409, 'Perjalanan antar pulau belum aktif.');
+    if (!to) throw new HttpError(400, 'Mau ke mana?');
+    if (to === from) throw new HttpError(409, 'Kamu sudah di sana.');
+    const d = fromMap.dock();
+    if (Math.abs(pos.x - d.x) + Math.abs(pos.y - d.y) > 2) throw new HttpError(409, 'Pergi ke dermaga dulu.');
+    const target = this.worldFor(account, to, false);
+    const arrive = target.row ? target.map!.layout.spawn : this.map.dock();
+    this.positions.setWorld(account, to, arrive, this.now());
+    return { toast: target.row ? `Tiba di ${this.islands.state(target.row).name}.` : 'Tiba di Pulau Publik.', world: to, arrive };
+  }
+
+  private upgradeIsland(account: string, id: number, attr: string, wid: string) {
+    if (wid !== worldId(id)) throw new HttpError(409, 'Tingkatkan pulaumu dari papan di pulaumu sendiri.');
+    return this.islands.upgrade(account, id, attr, this.clock.time().settleDay);
+  }
+
+  /** Dev tool (mock chain only): moves coin that already exists from the town treasury to a player's settled balance. */
+  async devGrant(account: string, coin: number) {
+    if (!(this.chain instanceof MockChain)) throw new HttpError(403, 'only on the mock chain');
+    if (!Number.isInteger(coin) || coin < 1 || coin > 100_000) throw new HttpError(400, 'coin 1-100000');
+    const free = Math.min(this.gs.settledBalance(this.town, 'coin'), this.gs.balance(this.town, 'coin'));
+    if (coin > free) throw new HttpError(409, `Kas desa hanya punya ${free} koin yang bebas.`);
+    this.chain.add(this.town, 'coin', -BigInt(coin));
+    this.chain.add(account, 'coin', BigInt(coin));
+    await this.settlement.refresh([this.town, account]);
+    return { granted: coin, coin: this.gs.balance(account, 'coin') };
   }
 
   /** Opens the map areas of town projects that are done on chain. Returns the chunks opened now. */
@@ -82,6 +128,7 @@ export class Game {
     await this.settlement.refresh([this.town, ...this.market.ids().map((id) => this.market.account(id))]);
     await this.settlement.refreshShops();
     await this.syncProjects();
+    await this.islands.syncAll(true); // island ownership comes from the chain, not from the last run's database
     if (!this.gs.meta('clock.hour')) this.gs.setMeta('clock.hour', String(this.clock.hours()));
   }
 
@@ -127,21 +174,26 @@ export class Game {
       if (this.monsters.pending.has(account) && a !== 'fight' && a !== 'flee') throw new HttpError(409, `${this.monsters.pending.get(account)!.name} menghadang! Lawan atau lari dulu.`);
     }
     // With the shared map, every action says where the player stands, and the action must happen there.
-    if (this.map && this.positions) {
-      const pos = this.positions.report(account, body.pos, this.now());
+    // Every action says which world it is in (default: the public island). Islands: only the owner acts; guests just walk.
+    const wid = s('world') || 'public';
+    const w = this.worldFor(account, wid, a !== 'travel');
+    let pos: Pos | null = null;
+    if (this.map && this.positions && w.map) {
+      pos = this.positions.report(account, body.pos, this.now(), wid, w.map);
       const far = (msg: string) => { throw new HttpError(409, msg); };
       if (a === 'gather' && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Terlalu jauh. Berdiri tepat di sebelahnya.');
-      if ((a === 'sell' || a === 'buy') && !this.map.nearStall(pos)) far('Jual-beli dilakukan di lapak pedagang di pasar.');
-      if (a === 'farm' && !this.map.nearPlot(pos, n('plot', -1))) far('Berdiri di sebelah petak kebunmu.');
-      if ((a === 'craft' || a === 'ship') && !this.map.atOwnHouse(pos)) far(a === 'craft' ? 'Meja Kerja ada di rumahmu.' : 'Kotak Kirim ada di rumahmu.');
+      if ((a === 'sell' || a === 'buy') && !w.map.nearStall(pos)) far('Jual-beli dilakukan di lapak pedagang di pasar.');
+      if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Berdiri di sebelah petak kebunmu.');
+      if ((a === 'craft' || a === 'ship') && !w.map.atOwnHouse(pos)) far(a === 'craft' ? 'Meja Kerja ada di rumahmu.' : 'Kotak Kirim ada di rumahmu.');
     }
-    let res: { toast: string };
+    if (w.row && (a === 'ship' || a === 'engage')) throw new HttpError(409, a === 'ship' ? 'Kotak Kirim hanya ada di Pulau Publik.' : 'Tidak ada monster di pulau pribadi.');
+    let res: { toast: string; tags?: string[]; world?: string; arrive?: Pos; gained?: Record<string, number> };
     switch (a) {
       case 'gather': {
-        this.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
-        const enc = this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
+        w.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
+        const enc = w.row ? null : this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
         if (enc) { res = { toast: `${enc.name} menghadang! Lawan atau lari.` }; break; }
-        res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1));
+        res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1), w.row ? `${wid}:` : ''); // island nodes are charged per island
         break;
       }
       case 'fight': res = this.need(this.monsters).fight(account); break;
@@ -153,7 +205,9 @@ export class Game {
       case 'flee': res = this.need(this.monsters).flee(account); break;
       case 'craft': res = this.world.craft(account, s('recipe')); break;
       case 'eat': res = this.world.eat(account, s('token')); break;
-      case 'farm': res = this.world.farm(account, s('op'), n('plot', -1)); break;
+      case 'farm': res = this.world.farm(account, s('op'), n('plot', -1), w.row ? { plotAccount: `${account}@${wid}`, ...this.islands.farmOf(w.row, this.econ.farm.growDays) } : undefined); break;
+      case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
+      case 'island_upgrade': res = this.upgradeIsland(account, n('island_id', -1), s('attr'), wid); break;
       case 'ship': res = this.world.ship(account, s('token'), n('qty')); break;
       case 'sell': res = this.market.sell(account, s('merchant'), s('token'), n('qty')); break;
       default: res = this.market.buy(account, s('merchant'), s('token'), n('qty')); break;
@@ -169,6 +223,7 @@ export class Game {
       }
       if (a === 'gather' && this.econ.gather.tiles[s('tile')]) tags.add(this.econ.gather.tiles[s('tile')]);
       if (a === 'buy' || a === 'sell') tags.add('coin');
+      for (const t of res.tags ?? []) tags.add(t);
       this.store.addHistory(account, a, res.toast, 'offchain', null, null, [...tags].filter((t) => t in this.econ.items));
     }
     return { ...res, state: this.state(account) };
@@ -178,7 +233,12 @@ export class Game {
     const koUntil = this.monsters?.koUntil(account) ?? null; // first: waking up restores energy
     const t = this.clock.time();
     const weather = this.weather();
-    if (weather) this.world.rainWater(account, weather.wet); // rain waters the farm by itself
+    if (weather && (this.positions?.worldOf(account) ?? 'public') === 'public') this.world.rainWater(account, weather.wet); // rain waters the farm by itself
+    const wid = this.positions?.worldOf(account) ?? 'public';
+    const islandId = wid === 'public' ? null : parseWorld(wid);
+    const irow = islandId ? this.gs.island(islandId) : undefined;
+    const onIsland = !!irow && irow.owner === account;
+    const field = onIsland ? this.islands.farmOf(irow, this.econ.farm.growDays) : null;
     const p = this.world.state(account);
     const bag: Record<string, { settled: number; today: number; name: string }> = {};
     for (const [token, def] of Object.entries(this.econ.items)) {
@@ -189,7 +249,9 @@ export class Game {
       energy: Math.floor(p.energy), energyMax: this.econ.gather.energyMax,
       tool: { uses: p.tool_uses, durability: this.econ.items.tool.durability ?? 20 },
       bag,
-      plots: this.world.plots(account).map((x) => ({ idx: x.idx, state: x.state, grown: x.grown, wateredToday: x.watered_day === t.day })),
+      worldId: irow ? wid : 'public',
+      island: irow ? { island_id: irow.island_id, owner: irow.owner, mine: onIsland, ...this.islands.live(irow), ...(field ?? {}) } : null,
+      plots: (field ? this.world.plots(`${account}@${wid}`, field.count) : irow ? [] : this.world.plots(account)).map((x) => ({ idx: x.idx, state: x.state, grown: x.grown, wateredToday: x.watered_day === t.day })),
       world: this.map ? { seed: this.map.seed, unlocked: this.map.unlocked } : null,
       encounter: this.monsters?.pending.get(account) ?? null,
       koUntil,

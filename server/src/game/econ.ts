@@ -14,6 +14,14 @@ export interface MerchantDef {
 }
 export interface SeasonDef { yield: Record<string, number>; demand: Record<string, number>; harvestBonus?: number }
 
+export interface IslandOffer { island_id: number; name: string; seed: number; size_level: number; fertility_level: number; price: number }
+export interface IslandsConfig {
+  broker: string;
+  offers: IslandOffer[];
+  upgrades: Record<string, Array<{ level: number; cost: Record<string, number> }>>;
+  fertility: Array<{ level: number; growFactor: number; yieldBonus: number }>;
+}
+
 export interface Econ {
   time: TimeConfig;
   items: Record<string, ItemDef>;
@@ -34,6 +42,7 @@ export interface Econ {
   /** Town projects; the contract holds the live state (create_project with these values). */
   projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number> }>;
   monsters: MonsterConfig;
+  islands: IslandsConfig;
 }
 
 export function loadEcon(): Econ {
