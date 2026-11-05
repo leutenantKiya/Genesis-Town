@@ -1826,6 +1826,7 @@ function update(dt){
   updateDialog(dt);
   updatePlayer(dt);
   if (!tr || tr.ph === 1){
+    if (playerFx.bubble){ playerFx.bubble.t -= dt; if (playerFx.bubble.t <= 0) playerFx.bubble = null; }
     updateNpcs(scene, dt, true);
     allScenes().forEach(function(sc){ if (sc !== scene) updateNpcs(sc, dt, false); });
   }
@@ -1951,6 +1952,7 @@ function drawNight(){
 
 /* speech bubbles + name tags (HTML over the canvas: crisp text, clamped to the screen) */
 var fxBub = new Map(), fxTag = new Map();
+var playerFx = {label:null, bubble:null};  // the player's own speech bubble (GT.playerSay)
 function fxSync(map, npc, want, cls, text){
   var rec = map.get(npc);
   if (!want){ if (rec){ if (rec.e.parentNode) rec.e.parentNode.removeChild(rec.e); map.delete(npc); } return null; }
@@ -1963,7 +1965,7 @@ function renderFx(ents){
   var sw = VW * S, sh = VH * S;
   var live = new Set();
   ents.forEach(function(en){
-    var n = en.n; if (!n) return;
+    var n = en.n || (playerFx.bubble ? playerFx : null); if (!n) return;
     live.add(n);
     var cx = (en.px - camX + T / 2) * S, top = (en.py - camY) * S;
     var visible = cx > -20 && cx < sw + 20 && top > -20 && top < sh + 20;
@@ -2283,6 +2285,8 @@ var GT = {
   on: on, off: off, emit: emit,
   npcKey: npcKey,
   findPath: findPath, npcGo: npcGo, npcFollow: npcFollow, npcSay: npcSay,
+  playerSay: function(text, secs){ playerFx.bubble = text == null ? null : {text:String(text).slice(0, 140), t:secs || 5}; },
+  setPlayerName: function(name){ name = String(name || '').trim().slice(0, 16); if (name){ state.playerName = name; save(); hudDirty = true; } },
   teleportPlayer: teleportPlayer,
   enterBuilding: function(b){ if (b) transition(function(){ enterBuilding(b); }); },
   dialog: function(pages, who, npc, after){ openDialog(pages, who, npc, after); },
