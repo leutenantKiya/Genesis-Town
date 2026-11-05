@@ -1,0 +1,18 @@
+{
+  "broker_id": "makelar.genesistown.testnet",
+  "voucher_key": "ed25519:REPLACE_WITH_SETTLER_PUBLIC_KEY",
+  "new_tokens": [
+    {
+      "token_id": "emas",
+      "name": "Emas",
+      "kind": "Raw",
+      "base": "40"
+    },
+    {
+      "token_id": "permata",
+      "name": "Permata",
+      "kind": "Raw",
+      "base": "120"
+    }
+  ]
+}

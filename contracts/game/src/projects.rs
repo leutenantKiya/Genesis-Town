@@ -6,11 +6,9 @@
 //! - when every line is met the project is done: the pledged goods and coin are burned (used to build it), which is
 //!   one of the economy's sinks, and contributors are kept on the project as its plaque.
 //! The server watches `get_project` and opens the chunk on the shared map when `done` is true.
-//! `migrate` upgrades a v3 contract (player market) in place, keeping all state.
 use crate::shops::{Contribution, RestoreLine, add_amount, get_amount, sub_amount};
-use crate::{Contract, ContractExt, Limits, StorageKey, TokenId, TokenMeta, events, market, shops};
+use crate::{Contract, ContractExt, events};
 use near_sdk::json_types::U128;
-use near_sdk::store::{LookupMap, LookupSet};
 use near_sdk::{AccountId, env, near, require};
 
 const MAX_PROJECTS: usize = 20;
@@ -49,36 +47,6 @@ fn lines(v: &[(String, u128)]) -> Vec<RestoreLine> {
     v.iter().map(|(t, a)| RestoreLine { token_id: t.clone(), amount: U128(*a) }).collect()
 }
 
-/// v3 state layout, read once by `migrate`.
-#[near(serializers = [borsh])]
-pub struct ContractV3 {
-    owner_id: AccountId,
-    settler_id: AccountId,
-    town_id: AccountId,
-    paused: bool,
-    tokens: Vec<TokenMeta>,
-    limits: Limits,
-    balances: LookupMap<(TokenId, AccountId), u128>,
-    supply: LookupMap<TokenId, u128>,
-    registered: LookupSet<AccountId>,
-    registered_count: u32,
-    applied: LookupSet<(u64, u32)>,
-    roots: LookupMap<u64, String>,
-    last_settled_day: u64,
-    gain_caps: LookupMap<(AccountId, TokenId), (u64, u128)>,
-    day_faucet: LookupMap<u64, (u128, u128)>,
-    send_caps: LookupMap<AccountId, (u64, u32)>,
-    storage_paid: LookupMap<AccountId, u128>,
-    merchants: Vec<AccountId>,
-    shops: LookupMap<AccountId, shops::Shop>,
-    shares: LookupMap<(AccountId, AccountId), shops::Holding>,
-    dividends_paid: LookupSet<(AccountId, u64)>,
-    listings: LookupMap<u64, market::Listing>,
-    next_listing_id: u64,
-    open_listings: LookupMap<AccountId, u32>,
-    market_fee_bps: u16,
-}
-
 impl Contract {
     fn project(&self, id: &str) -> Project {
         self.projects.get(id).cloned().unwrap_or_else(|| env::panic_str("no such project"))
@@ -99,43 +67,6 @@ impl Contract {
 
 #[near]
 impl Contract {
-    /// Upgrade from v3: keeps every v3 field and adds the empty project list. Callable only by the contract account
-    /// itself (as part of a deploy with an init call).
-    #[private]
-    #[init(ignore_state)]
-    pub fn migrate() -> Self {
-        let o: ContractV3 = env::state_read().unwrap_or_else(|| env::panic_str("no v3 state to migrate"));
-        Self {
-            owner_id: o.owner_id,
-            settler_id: o.settler_id,
-            town_id: o.town_id,
-            paused: o.paused,
-            tokens: o.tokens,
-            limits: o.limits,
-            balances: o.balances,
-            supply: o.supply,
-            registered: o.registered,
-            registered_count: o.registered_count,
-            applied: o.applied,
-            roots: o.roots,
-            last_settled_day: o.last_settled_day,
-            gain_caps: o.gain_caps,
-            day_faucet: o.day_faucet,
-            send_caps: o.send_caps,
-            storage_paid: o.storage_paid,
-            merchants: o.merchants,
-            shops: o.shops,
-            shares: o.shares,
-            dividends_paid: o.dividends_paid,
-            listings: o.listings,
-            next_listing_id: o.next_listing_id,
-            open_listings: o.open_listings,
-            market_fee_bps: o.market_fee_bps,
-            projects: LookupMap::new(StorageKey::Projects),
-            project_ids: vec![],
-        }
-    }
-
     /// Owner: a new town project that opens map area `chunk` when complete.
     pub fn create_project(&mut self, id: String, name: String, chunk: String, need: Vec<RestoreLine>) {
         self.require_owner();
@@ -226,43 +157,5 @@ impl Contract {
 
     pub fn list_projects(&self) -> Vec<ProjectView> {
         self.project_ids.iter().filter_map(|id| self.projects.get(id).map(|p| Self::view_project(id, p))).collect()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{TokenKind, TokenMeta};
-    use near_sdk::test_utils::VMContextBuilder;
-    use near_sdk::testing_env;
-
-    fn acc(s: &str) -> AccountId { s.parse().unwrap() }
-
-    #[test]
-    fn migrate_keeps_v3_state_and_adds_projects() {
-        let mut b = VMContextBuilder::new();
-        b.current_account_id(acc("game.testnet")).predecessor_account_id(acc("game.testnet"));
-        testing_env!(b.build());
-        let tokens = vec![TokenMeta { token_id: "coin".into(), name: "Koin".into(), kind: TokenKind::Currency, base: U128(1) }];
-        let limits = Limits { daily_gain_cap: U128(1), daily_coin_gain_cap: U128(1), daily_sends: 1, max_send_amount: U128(1), max_chunk: 1, max_players: 7, faucet_w0: U128(1), money_cap0: U128(1), active_divisor: 1, max_k: 1, rent: U128(40), initial_shares: U128(1000), max_contributors: 1 };
-        let mut balances = LookupMap::new(StorageKey::Balances);
-        balances.insert(("coin".to_string(), acc("alice.testnet")), 77u128);
-        balances.flush();
-        let v3 = ContractV3 {
-            owner_id: acc("owner.testnet"), settler_id: acc("settler.testnet"), town_id: acc("town.testnet"), paused: false,
-            tokens, limits, balances, supply: LookupMap::new(StorageKey::Supply), registered: LookupSet::new(StorageKey::Registered),
-            registered_count: 4, applied: LookupSet::new(StorageKey::Applied), roots: LookupMap::new(StorageKey::Roots), last_settled_day: 12,
-            gain_caps: LookupMap::new(StorageKey::GainCaps), day_faucet: LookupMap::new(StorageKey::DayFaucet), send_caps: LookupMap::new(StorageKey::SendCaps),
-            storage_paid: LookupMap::new(StorageKey::StoragePaid), merchants: vec![acc("joko.testnet")], shops: LookupMap::new(StorageKey::Shops),
-            shares: LookupMap::new(StorageKey::Shares), dividends_paid: LookupSet::new(StorageKey::Dividends),
-            listings: LookupMap::new(StorageKey::Listings), next_listing_id: 3, open_listings: LookupMap::new(StorageKey::OpenListings), market_fee_bps: 500,
-        };
-        env::state_write(&v3);
-        let c = Contract::migrate();
-        assert_eq!(c.registered_count, 4);
-        assert_eq!(c.last_settled_day, 12);
-        assert_eq!(c.next_listing_id, 3);
-        assert_eq!(c.balance("coin", &acc("alice.testnet")), 77);
-        assert!(c.list_projects().is_empty());
     }
 }

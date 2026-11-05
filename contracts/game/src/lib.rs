@@ -1,4 +1,4 @@
-//! Genesis Town game contract (NEAR testnet), v4.
+//! Genesis Town game contract (NEAR testnet), v5.
 //!
 //! One NEP-245 multi-token contract holds every item type and the in-game `coin`.
 //! - `mt.rs`: NEP-245 core (transfers with the 1 yoctoNEAR rule, transfer_call + resolve, views, events)
@@ -9,7 +9,8 @@
 //!   invariants (gain caps, the coin faucet and money cap, each chunk once) and stores the day's ledger root.
 //! - `shops.rs`: merchant shops: bankruptcy, restoration boards (on-chain pledges), shares and dividends
 //! - `market.rs`: the player market (escrowed listings, 5% fee burned)
-//! - `projects.rs`: town projects that open new map areas (pledged goods are burned when built) and the v3 -> v4 `migrate`
+//! - `projects.rs`: town projects that open new map areas (pledged goods are burned when built) 
+//! - `islands.rs`: Private Islands (`IS-<id>-<version>` tokens bought with a server voucher, Save World) and the v4 -> v5 `migrate`
 //!
 //! Design: docs/onchain-offchain.md, docs/economy.md, docs/threat-model.md.
 use near_sdk::json_types::U128;
@@ -18,6 +19,7 @@ use near_sdk::{AccountId, BorshStorageKey, PanicOnDefault, env, near, require};
 
 mod events;
 mod game;
+mod islands;
 mod market;
 mod mt;
 mod projects;
@@ -25,6 +27,7 @@ mod settle;
 mod shops;
 mod storage;
 
+pub use islands::{Island, IslandSpec, IslandView};
 pub use market::ListingView;
 pub use projects::ProjectView;
 pub use settle::Delta;
@@ -53,6 +56,8 @@ enum StorageKey {
     OpenListings,
     // added in v4 (town projects)
     Projects,
+    // added in v5 (islands)
+    Islands,
 }
 
 #[near(serializers = [json, borsh])]
@@ -128,6 +133,10 @@ pub struct Contract {
     // v4: town projects
     projects: LookupMap<String, projects::Project>,
     project_ids: Vec<String>,
+    // v5: private islands (tokens `IS-<id>-<version>`)
+    islands: LookupMap<u32, islands::Island>,
+    broker_id: AccountId,
+    voucher_pk: Vec<u8>,
 }
 
 impl Contract {
@@ -173,6 +182,7 @@ impl Contract {
         let key = (token_id.to_string(), account_id.clone());
         let new = self.balances.get(&key).copied().unwrap_or(0).checked_add(amount).unwrap_or_else(|| env::panic_str("balance overflow"));
         self.balances.insert(key, new);
+        self.island_owner_hook(token_id, account_id);
     }
 
     pub(crate) fn debit(&mut self, token_id: &str, account_id: &AccountId, amount: u128) {
@@ -208,8 +218,11 @@ impl Contract {
     pub(crate) fn internal_transfer(&mut self, token_id: &str, from: &AccountId, to: &AccountId, amount: u128) {
         require!(amount > 0, "amount must be positive");
         require!(from != to, "sender and receiver must differ");
-        self.require_token(token_id);
+        self.require_transferable(token_id);
         self.require_registered(to);
+        if islands::parse_island(token_id).is_some() {
+            require!(!self.is_merchant(to), "islands cannot be sent to merchants");
+        }
         self.debit(token_id, from, amount);
         self.credit(token_id, to, amount);
     }
@@ -254,6 +267,9 @@ impl Contract {
             market_fee_bps: 500,
             projects: LookupMap::new(StorageKey::Projects),
             project_ids: vec![],
+            islands: LookupMap::new(StorageKey::Islands),
+            broker_id: town_id.clone(),
+            voucher_pk: vec![],
         };
         c.registered.insert(town_id.clone());
         if treasury_coin.0 > 0 {
