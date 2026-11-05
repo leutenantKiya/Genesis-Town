@@ -437,3 +437,48 @@ test('dev_grant_moves_existing_coin_from_the_town_only_on_mock', async () => {
   assert.equal(h.chain.get(TOWN, 'coin'), 5000n - 800n);
   await assert.rejects(h.game.devGrant(P, 99999), /Kas desa/);
 });
+
+/** Signed HTTP client against a real createApp, for the world-id validation tests. */
+async function httpFor(h: H, account: string) {
+  const kp = near.KeyPair.fromRandom('ed25519');
+  h.store.addSessionKey(kp.getPublicKey().toString(), account);
+  const { server } = createApp({ cfg: h.cfg, chain: h.chain, store: h.store, game: h.game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const call = async (method: string, path: string, body?: unknown) => {
+    const raw = body === undefined ? '' : JSON.stringify(body), ts = String(Date.now());
+    const sig = kp.sign(new TextEncoder().encode(requestMessage(method, path, ts, raw))).signature;
+    const res = await fetch(base + path, { method, body: raw || undefined, headers: { 'x-account-id': account, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') } });
+    return { status: res.status, json: (await res.json()) as any };
+  };
+  return { call, close: () => server.close() };
+}
+const ledgerRows = (h: H) => (h.store.db.prepare('SELECT COUNT(*) AS c FROM ledger').get() as { c: number }).c;
+
+test('act_with_bad_world_changes_nothing', async () => {
+  const h = await harness();
+  const http = await httpFor(h, P);
+  try {
+    const rows = ledgerRows(h), wood = h.game.gs.balance(P, 'wood'), where = h.game.positions!.worldOf(P);
+    const spawn = h.game.map!.layout.spawn;
+    for (const world of ['bogus', 'IS-', 'IS-abc', '../public']) {
+      const r = await http.call('POST', '/api/act', { action: 'gather', tile: 'tree', x: spawn.x, y: spawn.y, world, pos: spawn });
+      assert.equal(r.status, 400, `world ${world}`);
+    }
+    assert.equal(ledgerRows(h), rows, 'no ledger row');
+    assert.equal(h.game.gs.balance(P, 'wood'), wood, 'no item gained');
+    assert.equal(h.game.positions!.worldOf(P), where, 'still in the same world');
+  } finally { http.close(); }
+});
+
+test('state_with_bad_world_records_nothing', async () => {
+  const h = await harness();
+  const http = await httpFor(h, P);
+  try {
+    const where = h.game.positions!.worldOf(P), rows = ledgerRows(h);
+    const r = await http.call('GET', '/api/state?x=5&y=5&world=bogus');
+    assert.equal(r.status, 400);
+    assert.equal(h.game.positions!.worldOf(P), where);
+    assert.equal(ledgerRows(h), rows);
+  } finally { http.close(); }
+});
