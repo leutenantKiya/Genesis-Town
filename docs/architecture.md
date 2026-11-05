@@ -135,6 +135,7 @@ New player actions in later milestones therefore work without re-issuing keys. A
 | merchant | none of its own in the daily loop; its balances change through settlement | daily coin-out cap per merchant, enforced in settlement |
 | relayer | none of its own. It only wraps delegate actions whose receiver is the game contract and whose method is on the allowlist | per-account and per-IP rate limits, gas cap per action, daily NEAR spend alarm |
 | owner | `set_config`, `register_merchant`, `set_roles`, `pause` | key not on the server |
+| voucher key (the settler's ed25519 key, used off chain) | signs `buy_island` and `save_island` vouchers; the player submits them | each voucher binds one account, expires in 10 minutes, and works once per island id or version ([threat-model.md](threat-model.md)) |
 
 ## Riwayat (history) panel
 
@@ -163,6 +164,8 @@ Built in M3 (`server/src/dialogue.ts`, route `POST /api/talk`, the **Ngobrol** b
 The village is generated from one world seed by `client/js/world/village.js`, a plain script the browser loads and
 the server imports, so both have the same map. The server uses it to check gathering and to open areas when town
 projects finish on chain. Details: [world.md](world.md).
+Private Islands are separate small maps from `client/js/world/island.js`; every request names its world (`public` or
+`IS-<id>`) and the server checks positions against that world's map ([world.md](world.md#islands)).
 
 ## Demo and offline mode
 

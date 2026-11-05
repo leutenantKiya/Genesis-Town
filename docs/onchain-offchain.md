@@ -28,6 +28,10 @@ Everything a player does alone, many times a minute, stays off chain until the d
 | Shop restoration pledge, shares, dividend claim | **on-chain, immediately** | immediately |
 | "Simpan sekarang" (settle my bag now) | **on-chain** on demand, limited to once per game day | immediately |
 | Account creation | **on-chain**, once | immediately |
+| Buy a Private Island | **on-chain, immediately**: `buy_island` with a server voucher, from settled coin. Coin buyer -> broker and burned, `IS-<id>-1` minted to the broker and transferred to the buyer | immediately |
+| Island upgrade (Kesuburan) | **off-chain**, paid like crafting (goods and coin leave via ledger rows), effect in the game at once | at the next daily settlement; the NFT changes only at Save World |
+| Save World | **on-chain, immediately**: `save_island` burns `IS-<id>-<v>` and mints `IS-<id>-<v+1>`; only upgrades already settled are written | immediately |
+| Island invites, live positions, chat | **off-chain**, server memory or SQLite, never on chain | n/a |
 
 One game day lasts 24 real minutes, so a player sees a settlement about every 24 minutes. Judges get a
 **"Settle sekarang"** button in the Dev panel to trigger it at any time.
