@@ -180,6 +180,7 @@
     [['tab-bag', 'Tas', function () { press('chainbtn'); }],
      ['tab-market', 'Pasar', function () { press('pasarbtn'); }],
      ['tab-map', 'Peta', function () { press('mapbtn'); }],
+     ['tab-chat', 'Chat', function () { if (window.GT_PLAYERS) GT_PLAYERS.openChat(''); }],
      ['tab-more', 'Lainnya', moreSheet]].forEach(function (t) {
       var b = $('button', 'gt-tab', t[1]); b.type = 'button'; b.id = t[0];
       b.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) t[2](); });

@@ -58,7 +58,7 @@ html.gt-phone .gt-tabbar{border-width:1px 0 0}
 }
 
 /* bottom bar: the four places, labelled, 52px tall, above the home indicator */
-html.gt-phone .gt-tabbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:0 8px env(safe-area-inset-bottom,0px)}
+html.gt-phone .gt-tabbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0 8px env(safe-area-inset-bottom,0px)}
 .gt-tab{min-height:52px;padding:0 2px;border:0;background:transparent;color:var(--ink);font-family:var(--font);font-size:calc(14px*var(--ts));line-height:1.2;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gt-tab:active{background:#1c1d36;color:var(--ink)}
 .gt-tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}

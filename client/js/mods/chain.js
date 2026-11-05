@@ -1155,7 +1155,12 @@
     if (!S.listings) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
     if (tab === 'lapak') {
       wrap.appendChild($('p', null, 'Jual pakai namamu: setiap barang yang laku menambah popularitasmu.'));
-      var named = S.listings.filter(function (l) { return !l.anonymous; });
+      var named = S.listings.filter(function (l) { return !l.anonymous && (!S.marketSeller || l.seller === S.marketSeller.account); });
+      if (S.marketSeller) {
+        // opened from another player's card: only their stall, with a way back to everyone's
+        wrap.appendChild($('h4', 'chain-h', 'Lapak ' + S.marketSeller.nick));
+        wrap.appendChild(button('Lihat semua lapak', function () { S.marketSeller = null; redraw(); }));
+      }
       if (!named.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada lapak. Jadilah yang pertama!'));
       byItem(named, wrap);
     } else if (tab === 'gelap') {
@@ -1324,7 +1329,7 @@
     if (kind === 'project') markGoal('board');
     var title = kind === 'bag' ? 'Tas' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? (arg ? 'Riwayat · ' + item(arg) : 'Riwayat') : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
     var body = kind === 'shop' ? shopBody(arg) : BODIES[kind](arg);
-    var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; } });
+    var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; if (kind === 'market') S.marketSeller = null; } });
     S.modal = { kind: kind, arg: arg, h: h };
     refresh(true);
   }
@@ -1439,6 +1444,6 @@
     return true;
   }
 
-  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, _signedCall: signedCall };
+  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, standPos: standPos, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame, onKey: onKey });
 })();

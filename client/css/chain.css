@@ -189,3 +189,23 @@ html.gt-fighting .gt-slotpop, html.gt-fighting #pad{visibility:hidden !important
 .gt-fight-acts{display:flex;gap:8px;flex-wrap:wrap}
 .gt-fight-acts .mbtn{min-height:44px;flex:1 1 auto;font-size:calc(15px*var(--ts))}
 html.gt-phone .gt-fight{left:6px;right:6px;bottom:6px}
+
+/* Global chat (js/mods/players.js): lines fade after a while; press C or tap Chat to type */
+.gt-chat{position:absolute;left:8px;bottom:64px;z-index:5;width:min(52%,420px);pointer-events:none;line-height:1.3}
+.gt-chat-head{display:none;margin-bottom:4px;padding:3px 8px;border-radius:4px;background:rgba(10,12,24,.75);color:#cfd8ff;font-size:calc(12px*var(--ts))}
+.gt-chat-list{max-height:160px;overflow:hidden;display:flex;flex-direction:column;gap:2px}
+.gt-chat-line{align-self:flex-start;max-width:100%;padding:2px 8px;border-radius:4px;background:rgba(10,12,24,.62);color:#f2f4ff;font-size:calc(13px*var(--ts));overflow-wrap:anywhere;transition:opacity .6s}
+.gt-chat-line b{font-weight:600;color:#ffd84a}
+.gt-chat-line.private{background:rgba(70,30,90,.78)}
+.gt-chat-line.private b{color:#f0b8ff}
+.gt-chat-line.note{color:#cfd8ff;font-style:italic}
+.gt-chat-line.old{opacity:0}
+.gt-chat-form{display:none;margin-top:4px}
+.gt-chat-input{width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:4px;background:var(--paper);color:var(--paper-ink);font:inherit;font-size:calc(15px*var(--ts));box-shadow:0 0 0 2px var(--paper-ink)}
+.gt-chat.open{pointer-events:auto}
+.gt-chat.open .gt-chat-head,.gt-chat.open .gt-chat-form{display:block}
+.gt-chat.open .gt-chat-list{max-height:220px;overflow-y:auto}
+html.gt-fishing .gt-chat,html.gt-fighting .gt-chat,html.gt-titlecard .gt-chat{display:none}
+html.gt-phone .gt-chat{left:6px;right:6px;width:auto;bottom:6px}
+html.gt-phone .gt-chat.open{bottom:6px}
+.gt-pcard-title{margin:0 0 6px;font-size:calc(16px*var(--ts));color:#2f6b3a}

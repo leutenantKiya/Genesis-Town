@@ -29,6 +29,10 @@
 >   The hotbar along the bottom shows every item; pick the one in your hand with a click, 1–7 or the mouse wheel;
 >   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen (also in Pengaturan), **T** a message to an NPC.
 >   On phones: tap the world to act, tap a slot to hold it, tap it again to use it.
+> - **Players see each other**: everyone outdoors walks around the same village with their name and market title over
+>   their head (your house stays private). Global chat (C, or the Chat tab on phones) with `/msg name text` for private
+>   lines, `/block name`, `/nama NamaBaru` and `/help`; long lines are capped, rude words masked and sending is
+>   rate-limited. Click another player for their card: message them or open their stall in the market.
 > - **Fights play out in the world**: a slim battle bar (Lawan / Lari, F / Esc) replaces the pop-up; each attack swings
 >   the axe at the monster (sparks and a white flash on a hit, "Meleset!" on a miss, the damage rising over it), then the
 >   monster lunges back with a red flash, the energy it cost and a small shake. The server still decides every round.

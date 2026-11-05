@@ -11,7 +11,8 @@ import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
-import { Bazaar } from './game/bazaar.ts';
+import { Bazaar, titleFor } from './game/bazaar.ts';
+import { Social } from './social.ts';
 import type { Game } from './game/game.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
 import { Worker } from 'node:worker_threads';
@@ -82,6 +83,8 @@ export function createApp(deps: AppDeps) {
   const clientRoot = resolve(deps.clientDir);
   const checkSpend = spendGuard(deps.chain, game);
   const bazaar = new Bazaar(deps.store.db);
+  const social = new Social(deps.store.db);
+  const presenceLimiter = new RateLimiter(240, 100_000); // about 2 reports a second per account
   const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
     const accts = [sender, ...extra];
     if (method === 'send_item' && typeof args.receiver_id === 'string') accts.push(args.receiver_id);
@@ -160,6 +163,28 @@ export function createApp(deps: AppDeps) {
       }
       if (req.method === 'GET' && p === '/api/time') {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null, weather: game.weather() });
+      }
+      if (req.method === 'POST' && p === '/api/presence') {
+        // where I am now -> who else is around, and the chat lines since the last call
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        if (!presenceLimiter.take(acct)) throw new HttpError(429, 'too many presence reports');
+        const b = parseJson(raw) as { x?: unknown; y?: unknown; dir?: unknown; scene?: unknown; since?: unknown };
+        social.report(acct, b);
+        game.reportPosition(acct, { x: Number(b.x), y: Number(b.y) });
+        const players = social.nearby(acct).map((s) => ({ nick: s.nick, account: s.account, x: s.x, y: s.y, dir: s.dir, title: titleFor(bazaar.points(s.account)) }));
+        const chat = social.since(acct, Math.max(0, Math.floor(Number(b.since) || 0)));
+        return send(res, 200, { me: social.nick(acct), online: social.online(), players, chat, last: social.seq });
+      }
+      if (req.method === 'POST' && p === '/api/chat') {
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        return send(res, 200, { msg: social.say(acct, (parseJson(raw) as { text?: unknown }).text) });
+      }
+      if (req.method === 'POST' && p === '/api/profile') {
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        return send(res, 200, { nick: social.setNick(acct, String((parseJson(raw) as { nick?: unknown }).nick ?? '')) });
       }
       if (req.method === 'GET' && p === '/api/state') {
         const acct = accountOf(req, url);
