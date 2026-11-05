@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   var C = null;                 // GT_CHAIN
-  var I = { offers: [], mine: [], at: 0, loading: null, sel: null };
+  var I = { offers: [], mine: [], invited: [], at: 0, loading: null, sel: null, err: null };
   var sailing = false, nearHint = false, hintT = 0;
   var win = null;               // the open broker / board window: { kind, h, arg }
 
@@ -46,7 +46,7 @@
     if (!C || !S() || !S().account || S().mode === 'offline') return Promise.resolve(I);
     if (I.loading) return I.loading;
     if (!force && Date.now() - I.at < 2500) return Promise.resolve(I);
-    I.loading = C.api('/islands').then(function (r) { I.offers = r.offers || []; I.mine = r.mine || []; I.at = Date.now(); }, function () { /* keep the old numbers */ })
+    I.loading = C.api('/islands').then(function (r) { I.offers = r.offers || []; I.mine = r.mine || []; I.invited = r.invited || []; I.at = Date.now(); I.err = null; }, function (e) { I.err = (e && e.message) || 'Tidak bisa terhubung.'; /* keep the old numbers */ })
       .then(function () { I.loading = null; redrawWin(); return I; });
     return I.loading;
   }
@@ -96,7 +96,11 @@
     head.appendChild($('span', null, 'Makelar Pulau · koin di rantai ' + (coin ? coin.settled : 0)));
     head.appendChild($('span', 'chain-dim', 'Membeli memakai koin yang sudah tersimpan'));
     wrap.appendChild(head);
-    if (!I.at) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
+    if (I.err) {
+      wrap.appendChild($('p', null, 'Daftar pulau gagal dimuat: ' + I.err));
+      wrap.appendChild(btn('Coba lagi', function () { I.err = null; redrawWin(); load(true); }, 'primary'));
+      if (!I.at) return wrap;
+    } else if (!I.at) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
     if (!I.offers.length) { wrap.appendChild($('p', null, 'Semua pulau sudah terjual. Tunggu pemilik menjualnya di Pasar.')); return wrap; }
     var sel = null;
     I.offers.forEach(function (o) { if (o.island_id === I.sel) sel = o; });
@@ -183,16 +187,15 @@
     // invites
     var iv = $('div', 'gt-detail');
     iv.appendChild($('div', 'gt-detail-name', 'Undangan'));
-    iv.appendChild($('div', 'chain-dim', 'Hanya kamu dan tamu undangan yang boleh datang. Isi nama akun, pisahkan dengan koma. Teman mengetik nomor pulaumu (#' + m.island_id + ') di dermaga.'));
-    var input = $('input'); input.type = 'text'; input.maxLength = 400; input.placeholder = 'akun1.players.testnet, akun2.players.testnet'; input.value = (m.invite || []).join(', ');
+    iv.appendChild($('div', 'chain-dim', 'Hanya kamu dan tamu undangan yang boleh datang. Tulis nama pemain (seperti di permainan), pisahkan dengan koma. Tamu melihat pulaumu di menu dermaga, bagian Pulau teman.'));
+    var input = $('input'); input.type = 'text'; input.maxLength = 400; input.placeholder = 'Ayu, Budi'; input.value = (m.guests || []).map(function (g) { return g.name; }).join(', ');
     input.style.width = '100%'; input.autocomplete = 'off';
     iv.appendChild(input);
     var iAct = $('div', 'gt-detail-acts');
     iAct.appendChild(btn('Simpan undangan', function () {
-      var list = String(input.value || '').split(/[\s,;]+/).map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
-      for (var i = 0; i < list.length; i++) if (!/^[a-z0-9._-]{2,64}$/.test(list[i])) { GT.toast('Nama akun tidak valid: ' + list[i].slice(0, 30)); return; }
+      var list = String(input.value || '').split(/[,;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
       C.api('/islands/invite', { method: 'POST', body: { island_id: m.island_id, accounts: list } })
-        .then(function (r) { GT.toast('Undangan tersimpan (' + (r.invite || []).length + ' tamu).'); return load(true); }, function (e) { GT.toast('Gagal: ' + e.message); });
+        .then(function (r) { var names = (r.invite || []).map(function (g) { return g.name; }); input.value = names.join(', '); GT.toast('Undangan tersimpan (' + names.length + ' tamu).'); return load(true); }, function (e) { GT.toast('Gagal: ' + e.message); });
     }));
     iv.appendChild(iAct);
     wrap.appendChild(iv);
@@ -235,21 +238,13 @@
         if (cur === 'IS-' + m.island_id) return;
         opts.push({ label: 'Pulau-ku #' + m.island_id + ' · ' + m.name, onPick: function () { sail('IS-' + m.island_id); } });
       });
-      opts.push({ label: 'Pulau teman…', onPick: askFriendIsland });
+      I.invited.forEach(function (v) {
+        if (cur === 'IS-' + v.island_id) return;
+        opts.push({ label: 'Pulau ' + v.owner_name + ' · ' + v.name, onPick: function () { sail('IS-' + v.island_id); } });
+      });
+      if (!I.invited.length) opts.push({ label: 'Pulau teman (belum ada undangan)', onPick: function () { GT.toast('Belum ada teman yang mengundangmu. Minta mereka mengisi namamu di Papan pulau.'); } });
       GT.menu('Dermaga · mau berlayar ke mana?', opts);
     });
-  }
-  function askFriendIsland() {
-    var body = $('div');
-    body.appendChild($('p', null, 'Ketik nomor pulau temanmu (contoh: 3). Kamu hanya bisa masuk kalau pemiliknya mengundangmu.'));
-    var input = $('input'); input.type = 'text'; input.inputMode = 'numeric'; input.maxLength = 6; input.placeholder = 'Nomor pulau'; input.autocomplete = 'off';
-    body.appendChild(input);
-    GT.modal({ title: 'Pulau teman', body: body, actions: [{ label: 'Berlayar', primary: true, onClick: function (h) {
-      var n = parseInt(String(input.value).replace(/^#/, ''), 10);
-      if (!(n >= 1)) { GT.toast('Nomor pulau tidak valid.'); return false; }
-      h.close('ok'); sail('IS-' + n); return true;
-    } }] });
-    setTimeout(function () { input.focus(); }, 50);
   }
   function sail(to) {
     if (sailing) return;
@@ -260,7 +255,15 @@
     layoutP.then(function (L) {
       GT.toast('Berlayar…');
       return C.act({ action: 'travel', to: to, world: from }, true).catch(function (e) { e.shown = true; throw e; }).then(function (r) {
-        if (!GT.switchWorld(r.world, L)) throw new Error('Peta pulau tidak bisa dibuat.');
+        var ok = false;
+        try { ok = GT.switchWorld(r.world, L); } catch (err) { ok = false; }
+        if (!ok) {
+          // The server already moved us, so both sides disagree now. A fresh page starts on the public spawn, which the
+          // server accepts as "back on the public island" (see Positions.report), so reloading puts them in step again.
+          GT.toast('Peta pulau gagal dibuat. Memuat ulang agar posisimu kembali sama dengan server…');
+          setTimeout(function () { location.reload(); }, 1800);
+          var e = new Error('Pelayaran gagal.'); e.shown = true; throw e;
+        }
         GT.teleportPlayer('out', r.arrive.x, r.arrive.y, 'down');
         nearHint = true; GT.toast(r.toast);
         if (window.GT_PRESENCE) GT_PRESENCE.refresh();

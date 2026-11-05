@@ -26,24 +26,30 @@ export interface IslandState {
   saved: IslandSpec; live: IslandSpec; savable: IslandSpec;
   pending: Array<{ attr: string; level: number; waitingSettlement: boolean }>;
   invite: string[];
+  /** The same list with display names, for the invite editor. */
+  guests: Array<{ account: string; name: string }>;
   /** The next Kesuburan level: its cost, and `locked` while it needs an item that is not in the game yet (Permata). */
   next: { attr: 'fertility'; level: number; cost: Record<string, number>; locked: boolean } | null;
 }
 
 const VOUCHER_TTL_MS = 10 * 60_000;
 const SYNC_TTL_MS = 15_000;
+const OWNER_TTL_MS = 10_000;
 export const worldId = (id: number) => `IS-${id}`;
 export function parseWorld(w: string): number | null {
   const m = /^IS-(\d{1,9})$/.exec(w);
   return m ? Number(m[1]) : null;
 }
 
-export interface IslandsDeps { econ: Econ; gs: GameStore; chain: Chain; contractId: string; signer?: VoucherSigner; now?: () => number }
+/** Player directory the invite list needs: display names and who is a registered player. */
+export interface PlayerDir { nameOf(account: string): string | null; accountByName(name: string): string | null; isPlayer(account: string): boolean }
+export interface IslandsDeps { econ: Econ; gs: GameStore; chain: Chain; contractId: string; signer?: VoucherSigner; now?: () => number; players?: PlayerDir }
 
 export class Islands {
   d: IslandsDeps;
   maps = new Map<string, IslandMap>();
   lastSync = 0;
+  private seen = new Map<number, number>();
 
   constructor(d: IslandsDeps) { this.d = d; }
 
@@ -56,6 +62,7 @@ export class Islands {
   /** Re-reads one island from the contract. A new owner starts from the saved spec: upgrades and invites are dropped. */
   async syncOne(id: number): Promise<IslandRow | undefined> {
     const info = await this.d.chain.getIsland(id);
+    this.seen.set(id, this.now());
     const gs = this.d.gs, had = gs.island(id);
     if (!info) { if (had) gs.deleteIsland(id); return undefined; }
     if (had && had.owner !== info.owner_id) { gs.dropIslandUpgrades(id, null, 0); gs.clearInvites(id); }
@@ -67,8 +74,21 @@ export class Islands {
   /** Every offered island, from the chain (after a restart, and at most every 15 s otherwise). */
   async syncAll(force = false) {
     if (!force && this.now() - this.lastSync < SYNC_TTL_MS) return;
-    this.lastSync = this.now();
-    for (const o of this.cfg?.offers ?? []) await this.syncOne(o.island_id);
+    let ok = true;
+    for (const o of this.cfg?.offers ?? []) {
+      try { await this.syncOne(o.island_id); } catch (e) { ok = false; console.error(`islands: sync of island ${o.island_id} failed, keeping the cached row:`, (e as Error).message); }
+    }
+    if (ok) this.lastSync = this.now(); // after a partial failure the next call tries again
+  }
+
+  /**
+   * Ownership can change on chain at any time (`mt_transfer`). Before an owner-only or guest act we re-read that one
+   * island when the cached row is older than 10 s. `access()` itself stays synchronous; the async entry points
+   * (`Game.prepare`, called by the HTTP layer) do the refresh. A failing RPC keeps the cached row.
+   */
+  async touch(id: number) {
+    if (this.now() - (this.seen.get(id) ?? 0) < OWNER_TTL_MS) return;
+    try { await this.syncOne(id); } catch (e) { console.error(`islands: refresh of island ${id} failed:`, (e as Error).message); }
   }
 
   /* ------------------------------------------------------------ specs, state */
@@ -105,16 +125,20 @@ export class Islands {
       island_id: r.island_id, token_id: `IS-${r.island_id}-${r.version}`, version: r.version, name: this.offer(r.island_id)?.name ?? `Pulau #${r.island_id}`,
       saved: this.specOf(r), live: this.live(r), savable: this.savable(r),
       pending: this.pendingRows(r).map((u) => ({ attr: u.attr, level: u.level, waitingSettlement: !this.d.gs.rowsSettled(JSON.parse(u.seqs) as number[]) })),
-      invite: this.d.gs.invites(r.island_id), next: this.nextUpgrade(r),
+      invite: this.d.gs.invites(r.island_id), guests: this.guests(r.island_id), next: this.nextUpgrade(r),
     };
   }
 
-  /** GET /api/islands: what the broker still has, and the islands this account owns. */
-  async view(account: string): Promise<{ offers: OfferView[]; mine: IslandState[] }> {
+  nameOf(account: string): string { return this.d.players?.nameOf(account) ?? account.split('.')[0].slice(0, 16); }
+  private guests(id: number) { return this.d.gs.invites(id).map((account) => ({ account, name: this.nameOf(account) })); }
+
+  /** GET /api/islands: what the broker still has, the islands this account owns, and islands it is invited to. */
+  async view(account: string): Promise<{ offers: OfferView[]; mine: IslandState[]; invited: Array<{ island_id: number; name: string; owner_name: string }> }> {
     await this.syncAll();
     const offers = (this.cfg?.offers ?? []).filter((o) => !this.d.gs.island(o.island_id))
       .map((o) => ({ island_id: o.island_id, name: o.name, spec: { seed: o.seed, size_level: o.size_level, fertility_level: o.fertility_level }, price: o.price }));
-    return { offers, mine: this.d.gs.islandsOf(account).map((r) => this.state(r)) };
+    const invited = this.d.gs.invitedIslands(account).map((r) => ({ island_id: r.island_id, name: this.offer(r.island_id)?.name ?? `Pulau #${r.island_id}`, owner_name: this.nameOf(r.owner) }));
+    return { offers, mine: this.d.gs.islandsOf(account).map((r) => this.state(r)), invited };
   }
 
   /* ------------------------------------------------------------ vouchers */
@@ -194,10 +218,20 @@ export class Islands {
   setInvites(account: string, id: number, accounts: string[]): string[] {
     const row = this.d.gs.island(id);
     if (!row || row.owner !== account) throw new HttpError(403, 'Itu bukan pulaumu.');
-    const list = [...new Set(accounts.map((a) => String(a).trim()).filter((a) => a && a !== account))].slice(0, 20);
+    // each entry is a display name (any case) or an account id of a registered player
+    const list: string[] = [], unknown: string[] = [];
+    for (const raw of accounts.map((a) => String(a).trim()).filter(Boolean)) {
+      const acct = this.d.players ? (this.d.players.accountByName(raw) ?? (this.d.players.isPlayer(raw) ? raw : null)) : raw;
+      if (!acct) unknown.push(raw.slice(0, 30)); else if (acct !== account && !list.includes(acct)) list.push(acct);
+    }
+    if (unknown.length) throw new HttpError(400, `Pemain tidak ditemukan: ${unknown.join(', ')}. Tulis nama pemain persis seperti di permainan.`);
+    list.splice(20);
     this.d.gs.setInvites(id, list);
     return list;
   }
+
+  /** Invite list with display names, as the invite editor shows it. */
+  guestsOf(id: number) { return this.guests(id); }
 
   /** Farm numbers of an island's plots: how many, how long they grow, extra yield (from Luas and Kesuburan). */
   farmOf(row: IslandRow, baseGrowDays: number): { count: number; growDays: number; yieldBonus: number } {

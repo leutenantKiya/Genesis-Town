@@ -432,6 +432,14 @@ export class MockChain implements Chain {
     return { txHash: this.hash(), ok: true };
   }
   async getIsland(id: number) { const i = this.islands.get(id); return i ? structuredClone(i) : null; }
+  /** Test helper: what an `mt_transfer` of the island NFT does to its owner. */
+  transferIsland(id: number, to: string) {
+    const isl = this.islands.get(id);
+    if (!isl) throw new Error('no such island');
+    this.add(isl.owner_id, isl.token_id, -1n);
+    this.add(to, isl.token_id, 1n);
+    isl.owner_id = to;
+  }
   async getProject(id: string) { const p = this.projects.get(id); return p ? structuredClone(p) : null; }
   /** Mirrors the owner's `create_project`. */
   addProject(id: string, name: string, chunk: string, need: Record<string, number>) {
