@@ -1,6 +1,6 @@
 # Islands: Public Island, Private Islands as versioned NFTs, upgrades, mining shaft
 
-Status: design, 2026-11-06. Nothing built. Owner: OyenCar. Calls marked **(Claude's call)** were not discussed with
+Status: design, 2026-11-06. Phases 1a and 1b are built (branch `islands`, see "As built"); contract v5 is not deployed to testnet yet. Phase 1c is not built. Owner: OyenCar. Calls marked **(Claude's call)** were not discussed with
 the owner and may be changed during review.
 
 ## Intent
@@ -81,6 +81,28 @@ saving its upgrades, selling it). Everything a player does on their island minut
 - The cheapest island should take about **10 hours** of play to afford.
 - Minimum for the demo video: buy an island → `IS-1-1` → upgrade Kesuburan → Save World → `IS-1-2`. Everything else
   may follow.
+
+## As built (phases 1a and 1b)
+
+What a player sees:
+- **Kantor Makelar**: the broker's window lists the islands still for sale with name, size, fertility and price. Buying
+  needs the coin to be settled on chain; the island NFT `IS-<id>-1` then shows up in the Tas.
+- **Docks**: walking to a Dermaga (public island or your own) opens a travel menu with the Public Island, your islands
+  and islands you are invited to.
+- **Island board** at your own island: the next Kesuburan Tanah upgrade with its cost, **Simpan Dunia** (Save World,
+  with a note when the upgrade still waits for the 06:00 settlement), and the invite editor.
+- **Tas**: the island NFT with its version and a Save World button.
+- **Other players** are drawn with their name; **C** opens chat and messages appear as bubbles.
+
+Differences from the design above:
+- Prices are 500 to 3000 coin for 8 offers (cheapest about 10 h of play; 19.9 coin per game day in the 30-day sim),
+  not the ~800 coin estimate.
+- Luas Ladang upgrades are not built: size is fixed by the offer (`size_level`). Only Kesuburan upgrades exist, and
+  levels 4-5 are locked until Permata exists (phase 1c). Emas and Permata are added to the registry by `migrate`
+  but are not items in `economy/config.json` yet.
+- Selling an island in the Pasar is not possible yet: `list_item` accepts registry tokens only. `mt_transfer` works.
+- Invites are account ids (up to 20), not display names.
+- The dev coin grant (`/api/dev/grant`) works on the mock chain only, from a local request with `DEV_TOOLS`.
 
 ## Design
 

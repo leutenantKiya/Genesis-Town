@@ -69,3 +69,49 @@ arrive, and the burn is a sink for coin and goods. New areas spread new players 
 
 Later (not built): more projects for the other chunks, a rule that offers the next project when the open house lots
 are mostly taken, and true chunk streaming for a world without fixed edges.
+
+## Islands
+
+Status: phase 1a and 1b built on branch `islands` (2026-11-06); contract v5 is not deployed to testnet yet. Code:
+[`client/js/world/island.js`](../client/js/world/island.js) (generator),
+[`server/src/game/islands.ts`](../server/src/game/islands.ts), [`contracts/game/src/islands.rs`](../contracts/game/src/islands.rs).
+Design: [the islands spec](superpowers/specs/2026-11-06-islands-design.md).
+
+### Public vs Private
+
+| | Public Island (the village above) | Private Island |
+| --- | --- | --- |
+| Resources | everything the village has | basic goods only (Kayu, Ikan, Bijih, Gandum). Emas from upgrades and Permata from the mining shaft *(planned, phase 1c)* |
+| Selling | merchants, Pasar, broker | none: bring goods to the Public Island |
+| People | everyone, live | the owner and invited guests, live |
+| Farming | the starter farm | 6 / 9 / 12 plots by size level; Kesuburan makes crops grow faster (levels 2-3 x1.5, 4-5 x3) and yield more (+1 at level 3, +2 at level 5) |
+
+### Island generator
+
+`island.js` makes one 32 x 32 map from `{seed, size_level, fertility_level}`: a landmass in the sea with the owner's
+house, a fenced farm, a rock outcrop, trees, a pond and a dock on the shore. No merchants or stalls. The same seed and
+spec give the same island in the browser and on the server (`IslandMap` in `worldmap.ts` checks positions and gather
+tiles). The size level sets the plot count; fertility only adds flowers around the field.
+
+### Docks and travel
+
+Every world has a dock (Dermaga). Standing within 2 tiles of it, the `travel` action takes you to the Public Island
+or to an island you own or are invited to; you arrive at the target's spawn (an island's house door, the village dock).
+Every request carries a world id (`public` or `IS-<id>`); the server tracks which world each player is in and changes
+it only by sailing. An island you may not enter answers 409.
+
+### Guests
+
+The owner keeps an invite list (up to 20 accounts, off chain, cleared when ownership changes). Guests can travel there,
+walk around and chat. They cannot gather, farm or upgrade: those need the owner, on their own island.
+
+### Buying and saving
+
+The broker sells 8 offers (`economy/config.json` -> `islands.offers`, 500 to 3000 coin). The server issues a voucher
+only when the buyer's settled coin covers the price. What is on chain: [onchain-offchain.md](onchain-offchain.md).
+
+### Seeing each other
+
+Players in the same world see each other with names and chat bubbles (key C, 80 characters). The server keeps positions
+and the last 50 chat lines per world in memory and streams them over Server-Sent Events; display names are 3-16
+characters and unique. Nothing of this is stored on chain.

@@ -171,6 +171,54 @@ storage registered only by the server at account creation, max 5 listings per ac
 and applied settlement keys kept only as a compact per-day bitmap. The `minter`/`town` accounts fund storage top-ups. This follows the NEAR docs'
 guidance to bound state growth that users don't pay for.
 
+## Island vouchers (buy and Save World)
+
+Buying an island and Save World are player calls (`buy_island`, `save_island`, session key, no deposit) that the
+contract accepts only with an ed25519 signature from the server's voucher key (`voucher_pk`, the settler's public key;
+the owner can replace it with `set_voucher_key`). The signed message names the contract, island id, buyer or owner,
+price or `from_version`, the spec and an expiry (10 minutes).
+- **A leaked voucher** is useless to anyone else: the message binds the account that must call. The holder can submit
+  it only before it expires.
+- **Replay**: `buy_island` fails when the island id exists, so a voucher buys once; `save_island` requires
+  `from_version` to equal the current version, and every save increments it.
+- **Forged vouchers** need the settler key. If it leaks, an attacker can buy islands only with coin they burn, and can
+  save only what the checks allow (same seed, levels never lower). `set_voucher_key` rotates it.
+- **Cost is real**: the server issues a buy voucher only if the account's settled coin (and today's coin) covers the
+  price, and the contract moves and burns that coin in the same call. A Save World voucher carries only upgrades whose
+  ledger rows are in a finished settlement, so the NFT never shows an unpaid upgrade.
+- The server never trusts its own copy of the owner: vouchers and syncs read `get_island` from the chain.
+
+## Settlement cannot mint islands
+
+`settle_day`, `send_item` and the Pasar (`list_item`) validate tokens with `require_token`, which knows only the
+registry (items and `coin`). Island ids (`IS-...`) are rejected there, and `migrate` refuses new registry tokens whose
+id starts with `IS-`. Island tokens are created only inside `buy_island` and `save_island`, and moved only by
+`mt_transfer` (1 yocto, a real wallet). So islands cannot be listed in the Pasar yet *(planned)*. Whoever receives the
+current version becomes the owner; `save_island` requires the caller to be the owner, and old versions have supply 0.
+
+## Island scan in `storage_unregister`
+
+`storage_unregister` refuses accounts that own an island by scanning `island_ids` (every island ever bought). The list
+grows only through server-issued vouchers (8 offers in the config), never through player input, so the scan is bounded.
+*(Planned, phase 2: a per-owner counter instead of a scan, if islands grow to hundreds.)*
+
+## Presence and chat
+
+Live players and chat are server memory only: positions seen in the last 10 s and the last 50 chat lines per world.
+- **Rate limits**: one chat line per 2 s per account, an IP limiter on `/api/chat`, a limiter on `/api/pos`, at most
+  4 open streams per account. Messages are at most 80 characters, control characters are removed, and a short word list
+  is masked.
+- **Text only**: names and chat are drawn with `textContent`, never as HTML. Names are 3-16 characters (letters, digits,
+  space, `_`, `-`) and unique.
+- **Private islands**: streaming, chatting and appearing in `IS-<id>` need `worldFor`, which admits the owner and the
+  invite list only. Everyone else gets 409.
+- **World must match**: a position report counts only if its world is the one the server tracks for that player
+  (worlds change only through the `travel` action at a dock) and the tile is walkable on that world's map. Claiming
+  another world, or a tile outside the map, is ignored.
+- Requests are signed with the session key like other requests; chat needs a chosen display name.
+- Not defended: many accounts spamming (each needs a login) and moderation beyond the word list. Players can mute
+  others locally.
+
 ## Server compromise (worst case)
 
 An attacker with every server key could: spend relayer NEAR; settle fake gains up to the daily caps (detectable from

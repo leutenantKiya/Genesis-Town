@@ -56,8 +56,22 @@
 >   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,
 >   snow, bright summer sun); rain waters the farm. Calmer HUD and a first-steps guide.
 >
+> - **Private Islands** (phase 1a/1b, built on branch `islands`): the broker in Kantor Makelar sells 8 islands. A purchase
+>   mints the NFT `IS-<id>-1` to the broker and transfers it to the player in one contract call; the coin price is
+>   burned. Kesuburan Tanah upgrades are paid off chain (goods and coin, effect at once); **Save World** swaps
+>   `IS-<id>-v` for `IS-<id>-v+1`, and only upgrades already settled at 06:00 are written. Islands are invite-only
+>   (the owner edits the list). Boats leave from a dock on each island. Prices: the cheapest island is 500 coin, about
+>   10 h of play (the 30-day simulation nets 19.9 coin per game day); the 8 offers go up to 3000 coin.
+>   A Private Island produces only basic goods; merchants and the Pasar stay on the Public Island ([docs/world.md](docs/world.md)).
+> - **Live players**: you see the other players in your world with their names, and talk with chat bubbles (key **C**,
+>   80 characters, one message per 2 s). Presence and chat live in server memory and never touch the chain.
+> - **Contract v5 is written and unit-tested (55 tests) but not deployed to testnet yet.** The owner deploys it with
+>   `contracts/game/migrate-v5-testnet.json` after filling `voucher_key` with the settler's public key; until then the
+>   game runs islands on the mock chain only (`npm run dev:mock`).
+>
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
-> and M5 (demo video, submission). Anything marked *(planned)* does not exist yet.
+> and M5 (demo video, submission). Also *(planned)*: the mining shaft with Emas and Permata (phase 1c; Kesuburan 4-5
+> stay locked until then), Luas Ladang upgrades, selling islands in the Pasar, agent wallets. Anything marked *(planned)* does not exist yet.
 >
 > **M4.5 Online** *(planned, target 2026-11-07)*: a public HTTPS URL anyone can play on testnet.
 > - Host: one long-running Node 24 process (the game loop ticks every 2 s, one game hour is one real minute,
@@ -120,7 +134,8 @@ Contract methods: NEP-245 `mt_transfer`, `mt_batch_transfer`, `mt_transfer_call`
 `mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`; NEP-145 `storage_*`. Game methods:
 `settle_day`, `register_player`, `register_merchant`, `close_shop`, `restore_contribute`, `restore_withdraw`,
 `pay_dividend`, `claim_dividends`, `send_item`, `list_item`, `buy_listing`, `cancel_listing`, `create_project`,
-`project_contribute`, `project_withdraw`, `migrate`. Full table: [contracts/game/README.md](contracts/game/README.md).
+`project_contribute`, `project_withdraw`, `buy_island`, `save_island`, `set_voucher_key`, `set_broker`, `get_island` (view),
+`migrate`. Full table: [contracts/game/README.md](contracts/game/README.md).
 
 Example transactions from the M2 end-to-end run (`node server/scripts/e2e-testnet.ts`, server stopped):
 - daily settlement of day 0 (45 ledger rows, root stored on chain):
