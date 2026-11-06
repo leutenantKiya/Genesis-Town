@@ -10,7 +10,7 @@ cargo-near.
 | `mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply` | view | NEP-245 views |
 | `storage_deposit`, `storage_withdraw`, `storage_unregister`, `storage_balance_of`, `storage_balance_bounds` | anyone | NEP-145, registration only |
 | `register_player(account_id)` | settler or owner | contract-paid registration, capped by `limits.max_players` |
-| `settle_day(day, chunk, entries, ledger_root, active_players)` | settler | applies the day's net changes (signed deltas); each chunk once; root fixed per day; player gain caps; coin faucet with money cap |
+| `settle_day(day, chunk, entries, ledger_root, active_players)` | settler | applies the day's net changes (signed deltas); each chunk once; root fixed per day; player gain caps; coin faucet on the day's running net coin across chunks, with money cap; entries of unregistered accounts are skipped and logged as `settle_skip` |
 | `register_merchant(account_id, name, restore, start)` | owner | shop + restoration board + opening stock; town owns initial shares |
 | `close_shop(merchant)` | settler | only if the merchant's coin is below the daily rent (checked on chain) |
 | `restore_contribute(merchant, contribution)`, `restore_withdraw(merchant)` | player, **no deposit** | pledge to / withdraw from a closed shop's board; completing it reopens the shop and issues shares |

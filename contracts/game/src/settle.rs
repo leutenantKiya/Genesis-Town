@@ -65,24 +65,31 @@ impl Contract {
             }
         }
 
-        let parsed: Vec<(AccountId, String, i128)> = entries
-            .into_iter()
-            .map(|e| {
-                self.require_token(&e.token_id);
-                self.require_registered(&e.account_id);
-                (e.account_id, e.token_id, parse_delta(&e.delta))
-            })
-            .collect();
+        // An account that unregistered while off-chain rows were pending is skipped (and logged), so one player
+        // cannot freeze settlement for everyone. The town and merchants always count as known accounts.
+        let mut parsed: Vec<(AccountId, String, i128)> = Vec::with_capacity(entries.len());
+        for e in entries {
+            self.require_token(&e.token_id);
+            let delta = parse_delta(&e.delta);
+            if self.registered.contains(&e.account_id) || self.is_merchant(&e.account_id) || e.account_id == self.town_id {
+                parsed.push((e.account_id, e.token_id, delta));
+            } else {
+                events::gt_settle_skip(day, chunk, e.account_id.as_str(), &e.token_id, &e.delta);
+            }
+        }
 
-        // Coin faucet: a chunk's net positive coin is new money.
+        // Coin faucet: the day's running NET coin (all chunks, signed) is new money. A transfer split across chunks
+        // (player +X in one, merchant -X in another) nets to zero. The server sends negative-net chunks first.
         let net_coin: i128 = parsed.iter().filter(|(_, t, _)| t == COIN).map(|(_, _, d)| *d).sum();
-        let (start_supply, mut minted) = self.day_faucet.get(&day).copied().unwrap_or((self.supply_of(COIN), 0));
+        let (start_supply, _) = self.day_faucet.get(&day).copied().unwrap_or((self.supply_of(COIN), 0));
+        let running = self.day_net.get(&day).copied().unwrap_or(0).saturating_add(net_coin);
         if net_coin > 0 {
             let allowed = self.faucet_allowed(start_supply, active_players);
-            minted = minted.saturating_add(net_coin as u128);
+            let minted = running.max(0) as u128;
             require!(minted <= allowed, format!("coin faucet exceeded: {minted} > {allowed} allowed today"));
         }
-        self.day_faucet.insert(day, (start_supply, minted));
+        self.day_net.insert(day, running);
+        self.day_faucet.insert(day, (start_supply, running.max(0) as u128));
 
         // Debits first (they must be covered by settled balances), then credits.
         let memo = format!("settle:{day}:{chunk}");
