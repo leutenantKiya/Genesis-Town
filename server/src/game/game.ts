@@ -184,7 +184,13 @@ export class Game {
   onNewPlayer(account: string) { this.world.starter(account, this.town); }
 
   /** Off-chain action from the player. Every one is logged in Riwayat as "waiting for settlement". */
+  /** An account whose settlement debit the chain could not cover is frozen until the operator lifts it. */
+  assertActive(account: string) {
+    if (this.gs.isFrozen(account)) throw new HttpError(403, 'Akun ini dibekukan karena saldo on-chain tidak cocok dengan permainan. Hubungi pengelola.');
+  }
+
   act(account: string, body: Record<string, unknown>) {
+    this.assertActive(account);
     const a = String(body.action ?? '');
     this.fixWorld(account);
     if (!(ACTIONS as readonly string[]).includes(a)) throw new HttpError(400, 'unknown action');

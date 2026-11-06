@@ -23,6 +23,9 @@ export class GameStore {
         delta INTEGER NOT NULL, kind TEXT NOT NULL, ref TEXT, settled INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS ledger_open ON ledger(settled, account, token);
       CREATE INDEX IF NOT EXISTS ledger_day ON ledger(day, seq);
+      CREATE TABLE IF NOT EXISTS shortfalls (day INTEGER NOT NULL, chunk INTEGER NOT NULL, account TEXT NOT NULL, token TEXT NOT NULL,
+        wanted INTEGER NOT NULL, applied INTEGER NOT NULL, kind TEXT NOT NULL DEFAULT 'shortfall', resolved INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, chunk, account, token));
       CREATE TABLE IF NOT EXISTS settled (account TEXT NOT NULL, token TEXT NOT NULL, amount INTEGER NOT NULL, PRIMARY KEY (account, token));
       CREATE TABLE IF NOT EXISTS player_state (account TEXT PRIMARY KEY, energy REAL NOT NULL, energy_hour INTEGER NOT NULL, tool_uses INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS plots (account TEXT NOT NULL, idx INTEGER NOT NULL, state TEXT NOT NULL, planted_day INTEGER NOT NULL DEFAULT 0,
@@ -71,7 +74,32 @@ export class GameStore {
   }
 
   balance(account: string, token: string): number {
-    return this.settledBalance(account, token) + this.pending(account, token);
+    return this.settledBalance(account, token) + this.pending(account, token) - this.reservedOf(account, token);
+  }
+
+  /** Amounts held back by a guarded on-chain relay that is in flight (memory only): off-chain play cannot spend them. */
+  private reserved = new Map<string, Map<string, number>>();
+  reservedOf(account: string, token: string): number { return this.reserved.get(account)?.get(token) ?? 0; }
+  reserve(account: string, need: Map<string, number>) { this.reserved.set(account, new Map(need)); }
+  release(account: string) { this.reserved.delete(account); }
+
+  /**
+   * A settlement debit the chain could not cover (or an entry dropped for an unregistered account). `wanted` and `applied`
+   * are signed deltas. kind 'shortfall' freezes the account; 'cap_clamp' (credit above the daily gain cap) does not.
+   * A retry of the same chunk keeps the first `wanted`.
+   */
+  recordShortfall(day: number, chunk: number, account: string, token: string, wanted: number, applied: number, kind = 'shortfall') {
+    this.db.prepare(`INSERT INTO shortfalls (day, chunk, account, token, wanted, applied, kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(day, chunk, account, token) DO UPDATE SET applied = excluded.applied`).run(day, chunk, account, token, wanted, applied, kind, Date.now());
+  }
+  shortfalls(): Array<{ day: number; chunk: number; account: string; token: string; wanted: number; applied: number; kind: string; resolved: number }> {
+    return this.db.prepare('SELECT day, chunk, account, token, wanted, applied, kind, resolved FROM shortfalls ORDER BY day, chunk, account, token').all() as never;
+  }
+  isFrozen(account: string): boolean {
+    return !!this.db.prepare("SELECT 1 FROM shortfalls WHERE account = ? AND kind = 'shortfall' AND resolved = 0 LIMIT 1").get(account);
+  }
+  unfreeze(account: string): number {
+    return Number(this.db.prepare('UPDATE shortfalls SET resolved = 1 WHERE account = ? AND resolved = 0').run(account).changes);
   }
 
   setSettled(account: string, token: string, amount: number) {

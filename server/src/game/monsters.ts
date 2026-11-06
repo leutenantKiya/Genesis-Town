@@ -117,16 +117,23 @@ export class Monsters {
       if (e.tile) {
         try {
           const g = this.world.gather(account, e.tile, e.x, e.y);
-          this.gs.add(day, account, this.econ.gather.tiles[e.tile], 1, 'monster_bonus', e.kind);
-          toast += ` ${g.toast} +1 bonus.`;
+          toast += ` ${g.toast}`;
+          try {
+            this.world.checkGain(account, this.econ.gather.tiles[e.tile], 1);
+            this.gs.add(day, account, this.econ.gather.tiles[e.tile], 1, 'monster_bonus', e.kind);
+            toast += ' +1 bonus.';
+          } catch { toast += ' Bonus hilang: batas harian tercapai.'; }
         } catch (err) {
           toast += ' ' + (err as Error).message;
         }
       } else {
         // a roaming monster leaves something behind
         const drop = d.drop;
-        this.gs.add(day, account, drop, 1, 'monster_drop', e.kind);
-        toast += ` Ia menjatuhkan 1 ${this.econ.items[drop]?.name ?? drop}.`;
+        try {
+          this.world.checkGain(account, drop, 1);
+          this.gs.add(day, account, drop, 1, 'monster_drop', e.kind);
+          toast += ` Ia menjatuhkan 1 ${this.econ.items[drop]?.name ?? drop}.`;
+        } catch { toast += ' Ia menjatuhkan sesuatu, tapi batas harianmu sudah penuh.'; }
       }
       return { toast, won: true };
     }

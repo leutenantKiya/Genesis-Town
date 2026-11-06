@@ -1,13 +1,14 @@
 // Spend guard for relayed on-chain actions. Items and coins live off-chain until the 06:00 settlement, so an on-chain
 // debit (send, list, pledge, buy) must not use what today's off-chain play already spent, nor what so far exists only
 // off-chain. Otherwise the next settlement would hit a negative balance and fail for everyone in that chunk.
+// With `reserve`, the guarded amounts are also held back from off-chain spending while the relay is in flight.
 // Returns the extra accounts to refresh after the relay (the seller of a bought listing).
 import type { Chain } from './chain.ts';
 import type { Game } from './game/game.ts';
 import { HttpError } from './auth.ts';
 
 export function spendGuard(chain: Chain, game: Game) {
-  return async (sender: string, method: string, args: Record<string, unknown>): Promise<string[]> => {
+  return async (sender: string, method: string, args: Record<string, unknown>, reserve = false): Promise<string[]> => {
     const need = new Map<string, number>();
     const add = (t: unknown, n: unknown) => {
       const v = Number(n);
@@ -33,6 +34,8 @@ export function spendGuard(chain: Chain, game: Game) {
       if (spendable < n) throw new HttpError(409, `${name} tidak cukup: perlu ${n}, punya ${spendable}.`);
       if (onChain < n) throw new HttpError(409, `${name} di rantai baru ${onChain} (perlu ${n}). Hasil hari ini masuk ke rantai saat penyelesaian 06:00.`);
     }
+    // Hold the amounts back from off-chain play until the relay is done (the caller releases them).
+    if (reserve) game.gs.reserve(sender, need);
     return extra;
   };
 }

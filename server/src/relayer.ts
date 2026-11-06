@@ -72,8 +72,12 @@ export interface RelayDeps {
   limiter: RateLimiter;
   currentBlockHeight: () => Promise<bigint>;
   /** Runs before submitting; throws to refuse (e.g. the spend guard). Returns extra accounts to refresh afterwards. */
-  checkSpend?: (sender: string, method: string, args: Record<string, unknown>) => Promise<string[] | void>;
+  checkSpend?: (sender: string, method: string, args: Record<string, unknown>, reserve?: boolean) => Promise<string[] | void>;
   /** Display name of an item for Riwayat summaries. */
+  /** Frees what `checkSpend` reserved (called when the relay is over, success or not). */
+  releaseSpend?: (sender: string) => void;
+  /** Throws to refuse a frozen account. */
+  assertActive?: (sender: string) => void;
   itemName?: (token: string) => string;
   afterRelay?: (sender: string, method: string, args: Record<string, unknown>, extra: string[]) => Promise<void>;
 }
@@ -151,6 +155,7 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
   const key = delegateKey(sd);
   const owner = deps.store.sessionKeyOwner(key);
   if (!owner || owner !== da.senderId) throw new HttpError(403, 'unknown session key for this sender');
+  deps.assertActive?.(da.senderId);
   if (da.receiverId !== deps.cfg.gameContractId) throw new HttpError(403, 'receiver must be the game contract');
   if (da.actions.length !== 1 || !da.actions[0].functionCall) throw new HttpError(403, 'exactly one function call allowed');
   const fc = da.actions[0].functionCall;
@@ -177,7 +182,7 @@ async function relayLocked(deps: RelayDeps, sd: ReturnType<typeof decodeSignedDe
   try { args = sanitizeArgs(JSON.parse(Buffer.from(fc.args).toString('utf8'))); } catch { /* summary falls back below */ }
   const name = (t: unknown) => (deps.itemName ? deps.itemName(String(t)) : String(t));
   const summary = summarize(fc.methodName, args, name);
-  const extra = (await deps.checkSpend?.(da.senderId, fc.methodName, args)) ?? [];
+  const extra = (await deps.checkSpend?.(da.senderId, fc.methodName, args, true)) ?? [];
   deps.store.relayPut(hash, da.senderId, 'pending', null);
   const hid = deps.store.addHistory(da.senderId, fc.methodName, summary, 'pending', null, null, relayTokens(fc.methodName, args));
   try {
@@ -191,5 +196,7 @@ async function relayLocked(deps: RelayDeps, sd: ReturnType<typeof decodeSignedDe
     deps.store.relayPut(hash, da.senderId, 'failed', null);
     deps.store.settleHistory(hid, 'failed', null);
     throw new HttpError(502, 'relay failed: ' + (e as Error).message);
+  } finally {
+    deps.releaseSpend?.(da.senderId);
   }
 }
