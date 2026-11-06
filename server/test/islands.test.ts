@@ -613,3 +613,81 @@ test('invited_islands_listed_for_guest', async () => {
     assert.deepEqual(r.json.mine, []);
   } finally { http.close(); }
 });
+
+test('invite_resave_cannot_be_hijacked_by_name_squatting', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900 });
+  await buy(h, P, 1);
+  const R = 'p3.players.test';
+  h.store.addPlayer(R, 'sub-' + R, 'ed25519:o');
+  h.game.islands.setInvites(P, 1, [Q]); // Q has no display name
+  const shown = h.game.islands.guestsOf(1)[0];
+  assert.equal(shown.account, Q);
+  assert.equal(shown.name, Q, 'no name set: the full account id, never a look-alike of a display name');
+  h.store.setName(R, 'p2'); // the attacker takes the old fallback label
+  const http = await httpFor(h, P);
+  try {
+    // the editor sends back what it shows (the id), and an id beats a display name
+    const r = await http.call('POST', '/api/islands/invite', { island_id: 1, accounts: [shown.name] });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.json.invite, [{ account: Q, name: Q }]);
+    assert.deepEqual(h.game.gs.invites(1), [Q]);
+  } finally { http.close(); }
+  // a registered account id wins over a display name that spells the same string
+  h.store.setName(R, Q);
+  assert.deepEqual(h.game.islands.setInvites(P, 1, [Q]), [Q]);
+});
+
+function counting(h: H) {
+  const c = { n: 0, ids: [] as number[], fail: false, delay: false };
+  const orig = h.chain.getIsland.bind(h.chain);
+  h.chain.getIsland = async (id: number) => {
+    c.n++; c.ids.push(id);
+    if (c.delay) await new Promise((r) => setTimeout(r, 20));
+    if (c.fail) throw new Error('rpc down');
+    return orig(id);
+  };
+  return c;
+}
+
+test('prepare_ignores_unknown_island_ids', async () => {
+  const h = await harness();
+  const c = counting(h);
+  h.clock.advanceHours(1);
+  await h.game.prepare(P, { island_id: 999 });
+  await h.game.prepare(P, { world: 'IS-999', island_id: -4 });
+  assert.equal(c.n, 0);
+  await h.game.prepare(P, { island_id: 1 });
+  assert.deepEqual(c.ids, [1]);
+});
+
+test('prepare_dedupes_concurrent_refresh', async () => {
+  const h = await harness();
+  const c = counting(h);
+  h.clock.advanceHours(1); // stale, so a refresh is due
+  c.delay = true;
+  await Promise.all([1, 2, 3, 4, 5].map(() => h.game.prepare(P, { island_id: 1 })));
+  assert.equal(c.n, 1);
+});
+
+test('owner_only_fails_closed_when_chain_unreachable', async () => {
+  const h = await harness();
+  await fund(h, P, { coin: 900, wood: 100 });
+  await buy(h, P, 1);
+  const map = onIsland(h, P, 1);
+  const c = counting(h);
+  h.clock.advanceHours(1); // the cached row is now older than the TTL
+  c.fail = true;
+  await h.game.prepare(P, { island_id: 1, world: 'IS-1' });
+  const woodBefore = h.game.gs.balance(P, 'wood');
+  assert.throws(() => h.game.act(P, { action: 'island_upgrade', island_id: 1, attr: 'fertility', world: 'IS-1', pos: map.layout.spawn }), (e: any) => e.status === 503 && /Data pulau/.test(e.message));
+  assert.throws(() => h.game.islands.setInvites(P, 1, [Q]), (e: any) => e.status === 503);
+  await assert.rejects(h.game.islands.voucher(P, 'save', 1), (e: any) => e.status === 503);
+  assert.equal(h.game.gs.balance(P, 'wood'), woodBefore);
+  // walking and layout stay open on the cached row
+  assert.ok(h.game.islands.layout(P, 1));
+  // the chain is back: owner acts work again
+  c.fail = false;
+  await h.game.prepare(P, { island_id: 1, world: 'IS-1' });
+  assert.deepEqual(h.game.islands.setInvites(P, 1, [Q]), [Q]);
+});
