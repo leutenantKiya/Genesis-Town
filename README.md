@@ -117,7 +117,8 @@ burns, rent), so anyone can verify them, while staying invisible in the normal l
   of the shop's daily profit as dividends.
 
 Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [world](docs/world.md) · [architecture](docs/architecture.md) ·
-[threat model](docs/threat-model.md) · [on-chain vs off-chain](docs/onchain-offchain.md) · [sources](docs/sources.md)
+[threat model](docs/threat-model.md) · [on-chain vs off-chain](docs/onchain-offchain.md) · [sources](docs/sources.md) ·
+[islands, NPC souls and schematics](docs/island-design.md) *(planned)*
 
 ## What is on-chain (NEAR testnet)
 
