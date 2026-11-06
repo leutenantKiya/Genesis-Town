@@ -83,6 +83,22 @@ export function blockHeightSource(cfg: Config): () => Promise<bigint> {
   return async () => BigInt((await p.viewBlock({ finality: 'final' })).header.height);
 }
 
+/** Call args come from JSON the player signed: anything may be in there. Only a plain object is trusted; a
+ *  `contribution` that is not a list of objects is dropped (the contract rejects those calls anyway). */
+export function sanitizeArgs(raw: unknown): Record<string, unknown> {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const a = { ...(raw as Record<string, unknown>) };
+  if ('contribution' in a) {
+    if (Array.isArray(a.contribution)) a.contribution = a.contribution.filter((l) => l !== null && typeof l === 'object' && !Array.isArray(l));
+    else delete a.contribution;
+  }
+  return a;
+}
+/** Riwayat line for a relayed call; a bad shape gives the plain method name instead of an error. */
+export function summarize(method: string, raw: unknown, n: (t: unknown) => string): string {
+  try { return Object.hasOwn(SUMMARY, method) ? SUMMARY[method](sanitizeArgs(raw), n) : method; } catch { return method; }
+}
+
 const SUMMARY: Record<string, (a: Record<string, unknown>, n: (t: unknown) => string) => string> = {
   send_item: (a, n) => `Kirim ${a.amount} ${n(a.token_id)} ke ${a.receiver_id}`,
   restore_contribute: (a, n) => `Sumbang ke papan pemulihan ${String(a.merchant).split('.')[0]}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${n(l.token_id)}`).join(', ')}`,
@@ -98,7 +114,8 @@ const SUMMARY: Record<string, (a: Record<string, unknown>, n: (t: unknown) => st
 };
 
 /** Items a relayed method is about (buy_listing doesn't say which item; it only moves coin). */
-export function relayTokens(method: string, args: Record<string, unknown>): string[] {
+export function relayTokens(method: string, raw: unknown): string[] {
+  const args = sanitizeArgs(raw);
   const out = new Set<string>();
   if (typeof args.token_id === 'string') out.add(args.token_id);
   if (Array.isArray(args.contribution)) for (const l of args.contribution as Array<{ token_id?: unknown }>) if (typeof l?.token_id === 'string') out.add(l.token_id);
@@ -132,9 +149,9 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
   if (!deps.limiter.take(da.senderId)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
 
   let args: Record<string, unknown> = {};
-  try { args = JSON.parse(Buffer.from(fc.args).toString('utf8')); } catch { /* summary falls back below */ }
+  try { args = sanitizeArgs(JSON.parse(Buffer.from(fc.args).toString('utf8'))); } catch { /* summary falls back below */ }
   const name = (t: unknown) => (deps.itemName ? deps.itemName(String(t)) : String(t));
-  const summary = SUMMARY[fc.methodName]?.(args, name) ?? fc.methodName;
+  const summary = summarize(fc.methodName, args, name);
   const extra = (await deps.checkSpend?.(da.senderId, fc.methodName, args)) ?? [];
   deps.store.relayPut(hash, da.senderId, 'pending', null);
   const hid = deps.store.addHistory(da.senderId, fc.methodName, summary, 'pending', null, null, relayTokens(fc.methodName, args));

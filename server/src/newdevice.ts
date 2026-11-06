@@ -37,6 +37,7 @@ export function parseMpcSignature(successValueB64: string): Uint8Array {
 export interface NewDeviceDeps { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; currentBlockHeight: () => Promise<bigint> }
 
 export async function addDeviceKey(d: NewDeviceDeps, body: { idToken?: unknown; delegateAction?: unknown; signatureRequest?: unknown }) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'body must be a JSON object');
   if (typeof body.idToken !== 'string' || typeof body.delegateAction !== 'string' || !body.signatureRequest) throw new HttpError(400, 'idToken, delegateAction and signatureRequest required');
   let sub: string;
   try { ({ sub } = await d.verify(body.idToken)); } catch (e) { throw new HttpError(401, 'login token rejected: ' + (e as Error).message); }

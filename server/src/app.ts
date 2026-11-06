@@ -64,7 +64,16 @@ async function readRaw(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 function parseJson(raw: string): Record<string, unknown> {
-  try { return JSON.parse(raw || '{}'); } catch { throw new HttpError(400, 'bad json'); }
+  let v: unknown;
+  try { v = JSON.parse(raw || '{}'); } catch { throw new HttpError(400, 'bad json'); }
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new HttpError(400, 'body must be a JSON object');
+  return v as Record<string, unknown>;
+}
+const has = (o: object, k: unknown): boolean => typeof k === 'string' && Object.hasOwn(o, k);
+/** Quantity field from a JSON body: absent means the default, anything but a positive JSON integer is a 400. */
+function intField(b: Record<string, unknown>, k: string) {
+  const v = b[k];
+  if (k in b && !(typeof v === 'number' && Number.isInteger(v) && v >= 1)) throw new HttpError(400, `${k} must be a positive whole number`);
 }
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> { return parseJson(await readRaw(req)); }
 
@@ -79,6 +88,7 @@ export function createApp(deps: AppDeps) {
   const actLimiter = new RateLimiter(60, 5000); // off-chain actions per account
   const ipLimiter = new RateLimiter(10, 200); // account creation per IP
   const posLimiter = new RateLimiter(240, 100000);
+  const simLimiter = new RateLimiter(6, 300); // simulations per IP (each new parameter set starts a worker thread)
   const talkLimiter = new RateLimiter(6, 150);
   const deviceLimiter = new RateLimiter(3, 20); // new-device key additions per IP (each costs the relayer a NEAR Auth sign call) // merchant questions per account (each may be one NEAR AI call)
   const dialogue = deps.dialogue ?? new Dialogue(deps.cfg.nearai);
@@ -159,10 +169,11 @@ export function createApp(deps: AppDeps) {
       const acct = accountOf(req, url, raw);
       if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
       const b = parseJson(raw), id = Number(b.island_id);
+      if (p === '/api/islands/invite' && !Array.isArray(b.accounts)) throw new HttpError(400, 'accounts must be a list');
       if (p === '/api/islands/voucher') send(res, 200, await game.islands.voucher(acct, String(b.kind ?? ''), id));
       else {
         await game.prepare(acct, { island_id: id });
-        game.islands.setInvites(acct, id, Array.isArray(b.accounts) ? b.accounts.map(String) : []);
+        game.islands.setInvites(acct, id, (b.accounts as unknown[]).map(String));
         send(res, 200, { invite: game.islands.guestsOf(id) });
       }
     } else throw new HttpError(404, 'no such route');
@@ -202,7 +213,7 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'POST' && p === '/api/relay') {
         const body = await readJson(req);
         const after = (s: string, m: string, a: Record<string, unknown>, e: string[]) => afterRelay(s, m, a, e, body);
-        return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay: after, itemName: (t) => game.econ.items[t]?.name ?? t }, body));
+        return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay: after, itemName: (t) => (has(game.econ.items, t) ? game.econ.items[t].name : t) }, body));
       }
       if (req.method === 'GET' && p === '/api/time') {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null, weather: game.weather() });
@@ -224,6 +235,11 @@ export function createApp(deps: AppDeps) {
         if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
         const ab = parseJson(raw);
         const w = worldOf(ab.world); // a bad world id must fail before the action changes any state
+        // ids from the request must be the game's own (not '__proto__' & co) and quantities real integers
+        if (ab.action === 'sell' || ab.action === 'buy' || ab.action === 'ship') intField(ab, 'qty');
+        if (ab.merchant !== undefined && !has(game.econ.merchants, ab.merchant)) throw new HttpError(404, 'Pedagang tidak dikenal.');
+        if (ab.token !== undefined && ab.token !== '' && !has(game.econ.items, ab.token)) throw new HttpError(400, 'Barang tidak dikenal.');
+        if (ab.recipe !== undefined && !has(game.econ.recipes, ab.recipe)) throw new HttpError(400, 'Resep tidak dikenal.');
         await game.prepare(acct, ab); // owner changes on chain show up here, before the act checks who owns what
         const out = game.act(acct, ab) as { world?: string; arrive?: { x: number; y: number } } & Record<string, unknown>;
         // after a boat trip the player stands at the arrival tile of the new world
@@ -277,6 +293,8 @@ export function createApp(deps: AppDeps) {
         if (!deps.store.nameOf(acct)) throw new HttpError(409, 'Pilih nama dulu.');
         await game.prepare(acct, { world });
         if (!presence.access(acct, world)) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
+        // a player on an island cannot speak into the public square (or the other way round)
+        if (game.positions && game.positions.worldOf(acct) !== world) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
         return send(res, 200, { message: presence.chat(acct, world, b.text) });
       }
       if (req.method === 'POST' && p === '/api/name') {
@@ -292,7 +310,9 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/quote') {
         const q = url.searchParams;
         const side = q.get('side') === 'buy' ? 'buy' : 'sell';
-        return send(res, 200, game.market.quote(q.get('merchant') ?? '', q.get('token') ?? '', side, Number(q.get('qty') ?? 1)));
+        const qs = q.get('qty') ?? '1';
+        if (!/^\d{1,6}$/.test(qs)) throw new HttpError(400, 'qty must be a whole number');
+        return send(res, 200, game.market.quote(q.get('merchant') ?? '', q.get('token') ?? '', side, Number(qs)));
       }
       if (req.method === 'GET' && p === '/api/shops') {
         const a = req.headers['x-account-id'];
@@ -304,7 +324,7 @@ export function createApp(deps: AppDeps) {
         if (!talkLimiter.take(acct)) throw new HttpError(429, 'Pedagangnya sedang sibuk melayani. Coba sebentar lagi.');
         const b = parseJson(raw);
         const id = String(b.merchant ?? '');
-        if (!game.econ.merchants[id]) throw new HttpError(404, 'no such merchant');
+        if (!has(game.econ.merchants, id)) throw new HttpError(404, 'no such merchant');
         const r = await dialogue.reply(game.market.view(id), game.econ.merchants[id].personality, String(b.text ?? ''));
         return send(res, 200, r);
       }
@@ -320,7 +340,7 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/history') {
         const acct = accountOf(req, url);
         const token = url.searchParams.get('token') ?? undefined;
-        if (token && !(token in game.econ.items)) throw new HttpError(400, 'unknown item');
+        if (token && !has(game.econ.items, token)) throw new HttpError(400, 'unknown item');
         return send(res, 200, { history: deps.store.history(acct, 50, token), explorerTxUrl: deps.cfg.explorerTxUrl });
       }
       const m = /^\/api\/ledger\/(\d+)$/.exec(p);
@@ -334,10 +354,13 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, { day, root: merkleRoot(leaves), rows, proofs, settlements: game.gs.settlements(50).filter((s) => (s as { day: number }).day === day) });
       }
       if (req.method === 'POST' && p === '/api/sim') {
+        // open to everyone (the public simulator page), so: one limiter per address and clamped inputs
+        if (!simLimiter.take(req.socket.remoteAddress ?? '?')) throw new HttpError(429, 'terlalu banyak simulasi, coba sebentar lagi');
         const b = await readJson(req);
-        const days = Math.max(1, Math.min(30, Math.floor(Number(b.days ?? 7))));
-        const players = Math.max(1, Math.min(60, Math.floor(Number(b.players ?? 25))));
-        const seed = Math.floor(Number(b.seed ?? 42)) >>> 0;
+        const num = (v: unknown, d: number) => { const n = Math.floor(Number(v ?? d)); return Number.isFinite(n) ? n : d; };
+        const days = Math.max(1, Math.min(30, num(b.days, 7)));
+        const players = Math.max(1, Math.min(60, num(b.players, 25)));
+        const seed = num(b.seed, 42) >>> 0;
         const r = await simulate(days, players, seed);
         return send(res, 200, { ...r, label: 'Simulasi off-chain: rantai tiruan, kode harga dan aturan yang sama (economy/pricing.ts)' });
       }
@@ -357,7 +380,9 @@ export function createApp(deps: AppDeps) {
     }
     // Static client.
     const rel = p === '/' ? '/index.html' : p;
-    const file = normalize(join(clientRoot, decodeURIComponent(rel)));
+    let decoded: string;
+    try { decoded = decodeURIComponent(rel); } catch { throw new HttpError(400, 'bad path'); }
+    const file = normalize(join(clientRoot, decoded));
     if (!file.startsWith(clientRoot)) throw new HttpError(403, 'forbidden');
     try {
       if (!(await stat(file)).isFile()) throw new Error();
