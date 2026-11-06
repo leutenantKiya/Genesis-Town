@@ -158,3 +158,4 @@ html.gt-fishing #pad, html.gt-fishing #acts, html.gt-fishing #dlg{visibility:hid
 @media (prefers-reduced-motion:reduce){.gt-fish-btn.hot{animation:none}}
 html.gt-phone .gt-fish-btn{min-width:160px;min-height:64px;font-size:13px}
 .gt-details{justify-content:flex-start;margin-top:8px}
+.gt-notice{margin:4px 0 8px;padding:7px 9px;background:#dff0d4;color:#1f4d2a;border:2px solid #2f6b3a;border-radius:5px;font-size:8px;line-height:1.6}

@@ -82,6 +82,7 @@
   function openWin(kind, title, arg) {
     if (win && win.h && win.h.isOpen()) win.h.close('switch');
     win = { kind: kind, arg: arg, h: null };
+    I.notice = null;
     win.h = GT.modal({ title: title, wide: true, body: bodyFor(win), onClose: function () { win = null; } });
     load(true);
   }
@@ -96,6 +97,7 @@
     head.appendChild($('span', null, 'Makelar Pulau · koin di rantai ' + (coin ? coin.settled : 0)));
     head.appendChild($('span', 'chain-dim', 'Membeli memakai koin yang sudah tersimpan'));
     wrap.appendChild(head);
+    if (I.notice) wrap.appendChild($('p', 'gt-notice', I.notice));
     if (I.err) {
       wrap.appendChild($('p', null, 'Daftar pulau gagal dimuat: ' + I.err));
       wrap.appendChild(btn('Coba lagi', function () { I.err = null; redrawWin(); load(true); }, 'primary'));
@@ -126,13 +128,17 @@
   }
   function buy(o) {
     if (!loggedIn() || (win && win.busy)) return;
-    if (win) win.busy = true; redrawWin();
+    if (win) win.busy = true;
+    I.notice = null; redrawWin();
     GT.toast('Menyiapkan surat jual-beli…');
     var done = function () { if (win) win.busy = false; redrawWin(); };
     C.api('/islands/voucher', { method: 'POST', body: { kind: 'buy', island_id: o.island_id } })
       .then(function (v) { GT.toast('Menandatangani pembelian…'); return C._signedCall(v.method, v.args); })
       .then(function () { return afterChange(); })
-      .then(function () { GT.toast('Selamat! ' + o.name + ' sekarang milikmu (IS-' + o.island_id + '-1). Berlayarlah dari dermaga.'); }, function (e) { GT.toast('Gagal: ' + (e && e.message || e)); })
+      .then(function () {
+        var msg = 'Selamat! ' + o.name + ' sekarang milikmu (IS-' + o.island_id + '-1). Berlayarlah dari dermaga.';
+        I.notice = msg; GT.toast(msg); // the offer list shrinks on refresh, so keep the news inside the window too
+      }, function (e) { I.notice = null; GT.toast('Gagal: ' + (e && e.message || e)); })
       .then(done, done);
   }
 

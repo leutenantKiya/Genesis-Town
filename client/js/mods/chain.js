@@ -292,6 +292,7 @@
   function syncClock(t) {
     // The server owns game time: 1 game day = 24 real minutes; keep the engine clock in step.
     if (GT.dayLength !== 24) GT.setDayLength(24);
+    if (GT.setHudDay) GT.setHudDay(t.dayOfSeason != null ? t.dayOfSeason : null); // same day number as the season badge
     var m = Math.floor((t.fraction || 0) * 60);
     var cur = GT.time;
     var curMin = cur && cur.hour != null ? cur.hour * 60 + (cur.minute || 0) : -999;
@@ -335,7 +336,7 @@
     // Every shop closed: nobody can sell, so say what the easiest board still needs (beats the first-steps guide).
     var rescue = closedHint();
     if (rescue && lsGet('gt.chain.rescueHidden') !== String(S.st && S.st.time.day)) { next = rescue; hidden = false; }
-    goalBox.style.display = !next || hidden || S.mode === 'offline' ? 'none' : '';
+    goalBox.style.display = !next || hidden || S.mode === 'offline' || worldNow() !== 'public' ? 'none' : ''; // the guide points at the public town
     if (!next) return;
     goalBox.textContent = '';
     var head = $('div', 'gt-goals-head');
@@ -1297,6 +1298,7 @@
     S.npcs = {}; villagers = []; S.plots = [];
     if (worldNow() === 'public') { placeMerchants(); spawnVillagers(); } // islands have no merchants or townsfolk
     findPlots();
+    renderGoals();
   }
 
   function init() {
@@ -1305,7 +1307,7 @@
     GT.addHudButton({ id: 'pasarbtn', label: 'Pasar', key: 'K', onClick: function () { if (S.mode === 'offline') GT.toast('Pasar Pemain butuh server game.'); else open('market'); } });
     // The old local bag (play items) is replaced by the NEAR bag: hide its button and point the I key here.
     var oldBag = document.getElementById('bagbtn'); if (oldBag) oldBag.style.display = 'none';
-    GT.hotkey('I', function () { open('bag'); });
+    GT.hotkey('I', function () { if (S.mode === 'offline') GT.openBag(); else open('bag'); }); // offline demo keeps the local bag
     var forceOffline = /[?&]mode=offline\b/.test(location.search) || location.protocol === 'file:';
     var cfgP = forceOffline ? Promise.reject(new Error('offline')) :
       Promise.race([api('/config'), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 4000); })]);
