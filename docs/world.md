@@ -102,7 +102,8 @@ it only by sailing. An island you may not enter answers 409.
 
 ### Guests
 
-The owner keeps an invite list (up to 20 accounts, off chain, cleared when ownership changes). Guests can travel there,
+The owner keeps an invite list (up to 20 players, typed as display names or account ids; stored as account ids, off
+chain, cleared when ownership changes). Invited islands show up in the dock menu as "Pulau teman". Guests can travel there,
 walk around and chat. They cannot gather, farm or upgrade: those need the owner, on their own island.
 
 ### Buying and saving

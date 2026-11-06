@@ -101,7 +101,9 @@ Differences from the design above:
   levels 4-5 are locked until Permata exists (phase 1c). Emas and Permata are added to the registry by `migrate`
   but are not items in `economy/config.json` yet.
 - Selling an island in the Pasar is not possible yet: `list_item` accepts registry tokens only. `mt_transfer` works.
-- Invites are account ids (up to 20), not display names.
+- Invites (up to 20) take display names or account ids; the server stores account ids and resolves an exact
+  account id before a display name, so a look-alike name cannot take over an invite. The dock menu lists the islands
+  you are invited to ("Pulau teman").
 - The dev coin grant (`/api/dev/grant`) works on the mock chain only, from a local request with `DEV_TOOLS`.
 
 ## Design
