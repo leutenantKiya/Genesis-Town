@@ -66,8 +66,10 @@
 > - **Live players**: you see the other players in your world with their names, and talk with chat bubbles (key **C**,
 >   80 characters, one message per 2 s). Presence and chat live in server memory and never touch the chain.
 > - **Contract v5 is written and unit-tested (55 tests) but not deployed to testnet yet.** The owner deploys it with
->   `contracts/game/migrate-v5-testnet.json` after filling `voucher_key` with the settler's public key; until then the
->   game runs islands on the mock chain only (`npm run dev:mock`).
+>   `contracts/game/migrate-v5-testnet.json` after filling `voucher_key` with the settler's public key. Until then,
+>   buying and Save World work only on the mock chain (`npm run dev:mock`). On testnet the broker still lists the
+>   islands, but **Beli** fails with "Data pulau sedang tidak bisa diperiksa" because the v4 contract has no
+>   `get_island`; live players and chat work on testnet as they are.
 >
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
 > and M5 (demo video, submission). Also *(planned)*: the mining shaft with Emas and Permata (phase 1c; Kesuburan 4-5
