@@ -54,6 +54,7 @@ export async function register(
   deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; onNewPlayer?: (accountId: string) => void },
   body: { idToken?: unknown; sessionPublicKey?: unknown },
 ): Promise<RegisterResult> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'body must be a JSON object');
   if (typeof body.idToken !== 'string') throw new HttpError(400, 'idToken required');
   if (!isEd25519Key(body.sessionPublicKey)) throw new HttpError(400, 'sessionPublicKey must be an ed25519 public key');
   let sub: string;
