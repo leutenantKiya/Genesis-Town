@@ -49,7 +49,10 @@ export class Islands {
   d: IslandsDeps;
   maps = new Map<string, IslandMap>();
   lastSync = 0;
+  /** Last successful read per offered island (bounded to the offers), islands whose latest refresh failed, reads in flight. */
   private seen = new Map<number, number>();
+  private failed = new Set<number>();
+  private inflight = new Map<number, Promise<void>>();
 
   constructor(d: IslandsDeps) { this.d = d; }
 
@@ -62,7 +65,7 @@ export class Islands {
   /** Re-reads one island from the contract. A new owner starts from the saved spec: upgrades and invites are dropped. */
   async syncOne(id: number): Promise<IslandRow | undefined> {
     const info = await this.d.chain.getIsland(id);
-    this.seen.set(id, this.now());
+    if (this.offer(id)) { this.seen.set(id, this.now()); this.failed.delete(id); }
     const gs = this.d.gs, had = gs.island(id);
     if (!info) { if (had) gs.deleteIsland(id); return undefined; }
     if (had && had.owner !== info.owner_id) { gs.dropIslandUpgrades(id, null, 0); gs.clearInvites(id); }
@@ -87,8 +90,20 @@ export class Islands {
    * (`Game.prepare`, called by the HTTP layer) do the refresh. A failing RPC keeps the cached row.
    */
   async touch(id: number) {
+    if (!this.offer(id)) return; // ids from requests cost nothing unless the broker sells that island
     if (this.now() - (this.seen.get(id) ?? 0) < OWNER_TTL_MS) return;
-    try { await this.syncOne(id); } catch (e) { console.error(`islands: refresh of island ${id} failed:`, (e as Error).message); }
+    let p = this.inflight.get(id);
+    if (!p) {
+      p = this.syncOne(id).then(() => { this.failed.delete(id); }, (e) => { this.failed.add(id); console.error(`islands: refresh of island ${id} failed:`, (e as Error).message); })
+        .finally(() => { this.inflight.delete(id); });
+      this.inflight.set(id, p);
+    }
+    await p;
+  }
+
+  /** Owner-only changes must not use a stale owner: when the last refresh failed and the last good read is older than the TTL, refuse. */
+  assertFresh(id: number) {
+    if (this.failed.has(id) && this.now() - (this.seen.get(id) ?? 0) >= OWNER_TTL_MS) throw new HttpError(503, 'Data pulau sedang tidak bisa diperiksa. Coba lagi sebentar.');
   }
 
   /* ------------------------------------------------------------ specs, state */
@@ -129,7 +144,8 @@ export class Islands {
     };
   }
 
-  nameOf(account: string): string { return this.d.players?.nameOf(account) ?? account.split('.')[0].slice(0, 16); }
+  /** The display name, or the full account id when none is set (never a short label that could pass for a display name). */
+  nameOf(account: string): string { return this.d.players?.nameOf(account) ?? account; }
   private guests(id: number) { return this.d.gs.invites(id).map((account) => ({ account, name: this.nameOf(account) })); }
 
   /** GET /api/islands: what the broker still has, the islands this account owns, and islands it is invited to. */
@@ -152,7 +168,8 @@ export class Islands {
   async voucher(account: string, kind: string, id: number): Promise<{ method: 'buy_island' | 'save_island'; args: Record<string, unknown> }> {
     if (!Number.isInteger(id) || id < 1) throw new HttpError(400, 'island_id salah');
     const expires = (BigInt(this.now()) + BigInt(VOUCHER_TTL_MS)) * 1_000_000n;
-    const info = await this.d.chain.getIsland(id); // the chain, not our cache, decides who owns what
+    let info: IslandInfo | null; // the chain, not our cache, decides who owns what
+    try { info = await this.d.chain.getIsland(id); } catch { throw new HttpError(503, 'Data pulau sedang tidak bisa diperiksa. Coba lagi sebentar.'); }
     if (kind === 'buy') {
       const o = this.offer(id);
       if (!o) throw new HttpError(404, 'Pulau itu tidak dijual.');
@@ -169,7 +186,8 @@ export class Islands {
     }
     if (kind === 'save') {
       if (!info || info.owner_id !== account) throw new HttpError(403, 'Itu bukan pulaumu.');
-      const row = await this.syncOne(id);
+      let row: IslandRow | undefined;
+      try { row = await this.syncOne(id); } catch { throw new HttpError(503, 'Data pulau sedang tidak bisa diperiksa. Coba lagi sebentar.'); }
       if (!row) throw new HttpError(404, 'Pulau tidak ditemukan.');
       const spec = this.savable(row);
       if (spec.fertility_level <= row.fertility_level) {
@@ -218,10 +236,11 @@ export class Islands {
   setInvites(account: string, id: number, accounts: string[]): string[] {
     const row = this.d.gs.island(id);
     if (!row || row.owner !== account) throw new HttpError(403, 'Itu bukan pulaumu.');
-    // each entry is a display name (any case) or an account id of a registered player
+    this.assertFresh(id);
+    // each entry is an account id of a registered player (checked first, so a display name can never take over an id) or a display name
     const list: string[] = [], unknown: string[] = [];
     for (const raw of accounts.map((a) => String(a).trim()).filter(Boolean)) {
-      const acct = this.d.players ? (this.d.players.accountByName(raw) ?? (this.d.players.isPlayer(raw) ? raw : null)) : raw;
+      const acct = this.d.players ? ((this.d.players.isPlayer(raw) ? raw : null) ?? this.d.players.accountByName(raw)) : raw;
       if (!acct) unknown.push(raw.slice(0, 30)); else if (acct !== account && !list.includes(acct)) list.push(acct);
     }
     if (unknown.length) throw new HttpError(400, `Pemain tidak ditemukan: ${unknown.join(', ')}. Tulis nama pemain persis seperti di permainan.`);
@@ -251,6 +270,7 @@ export class Islands {
     if (attr !== 'fertility') throw new HttpError(400, 'Peningkatan itu tidak ada.');
     const row = this.d.gs.island(id);
     if (!row || row.owner !== account) throw new HttpError(403, 'Itu bukan pulaumu.');
+    this.assertFresh(id);
     const next = this.nextUpgrade(row);
     if (!next) throw new HttpError(409, 'Kesuburan sudah di tingkat tertinggi.');
     if (next.locked) throw new HttpError(409, `Kesuburan ${next.level} butuh ${Object.keys(next.cost).filter((t) => !(t in this.d.econ.items)).join(', ')} dari tambang, yang belum dibuka.`);

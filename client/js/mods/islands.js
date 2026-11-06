@@ -188,14 +188,17 @@
     var iv = $('div', 'gt-detail');
     iv.appendChild($('div', 'gt-detail-name', 'Undangan'));
     iv.appendChild($('div', 'chain-dim', 'Hanya kamu dan tamu undangan yang boleh datang. Tulis nama pemain (seperti di permainan), pisahkan dengan koma. Tamu melihat pulaumu di menu dermaga, bagian Pulau teman.'));
-    var input = $('input'); input.type = 'text'; input.maxLength = 400; input.placeholder = 'Ayu, Budi'; input.value = (m.guests || []).map(function (g) { return g.name; }).join(', ');
+    var input = $('input'); input.type = 'text'; input.maxLength = 400; input.placeholder = 'Ayu, Budi'; var known = {}; // shown name -> account id, so a re-save sends ids for guests already on the list
+    (m.guests || []).forEach(function (g) { known[g.name] = g.account; });
+    input.value = (m.guests || []).map(function (g) { return g.name; }).join(', ');
     input.style.width = '100%'; input.autocomplete = 'off';
     iv.appendChild(input);
     var iAct = $('div', 'gt-detail-acts');
     iAct.appendChild(btn('Simpan undangan', function () {
-      var list = String(input.value || '').split(/[,;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+      var list = String(input.value || '').split(/[,;]+/).map(function (x) { return x.trim(); }).filter(Boolean)
+        .map(function (x) { return Object.prototype.hasOwnProperty.call(known, x) ? known[x] : x; });
       C.api('/islands/invite', { method: 'POST', body: { island_id: m.island_id, accounts: list } })
-        .then(function (r) { var names = (r.invite || []).map(function (g) { return g.name; }); input.value = names.join(', '); GT.toast('Undangan tersimpan (' + names.length + ' tamu).'); return load(true); }, function (e) { GT.toast('Gagal: ' + e.message); });
+        .then(function (r) { var names = (r.invite || []).map(function (g) { known[g.name] = g.account; return g.name; }); input.value = names.join(', '); GT.toast('Undangan tersimpan (' + names.length + ' tamu).'); return load(true); }, function (e) { GT.toast('Gagal: ' + e.message); });
     }));
     iv.appendChild(iAct);
     wrap.appendChild(iv);
