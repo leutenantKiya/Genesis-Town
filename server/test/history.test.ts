@@ -36,6 +36,7 @@ test('rows are tagged by item and the token filter returns only that item', asyn
   s.store.addPlayer(ACC, 'sub', 'ed25519:o');
   const game = new Game(s.store, s.chain, { merchantParent: 'gt.test', town: 'town.gt.test', rng: () => 0.99 });
   await game.init();
+  game.gs.setSettled('town.gt.test', 'coin', 5000); // the starter coin needs a funded treasury
   game.onNewPlayer(ACC);
   game.gs.add(0, ACC, 'wheat', 2, 'test');
   game.act(ACC, { action: 'craft', recipe: 'bread' });

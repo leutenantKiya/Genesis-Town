@@ -48,11 +48,33 @@ export class World {
     if (have < n) throw new HttpError(409, `${this.name(token)} kurang (punya ${have}, perlu ${n}).`);
   }
 
-  /** Starter kit: coin from the town treasury, items minted at settlement. */
+  /** Net amount of `token` the account has gained on this ledger day (the contract caps this per day at settlement). */
+  dayNet(account: string, token: string, day: number): number {
+    return (this.gs.db.prepare('SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND account = ? AND token = ?').get(day, account, token) as { s: number }).s;
+  }
+
+  /** Refuses (409) a gain that would push today's net gain of `token` over the daily cap, which would fail the whole
+   *  settlement chunk on chain. Only for player accounts: merchants and the town are exempt on chain too. */
+  checkGain(account: string, token: string, amount: number) {
+    if (amount <= 0) return;
+    const caps = this.econ.caps as { dailyGainPerItem: number; dailyCoinGain?: number };
+    const cap = token === 'coin' ? (caps.dailyCoinGain ?? 5000) : caps.dailyGainPerItem;
+    const day = this.clock.time().settleDay;
+    if (this.dayNet(account, token, day) + amount > cap) {
+      throw new HttpError(409, `Batas harian ${this.name(token)} tercapai (${cap} per hari). Lanjut besok.`);
+    }
+  }
+
+  /** Starter kit: items minted at settlement; the coin comes from the town treasury only if it can pay it. */
   starter(account: string, town: string) {
     const day = this.clock.time().settleDay;
     for (const [token, n] of Object.entries(this.econ.starter)) {
       if (token === 'coin') {
+        const treasury = this.gs.balance(town, 'coin'); // settled + today's pending
+        if (treasury < n) {
+          console.warn(`[starter] treasury has ${treasury} coin, below the ${n} starter coin: ${account} gets the goods only`);
+          continue;
+        }
         this.gs.add(day, town, 'coin', -n, 'starter', account);
       }
       this.gs.add(day, account, token, n, 'starter');
@@ -69,18 +91,22 @@ export class World {
     const t = this.clock.time();
     const key = `${nodePrefix}${tile}:${x},${y}`;
     const node = this.gs.node(key);
-    let charges = node && t.totalHours < node.refill_hour ? node.charges : g.charges;
+    // A node with no row, or whose refill hour has passed, starts a fresh cycle: full charges and a new refill hour.
+    const fresh = !node || t.totalHours >= node.refill_hour;
+    let charges = fresh ? g.charges : node.charges;
+    const refillHour = (fresh) ? t.totalHours + g.respawnGameHours : (node?.refill_hour ?? t.totalHours + g.respawnGameHours);
     if (charges <= 0) {
-      const wait = (node?.refill_hour ?? 0) - t.totalHours;
+      const wait = refillHour - t.totalHours;
       throw new HttpError(409, `Sudah habis. Kembali sekitar ${wait} jam lagi.`);
     }
     const p = this.state(account);
-    this.spendEnergy(p, g.energyCost);
-    charges -= 1;
-    this.gs.saveNode(key, charges, charges === 0 ? t.totalHours + g.respawnGameHours : (node?.refill_hour ?? t.totalHours + g.respawnGameHours));
-
+    this.spendEnergy(p, g.energyCost); // in memory only: nothing is saved if the gain cap refuses below
     const mult = this.econ.seasons[t.season]?.yield[token] ?? 1;
     const amount = mult >= 1 ? 1 + (this.rng() < mult - 1 ? 1 : 0) : (this.rng() < mult ? 1 : 0);
+    this.checkGain(account, token, amount);
+    charges -= 1;
+    this.gs.saveNode(key, charges, charges === 0 ? t.totalHours + g.respawnGameHours : refillHour);
+
     if (amount > 0) this.gs.add(t.settleDay, account, token, amount, 'gather', key);
     let toast = amount > 0 ? `+${amount} ${def.name}` : `Tidak dapat ${def.name.toLowerCase()} kali ini.`;
     if (def.needsTool) {
@@ -100,6 +126,7 @@ export class World {
     if (!r) throw new HttpError(400, 'Resep tidak dikenal.');
     for (const [t, n] of Object.entries(r.inputs)) this.need(account, t, n);
     if (r.fee > 0) this.need(account, 'coin', r.fee);
+    this.checkGain(account, r.output, 1);
     const p = r.energy ? this.state(account) : null;
     if (p && r.energy) {
       if (p.energy < r.energy) throw new HttpError(409, `Energi kurang (punya ${Math.floor(p.energy)}, perlu ${r.energy}). Makan dulu atau istirahat.`);
@@ -190,6 +217,7 @@ export class World {
     } else if (op === 'harvest') {
       if (plot.state !== 'ready') throw new HttpError(409, 'Belum siap dipanen.');
       const n = f.harvest + (this.econ.seasons[t.season]?.harvestBonus ?? 0) + (field?.yieldBonus ?? 0);
+      this.checkGain(account, f.seed, n);
       this.gs.add(t.settleDay, account, f.seed, n, 'harvest');
       Object.assign(plot, { state: 'tilled', grown: 0, watered_day: -1 });
       toast = `+${n} Gandum`;

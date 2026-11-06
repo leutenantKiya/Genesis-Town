@@ -113,7 +113,7 @@ export class Monsters {
       this.pending.delete(account);
       // the way is clear: gather as usual, plus one for the trouble
       let toast = `${e.name} kabur!`;
-      const day = this.clock.time().day;
+      const day = this.clock.time().settleDay; // the open ledger day, like every other write
       if (e.tile) {
         try {
           const g = this.world.gather(account, e.tile, e.x, e.y);

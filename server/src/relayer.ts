@@ -106,7 +106,22 @@ export function relayTokens(method: string, args: Record<string, unknown>): stri
   return [...out];
 }
 
-export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown }) {
+// Relays being processed right now (by delegate hash), and a per-account queue: spend-guarded relays of one account
+// run one after another, so the second guard sees what the first one spent. Both are in memory on purpose.
+const inflight = new Set<string>();
+const accountQueue = new Map<string, Promise<unknown>>();
+
+async function serialized<T>(account: string, fn: () => Promise<T>): Promise<T> {
+  const prev = accountQueue.get(account) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.catch(() => undefined);
+  accountQueue.set(account, tail);
+  try { return await run; } finally { if (accountQueue.get(account) === tail) accountQueue.delete(account); }
+}
+
+export interface RelayResult { txHash: string | null; status: string; duplicate?: boolean; error?: string }
+
+export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown }): Promise<RelayResult> {
   if (typeof body.signedDelegate !== 'string') throw new HttpError(400, 'signedDelegate (base64) required');
   const { sd, bytes } = decodeSignedDelegate(body.signedDelegate);
   const da = sd.delegateAction;
@@ -114,7 +129,8 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
 
   const seen = deps.store.relayGet(hash);
   if (seen) return { txHash: seen.tx_hash, status: seen.status, duplicate: true };
-
+  // an identical post that is still being processed is a duplicate too (its 'pending' row is only written later)
+  if (inflight.has(hash)) return { txHash: null as string | null, status: 'pending', duplicate: true };
   const key = delegateKey(sd);
   const owner = deps.store.sessionKeyOwner(key);
   if (!owner || owner !== da.senderId) throw new HttpError(403, 'unknown session key for this sender');
@@ -125,6 +141,15 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
   if (BigInt(fc.deposit) !== 0n) throw new HttpError(403, 'deposit must be 0');
   if (BigInt(fc.gas) > BigInt(deps.cfg.relay.maxGasTera) * 10n ** 12n) throw new HttpError(403, 'gas above cap');
   if (!verifyDelegateSignature(sd)) throw new HttpError(403, 'bad signature');
+  inflight.add(hash);
+  try {
+    return await serialized(da.senderId, () => relayLocked(deps, sd, da, fc, hash));
+  } finally {
+    inflight.delete(hash);
+  }
+}
+
+async function relayLocked(deps: RelayDeps, sd: ReturnType<typeof decodeSignedDelegate>['sd'], da: ReturnType<typeof decodeSignedDelegate>['sd']['delegateAction'], fc: { methodName: string; args: Uint8Array }, hash: string): Promise<RelayResult> {
   const height = await deps.currentBlockHeight();
   const ahead = BigInt(da.maxBlockHeight) - height;
   if (ahead <= 0n) throw new HttpError(400, 'delegate expired');

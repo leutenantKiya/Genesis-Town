@@ -141,3 +141,18 @@ test('rain waters planted plots by itself, once per rainy day', async () => {
   const g = s1.plots[0].grown;
   assert.equal((w.game.state(P) as { plots: Array<{ grown: number }> }).plots[0].grown, g, 'only once per day');
 });
+
+test('a monster bonus at 02:00 lands on the same ledger day as every other write (the settle day, not the calendar day)', async () => {
+  const w = await world();
+  w.advanceTo(2);
+  const t = w.game.clock.time();
+  assert.equal(t.settleDay, t.day - 1, 'before 06:00 the open ledger day is yesterday');
+  w.rolls([0.1, 0.1, 0.1]);
+  w.gather();
+  w.act('fight');
+  const won = w.act('fight') as { won?: boolean };
+  assert.equal(won.won, true);
+  const rows = w.game.gs.openRows(1e9).filter((r) => r.account === P && ['gather', 'monster_bonus'].includes(r.kind));
+  assert.ok(rows.some((r) => r.kind === 'monster_bonus'), 'bonus row written');
+  for (const r of rows) assert.equal(r.day, t.settleDay, `${r.kind} row is on the settle day`);
+});
