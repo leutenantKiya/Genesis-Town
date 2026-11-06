@@ -10,8 +10,9 @@ export function spendGuard(chain: Chain, game: Game) {
   return async (sender: string, method: string, args: Record<string, unknown>): Promise<string[]> => {
     const need = new Map<string, number>();
     const add = (t: unknown, n: unknown) => {
-      const v = Math.max(0, Math.floor(Number(n) || 0));
-      if (typeof t === 'string' && v > 0) need.set(t, (need.get(t) ?? 0) + v);
+      const v = Number(n);
+      if (typeof t !== 'string' || !Number.isInteger(v) || v <= 0) throw new HttpError(400, 'Jumlah harus bilangan bulat lebih dari 0.');
+      need.set(t, (need.get(t) ?? 0) + v);
     };
     const extra: string[] = [];
     if (method === 'send_item' || method === 'list_item') add(args.token_id, args.amount);

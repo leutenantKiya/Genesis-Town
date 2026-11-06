@@ -231,8 +231,13 @@ export class Game {
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
       case 'island_upgrade': res = this.upgradeIsland(account, n('island_id', -1), s('attr'), wid); break;
       case 'ship': res = this.world.ship(account, s('token'), n('qty')); break;
-      case 'sell': res = this.market.sell(account, s('merchant'), s('token'), n('qty')); break;
-      default: res = this.market.buy(account, s('merchant'), s('token'), n('qty')); break;
+      case 'sell': {
+        // the coin earned counts toward the daily coin gain cap (same as the contract's settlement check)
+        try { this.world.checkGain(account, 'coin', this.market.quote(s('merchant'), s('token'), 'sell', n('qty')).total); } catch (e) { if (e instanceof HttpError && e.status === 409) throw e; }
+        res = this.market.sell(account, s('merchant'), s('token'), n('qty'));
+        break;
+      }
+      default: if (Number.isInteger(n('qty')) && n('qty') > 0) this.world.checkGain(account, s('token'), n('qty')); res = this.market.buy(account, s('merchant'), s('token'), n('qty')); break;
     }
     if (a !== 'farm') {
       const tags = new Set<string>(Object.keys((res as { gained?: Record<string, number> }).gained ?? {}));
