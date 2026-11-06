@@ -169,13 +169,6 @@ fn gain_cap_resets_next_day_and_does_not_apply_to_merchants() {
 }
 
 #[test]
-#[should_panic(expected = "is not registered")]
-fn unregistered_accounts_rejected() {
-    let mut c = setup();
-    settle(&mut c, 1, 0, vec![d(acc("stranger.testnet"), "fish", 1)]);
-}
-
-#[test]
 fn faucet_shrinks_as_supply_grows_and_stops_at_the_cap() {
     let c = setup();
     // supply 5600, k = 1 (1 active player), Mcap = 25000: allowed = 1200 * (25000-5600)/25000 = 931
@@ -200,6 +193,35 @@ fn coin_moving_between_accounts_is_not_new_money() {
     let mut c = setup();
     settle(&mut c, 1, 0, vec![d(budi(), "coin", -500), d(alice(), "coin", 500)]);
     assert_eq!(c.faucet_status(1, 1).minted_today.0, 0);
+}
+
+#[test]
+fn faucet_counts_day_net_across_chunks() {
+    let mut c = setup();
+    c.limits.faucet_w0 = U128(400); // allowed today = 310, below the 498 that moves
+    settle(&mut c, 1, 0, vec![d(budi(), "coin", -498)]);
+    settle(&mut c, 1, 1, vec![d(alice(), "coin", 498)]);
+    assert_eq!(c.faucet_status(1, 1).minted_today.0, 0);
+    assert_eq!(bal(&c, budi(), "coin"), 102);
+}
+
+#[test]
+#[should_panic(expected = "coin faucet exceeded")]
+fn faucet_still_caps_real_minting() {
+    let mut c = setup();
+    c.limits.faucet_w0 = U128(1200);
+    settle(&mut c, 1, 0, vec![d(budi(), "coin", 900)]);
+    settle(&mut c, 1, 1, vec![d(budi(), "coin", 1100)]);
+}
+
+#[test]
+fn settle_skips_unregistered_account() {
+    let mut c = setup();
+    settle(&mut c, 1, 0, vec![d(alice(), "fish", 3), d(acc("ghost.testnet"), "fish", 4)]);
+    assert_eq!(bal(&c, alice(), "fish"), 3);
+    assert_eq!(bal(&c, acc("ghost.testnet"), "fish"), 0);
+    assert!(get_logs().iter().any(|l| l.contains(r#""event":"settle_skip""#) && l.contains("ghost.testnet")));
+    assert!(c.is_chunk_applied(1, 0));
 }
 
 /* ------------------------------------------------------------ shops */

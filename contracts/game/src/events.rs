@@ -42,6 +42,10 @@ pub fn gt_settle(day: u64, chunk: u32, ledger_root: &str, entries: usize) {
     emit_game("settle", json!([{ "day": day, "chunk": chunk, "ledger_root": ledger_root, "entries": entries }]));
 }
 
+pub fn gt_settle_skip(day: u64, chunk: u32, account: &str, token_id: &str, delta: &str) {
+    emit_game("settle_skip", json!([{ "day": day, "chunk": chunk, "account": account, "token": token_id, "delta": delta }]));
+}
+
 pub fn gt_shop(merchant: &str, what: &str, contributors: u32) {
     emit_game("shop", json!([{ "merchant": merchant, "what": what, "contributors": contributors }]));
 }

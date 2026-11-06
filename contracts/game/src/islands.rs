@@ -174,6 +174,7 @@ impl Contract {
             broker_id,
             voucher_pk: raw_key(&voucher_key),
             island_ids: vec![],
+            day_net: LookupMap::new(StorageKey::DayNet),
         }
     }
 

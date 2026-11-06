@@ -58,6 +58,7 @@ enum StorageKey {
     Projects,
     // added in v5 (islands)
     Islands,
+    DayNet,
 }
 
 #[near(serializers = [json, borsh])]
@@ -138,6 +139,7 @@ pub struct Contract {
     broker_id: AccountId,
     voucher_pk: Vec<u8>,
     island_ids: Vec<u32>,
+    day_net: LookupMap<u64, i128>, // day -> signed running net coin of the settled chunks (faucet check)
 }
 
 impl Contract {
@@ -272,6 +274,7 @@ impl Contract {
             broker_id: town_id.clone(),
             voucher_pk: vec![],
             island_ids: vec![],
+            day_net: LookupMap::new(StorageKey::DayNet),
         };
         c.registered.insert(town_id.clone());
         if treasury_coin.0 > 0 {
