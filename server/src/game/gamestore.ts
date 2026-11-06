@@ -90,11 +90,12 @@ export class GameStore {
   /** After a settlement landed on chain: mark its rows settled and move their net deltas into the cached on-chain
    *  balances, in one transaction. Computed locally because a read right after the write may hit an RPC node that
    *  hasn't seen it yet (that once cached a pre-settlement balance and let a player spend items twice). */
-  applySettlement(seqs: number[], entries: Array<{ account_id: string; token_id: string; delta: string }>) {
+  applySettlement(seqs: number[], entries: Array<{ account_id: string; token_id: string; delta: string }>, marker?: [string, string]) {
     this.db.exec('BEGIN');
     try {
       for (const e of entries) this.setSettled(e.account_id, e.token_id, this.settledBalance(e.account_id, e.token_id) + Number(e.delta));
       this.markSettled(seqs);
+      if (marker) this.setMeta(marker[0], marker[1]);
       this.db.exec('COMMIT');
     } catch (err) {
       this.db.exec('ROLLBACK');

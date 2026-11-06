@@ -151,7 +151,7 @@ test('town demand creates new coin only within the faucet', async () => {
 });
 
 test('settlement writes net deltas on chain in chunks, matches off-chain balances, and is retry-safe', async () => {
-  const { game, chain, store } = await world();
+  const { game, chain, store, clock } = await world();
   for (let k = 0; k < 4; k++) game.act(P, { action: 'gather', tile: 'water', x: 3, y: 3 });
   game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 2 });
   game.act(Q, { action: 'ship', token: 'bread', qty: 2 });
@@ -160,6 +160,9 @@ test('settlement writes net deltas on chain in chunks, matches off-chain balance
   chain.failNext = true; // first chunk hits a network error
   await game.devSettle();
   assert.equal(game.settlement.settledThrough(), day - 1, 'day not settled after the error');
+  await game.step();
+  assert.equal(game.settlement.settledThrough(), day - 1, 'backoff: no retry within 30 s');
+  clock.advanceHours(1);
   await game.step(); // retry
   assert.equal(game.settlement.settledThrough(), day);
   assert.deepEqual(await chain.balances(P, ['coin', 'fish']), [String(offP.coin), String(offP.fish)]);
