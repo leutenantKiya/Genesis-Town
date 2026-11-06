@@ -186,6 +186,8 @@
     // typing must not move the character or trigger game keys
     input.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); closeChat(); } });
     input.addEventListener('keyup', function (e) { e.stopPropagation(); });
+    // Clicking the world blurs the input: an empty box closes; a draft stays but Esc still closes it (see onKey).
+    input.addEventListener('blur', function () { setTimeout(function () { if (chatOpen && !input.disabled && document.activeElement !== input && !input.value) closeChat(); }, 120); });
     form.addEventListener('submit', function (e) { e.preventDefault(); submit(); });
   }
   function openChat() {
@@ -261,5 +263,9 @@
     GT.hotkey('C', openChat);
     window.GT_PRESENCE = { openChat: openChat, promptName: function () { promptName(true); }, refresh: function () { stopStream(); clearRemotes(); retryAt = 0; reportPos(true); } };
   }
-  GT.register({ id: 'presence', init: init, onFrame: onFrame, onWorld: onWorld });
+  function onKey(e) {
+    if (chatOpen && e.type === 'keydown' && e.code === 'Escape') { closeChat(); return true; }
+    return false;
+  }
+  GT.register({ id: 'presence', init: init, onFrame: onFrame, onWorld: onWorld, onKey: onKey });
 })();

@@ -2083,12 +2083,14 @@ function lampNear(x, y, r){
   for (var i = 0; i < L.length; i++) if (Math.abs(L[i].x - x) <= r && Math.abs(L[i].y - y) <= r) return true;
   return false;
 }
+var hudDay = null;      // server day-of-season shown in WAKTU (set by chain.js when signed in)
+function setHudDay(n){ hudDay = n == null ? null : n; hudDirty = true; }
 function updateHud(){
   var l = locText();
   if (l !== lastLoc){ lastLoc = l; elLoc.textContent = l; }
   if (seed !== lastSeed){ lastSeed = seed; elSeed.textContent = String(seed); }
   if (state.coins !== lastCoins){ lastCoins = state.coins; elCoins.textContent = String(state.coins); }
-  var ci = clockInfo(), cs = ci.hhmm + ' H' + ci.day;
+  var ci = clockInfo(), cs = ci.hhmm + ' H' + (hudDay != null ? hudDay : ci.day);
   if (cs !== lastClock){ lastClock = cs; elClock.textContent = cs; }
   var smc = ci.night ? 'night' : (ci.light < 0.98 ? 'dusk' : '');
   if (smc !== lastSm){ lastSm = smc; elSm.className = 'sm' + (smc ? ' ' + smc : ''); }
@@ -2241,7 +2243,9 @@ function setupInput(){
   elMap.addEventListener('click', function(){ setMap(false); });
   elDlg.addEventListener('pointerdown', function(e){ e.preventDefault(); advanceDialog(); });
   document.getElementById('regen').addEventListener('click', function(e){ e.currentTarget.blur(); confirmRegen(); });
-  hotkey('I', openBag); hotkey('P', openProfile);
+  // Mods run init first (chain.js binds I to the NEAR Tas); only fill in defaults they did not claim.
+  if (!hotkeys.KeyI) hotkey('I', openBag);
+  if (!hotkeys.KeyP) hotkey('P', openProfile);
   addHudButton({id:'devbtn', label:'Dev', onClick:openDev});
 }
 function toggleMapUi(){ if (tr || D || modals.length) return; setMap(!mapOpen); }
@@ -2348,7 +2352,7 @@ var GT = {
   },
   // extras
   facing: function(){ return facingTile(); },
-  addHudButton: addHudButton, hotkey: hotkey,
+  addHudButton: addHudButton, hotkey: hotkey, setHudDay: setHudDay,
   interact: function(mode){ return interact(mode || 'talk'); },
   // A point on the screen (e.g. a mouse click) to the map tile under it, in the current scene
   screenToTile: function(clientX, clientY){
@@ -2416,7 +2420,7 @@ function exposeDebug(){
     closeModals: closeAllModals,
     openShop: function(){ return openShop(keeperOf(scene)); },
     openBag: openBag, openProfile: openProfile,
-    setTime: setTime, setDayLength: setDayLength, pauseTime: pauseTime, isNight: function(){ return clockInfo().night; },
+    setTime: setTime, setHudDay: setHudDay, setDayLength: setDayLength, pauseTime: pauseTime, isNight: function(){ return clockInfo().night; },
     lampNear: lampNear, openDev: openDev,
     renderOnce: function(){ render(); },
     setDarkness: function(d){ darkOverride = (d == null) ? null : Math.max(0, Math.min(1, +d)); },
