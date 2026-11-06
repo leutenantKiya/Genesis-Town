@@ -179,6 +179,14 @@ export class MockChain implements Chain {
   contractId = 'game.genesistown.mock';
   n = 0;
   failNext = false;
+  /** When set, every settle_day call throws this message (a down RPC node). */
+  settleError: string | null = null;
+  settleCalls: Array<{ day: number; chunk: number }> = [];
+  /** Contract limits, defaults from contracts/game/init-testnet.json. */
+  limits = { faucetW0: 1200, moneyCap0: 25000, activeDivisor: 10, maxK: 6, dailyGainCap: 200, dailyCoinGainCap: 5000 };
+  dayFaucet = new Map<number, { start: bigint; net: bigint }>();
+  gainUsed = new Map<string, { day: number; used: bigint }>();
+  dividendsPaid = new Set<string>();
 
   hash(): string { return `mock-${++this.n}`; }
   get(a: string, t: string): bigint { return this.bal.get(`${a}|${t}`) ?? 0n; }
@@ -201,28 +209,60 @@ export class MockChain implements Chain {
   }
   async registerPlayer(accountId: string): Promise<TxResult> { this.accounts.add(accountId); return { txHash: this.hash(), ok: true }; }
 
-  async settleDay(day: number, chunk: number, entries: DeltaEntry[], root: string): Promise<TxResult> {
+  /** Mirrors `settle_day` in contracts/game/src/settle.rs (defaults are contracts/game/init-testnet.json). */
+  async settleDay(day: number, chunk: number, entries: DeltaEntry[], root: string, active = 0): Promise<TxResult> {
     if (this.failNext) { this.failNext = false; throw new Error('mock network error'); }
+    this.settleCalls.push({ day, chunk });
+    if (this.settleError) throw new Error(this.settleError);
     const k = `${day}:${chunk}`;
     if (this.applied.has(k)) return { txHash: this.hash(), ok: false, error: 'chunk already applied' };
     if (this.roots.has(day) && this.roots.get(day) !== root) return { txHash: this.hash(), ok: false, error: 'ledger_root differs' };
     const snapshot = new Map(this.bal);
+    const gainSnapshot = new Map(this.gainUsed);
+    const faucetSnapshot = this.dayFaucet.get(day);
     try {
-      for (const e of entries.filter((x) => BigInt(x.delta) < 0n)) {
-        if (!this.accounts.has(e.account_id)) throw new Error(`${e.account_id} is not registered`);
-        this.add(e.account_id, e.token_id, BigInt(e.delta));
+      // Entries for accounts that are not registered are skipped (the contract ignores them).
+      const parsed = entries.filter((e) => this.accounts.has(e.account_id)).map((e) => ({ ...e, d: BigInt(e.delta) }));
+      // Coin faucet: running signed net of coin over the day's chunks; it may only grow within the allowance.
+      const net = parsed.filter((e) => e.token_id === 'coin').reduce((x, e) => x + e.d, 0n);
+      const f = { ...(faucetSnapshot ?? { start: this.supplyBig(), net: 0n }) };
+      f.net += net;
+      if (net > 0n) {
+        const allowed = this.faucetAllowed(f.start, active);
+        if (f.net > allowed) throw new Error(`coin faucet exceeded: ${f.net} > ${allowed} allowed today`);
       }
-      for (const e of entries.filter((x) => BigInt(x.delta) > 0n)) {
-        if (!this.accounts.has(e.account_id)) throw new Error(`${e.account_id} is not registered`);
-        this.add(e.account_id, e.token_id, BigInt(e.delta));
+      this.dayFaucet.set(day, f);
+      for (const e of parsed.filter((x) => x.d < 0n)) this.add(e.account_id, e.token_id, e.d);
+      for (const e of parsed.filter((x) => x.d > 0n)) {
+        if (!this.shops.has(e.account_id) && e.account_id !== this.townAccount) {
+          const cap = BigInt(e.token_id === 'coin' ? this.limits.dailyCoinGainCap : this.limits.dailyGainCap);
+          const key = `${e.account_id}|${e.token_id}`;
+          const g = this.gainUsed.get(key);
+          const next = (g && g.day === day ? g.used : 0n) + e.d;
+          if (next > cap) throw new Error(`daily gain cap reached for ${e.account_id} ${e.token_id}`);
+          this.gainUsed.set(key, { day, used: next });
+        }
+        this.add(e.account_id, e.token_id, e.d);
       }
     } catch (err) {
       this.bal = snapshot;
+      this.gainUsed = gainSnapshot;
+      if (faucetSnapshot) this.dayFaucet.set(day, faucetSnapshot); else this.dayFaucet.delete(day);
       return { txHash: this.hash(), ok: false, error: (err as Error).message };
     }
     this.applied.add(k);
     this.roots.set(day, root);
     return { txHash: this.hash(), ok: true };
+  }
+  supplyBig(): bigint { let x = 0n; for (const [key, v] of this.bal) if (key.endsWith('|coin')) x += v; return x; }
+  /** W_day = W0 * k * (Mcap - M) / Mcap, Mcap = Mcap0 * k, k = min(max_k, 1 + active / divisor). */
+  faucetAllowed(supplyAtStart: bigint, active: number): bigint {
+    const L = this.limits;
+    const registered = [...this.accounts].filter((a) => !this.shops.has(a) && a !== this.townAccount).length;
+    const kk = BigInt(Math.min(L.maxK, 1 + Math.floor(Math.min(active, registered) / Math.max(1, L.activeDivisor))));
+    const mcap = BigInt(L.moneyCap0) * kk;
+    if (mcap === 0n || supplyAtStart >= mcap) return 0n;
+    return (BigInt(L.faucetW0) * kk * (mcap - supplyAtStart)) / mcap;
   }
   async isChunkApplied(day: number, chunk: number) { return this.applied.has(`${day}:${chunk}`); }
 
@@ -239,6 +279,8 @@ export class MockChain implements Chain {
   async payDividend(merchant: string, _day: number, amount: number): Promise<TxResult> {
     const s = this.shops.get(merchant);
     if (!s || !s.open) return { txHash: this.hash(), ok: false, error: 'closed' };
+    if (!this.dividendsPaid.has(`${merchant}|${_day}`)) this.dividendsPaid.add(`${merchant}|${_day}`);
+    else return { txHash: this.hash(), ok: false, error: 'dividend already paid for this day' };
     this.add(merchant, 'coin', -BigInt(amount));
     for (const [h, n] of s.shares) s.claimable.set(h, (s.claimable.get(h) ?? 0) + Math.floor((amount * n) / s.total));
     return { txHash: this.hash(), ok: true };
