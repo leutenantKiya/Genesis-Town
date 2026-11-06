@@ -168,6 +168,7 @@ export function createApp(deps: AppDeps) {
       const raw = await readRaw(req);
       const acct = accountOf(req, url, raw);
       if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
+      game.assertActive(acct);
       const b = parseJson(raw), id = Number(b.island_id);
       if (p === '/api/islands/invite' && !Array.isArray(b.accounts)) throw new HttpError(400, 'accounts must be a list');
       if (p === '/api/islands/voucher') send(res, 200, await game.islands.voucher(acct, String(b.kind ?? ''), id));
@@ -213,7 +214,7 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'POST' && p === '/api/relay') {
         const body = await readJson(req);
         const after = (s: string, m: string, a: Record<string, unknown>, e: string[]) => afterRelay(s, m, a, e, body);
-        return send(res, 200, await relay({ ...deps, limiter, checkSpend, afterRelay: after, itemName: (t) => (has(game.econ.items, t) ? game.econ.items[t].name : t) }, body));
+        return send(res, 200, await relay({ ...deps, limiter, checkSpend, releaseSpend: (a) => game.gs.release(a), assertActive: (a) => game.assertActive(a), afterRelay: after, itemName: (t) => (has(game.econ.items, t) ? game.econ.items[t].name : t) }, body));
       }
       if (req.method === 'GET' && p === '/api/time') {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null, weather: game.weather() });
@@ -289,6 +290,7 @@ export function createApp(deps: AppDeps) {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
         if (!chatIpLimiter.take(req.socket.remoteAddress ?? '?')) throw new HttpError(429, 'terlalu cepat');
+        game.assertActive(acct);
         const b = parseJson(raw), world = worldOf(b.world);
         if (!deps.store.nameOf(acct)) throw new HttpError(409, 'Pilih nama dulu.');
         await game.prepare(acct, { world });
@@ -371,6 +373,11 @@ export function createApp(deps: AppDeps) {
         game.clock.skipHours((20 - h + per) % per || per);
         await game.step();
         return send(res, 200, { time: game.clock.time() });
+      }
+      if (req.method === 'POST' && p === '/api/dev/unfreeze') {
+        if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
+        const account = String(parseJson(await readRaw(req)).account ?? '');
+        return send(res, 200, { account, lifted: game.gs.unfreeze(account) });
       }
       if (req.method === 'POST' && p === '/api/dev/settle') {
         if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');

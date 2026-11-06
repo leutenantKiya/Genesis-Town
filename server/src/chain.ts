@@ -24,6 +24,8 @@ export interface Chain {
   payDividend(merchant: string, day: number, amount: number): Promise<TxResult>;
   relay(signedDelegate: unknown, senderId: string): Promise<TxResult>;
   balances(accountId: string, tokenIds: string[]): Promise<string[]>;
+  /** Whether the account is registered with the game contract (`is_registered`); unregistered entries are skipped by `settle_day`. */
+  isRegistered(accountId: string): Promise<boolean>;
   listShops(): Promise<ShopInfo[]>;
   holding(merchant: string, holder: string): Promise<HoldingInfo>;
   coinSupply(): Promise<string>;
@@ -113,6 +115,7 @@ export class TestnetChain implements Chain {
   }
 
   balances(accountId: string, tokenIds: string[]) { return this.view<string[]>('mt_batch_balance_of', { account_id: accountId, token_ids: tokenIds }); }
+  isRegistered(accountId: string) { return this.view<boolean>('is_registered', { account_id: accountId }); }
   listShops() { return this.view<ShopInfo[]>('list_shops', {}); }
   holding(merchant: string, holder: string) { return this.view<HoldingInfo>('get_holding', { merchant, holder }); }
   async coinSupply() { return (await this.view<string | null>('mt_supply', { token_id: 'coin' })) ?? '0'; }
@@ -448,6 +451,7 @@ export class MockChain implements Chain {
   }
 
   async balances(accountId: string, tokenIds: string[]) { return tokenIds.map((t) => String(this.get(accountId, t))); }
+  async isRegistered(accountId: string) { return this.accounts.has(accountId); }
   async listShops(): Promise<ShopInfo[]> {
     return [...this.shops].map(([acct, s]) => ({
       account_id: acct, name: s.name, open: s.open, coin: String(this.get(acct, 'coin')), total_shares: String(s.total),

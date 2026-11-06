@@ -158,6 +158,55 @@ export class Settlement {
     return plan;
   }
 
+  /**
+   * Checks a not-yet-applied chunk against the chain before it is sent. A debit the chain balance cannot cover would
+   * make the contract refuse the whole chunk (blocking the day for everyone), and an unregistered account's entries are
+   * skipped by the contract. So: unregistered -> drop that account's entries; debit above the balance -> clamp it to
+   * what the account holds; credit above the daily gain cap -> clamp it (defensive). Every change is recorded as a
+   * shortfall (debits and unregistered freeze the account; cap clamps do not) and written back to the persisted plan.
+   * A coin debit that is clamped means the counterpart may receive coin nobody paid; the contract's faucet bounds it.
+   */
+  private async preflight(day: number, c: number, plan: Plan) {
+    const { gs, chain, market, econ, town } = this.d;
+    const chunk = plan.chunks[c];
+    const exempt = new Set<string>([town, ...market.ids().map((id) => market.account(id))]);
+    const caps = econ.caps as { dailyGainPerItem: number; dailyCoinGain?: number };
+    const next: DeltaEntry[] = [];
+    let changed = false;
+    const note = (a: string, t: string, wanted: number, applied: number, kind: string, why: string) => {
+      gs.recordShortfall(day, c, a, t, wanted, applied, kind);
+      console.error(`settlement shortfall day ${day} chunk ${c}: ${a} ${t} wanted ${wanted} applied ${applied} (${why})${t === 'coin' && wanted < 0 ? '; the counterpart may receive coin nobody paid' : ''}`);
+    };
+    for (const account of [...new Set(chunk.entries.map((e) => e.account_id))]) {
+      const mine = chunk.entries.filter((e) => e.account_id === account);
+      if (exempt.has(account)) { next.push(...mine); continue; }
+      if (!(await chain.isRegistered(account))) {
+        for (const e of mine) note(account, e.token_id, Number(e.delta), 0, 'shortfall', 'account not registered');
+        changed = true;
+        continue;
+      }
+      const debits = mine.filter((e) => Number(e.delta) < 0);
+      const held = debits.length ? await chain.balances(account, debits.map((e) => e.token_id)) : [];
+      for (const e of mine) {
+        let d = Number(e.delta);
+        const i = debits.indexOf(e);
+        if (d < 0 && -d > Number(held[i])) {
+          const applied = -Number(held[i]);
+          note(account, e.token_id, d, applied, 'shortfall', 'chain balance too low');
+          d = applied; changed = true;
+        } else if (d > 0) {
+          const cap = e.token_id === 'coin' ? (caps.dailyCoinGain ?? 5000) : caps.dailyGainPerItem;
+          if (d > cap) { note(account, e.token_id, d, cap, 'cap_clamp', 'daily gain cap'); d = cap; changed = true; }
+        }
+        if (d !== 0) next.push({ ...e, delta: String(d) });
+      }
+    }
+    if (changed) {
+      chunk.entries = next;
+      gs.setMeta(`settle.plan.${day}`, JSON.stringify(plan));
+    }
+  }
+
   /** Returns true when the day is fully settled. */
   async settleDay(day: number): Promise<boolean> {
     const { gs, chain, store } = this.d;
@@ -166,8 +215,7 @@ export class Settlement {
     const root = plan.root;
 
     for (let c = 0; c < plan.chunks.length; c++) {
-      const { entries, seqs } = plan.chunks[c];
-      const accounts = [...new Set(entries.map((e) => e.account_id))];
+      const accounts = [...new Set(plan.chunks[c].entries.map((e) => e.account_id))];
       const rec = gs.settlement(day, c);
       if (rec?.status !== 'ok') {
         if (await chain.isChunkApplied(day, c)) {
@@ -175,7 +223,9 @@ export class Settlement {
         } else {
           let res;
           try {
-            res = await chain.settleDay(day, c, entries, root, plan.active);
+            // Pre-flight on every attempt: the player may have moved tokens on chain since the last one.
+            await this.preflight(day, c, plan);
+            res = await chain.settleDay(day, c, plan.chunks[c].entries, root, plan.active);
           } catch (e) {
             gs.saveSettlement(day, c, root, 'error', null, accounts);
             console.error(`settlement day ${day} chunk ${c}:`, (e as Error).message);
@@ -188,7 +238,7 @@ export class Settlement {
       // The chunk is on chain: from now its rows are settled and its deltas are in the cached chain balances, so a
       // refresh() between chunks never counts them twice.
       const marker = `settle.applied.${day}.${c}`;
-      if (!gs.meta(marker)) gs.applySettlement(seqs, entries, [marker, '1']);
+      if (!gs.meta(marker)) gs.applySettlement(plan.chunks[c].seqs, plan.chunks[c].entries, [marker, '1']);
     }
 
     // Finalize.

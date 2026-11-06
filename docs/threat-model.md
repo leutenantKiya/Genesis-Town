@@ -70,8 +70,34 @@ only written at 06:00. Without a check, a player could sell 3 bread to a merchan
 bread on chain; the 06:00 settlement would then try to debit bread that is gone and the chunk would fail.
 The relayer's spend guard (`server/src/spend.ts`) re-reads the player's on-chain balance before relaying and
 requires, per item, both: on-chain balance ≥ amount, and on-chain balance + today's off-chain change ≥ amount.
-Remaining gap: two relays for the same item in flight at the same moment both pass the check; the contract still
-rejects the second if the on-chain balance runs out, and the per-account rate limit keeps this narrow.
+Guarded relays of one account run one after another, and while one is in flight its amounts are reserved in memory
+(`GameStore.reserve`): off-chain play (sell, buy, craft, eat, ship, upgrades) sees the balance minus the reservation, so
+`Game.act` cannot spend the same fish in the gap before the relay lands. The reservation is released when the relay
+finishes, success or not.
+
+The guard only covers what goes through the relayer. The player owns a full-access key, so they can also call
+`mt_transfer` or `storage_unregister` directly. See "Settlement shortfall" below.
+
+## Settlement shortfall (chain balance below the day's debit)
+
+What happens: a player moves settled tokens away on chain (or unregisters), after spending them off-chain. The day's
+settlement then holds a debit the chain cannot cover (the contract panics the whole chunk, blocking the day for
+everyone) or an entry for an unregistered account (skipped by the contract, so the counterpart's side would apply
+alone). Before every chunk submit, `Settlement.preflight` reads each account's registration and chain balances,
+and: drops all entries of an unregistered account, clamps a debit to what the account holds, and clamps a credit above
+the daily gain cap (defensive). The change is written back to the persisted plan (only for the chunk not yet applied),
+so retries use it, and the check runs again on every attempt (a race between pre-flight and submit fails the chunk,
+backs off, and is clamped on the retry). Every change is a row in `shortfalls` (`day, chunk, account, token, wanted,
+applied`, signed deltas) and one log line; ledger rows are still marked settled as the record of what happened.
+
+What is bounded: the day always completes. The loss is bounded by what the player held: the counterpart (a merchant) keeps
+what it bought. Coin is the soft spot: a clamped coin debit lets the counterpart receive coin nobody paid; that coin is
+minted under the contract's daily faucet and money-supply throttle, and it is visible as a coin row in `shortfalls`.
+
+Freezing: an account with a `shortfall` record is frozen. `Game.act`, `/api/relay`, the island voucher/invite routes and
+chat answer 403 `Akun ini dibekukan karena saldo on-chain tidak cocok dengan permainan. Hubungi pengelola.` The operator
+lifts it with `POST /api/dev/unfreeze {account}` (DEV_TOOLS, local only). `cap_clamp` records do not freeze.
+Monster bonuses and drops check the daily gain cap before they are written, so they cannot cause a cap clamp.
 
 ## The shared map and town projects
 
