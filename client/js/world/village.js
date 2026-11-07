@@ -193,21 +193,21 @@
     // the player's house with the farm next to it, in Ladang Barat near the main road
     var own = place('house', null, 3, 3, ['ladang'], function (x, y) { return -Math.abs(x - 24) * 0.8 - Math.abs(y - ry) * 1.5; }, { own: true, style: R.int(0, 3) });
     if (!own) return null;
-    // farm: 5 x 5 fenced field west or east of the house (fence ring, 3 x 2 soil plots, a walking row, gate south)
+    // farm: 7 x 6 fenced field west or east of the house (fence ring, 5 x 3 soil plots, a walking row, gate south)
     var farm = null;
     var spotsF = [];
-    [-7, 5, -8, 6, -9, 7].forEach(function (ox) { [-1, -2, 0, -3].forEach(function (oy) { spotsF.push([own.x + ox, own.y + oy]); }); });
+    [-9, 5, -10, 6, -11, 7].forEach(function (ox) { [-1, -2, 0, -3].forEach(function (oy) { spotsF.push([own.x + ox, own.y + oy]); }); });
     spotsF.some(function (p) {
       var fx = p[0], fy = p[1];
-      for (var y = fy - 1; y <= fy + 5; y++) for (var x = fx - 1; x <= fx + 5; x++) if (!free(x, y) && !(y >= fy + 4 && tiles[I(x, y)] === 'path')) return false;
-      farm = { x0: fx, y0: fy, x1: fx + 4, y1: fy + 4, plots: [], gate: { x: fx + 2, y: fy + 4 } };
+      for (var y = fy - 1; y <= fy + 6; y++) for (var x = fx - 1; x <= fx + 7; x++) if (!free(x, y) && !(y >= fy + 5 && tiles[I(x, y)] === 'path')) return false;
+      farm = { x0: fx, y0: fy, x1: fx + 6, y1: fy + 5, plots: [], gate: { x: fx + 3, y: fy + 5 } };
       return true;
     });
     if (!farm) return null;
     for (x = farm.x0; x <= farm.x1; x++) { set(x, farm.y0, 'fence'); set(x, farm.y1, x === farm.gate.x ? 'path' : 'fence'); }
     for (y = farm.y0; y <= farm.y1; y++) { set(farm.x0, y, 'fence'); set(farm.x1, y, 'fence'); }
     for (y = farm.y0; y <= farm.y1; y++) for (x = farm.x0; x <= farm.x1; x++) res[I(x, y)] = 1;
-    for (y = farm.y0 + 1; y <= farm.y0 + 2; y++) for (x = farm.x0 + 1; x <= farm.x1 - 1; x++) { set(x, y, 'soil'); farm.plots.push({ x: x, y: y }); }
+    for (y = farm.y0 + 1; y <= farm.y0 + 3; y++) for (x = farm.x0 + 1; x <= farm.x1 - 1; x++) { set(x, y, 'soil'); farm.plots.push({ x: x, y: y }); }
     // path from the gate to the nearest road (straight down, then sideways)
     (function () { var y = farm.gate.y + 1; while (inb(farm.gate.x, y) && get(farm.gate.x, y) !== 'path' && y < farm.gate.y + 8) { if (!free(farm.gate.x, y)) break; road(farm.gate.x, y); y++; } })();
 

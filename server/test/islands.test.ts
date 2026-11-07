@@ -112,8 +112,8 @@ test('generator_is_deterministic_and_reachable', () => {
 
 const tileHash = (L: { tiles: string[]; buildings: unknown[] }) => createHash('sha256').update(L.tiles.join() + JSON.stringify(L.buildings)).digest('hex');
 test('village_layout_unchanged_by_dock', () => {
-  // hashes taken from the generator before dockOf existed
-  const before: Record<number, string> = { 20261114: '373841a13b9b427ceacd981075f479ab2f8d30d3777f35544f7f955d4f6ee426', 123: '30ae752a9cc6423d353191f0c7b870332196461a89a388867f469c42cc54d50b' };
+  // hashes of main's generator (15-plot farm), which has no dockOf: the dock must not change the village
+  const before: Record<number, string> = { 20261114: '38aa5038dcef240f22fe792f8cc1b029061daacf01ff171fbfcc777c5e257814', 123: '6b7470e8aedad8baaab72c7318246fabcce34e251f03af97ab6acd49b162667a' };
   for (const [seed, hash] of Object.entries(before)) {
     const L = Village.generate(Number(seed));
     const dock = Village.dockOf(L);
@@ -440,19 +440,20 @@ test('dev_grant_moves_existing_coin_from_the_town_only_on_mock', async () => {
 });
 
 /** Signed HTTP client against a real createApp, for the world-id validation tests. */
-async function httpFor(h: H, account: string) {
-  const kp = near.KeyPair.fromRandom('ed25519');
-  h.store.addSessionKey(kp.getPublicKey().toString(), account);
+async function httpFor(h: H, account: string, others: string[] = []) {
+  const keys = new Map<string, near.KeyPair>();
+  for (const a of [account, ...others]) { const k = near.KeyPair.fromRandom('ed25519'); keys.set(a, k); h.store.addSessionKey(k.getPublicKey().toString(), a); }
   const { server } = createApp({ cfg: h.cfg, chain: h.chain, store: h.store, game: h.game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const call = async (method: string, path: string, body?: unknown) => {
+  const callAs = async (who: string, method: string, path: string, body?: unknown) => {
+    const kp = keys.get(who)!;
     const raw = body === undefined ? '' : JSON.stringify(body), ts = String(Date.now());
     const sig = kp.sign(new TextEncoder().encode(requestMessage(method, path, ts, raw))).signature;
-    const res = await fetch(base + path, { method, body: raw || undefined, headers: { 'x-account-id': account, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') } });
+    const res = await fetch(base + path, { method, body: raw || undefined, headers: { 'x-account-id': who, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') } });
     return { status: res.status, json: (await res.json()) as any };
   };
-  return { call, close: () => server.close() };
+  return { call: (method: string, path: string, body?: unknown) => callAs(account, method, path, body), callAs, close: () => server.close() };
 }
 const ledgerRows = (h: H) => (h.store.db.prepare('SELECT COUNT(*) AS c FROM ledger').get() as { c: number }).c;
 
@@ -515,33 +516,35 @@ test('old_owner_loses_access_after_chain_transfer', async () => {
   assert.equal(h.game.positions!.worldOf(P), 'public', 'the old owner is moved back to the public island');
 });
 
-test('stream_ends_when_guest_is_uninvited', async () => {
+test('island_presence_and_chat_stay_on_the_island_and_stop_for_an_uninvited_guest', async () => {
   const h = await harness();
   await fund(h, P, { coin: 900 });
   await buy(h, P, 1);
+  h.store.setName(P, 'Pemilik'); h.store.setName(Q, 'Tamu');
   h.game.islands.setInvites(P, 1, [Q]);
-  const kp = near.KeyPair.fromRandom('ed25519');
-  h.store.addSessionKey(kp.getPublicKey().toString(), Q);
-  const { server } = createApp({ cfg: h.cfg, chain: h.chain, store: h.store, game: h.game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const path = '/api/stream?world=IS-1', ts = String(Date.now());
-  const sig = kp.sign(new TextEncoder().encode(requestMessage('GET', path, ts, ''))).signature;
-  const ac = new AbortController();
+  const http = await httpFor(h, P, [Q]); // one app: one in-memory presence for both
+  const owner = { call: (m: string, p: string, b?: unknown) => http.callAs(P, m, p, b) }, guest = { call: (m: string, p: string, b?: unknown) => http.callAs(Q, m, p, b) };
   try {
-    const res = await fetch(base + path, { headers: { 'x-account-id': Q, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') }, signal: ac.signal });
-    assert.equal(res.status, 200);
-    const reader = res.body!.getReader();
-    await reader.read();
+    const dock = h.game.map!.dock();
+    h.game.act(Q, { action: 'travel', to: 'IS-1', pos: dock });
+    const map = onIsland(h, P, 1);
+    const sp = map.layout.spawn;
+    const at = { world: 'IS-1', x: sp.x, y: sp.y, dir: 'down', scene: 'out', since: 0 };
+    const o1 = await owner.call('POST', '/api/presence', at);
+    assert.equal(o1.status, 200);
+    const g1 = await guest.call('POST', '/api/presence', at);
+    assert.equal(g1.status, 200);
+    assert.deepEqual(g1.json.players.map((p: any) => p.nick), ['Pemilik']);
+    assert.equal((await owner.call('POST', '/api/chat', { world: 'IS-1', text: 'selamat datang' })).status, 200);
+    assert.deepEqual((await guest.call('POST', '/api/presence', at)).json.chat.map((m: any) => m.text), ['selamat datang']);
+    // the public square hears nothing of it, and a stranger cannot join the island
+    assert.equal((await guest.call('POST', '/api/presence', { ...at, world: 'public' })).status, 409, 'server has the guest on the island');
+    // uninvite: the guest is refused at once and no longer shown to the owner
     h.game.islands.setInvites(P, 1, []);
-    const t0 = Date.now();
-    let ended = false;
-    while (Date.now() - t0 < 3000) {
-      const r = await reader.read();
-      if (r.done) { ended = true; break; }
-    }
-    assert.ok(ended, 'the stream is closed once the guest is not invited');
-  } finally { ac.abort(); server.closeAllConnections(); server.close(); }
+    assert.equal((await guest.call('POST', '/api/presence', at)).status, 409);
+    assert.equal((await guest.call('POST', '/api/chat', { world: 'IS-1', text: 'masih di sini?' })).status, 409);
+    assert.deepEqual((await owner.call('POST', '/api/presence', at)).json.players, []);
+  } finally { http.close(); }
 });
 
 test('world_resets_or_recovers_when_server_memory_differs', async () => {

@@ -1216,10 +1216,16 @@ function updateDialog(dt){
 /* ---------- toasts ---------- */
 function toast(text){
   if (text == null || !elToasts) return;
-  var t = el('div', 'toast', String(text).slice(0, 120));
+  var msg = String(text).slice(0, 120);
+  // the same message again just stays up longer instead of stacking copies
+  for (var i = 0; i < elToasts.children.length; i++){
+    var c = elToasts.children[i];
+    if (c.textContent === msg){ clearTimeout(c._gtT); c._gtT = setTimeout(function(){ if (c.parentNode) c.parentNode.removeChild(c); }, 2400); emit('toast', msg); return; }
+  }
+  var t = el('div', 'toast', msg);
   elToasts.appendChild(t);
   while (elToasts.children.length > 3) elToasts.removeChild(elToasts.firstChild);
-  setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2400);
+  t._gtT = setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2400);
   emit('toast', String(text));
 }
 
@@ -1912,6 +1918,8 @@ function render(){
   var ents = [];
   scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n}); });
   ents.push({py:pp.py, px:pp.px, n:null});
+  // mods may add their own characters (other players) as {py, draw}: they join the same y-sort as NPCs and trees
+  callMods('onEntities', [ents, ctx, camX, camY, T]);
   ents.sort(function(a, b){ return a.py - b.py; });
   // overhead art (tree canopies, stall awnings) joins the y-sort; slightly before same-row characters
   var all = ents;
@@ -2337,7 +2345,7 @@ var GT = {
   teleportPlayer: teleportPlayer,
   enterBuilding: function(b){ if (b) transition(function(){ enterBuilding(b); }); },
   dialog: function(pages, who, npc, after){ openDialog(pages, who, npc, after); },
-  toast: toast, modal: modal, menu: menu, isUiOpen: isUiOpen,
+  toast: toast, modal: modal, menu: menu, isUiOpen: isUiOpen, drawChar: function(g, x, y, pal, dir, step){ drawChar(g, x, y, pal, dir, step); },
   rng: function(salt){ var r = makeR((seed ^ hashStr(salt)) >>> 0), f = function(){ return r.f(); }; f.int = r.int; f.pick = r.pick; f.chance = r.chance; f.shuffle = r.shuffle; return f; },
   cap: function(name){
     return new Promise(function(resolve){

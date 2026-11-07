@@ -22,11 +22,11 @@ NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play
 | `client/js/world/village.js` | Seeded village generator, run by BOTH browser and server (same map for everyone, `WORLD_SEED`) |
 | `client/vendor/near.js` | esbuild bundle of near-api-js + fast-auth (`client/build/`), gitignored, made by `npm run build:client` |
 | `server/src/main.ts` | Entry: config → SQLite `Store` → `MockChain` or `TestnetChain` → `Game` loop → HTTP app |
-| `server/src/app.ts` | Hand-written router (no framework): `/api/config, auth/register, auth/add-key, relay, time, state, act, market, quote, shops, talk, projects, listings, history, sim, dev/*`; islands: `islands, islands/voucher|layout|invite`; live: `stream` (SSE), `chat`, `name`, `pos`; `dev/grant` (mock chain, local only) |
+| `server/src/app.ts` | Hand-written router (no framework): `/api/config, auth/register, auth/add-key, relay, time, state, act, market, quote, shops, talk, projects, listings, history, sim, dev/*`; islands: `islands, islands/voucher|layout|invite`; live: `presence` (POST, polled ~0.7 s: position in, same-world players and chat out), `chat`, `name`; `health`; `dev/grant` (mock chain, local only: `items` and `coin`) |
 | `server/src/game/game.ts` | Game loop (tick 2 s) + `/api/act` switch: `gather, fight, engage, flee, craft, eat, farm, ship, sell, ...` |
 | `server/src/game/` | `world.ts` (off-chain actions → ledger rows), `market.ts` (merchant trades), `bazaar.ts` (Lapak / Pasar Gelap side), `settlement.ts` + `merkle.ts`, `monsters.ts`, `clock.ts`, `worldmap.ts`, `gamestore.ts`, `sim.ts` |
 | `server/src/game/islands.ts` | Private Islands: offers, vouchers (ed25519, settler key), upgrade (Kesuburan), Save World spec, invites, per-island maps (`IslandMap` in `worldmap.ts`) |
-| `server/src/presence.ts` | Live players + chat per world (`public` or `IS-<id>`), in memory only; `client/js/mods/presence.js` is its client |
+| `server/src/social.ts` | Display names (Store `names` table), presence and chat, per world (`public` or `IS-<id>`), in memory only; `client/js/mods/players.js` is its client (name tags, bubbles, chat box, `/msg /block /nama`, player cards, first-login name prompt) |
 | `client/js/world/island.js` | Private Island generator (seed + spec), run by browser and server like `village.js`; `client/js/mods/islands.js` is the UI (broker, dock menu, island board) |
 | `server/src/` | `chain.ts`, `relayer.ts` (NEP-366), `auth.ts` (Auth0 JWT), `reqauth.ts` (session-key signed requests), `newdevice.ts`, `dialogue.ts` (NEAR AI Cloud + local fallback), `db.ts` |
 | `economy/` | `config.json` (items, recipes, merchants, seasons, fees, caps, projects, monsters) + `pricing.ts` + `time.ts`; shared by server and simulator |

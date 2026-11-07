@@ -71,3 +71,66 @@ test('dev tools answer only a direct request from this machine, never one throug
     server.close();
   }
 });
+
+test('health check answers with the chain mode and settlement day', async () => {
+  const s = setup();
+  const game = new Game(s.store, s.chain, { merchantParent: 'gt.test', town: 'town.gt.test' });
+  await game.init();
+  const { server } = createApp({ ...s, game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  try {
+    const h = await (await fetch(base + '/api/health')).json();
+    assert.equal(h.ok, true);
+    assert.equal(h.chain, 'mock');
+    assert.equal(typeof h.settledThrough, 'number');
+  } finally {
+    server.close();
+  }
+});
+
+test('behind a proxy (TRUST_PROXY=1) each visitor has its own sign-up limit; without it they share the proxy\'s', async () => {
+  for (const trust of [true, false]) {
+    const s = setup();
+    s.cfg.trustProxy = trust;
+    const game = new Game(s.store, s.chain, { merchantParent: 'gt.test', town: 'town.gt.test' });
+    await game.init();
+    const { server } = createApp({ ...s, game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const hit = (ip: string) => fetch(base + '/api/auth/add-key', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `198.51.100.9, ${ip}` }, body: '{}' }).then((r) => r.status);
+    try {
+      for (let i = 0; i < 3; i++) await hit('203.0.113.1');
+      assert.equal(await hit('203.0.113.1'), 429, 'the same visitor is limited');
+      const other = await hit('203.0.113.2');
+      if (trust) assert.notEqual(other, 429, 'another visitor is not');
+      else assert.equal(other, 429, 'without TRUST_PROXY everyone counts as the proxy');
+    } finally {
+      server.close();
+    }
+  }
+});
+
+test('dev grant (mock chain, this machine only) puts settled goods in the bag; never through a proxy', async () => {
+  const s = setup();
+  s.cfg.devTools = true;
+  const kp = near.KeyPair.fromRandom('ed25519');
+  s.store.addPlayer(ACC, 'sub', 'ed25519:o');
+  s.store.addSessionKey(kp.getPublicKey().toString(), ACC);
+  const game = new Game(s.store, s.chain, { merchantParent: 'gt.test', town: 'town.gt.test' });
+  await game.init();
+  game.onNewPlayer(ACC);
+  const { server } = createApp({ ...s, game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const body = JSON.stringify({ items: { wood: 60 } });
+  try {
+    const proxied = await fetch(base + '/api/dev/grant', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.5', ...sign(kp, 'POST', '/api/dev/grant', body) }, body });
+    assert.equal(proxied.status, 403);
+    const ok = await fetch(base + '/api/dev/grant', { method: 'POST', headers: { 'content-type': 'application/json', ...sign(kp, 'POST', '/api/dev/grant', body) }, body });
+    assert.equal(ok.status, 200);
+    assert.equal(game.gs.settledBalance(ACC, 'wood'), 60);
+  } finally {
+    server.close();
+  }
+});

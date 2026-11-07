@@ -32,7 +32,7 @@
     "energyRegenPerHour": 2
   },
   "farm": {
-    "plots": 6,
+    "plots": 15,
     "seed": "wheat",
     "growDays": 3,
     "harvest": 3,

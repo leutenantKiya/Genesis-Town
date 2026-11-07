@@ -58,7 +58,7 @@ test('JSON bodies that are not objects are 400 on every POST', async () => {
         assert.equal(r.status, 400, `${path} ${body}`);
         assert.equal(r.json.error, 'body must be a JSON object');
       }
-      for (const path of ['/api/act', '/api/pos', '/api/chat', '/api/name', '/api/talk', '/api/islands/voucher', '/api/islands/invite']) {
+      for (const path of ['/api/act', '/api/presence', '/api/chat', '/api/name', '/api/talk', '/api/islands/voucher', '/api/islands/invite']) {
         const r = await h.call('POST', path, body);
         assert.equal(r.status, 400, `${path} ${body}`);
       }
