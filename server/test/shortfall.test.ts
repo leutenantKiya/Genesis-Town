@@ -215,3 +215,27 @@ test('cap_clamp_in_preflight_is_recorded_without_freezing', async () => {
   assert.equal(f.applied, cap);
   assert.equal(w.game.gs.isFrozen(P), false);
 });
+
+test('shortfall_withholds_the_accounts_credits', async () => {
+  const w = await world();
+  const day = w.game.clock.time().settleDay;
+  const sariFish = Number(w.chain.get('sari.gt.test', 'fish'));
+  const coinBefore = Number(w.chain.get(P, 'coin'));
+  const cacheBefore = w.game.gs.settledBalance(P, 'coin');
+  sell(w); // fish -10, coin +N off-chain
+  w.chain.add(P, 'fish', -10n); // moved away on chain
+  const q = quiet();
+  try { await w.game.devSettle(); } finally { q.restore(); }
+  assert.equal(w.game.settlement.settledThrough(), day);
+  assert.equal(Number(w.chain.get(P, 'coin')), coinBefore, 'no coin credited on chain');
+  await w.game.settlement.refresh([P]);
+  assert.equal(w.game.gs.settledBalance(P, 'coin'), cacheBefore, 'cache matches');
+  assert.equal(Number(w.chain.get('sari.gt.test', 'fish')), sariFish + 10, 'sari still gets the fish');
+  const rows = w.game.gs.shortfalls().filter((x) => x.account === P);
+  assert.ok(rows.some((x) => x.token === 'fish' && x.kind === 'shortfall'));
+  const wh = rows.find((x) => x.token === 'coin' && x.kind === 'withheld')!;
+  assert.ok(wh, 'withheld row');
+  assert.ok(wh.wanted > 0);
+  assert.equal(wh.applied, 0);
+  assert.equal(w.game.gs.isFrozen(P), true);
+});

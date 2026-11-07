@@ -93,6 +93,10 @@ applied`, signed deltas) and one log line; ledger rows are still marked settled 
 What is bounded: the day always completes. The loss is bounded by what the player held: the counterpart (a merchant) keeps
 what it bought. Coin is the soft spot: a clamped coin debit lets the counterpart receive coin nobody paid; that coin is
 minted under the contract's daily faucet and money-supply throttle, and it is visible as a coin row in `shortfalls`.
+The player side gets nothing for it: when an account has a clamped debit in a chunk, `preflight` also withholds all of
+that account's credits in the chunk (each recorded as a `withheld` row, wanted = the credit, applied = 0, one log line),
+so selling settled items off-chain and then moving them away on chain no longer pays. Merchants and the town are never
+withheld.
 
 Freezing: an account with a `shortfall` record is frozen. `Game.act`, `/api/relay`, the island voucher/invite routes and
 chat answer 403 `Akun ini dibekukan karena saldo on-chain tidak cocok dengan permainan. Hubungi pengelola.` The operator

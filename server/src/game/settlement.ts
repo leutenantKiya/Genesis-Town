@@ -187,19 +187,27 @@ export class Settlement {
       }
       const debits = mine.filter((e) => Number(e.delta) < 0);
       const held = debits.length ? await chain.balances(account, debits.map((e) => e.token_id)) : [];
+      const kept: DeltaEntry[] = [];
+      let short = false;
       for (const e of mine) {
         let d = Number(e.delta);
         const i = debits.indexOf(e);
         if (d < 0 && -d > Number(held[i])) {
           const applied = -Number(held[i]);
           note(account, e.token_id, d, applied, 'shortfall', 'chain balance too low');
-          d = applied; changed = true;
+          d = applied; changed = true; short = true;
         } else if (d > 0) {
           const cap = e.token_id === 'coin' ? (caps.dailyCoinGain ?? 5000) : caps.dailyGainPerItem;
           if (d > cap) { note(account, e.token_id, d, cap, 'cap_clamp', 'daily gain cap'); d = cap; changed = true; }
         }
-        if (d !== 0) next.push({ ...e, delta: String(d) });
+        if (d !== 0) kept.push({ ...e, delta: String(d) });
       }
+      if (short) {
+        // The account's books do not match the chain: it may have sold what it then moved away. Hold back its credits
+        // (merchants and the town are exempt above and keep theirs).
+        for (const e of kept.filter((k) => Number(k.delta) > 0)) note(account, e.token_id, Number(mine.find((m) => m.token_id === e.token_id)!.delta), 0, 'withheld', 'credit withheld after shortfall');
+        next.push(...kept.filter((k) => Number(k.delta) < 0));
+      } else next.push(...kept);
     }
     if (changed) {
       chunk.entries = next;
