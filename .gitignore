@@ -26,3 +26,6 @@ playwright-report/
 .DS_Store
 data/
 client/vendor/
+
+# design audit screenshots (taste-skill)
+.taste-skill/

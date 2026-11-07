@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { MARKET_FEE_BPS, type Config } from './config.ts';
-import type { Chain } from './chain.ts';
+import { MockChain, type Chain } from './chain.ts';
 import type { Store } from './db.ts';
 import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
@@ -11,8 +11,8 @@ import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
-import { Presence, validName, worldIdOk } from './presence.ts';
-import { Bazaar } from './game/bazaar.ts';
+import { Bazaar, titleFor } from './game/bazaar.ts';
+import { Social, worldIdOk } from './social.ts';
 import type { Game } from './game/game.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
 import { Worker } from 'node:worker_threads';
@@ -45,7 +45,6 @@ export interface AppDeps {
   currentBlockHeight: () => Promise<bigint>;
   clientDir: string;
   dialogue?: Dialogue;
-  presence?: Presence;
 }
 
 const MIME: Record<string, string> = {
@@ -87,7 +86,6 @@ export function createApp(deps: AppDeps) {
   const limiter = new RateLimiter(deps.cfg.relay.perMinute, deps.cfg.relay.perDay);
   const actLimiter = new RateLimiter(60, 5000); // off-chain actions per account
   const ipLimiter = new RateLimiter(10, 200); // account creation per IP
-  const posLimiter = new RateLimiter(240, 100000);
   const simLimiter = new RateLimiter(6, 300); // simulations per IP (each new parameter set starts a worker thread)
   const talkLimiter = new RateLimiter(6, 150);
   const deviceLimiter = new RateLimiter(3, 20); // new-device key additions per IP (each costs the relayer a NEAR Auth sign call) // merchant questions per account (each may be one NEAR AI call)
@@ -95,6 +93,8 @@ export function createApp(deps: AppDeps) {
   const clientRoot = resolve(deps.clientDir);
   const checkSpend = spendGuard(deps.chain, game);
   const bazaar = new Bazaar(deps.store.db);
+  const social = new Social(deps.store);
+  const presenceLimiter = new RateLimiter(240, 100_000); // about 2 reports a second per account
   const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
     const accts = [sender, ...extra];
     if (method === 'send_item' && typeof args.receiver_id === 'string') accts.push(args.receiver_id);
@@ -108,29 +108,20 @@ export function createApp(deps: AppDeps) {
     if (method === 'buy_listing' && extra[0]) bazaar.recordSale(Number(args.listing_id), extra[0], Number(args.amount));
   };
 
-  // Live presence and chat (src/presence.ts): in memory, per world.
-  const presence = deps.presence ?? new Presence((a) => deps.store.nameOf(a));
-  // Private Islands: only the owner and invited guests may stream, chat or show up there.
-  presence.access = (a, w) => {
+  // Private Islands: only the owner and invited guests may report, chat or show up there.
+  social.access = (a, w) => {
     if (w === 'public') return true;
     try { game.worldFor(a, w, false); return true; } catch { return false; }
   };
   const chatIpLimiter = new RateLimiter(30, 2000);
-  const streams = new Map<string, number>();
   const worldOf = (v: unknown) => (v == null || v === '' ? 'public' : worldIdOk(v) ? v : (() => { throw new HttpError(400, 'bad world'); })());
-  /** Records where a player says they stand (position already validated by the caller or checked here). */
-  function feedPresence(acct: string, world: string, pos: { x?: unknown; y?: unknown } | null | undefined, dir: unknown, scene: unknown) {
-    const x = Number(pos?.x), y = Number(pos?.y);
-    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 255 || y > 255) return;
-    if (!presence.access(acct, world)) return;
-    // Only show a player in the world the server has them in (worlds change only by sailing), on a walkable tile.
-    if (game.positions && game.positions.worldOf(acct) !== world) return;
-    if (game.map) {
-      let m: { walkable(x: number, y: number): boolean } | null = null;
-      try { m = game.worldFor(acct, world, false).map; } catch { return; }
-      if (m && !m.walkable(x, y)) return;
-    }
-    presence.update(acct, world, { x, y }, String(dir ?? ''), String(scene ?? 'out'));
+  /** The world a presence or chat request is about: it must be one the player may be in AND the one the server has them in. */
+  async function checkedWorld(acct: string, v: unknown) {
+    const w = worldOf(v);
+    await game.prepare(acct, { world: w });
+    if (!social.access(acct, w)) throw new HttpError(409, 'Kamu tidak boleh ke sana.');
+    if (game.positions && game.positions.worldOf(acct) !== w) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
+    return w;
   }
 
   // Off-chain play is signed with the player's session key (src/reqauth.ts); the account header alone proves nothing.
@@ -148,15 +139,18 @@ export function createApp(deps: AppDeps) {
     return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
   }
 
-  /** Private Islands: /api/islands, /api/islands/voucher|layout|invite, and the dev coin grant. Returns true when it answered. */
+  /** The visitor's address for per-address limits. Behind a hosting proxy every request comes from the proxy, so with
+   *  TRUST_PROXY=1 the address the proxy appended (the last X-Forwarded-For entry, which a client cannot forge) is used. */
+  function clientIp(req: IncomingMessage) {
+    const direct = req.socket.remoteAddress ?? '?';
+    if (!deps.cfg.trustProxy) return direct;
+    const xff = req.headers['x-forwarded-for'];
+    const list = (Array.isArray(xff) ? xff.join(',') : xff ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    return list[list.length - 1] ?? direct;
+  }
+
+  /** Private Islands: /api/islands, /api/islands/voucher|layout|invite. Returns true when it answered. */
   async function islandsApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
-    if (p === '/api/dev/grant' && req.method === 'POST') {
-      const raw = await readRaw(req);
-      const acct = accountOf(req, url, raw);
-      if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
-      send(res, 200, await game.devGrant(acct, Math.floor(Number(parseJson(raw).coin))));
-      return true;
-    }
     if (p !== '/api/islands' && !p.startsWith('/api/islands/')) return false;
     if (req.method === 'GET' && p === '/api/islands') {
       send(res, 200, await game.islands.view(accountOf(req, url)));
@@ -201,13 +195,18 @@ export function createApp(deps: AppDeps) {
           monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, reach: game.econ.monsters.reach } : null,
         });
       }
+      if (req.method === 'GET' && p === '/api/health') {
+        // for the host's health check: the process is up and the game clock and settlement are where they should be
+        const t = game.clock.time();
+        return send(res, 200, { ok: true, chain: deps.chain.mode, day: t.day, hour: t.hour, settledThrough: game.settlement.settledThrough() });
+      }
       if (req.method === 'POST' && p === '/api/auth/register') {
-        const ip = req.socket.remoteAddress ?? '?';
+        const ip = clientIp(req);
         if (!ipLimiter.take(ip)) throw new HttpError(429, 'too many sign-ups from this address');
         return send(res, 200, await register({ ...deps, onNewPlayer: (a) => game.onNewPlayer(a) }, await readJson(req)));
       }
       if (req.method === 'POST' && p === '/api/auth/add-key') {
-        const ip = req.socket.remoteAddress ?? '?';
+        const ip = clientIp(req);
         if (!deviceLimiter.take(ip)) throw new HttpError(429, 'too many new-device requests');
         return send(res, 200, await addDeviceKey(deps, await readJson(req)));
       }
@@ -219,6 +218,39 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/time') {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null, weather: game.weather() });
       }
+      if (req.method === 'POST' && p === '/api/presence') {
+        // where I am now -> who else is in my world, and the chat lines since the last call
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        if (!presenceLimiter.take(acct)) throw new HttpError(429, 'too many presence reports');
+        const b = parseJson(raw) as { world?: unknown; x?: unknown; y?: unknown; dir?: unknown; scene?: unknown; since?: unknown };
+        game.fixWorld(acct); // an island sold or a guest uninvited while standing there: back to the public island first
+        const w = await checkedWorld(acct, b.world);
+        game.reportPosition(acct, { x: Number(b.x), y: Number(b.y) }, w);
+        let onTile = true; // outdoors, only walkable tiles of that world's map are shown
+        if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, false).map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
+        if (onTile) social.report(acct, w, b);
+        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, account: s.account, x: s.x, y: s.y, dir: s.dir, title: titleFor(bazaar.points(s.account)) }));
+        const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
+        return send(res, 200, { me: social.nick(acct), online: social.online(), world: w, players, chat, last: social.seq });
+      }
+      if (req.method === 'POST' && p === '/api/chat') {
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        if (!chatIpLimiter.take(clientIp(req))) throw new HttpError(429, 'terlalu cepat');
+        game.assertActive(acct); // frozen accounts cannot speak
+        const b = parseJson(raw) as { world?: unknown; text?: unknown };
+        const text = typeof b.text === 'string' ? b.text : '';
+        if (!deps.store.nameOf(acct)) throw new HttpError(409, 'Pilih nama dulu.');
+        const w = await checkedWorld(acct, b.world);
+        return send(res, 200, { msg: social.say(acct, w, text) });
+      }
+      if (req.method === 'POST' && p === '/api/name') {
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        game.assertActive(acct);
+        return send(res, 200, { name: social.setNick(acct, parseJson(raw).name) });
+      }
       if (req.method === 'GET' && p === '/api/state') {
         const acct = accountOf(req, url);
         const qx = url.searchParams.get('x'), qy = url.searchParams.get('y');
@@ -226,7 +258,6 @@ export function createApp(deps: AppDeps) {
           const w = worldOf(url.searchParams.get('world')); // validate before anything is recorded
           await game.prepare(acct, { world: w });
           game.reportPosition(acct, { x: Number(qx), y: Number(qy) }, w);
-          feedPresence(acct, w, { x: qx, y: qy }, url.searchParams.get('dir'), url.searchParams.get('scene'));
         }
         return send(res, 200, { ...game.state(acct), name: deps.store.nameOf(acct) });
       }
@@ -243,68 +274,7 @@ export function createApp(deps: AppDeps) {
         if (ab.recipe !== undefined && !has(game.econ.recipes, ab.recipe)) throw new HttpError(400, 'Resep tidak dikenal.');
         await game.prepare(acct, ab); // owner changes on chain show up here, before the act checks who owns what
         const out = game.act(acct, ab) as { world?: string; arrive?: { x: number; y: number } } & Record<string, unknown>;
-        // after a boat trip the player stands at the arrival tile of the new world
-        feedPresence(acct, typeof out?.world === 'string' ? out.world : w, out?.arrive ?? (ab.pos as { x?: unknown; y?: unknown } | undefined), ab.dir, ab.scene);
         return send(res, 200, out);
-      }
-      if (req.method === 'POST' && p === '/api/pos') {
-        // Light position report for presence only (no game action): { world, x, y, dir, scene }
-        const raw = await readRaw(req);
-        const acct = accountOf(req, url, raw);
-        if (!posLimiter.take(acct)) throw new HttpError(429, 'terlalu sering');
-        const b = parseJson(raw);
-        feedPresence(acct, worldOf(b.world), b as { x?: unknown; y?: unknown }, b.dir, b.scene);
-        return send(res, 200, { ok: true });
-      }
-      if (req.method === 'GET' && p === '/api/stream') {
-        // Server-Sent Events: `presence` {players} twice a second and `chat` {account,name,text,t}. Signed like /api/state
-        // (headers; the client reads it with fetch, since EventSource cannot set headers).
-        const acct = accountOf(req, url);
-        const world = worldOf(url.searchParams.get('world'));
-        await game.prepare(acct, { world });
-        if (!presence.access(acct, world)) throw new HttpError(409, 'Kamu tidak boleh ke sana.');
-        if ((streams.get(acct) ?? 0) >= 4) throw new HttpError(429, 'terlalu banyak koneksi');
-        streams.set(acct, (streams.get(acct) ?? 0) + 1);
-        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no' });
-        const emit = (ev: string, data: unknown) => { res.write(`event: ${ev}\ndata: ${JSON.stringify(data)}\n\n`); };
-        res.write('retry: 2000\n\n');
-        for (const m of presence.recent(world)) emit('chat', { ...m, backlog: true });
-        let closed = false;
-        let unsub = () => {};
-        const timer = setInterval(() => tick(), 500);
-        const close = () => {
-          if (closed) return;
-          closed = true; clearInterval(timer); unsub(); streams.set(acct, Math.max(0, (streams.get(acct) ?? 1) - 1));
-        };
-        const tick = () => {
-          // a guest who is no longer invited (or an owner who sold the island) stops hearing the island at once
-          if (!presence.access(acct, world)) { close(); res.end(); return; }
-          emit('presence', { players: presence.others(world, acct) });
-        };
-        tick();
-        unsub = presence.subscribe(world, (m) => { if (!closed) emit('chat', m); });
-        req.on('close', close);
-        return;
-      }
-      if (req.method === 'POST' && p === '/api/chat') {
-        const raw = await readRaw(req);
-        const acct = accountOf(req, url, raw);
-        if (!chatIpLimiter.take(req.socket.remoteAddress ?? '?')) throw new HttpError(429, 'terlalu cepat');
-        game.assertActive(acct);
-        const b = parseJson(raw), world = worldOf(b.world);
-        if (!deps.store.nameOf(acct)) throw new HttpError(409, 'Pilih nama dulu.');
-        await game.prepare(acct, { world });
-        if (!presence.access(acct, world)) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
-        // a player on an island cannot speak into the public square (or the other way round)
-        if (game.positions && game.positions.worldOf(acct) !== world) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
-        return send(res, 200, { message: presence.chat(acct, world, b.text) });
-      }
-      if (req.method === 'POST' && p === '/api/name') {
-        const raw = await readRaw(req);
-        const acct = accountOf(req, url, raw);
-        const name = validName(parseJson(raw).name);
-        deps.store.setName(acct, name);
-        return send(res, 200, { name });
       }
       if (req.method === 'GET' && p === '/api/market') {
         return send(res, 200, { merchants: game.merchants() });
@@ -357,7 +327,7 @@ export function createApp(deps: AppDeps) {
       }
       if (req.method === 'POST' && p === '/api/sim') {
         // open to everyone (the public simulator page), so: one limiter per address and clamped inputs
-        if (!simLimiter.take(req.socket.remoteAddress ?? '?')) throw new HttpError(429, 'terlalu banyak simulasi, coba sebentar lagi');
+        if (!simLimiter.take(clientIp(req))) throw new HttpError(429, 'terlalu banyak simulasi, coba sebentar lagi');
         const b = await readJson(req);
         const num = (v: unknown, d: number) => { const n = Math.floor(Number(v ?? d)); return Number.isFinite(n) ? n : d; };
         const days = Math.max(1, Math.min(30, num(b.days, 7)));
@@ -378,6 +348,24 @@ export function createApp(deps: AppDeps) {
         if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
         const account = String(parseJson(await readRaw(req)).account ?? '');
         return send(res, 200, { account, lifted: game.gs.unfreeze(account) });
+      }
+      if (req.method === 'POST' && p === '/api/dev/grant') {
+        // Mock chain only, from this machine only: put settled goods in a player's bag to try out town projects,
+        // shop rescues and the market without hours of gathering. Never available on testnet.
+        if (!devAllowed(req) || !(deps.chain instanceof MockChain)) throw new HttpError(403, 'dev grant is mock-only');
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        const body = parseJson(raw) as { items?: Record<string, unknown>; coin?: unknown };
+        const items = body.items ?? {};
+        // coin never appears from nowhere: it moves from the town treasury (existing coin), items are minted on the mock chain
+        if (body.coin != null) await game.devGrant(acct, Math.floor(Number(body.coin)));
+        for (const [t, n] of Object.entries(items)) {
+          if (t === 'coin') { await game.devGrant(acct, n as number); continue; }
+          if (!game.econ.items[t] || !Number.isInteger(n) || (n as number) < 1 || (n as number) > 1000) throw new HttpError(400, 'bad item or amount');
+          deps.chain.add(acct, t, BigInt(n as number));
+        }
+        await game.settlement.refresh([acct]);
+        return send(res, 200, { ok: true, state: game.state(acct) });
       }
       if (req.method === 'POST' && p === '/api/dev/settle') {
         if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');

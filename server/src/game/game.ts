@@ -13,7 +13,7 @@ import { Islands, parseWorld, worldId, type VoucherSigner } from './islands.ts';
 import type { IslandRow } from './gamestore.ts';
 import { MockChain } from '../chain.ts';
 import { Monsters } from './monsters.ts';
-import { worldIdOk } from '../presence.ts';
+import { worldIdOk } from '../social.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number; contractId?: string; voucherSigner?: VoucherSigner }
 

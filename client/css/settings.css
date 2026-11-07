@@ -9,11 +9,11 @@ html.gt-full .bezel{flex:1;display:flex;align-items:center;justify-content:cente
 html.gt-full #fit{height:100%;align-items:center}
 html.gt-full .pad{display:none}
 html:fullscreen .shell{box-shadow:none}
-.gt-settings h3{margin:10px 0 6px;font-size:9px;font-weight:400;color:#4a4d75}
+.gt-settings h3{margin:10px 0 6px;font-size:calc(15px*var(--ts));font-weight:400;color:#4a4d75}
 .gt-settings h3:first-child{margin-top:0}
-.gt-key{min-width:64px;font-size:8px}
+.gt-key{min-width:64px;font-size:calc(14px*var(--ts))}
 .gt-key.gt-capturing{background:#9c2f55;color:#fff}
-#gt-hint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:rgba(10,12,24,.82);color:#fff;font-size:8px;line-height:1.4;padding:3px 7px;border-radius:3px;box-shadow:0 0 0 1px #000;pointer-events:none;white-space:nowrap;display:none;z-index:2}
+#gt-hint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:rgba(10,12,24,.82);color:#fff;font-size:calc(14px*var(--ts));line-height:1.4;padding:3px 7px;border-radius:3px;box-shadow:0 0 0 1px #000;pointer-events:none;white-space:nowrap;display:none;z-index:2}
 #gt-hint.on{display:block}
 #gt-hint b{color:#f2c94c;font-weight:400}
 html.gt-reduced-motion *{animation:none!important;transition:none!important}
@@ -22,7 +22,7 @@ html.gt-reduced-motion *{animation:none!important;transition:none!important}
 .hud .cell:has(#role){display:none}
 html.gt-full .shell{background:#14152a;box-shadow:none}
 html.gt-full .bezel{background:#0b0c14;box-shadow:none;padding:0}
-.chain-banner{display:inline-block;margin:0 0 6px 2px;padding:2px 7px;border-radius:9px;font-size:7px;box-shadow:none}
+.chain-banner{display:inline-block;margin:0 0 6px 2px;padding:2px 7px;border-radius:9px;font-size:calc(12px*var(--ts));box-shadow:none}
 .chain-banner::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:0;background:currentColor}
 .chain-energy i{background:#b8d94a}
 /* full-window must beat the prototype's short-landscape grid layout */

@@ -91,7 +91,46 @@
     else { txt = 'Menghubungkan…'; cls += 'mock'; }
     banner.className = cls; banner.textContent = txt;
     banner.hidden = S.mode === 'testnet' && !chainUI(); // mock and offline banners are warnings and always show
+    // before signing in, the prototype's local coin counter would show a balance that isn't yours: hide it
+    document.documentElement.classList.toggle('gt-guest', (S.mode === 'testnet' || S.mode === 'mock') && !S.account);
+    renderTitle();
     if (accBtn) accBtn.textContent = S.account || S.mode === 'offline' ? 'Tas' : 'Masuk';
+  }
+
+  /* ---- Title card: what this is and one button to start, for anyone not signed in yet ---- */
+  var titleEl = null;
+  function liveLine() {
+    var open = (S.market || []).filter(function (m) { return m.open; }), closed = (S.market || []).length - open.length, best = null;
+    open.forEach(function (m) { m.items.forEach(function (it) { if (it.ask != null && (!best || Math.abs(it.changePct) > Math.abs(best.it.changePct))) best = { m: m, it: it }; }); });
+    var parts = [];
+    if (best) parts.push(item(best.it.token) + ' di ' + best.m.name + ' ' + best.it.ask + ' koin' + (best.it.changePct ? ' (' + (best.it.changePct > 0 ? 'naik ' : 'turun ') + Math.abs(best.it.changePct) + '%)' : ''));
+    if (closed) parts.push(closed + ' toko tutup, butuh bantuan warga');
+    return parts.length ? 'Di pasar sekarang: ' + parts.join(' · ') : null;
+  }
+  function renderTitle() {
+    var show = (S.mode === 'testnet' || S.mode === 'mock') && !S.account;
+    try { if (sessionStorage.getItem('gt.title.skip') === '1') show = false; } catch (e) { /* storage blocked */ }
+    document.documentElement.classList.toggle('gt-titlecard', show);
+    if (!show) { if (titleEl) titleEl.hidden = true; return; }
+    var screen = document.getElementById('screen');
+    if (!screen) return;
+    if (!titleEl) {
+      titleEl = $('section', 'gt-title'); titleEl.setAttribute('aria-labelledby', 'gt-title-h');
+      screen.appendChild(titleEl);
+    }
+    titleEl.hidden = false;
+    titleEl.textContent = '';
+    var card = $('div', 'gt-title-card');
+    var h = $('h1', null, 'Genesis Town'); h.id = 'gt-title-h'; card.appendChild(h);
+    card.appendChild($('p', 'gt-title-lead', 'Kota pasar piksel. Kumpulkan, olah, dan jual ke pedagang yang harganya bergerak karena pemain.'));
+    var live = liveLine();
+    if (live) card.appendChild($('p', 'gt-title-live', live));
+    var acts = $('div', 'gt-title-acts');
+    acts.appendChild(button('Main sekarang', function () { login(); }, 'primary'));
+    acts.appendChild(button('Lihat-lihat dulu', function () { try { sessionStorage.setItem('gt.title.skip', '1'); } catch (e) { /* storage blocked */ } renderTitle(); }));
+    card.appendChild(acts);
+    card.appendChild($('p', 'gt-title-note', 'Masuk pakai Google atau email. Tanpa dompet, tanpa biaya, langsung di browser.'));
+    titleEl.appendChild(card);
   }
 
   var SEASON = { semi: 'Semi', panas: 'Panas', gugur: 'Gugur', dingin: 'Dingin' };
@@ -274,7 +313,7 @@
     } else {
       jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); S.weather = t.weather; S.season = t.season; }));
     }
-    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); applyWeatherClass(); if (S.st && S.st.encounter && !(fightH && fightH.isOpen()) && !GT.isUiOpen()) openFight(); }).catch(function (e) {
+    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); if (!S.account) renderTitle(); applyWeatherClass(); if (S.st && S.st.encounter && !fightOpen() && !GT.isUiOpen()) openFight(); else if (S.st && !S.st.encounter && fightOpen()) closeFight(); }).catch(function (e) {
       if (e.status === 401) { S.account = null; lsSet(LS_ACC, null); renderBanner(); }
     });
   }
@@ -372,7 +411,6 @@
   }
 
   /* ---- Night monsters (the server decides; this draws them and runs the fight window) ---- */
-  var fightH = null;
   function drawMonster(ctx, kind, px, py, t) {
     var bob = Math.round(Math.sin(t * 6) * 1);
     function R(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(px + x, py + y + bob, w, h); }
@@ -403,7 +441,11 @@
       var w = wander(m, t);
       drawMonster(ctx, m.kind, Math.round((m.x + w.dx) * T - camX), Math.round((m.y + w.dy) * T - camY), t + m.x);
     });
-    if (e) drawMonster(ctx, e.kind, e.x * T - camX, e.y * T - camY, t);
+    if (e) {
+      var lx = 0, ly = 0, lk = (performance.now() - fightLunge) / 260;
+      if (lk >= 0 && lk < 1) { var reach = Math.sin(lk * Math.PI) * 6, dxp = GT.player.x - e.x, dyp = GT.player.y - e.y, dl = Math.max(1, Math.abs(dxp) + Math.abs(dyp)); lx = dxp / dl * reach; ly = dyp / dl * reach; }
+      drawMonster(ctx, e.kind, Math.round(e.x * T - camX + lx), Math.round(e.y * T - camY + ly), t);
+    }
     drawWeather(ctx, T, t);
   }
 
@@ -439,33 +481,91 @@
     });
     ctx.restore();
   }
-  function fightBody(e) {
-    var wrap = $('div');
-    var hp = ''; for (var i = 0; i < e.maxHp; i++) hp += i < e.hp ? '■ ' : '□ ';
-    wrap.appendChild($('p', null, e.tile ? e.name + ' keluar dari ' + (e.tile === 'rock' ? 'celah batu' : 'balik pohon') + ' dan menghadang.' : e.name + ' menyerang di gelap hutan.'));
-    wrap.appendChild($('p', 'num', 'Tenaganya: ' + hp.trim()));
-    wrap.appendChild($('p', 'num', 'Energimu: ' + (S.st ? S.st.energy : '?') + '/' + (S.st ? S.st.energyMax : 100)));
-    wrap.appendChild($('p', 'chain-dim', (e.tile ? 'Menang: kamu dapat hasilnya +1 bonus.' : 'Menang: ' + (e.kind === 'bat' ? 'kelelawar menjatuhkan 1 Bijih.' : 'babi hutan menjatuhkan 1 Kayu.')) + ' Energi habis: pingsan sampai pukul 06:00 (tidak ada barang yang hilang). Pos Ronda di Balai Desa membuat hutan aman.'));
-    return wrap;
+  /* ---- Fighting a night monster: a slim battle bar at the bottom, the fight itself plays out in the world.
+   * Lawan: the axe swings at the monster (sparks on a hit, a cut through air on a miss), the monster flashes and the
+   * damage rises over it; then the monster lunges back and the energy it costs rises over the player. The server
+   * still decides every round; the animation shows what it decided. ---- */
+  var fightEl = null, fightLunge = 0;
+  function fightOpen() { return !!(fightEl && !fightEl.hidden); }
+  function pips(n, max) { var s = ''; for (var i = 0; i < max; i++) s += i < n ? '■' : '□'; return s; }
+  function renderFight(e, note) {
+    var screen = document.getElementById('screen');
+    if (!screen) return;
+    if (!fightEl) { fightEl = $('section', 'gt-fight'); fightEl.setAttribute('aria-live', 'polite'); screen.appendChild(fightEl); }
+    fightEl.hidden = false;
+    document.documentElement.classList.add('gt-fighting');
+    fightEl.textContent = '';
+    var cfg = S.cfg && S.cfg.monsters || {};
+    var top = $('div', 'gt-fight-top');
+    var foe = $('div', 'gt-fight-foe');
+    foe.appendChild($('b', null, e.name));
+    foe.appendChild($('span', 'gt-fight-hp', pips(e.hp, e.maxHp)));
+    top.appendChild(foe);
+    var me = $('div', 'gt-fight-me');
+    var bar = $('span', 'chain-energy'); var fill = $('i'); fill.style.width = Math.round(100 * (S.st ? S.st.energy / S.st.energyMax : 1)) + '%'; bar.appendChild(fill);
+    me.appendChild($('span', null, 'Energimu ' + (S.st ? S.st.energy : '?')));
+    me.appendChild(bar);
+    top.appendChild(me);
+    fightEl.appendChild(top);
+    fightEl.appendChild($('p', 'gt-fight-note', note || (e.tile ? e.name + ' menghadang dari ' + (e.tile === 'rock' ? 'celah batu' : 'balik pohon') + '!' : e.name + ' menyerang di gelap hutan!')));
+    var acts = $('div', 'gt-fight-acts');
+    var touch = document.documentElement.classList.contains('gt-phone');
+    acts.appendChild(button('Lawan' + (touch ? '' : ' (F)') + ' · −' + (cfg.fightEnergy || 5) + ' energi', function () { fightStep('fight'); }, 'primary'));
+    acts.appendChild(button('Lari' + (touch ? '' : ' (Esc)') + ' · −' + (cfg.fleeEnergy || 4), function () { fightStep('flee'); }));
+    fightEl.appendChild(acts);
+  }
+  function closeFight() {
+    if (fightEl) fightEl.hidden = true;
+    document.documentElement.classList.remove('gt-fighting');
   }
   function openFight() {
     var e = S.st && S.st.encounter;
     if (!e) return;
-    if (fightH && fightH.isOpen()) { fightH.setBody(fightBody(e)); return; }
-    var cfg = S.cfg && S.cfg.monsters || {};
-    fightH = GT.modal({ title: e.name + '!', body: fightBody(e), closable: false, actions: [
-      { label: 'Lawan (−' + (cfg.fightEnergy || 6) + ' energi)', primary: true, onClick: function () { fightStep('fight'); return false; } },
-      { label: 'Lari (−' + (cfg.fleeEnergy || 4) + ' energi)', onClick: function () { fightStep('flee'); return false; } }
-    ] });
+    if (!fightOpen() && window.GT_FX) { GT_FX.float({ x: e.x, y: e.y }, '!', '#ffd84a'); GT_FX.shake(1); }
+    renderFight(e);
   }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function fightStep(action) {
     if (S.busy) return;
+    var e = S.st && S.st.encounter;
+    if (!e) return closeFight();
     S.busy = true;
-    act({ action: action }).then(function (r) {
-      if (r && r.state && r.state.encounter) openFight();
-      else if (fightH) { fightH.close('done'); fightH = null; }
-      if (r && r.ko) knockedOut();
-    }, noop).then(function () { S.busy = false; });
+    var FX = window.GT_FX, tile = { x: e.x, y: e.y }, me = { x: GT.player.x, y: GT.player.y };
+    var hpBefore = e.hp, energyBefore = S.st.energy;
+    if (action === 'fight' && FX) FX.strike(tile, true);
+    act({ action: action }, true).then(function (r) {
+      var next = r && r.state && r.state.encounter;
+      if (action === 'flee') {
+        if (FX) FX.float(me, 'Kabur!', '#cfd8ff');
+        closeFight(); GT.toast(r.toast);
+        if (r.ko) knockedOut();
+        return;
+      }
+      var hit = r.won || (next && next.hp < hpBefore);
+      return wait(190).then(function () {
+        if (FX) {
+          if (hit) { FX.flash(tile, 'rgba(255,255,255,0.9)'); FX.float(tile, r.won ? 'KO!' : '-1', '#ffd84a'); FX.shake(2); }
+          else FX.float(tile, 'Meleset!', '#cfd8ff');
+        }
+        if (r.won) {
+          if (FX) FX.poof(tile);
+          closeFight();
+          GT.toast(r.toast);
+          return;
+        }
+        if (next) renderFight(next, hit ? 'Kena! ' + next.name + ' masih melawan.' : 'Meleset! ' + next.name + ' bersiap menyerang…');
+        // the monster's turn
+        return wait(380).then(function () {
+          fightLunge = performance.now();
+          return wait(160);
+        }).then(function () {
+          var lost = energyBefore - (S.st ? S.st.energy : energyBefore) - ((S.cfg && S.cfg.monsters && S.cfg.monsters.fightEnergy) || 0);
+          if (FX) { FX.flash(me, 'rgba(232,80,60,0.6)'); if (lost > 0) FX.float(me, '-' + lost, '#ff8a7a'); FX.shake(3); }
+          if (r.ko) { closeFight(); knockedOut(); return; }
+          if (next) renderFight(next, next.name + ' menyerang balik' + (lost > 0 ? ' (−' + lost + ' energi)' : '') + '. Lawan atau lari?');
+        });
+      });
+    }, function () { /* the toast already says why */ }).then(function () { S.busy = false; });
   }
   function knockedOut() {
     var sp = GT.world && GT.world.spawn;
@@ -576,7 +676,7 @@
   function findPlots() {
     var own = GT.world && GT.world.own, sc = GT.getScene('out');
     if (!own || !sc) return;
-    if (GT.world.farm && GT.world.farm.plots.length) { S.plots = GT.world.farm.plots.slice(0, 12); return; }
+    if (GT.world.farm && GT.world.farm.plots.length) { S.plots = GT.world.farm.plots.slice(0, (S.cfg && S.cfg.econ.farm && S.cfg.econ.farm.plots) || 15); return; }
     var m = sc.map, out = [], sp = GT.world.spawn;
     for (var r = 1; r <= 5 && out.length < 6; r++) {
       for (var y = own.y - r; y <= own.y + 2 + r && out.length < 6; y++) {
@@ -812,7 +912,7 @@
     var s = (S.shops || []).filter(function (x) { return x.id === id; })[0];
     wrap.appendChild($('p', 'chain-closed', 'TUTUP. ' + m.name + ' tidak sanggup membayar sewa.'));
     if (!s) { wrap.appendChild($('p', null, 'Memuat papan pemulihan…')); return wrap; }
-    wrap.appendChild($('p', null, 'Bantu buka lagi: lengkapi semua baris di bawah. Penyumbang mendapat saham dan bagian keuntungan toko.'));
+    wrap.appendChild($('p', null, 'Lengkapi semua baris untuk membuka lagi tokonya. Penyumbang dapat saham dan bagian untung.'));
     var lines = [], allDone = true;
     s.need.forEach(function (n) {
       var got = 0; (s.pledged || []).forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
@@ -847,7 +947,7 @@
   function spendable(t) { var b = S.st && S.st.bag[t]; return b ? Math.max(0, Math.min(b.settled, b.settled + b.today)) : 0; }
   function projectBody() {
     var wrap = $('div');
-    wrap.appendChild($('p', null, 'Warga mengumpulkan bahan bersama. Saat semua baris terpenuhi, bahan dipakai habis' + (chainUI() ? ' (dibakar on-chain)' : '') + ' dan bagian peta baru terbuka untuk semua pemain.'));
+    wrap.appendChild($('p', null, 'Patungan bahan dengan warga lain. Kalau semua baris terpenuhi, bagian peta baru terbuka untuk semua' + (chainUI() ? ' (bahannya dibakar on-chain).' : '.')));
     if (!S.projects) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
     if (!S.projects.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada proyek.'));
     S.projects.forEach(function (pj) {
@@ -874,7 +974,7 @@
         signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast('Sumbangan dikembalikan ke tasmu.'); refreshModal(); }, function (e) { GT.toast(e.message); });
       }));
     });
-    wrap.appendChild($('p', 'chain-dim', 'Sumbangan memakai barang yang sudah tersimpan (lewat pukul 06:00) dan belum terpakai hari ini. Bisa ditarik lagi selama proyek belum selesai.'));
+    wrap.appendChild($('p', 'chain-dim', 'Pakai barang yang sudah tersimpan (lewat 06:00). Bisa ditarik lagi selama proyek belum selesai.'));
     return wrap;
   }
 
@@ -907,7 +1007,7 @@
     });
     wrap.appendChild(grid);
     wrap.appendChild(bagDetail(sel));
-    wrap.appendChild($('p', 'chain-dim', (document.documentElement.classList.contains('gt-phone') ? 'Ketuk barang untuk melihatnya, lalu Pegang untuk menaruhnya di tangan. ' : 'Klik barang untuk melihatnya, klik kanan untuk memegangnya. ') + '"Hari ini" disimpan permanen pukul 06:00' + (chainUI() ? ' (dicatat di NEAR)' : '') + '; Kirim dan Pasar memakai barang yang sudah tersimpan.'));
+    wrap.appendChild($('p', 'chain-dim', (document.documentElement.classList.contains('gt-phone') ? 'Ketuk barang untuk melihat, lalu Pegang. ' : 'Klik untuk melihat, klik kanan untuk memegang. ') + 'Barang "hari ini" tersimpan permanen pukul 06:00' + (chainUI() ? ' (di NEAR).' : '.')));
     if (S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
     if (window.GT_ISLANDS && GT_ISLANDS.bagSection) { var isl = GT_ISLANDS.bagSection(); if (isl) wrap.appendChild(isl); }
     wrap.appendChild(button('Semua riwayat', function () { open('history'); }));
@@ -1060,17 +1160,22 @@
     wrap.appendChild(tabs);
     if (!S.listings) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
     if (tab === 'lapak') {
-      wrap.appendChild($('p', null, 'Lapak pemain: namamu tampil, dan setiap barang yang terjual menambah popularitasmu. Tidak perlu punya toko.'));
-      var named = S.listings.filter(function (l) { return !l.anonymous; });
+      wrap.appendChild($('p', null, 'Jual pakai namamu: setiap barang yang laku menambah popularitasmu.'));
+      var named = S.listings.filter(function (l) { return !l.anonymous && (!S.marketSeller || l.seller === S.marketSeller.account); });
+      if (S.marketSeller) {
+        // opened from another player's card: only their stall, with a way back to everyone's
+        wrap.appendChild($('h4', 'chain-h', 'Lapak ' + S.marketSeller.nick));
+        wrap.appendChild(button('Lihat semua lapak', function () { S.marketSeller = null; redraw(); }));
+      }
       if (!named.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada lapak. Jadilah yang pertama!'));
       byItem(named, wrap);
     } else if (tab === 'gelap') {
-      wrap.appendChild($('p', null, 'Pasar Gelap: jual tanpa nama. Pembeli tidak tahu siapa penjualnya, tapi kamu juga tidak dapat popularitas. Anonim di dalam game saja: catatan transaksinya tetap publik.'));
+      wrap.appendChild($('p', null, 'Jual tanpa nama dan tanpa popularitas. Anonim di dalam game saja; catatan transaksinya tetap publik.'));
       var anon = S.listings.filter(function (l) { return l.anonymous; });
       if (!anon.length) wrap.appendChild($('p', 'chain-dim', 'Pasar Gelap sedang sepi.'));
       byItem(anon, wrap);
     } else {
-      wrap.appendChild($('p', null, 'Pedagang terpopuler: satu poin untuk setiap barang yang terjual dari Lapak.'));
+      wrap.appendChild($('p', null, 'Satu poin untuk setiap barang yang laku di Lapak.'));
       if (!(S.popular || []).length) wrap.appendChild($('p', 'chain-dim', 'Belum ada penjualan di Lapak.'));
       (S.popular || []).forEach(function (p, i) {
         var row = $('div', 'mrow');
@@ -1096,7 +1201,7 @@
     });
     wrap.appendChild(grid);
     if (!any) wrap.appendChild($('p', 'chain-dim', 'Belum ada barang yang bisa dijual di sini.'));
-    wrap.appendChild($('p', 'chain-dim', 'Barang hari ini bisa dijual setelah pukul 06:00. Maks 5 barang dipasang per pemain. Setiap penjualan membakar ' + feePct() + '% dari harga.' + (chainUI() ? ' Langsung on-chain, tanpa dompet dan tanpa gas.' : '')));
+    wrap.appendChild($('p', 'chain-dim', 'Barang hari ini bisa dijual setelah 06:00 · maks 5 lapak · biaya ' + feePct() + '% per penjualan.' + (chainUI() ? ' Langsung on-chain, tanpa dompet dan tanpa gas.' : '')));
     return wrap;
   }
 
@@ -1212,7 +1317,7 @@
       }
       wrap.appendChild(row);
     });
-    if (S.st) wrap.appendChild($('p', 'chain-dim', 'Kegiatan hari ini disimpan permanen pukul 06:00 (hari ' + (S.st.time.day + (S.st.time.hour >= 6 ? 1 : 0)) + '). "Detail ↗" membuka catatan lengkapnya di browser.'));
+    if (S.st) wrap.appendChild($('p', 'chain-dim', 'Kegiatan hari ini disimpan pukul 06:00. Detail ↗ membuka catatan lengkapnya.'));
     // technical mode (account name, on-chain labels elsewhere in the game) stays available, out of the way
     var tog = $('label', 'chain-field gt-details');
     var cb = $('input'); cb.type = 'checkbox'; cb.checked = details;
@@ -1230,7 +1335,7 @@
     if (kind === 'project') markGoal('board');
     var title = kind === 'bag' ? 'Tas' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? (arg ? 'Riwayat · ' + item(arg) : 'Riwayat') : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
     var body = kind === 'shop' ? shopBody(arg) : BODIES[kind](arg);
-    var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; } });
+    var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; if (kind === 'market') S.marketSeller = null; } });
     S.modal = { kind: kind, arg: arg, h: h };
     refresh(true);
   }
@@ -1323,6 +1428,13 @@
           GT.toast('Settlement berjalan…');
           api('/dev/settle', { method: 'POST' }).then(function (r) { GT.toast('Settled sampai hari ' + r.settledThrough); refresh(true); }, function (e) { GT.toast(e.message); });
         }, 'primary'));
+        if (cfg.chainMode === 'mock') {
+          sec.appendChild($('p', 'mnote', 'Rantai tiruan saja: isi tas dengan bahan proyek desa dan toko (langsung tersimpan) untuk mencoba alurnya.'));
+          sec.appendChild(button('Beri bahan (mock)', function () {
+            api('/dev/grant', { method: 'POST', body: { items: { wood: 120, ore: 40, coin: 600, fish: 10, wheat: 20 } } })
+              .then(function (r) { S.st = r.state; renderHud(); redraw(); GT.toast('Tas diisi: 120 Kayu, 40 Bijih, 600 Koin, 10 Ikan, 20 Gandum.'); }, function (e) { GT.toast(e.message); });
+          }));
+        }
         sec.appendChild($('p', 'mnote', 'Lompat ke pukul 20:00 berikutnya: monster muncul di Hutan Utara pada malam hari.'));
         sec.appendChild(button('Lompat ke malam', function () {
           api('/dev/night', { method: 'POST' }).then(function () { GT.toast('Sekarang malam.'); refresh(true); }, function (e) { GT.toast(e.message); });
@@ -1334,6 +1446,15 @@
     renderBanner();
   }
 
-  window.GT_CHAIN = { api: api, signHeaders: signHeaders, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, _signedCall: signedCall };
-  GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame });
+  // keys while fighting: F / Space / Enter attack, Esc runs; nothing else moves the player
+  function onKey(e) {
+    if (!fightOpen()) return false;
+    if (e.repeat) return true;
+    if (e.code === 'KeyF' || e.code === 'Space' || e.code === 'Enter') fightStep('fight');
+    else if (e.code === 'Escape') fightStep('flee');
+    return true;
+  }
+
+  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, _signedCall: signedCall };
+  GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame, onKey: onKey });
 })();

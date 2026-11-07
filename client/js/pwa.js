@@ -6,7 +6,15 @@
   var fullscreenQuery = window.matchMedia ? window.matchMedia('(display-mode: fullscreen)') : null;
 
   if ('serviceWorker' in navigator && !/[?&]nosw\b/.test(location.search)) {
-    window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () { /* no worker: the game still runs */ }); });
+    window.addEventListener('load', function () {
+      // check for a newer worker on every load; when a new one takes over, reload once so the page runs the new code
+      navigator.serviceWorker.register('/sw.js').then(function (reg) { reg.update().catch(function () {}); }).catch(function () { /* no worker: the game still runs */ });
+    });
+    var hadController = !!navigator.serviceWorker.controller, reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!hadController || reloaded) { hadController = true; return; }
+      reloaded = true; location.reload();
+    });
   }
 
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; });

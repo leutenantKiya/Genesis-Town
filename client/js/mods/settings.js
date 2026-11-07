@@ -35,7 +35,7 @@
   var reentry = false;
 
   function load() {
-    var d = { binds: {}, layout: 'auto', reducedMotion: null };
+    var d = { binds: {}, layout: 'auto', reducedMotion: null, textSize: 1 };
     try { var s = JSON.parse(localStorage.getItem(LS) || 'null'); if (s && typeof s === 'object') Object.assign(d, s); } catch (e) { /* storage blocked */ }
     ACTIONS.forEach(function (a) { if (!Array.isArray(d.binds[a.id])) d.binds[a.id] = a.keys.slice(); });
     // v2 (2026-11-03): E opens the bag, T sends a message to an NPC. Move a saved E from message to bag once.
@@ -124,8 +124,9 @@
   // (D-pad, A/E, and a bottom bar with the four places players go). css/phone.css lays it out.
   function wantsPhone() {
     if (wantsFull() || st.layout === 'boxed') return false;
-    return window.innerWidth <= 700 && window.innerHeight > window.innerWidth;
+    return window.innerWidth <= 900 && window.innerHeight > window.innerWidth; // phones and portrait tablets
   }
+  function applyText() { document.documentElement.style.setProperty('--ts', String(st.textSize || 1)); }
   function applyLayout() {
     var on = wantsFull(), phone = !on && wantsPhone();
     var root = document.documentElement;
@@ -136,6 +137,7 @@
     if (changed) window.dispatchEvent(new Event('resize'));
     var rm = st.reducedMotion == null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : st.reducedMotion;
     root.classList.toggle('gt-reduced-motion', !!rm);
+    applyText();
   }
   // Standard API first, then the WebKit-prefixed one (iPad Safari). iPhone Safari has neither.
   function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
@@ -164,7 +166,6 @@
   function moreSheet() {
     var opts = [];
     if (document.getElementById('simbtn')) opts.push({ label: 'Simulasi 1 minggu', onPick: function () { press('simbtn'); } });
-    if (window.GT_PRESENCE) opts.push({ label: 'Chat', onPick: function () { GT_PRESENCE.openChat(); } });
     opts.push({ label: 'Pengaturan', onPick: openSettings });
     if (GT.openProfile) opts.push({ label: 'Profil', onPick: function () { GT.openProfile(); } });
     if (document.getElementById('btnJiwa')) opts.push({ label: 'Jiwa', onPick: function () { press('btnJiwa'); } });
@@ -180,6 +181,7 @@
     [['tab-bag', 'Tas', function () { press('chainbtn'); }],
      ['tab-market', 'Pasar', function () { press('pasarbtn'); }],
      ['tab-map', 'Peta', function () { press('mapbtn'); }],
+     ['tab-chat', 'Chat', function () { if (window.GT_PLAYERS) GT_PLAYERS.openChat(''); }],
      ['tab-more', 'Lainnya', moreSheet]].forEach(function (t) {
       var b = $('button', 'gt-tab', t[1]); b.type = 'button'; b.id = t[0];
       b.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) t[2](); });
@@ -199,26 +201,16 @@
 
   function body() {
     var wrap = $('div', 'gt-settings');
-    var h = $('h3', null, 'Tombol'); wrap.appendChild(h);
-    wrap.appendChild($('p', 'mnote', 'Klik sebuah kotak lalu tekan tombol baru. Esc membatalkan. Tombol yang sudah dipakai aksi lain akan dipindahkan.'));
-    ACTIONS.forEach(function (a) {
-      var row = $('div', 'mrow');
-      row.appendChild($('span', 'grow', a.label));
-      for (var slot = 0; slot < 2; slot++) {
-        (function (slot) {
-          var b = $('button', 'mbtn gt-key', keyName(st.binds[a.id][slot]));
-          b.type = 'button';
-          b.setAttribute('aria-label', a.label + ', tombol ' + (slot + 1) + ': ' + keyName(st.binds[a.id][slot]));
-          b.addEventListener('click', function () { startCapture(a.id, slot, b); });
-          row.appendChild(b);
-        })(slot);
-      }
-      wrap.appendChild(row);
+    // text size first: the setting most players look for
+    wrap.appendChild($('h3', null, 'Ukuran teks'));
+    var ts = $('div', 'mseg');
+    [[1, 'Normal'], [1.15, 'Besar'], [1.3, 'Lebih besar']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-ts'; inp.value = String(o[0]); inp.checked = (st.textSize || 1) === o[0];
+      inp.addEventListener('change', function () { st.textSize = o[0]; save(); applyText(); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); ts.appendChild(lab);
     });
-    var r = $('div', 'dbtns');
-    var reset = $('button', 'mbtn', 'Reset ke bawaan'); reset.type = 'button';
-    reset.addEventListener('click', function () { ACTIONS.forEach(function (a) { st.binds[a.id] = a.keys.slice(); }); save(); rebuild(); redraw(); GT.toast('Tombol dikembalikan ke bawaan.'); });
-    r.appendChild(reset); wrap.appendChild(r);
+    wrap.appendChild(ts);
+
 
     wrap.appendChild($('h3', null, 'Layar'));
     var seg = $('div', 'mseg');
@@ -260,6 +252,28 @@
     cb.addEventListener('change', function () { st.reducedMotion = cb.checked; save(); applyLayout(); });
     rm.appendChild(cb); rm.appendChild($('span', null, 'Kurangi animasi'));
     wrap.appendChild(rm);
+    var keys = $('div');
+    var h = $('h3', null, 'Tombol'); keys.appendChild(h);
+    keys.appendChild($('p', 'mnote', 'Klik sebuah kotak lalu tekan tombol baru. Esc membatalkan. Tombol yang sudah dipakai aksi lain akan dipindahkan.'));
+    ACTIONS.forEach(function (a) {
+      var row = $('div', 'mrow');
+      row.appendChild($('span', 'grow', a.label));
+      for (var slot = 0; slot < 2; slot++) {
+        (function (slot) {
+          var b = $('button', 'mbtn gt-key', keyName(st.binds[a.id][slot]));
+          b.type = 'button';
+          b.setAttribute('aria-label', a.label + ', tombol ' + (slot + 1) + ': ' + keyName(st.binds[a.id][slot]));
+          b.addEventListener('click', function () { startCapture(a.id, slot, b); });
+          row.appendChild(b);
+        })(slot);
+      }
+      keys.appendChild(row);
+    });
+    var r = $('div', 'dbtns');
+    var reset = $('button', 'mbtn', 'Reset ke bawaan'); reset.type = 'button';
+    reset.addEventListener('click', function () { ACTIONS.forEach(function (a) { st.binds[a.id] = a.keys.slice(); }); save(); rebuild(); redraw(); GT.toast('Tombol dikembalikan ke bawaan.'); });
+    r.appendChild(reset); keys.appendChild(r);
+    if (!document.documentElement.classList.contains('gt-phone') && !window.matchMedia('(pointer: coarse)').matches) wrap.appendChild(keys);
     return wrap;
   }
 

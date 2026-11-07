@@ -1,0 +1,24 @@
+# secrets never go into the image: the host passes them as environment variables
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+**/credentials/
+near-credentials/
+submission*.json
+
+# local data and build output
+data/
+*.db
+*.db-wal
+*.db-shm
+**/node_modules/
+client/vendor/
+contracts/
+prototype/
+coverage/
+.git/
+.claude/
+.taste-skill/
+.DS_Store

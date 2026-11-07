@@ -275,7 +275,7 @@
         }
         GT.teleportPlayer('out', r.arrive.x, r.arrive.y, 'down');
         nearHint = true; GT.toast(r.toast);
-        if (window.GT_PRESENCE) GT_PRESENCE.refresh();
+        if (window.GT_PLAYERS) GT_PLAYERS.refresh();
         return C.refresh(true);
       });
     }).catch(function (e) { if (!(e && e.shown)) GT.toast(e && e.message || 'Gagal berlayar.'); }).then(function () { sailing = false; });

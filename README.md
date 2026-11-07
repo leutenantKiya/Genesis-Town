@@ -29,6 +29,20 @@
 >   The hotbar along the bottom shows every item; pick the one in your hand with a click, 1–7 or the mouse wheel;
 >   right-click a slot to send or sell it. **E** opens the bag (**Tas**), **L** fullscreen (also in Pengaturan), **T** a message to an NPC.
 >   On phones: tap the world to act, tap a slot to hold it, tap it again to use it.
+> - **Players see each other**: everyone outdoors walks around the same village with their name and market title over
+>   their head (your house stays private). Global chat (C, or the Chat tab on phones) with `/msg name text` for private
+>   lines, `/block name`, `/nama NamaBaru` and `/help`; long lines are capped, rude words masked and sending is
+>   rate-limited (80 characters, one line per 2 s). Players and chat are per world: on a Private Island you only meet the
+>   people on that island (`/msg` still reaches anyone). You pick a name (3–16 characters, unique) the first time you
+>   sign in. Presence and chat live in server memory and never touch the chain. Click another player for their card:
+>   message them or open their stall in the market.
+> - **Fights play out in the world**: a slim battle bar (Lawan / Lari, F / Esc) replaces the pop-up; each attack swings
+>   the axe at the monster (sparks and a white flash on a hit, "Meleset!" on a miss, the damage rising over it), then the
+>   monster lunges back with a red flash, the energy it cost and a small shake. The server still decides every round.
+> - **A bigger farm**: the fenced field next to your house has 15 plots (5 × 3) instead of 6.
+> - **Readable UI**: text is set in Pixelify Sans at 12–18px (the blocky Press Start 2P only for big titles), with a
+>   text-size setting (Normal / Besar / Lebih besar); a title card tells first-time visitors what the game is, shows one
+>   live line from the market and offers "Main sekarang"; portrait tablets get the full-screen phone layout.
 > - **Chopping has a swing**: the axe slashes into the tree with a white trail, wood chips fly and leaves drift down.
 > - **Fishing as a skill game**: ripples mark where fish gather (they move every two game hours; bites come faster
 >   there). Cast, wait for the "!", press in time, then hold to keep the fish inside the green zone until the catch
@@ -63,8 +77,6 @@
 >   (the owner edits the list). Boats leave from a dock on each island. Prices: the cheapest island is 500 coin, about
 >   10 h of play (the 30-day simulation nets 19.9 coin per game day); the 8 offers go up to 3000 coin.
 >   A Private Island produces only basic goods; merchants and the Pasar stay on the Public Island ([docs/world.md](docs/world.md)).
-> - **Live players**: you see the other players in your world with their names, and talk with chat bubbles (key **C**,
->   80 characters, one message per 2 s). Presence and chat live in server memory and never touch the chain.
 > - **Contract v5 is written and unit-tested (55 tests) but not deployed to testnet yet.** The owner deploys it with
 >   `contracts/game/migrate-v5-testnet.json` after filling `voucher_key` with the settler's public key. Until then,
 >   buying and Save World work only on the mock chain (`npm run dev:mock`). On testnet the broker still lists the
@@ -84,6 +96,9 @@
 >   making the store async). Copy the current testnet DB over so balances, shops and history carry on.
 > - Secrets only as the host's environment variables; NEAR Auth login checked on the new origin (from its docs);
 >   relayer balance and rate limits reviewed for public traffic.
+> - Ready in the repo: `Dockerfile`, [docs/deploy.md](docs/deploy.md) (host requirements, env var names, DB move,
+>   checks), `GET /api/health`, and `TRUST_PROXY=1` so per-address limits see each visitor behind the host's proxy.
+>   Waiting on: the host (owner's account) and NEAR Auth accepting the public domain.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
@@ -119,7 +134,8 @@ burns, rent), so anyone can verify them, while staying invisible in the normal l
   of the shop's daily profit as dividends.
 
 Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [world](docs/world.md) · [architecture](docs/architecture.md) ·
-[threat model](docs/threat-model.md) · [on-chain vs off-chain](docs/onchain-offchain.md) · [sources](docs/sources.md)
+[threat model](docs/threat-model.md) · [on-chain vs off-chain](docs/onchain-offchain.md) · [sources](docs/sources.md) ·
+[islands, NPC souls and schematics](docs/island-design.md) *(planned)*
 
 ## What is on-chain (NEAR testnet)
 
@@ -241,7 +257,7 @@ Run locally (below), open http://localhost:3000.
    Outside, in the fenced field next to your house, press F on a plot to till, plant (press twice) and water wheat
    (not in Dingin: wheat doesn't grow in winter). With no Gandum left, the village gives
    up to 3 free seeds a day (planted straight away), so farming never dead-ends when the bakery is closed.
-5. Open the Dev panel → **Settle sekarang** → Riwayat (H, or Tas → Semua riwayat) → tick **Tampilkan detail blockchain** → "Settlement hari N"
+5. Open the Dev panel → **Settle sekarang** → Riwayat (H, or Tas → Semua riwayat) → tick **Mode teknis** → "Settlement hari N"
    with a testnet explorer link, and everything from step 2 now points to it. With the box unticked (the default) the
    game hardly mentions the chain: no account banner, no "on-chain" labels and no explorer links; one line in
    Riwayat says the items are kept on NEAR testnet.
@@ -257,7 +273,10 @@ Run locally (below), open http://localhost:3000.
 10. Walk into the **Balai Desa** next to the plaza and face the shelf at the back → the project board. Pledge toward
     the bridge to Dusun Seberang (the fogged hamlet across the river). Press **Peta** (M) to see the whole village.
 11. Dev panel → **Lompat ke malam**, then gather at a tree or rock in Hutan Utara (north of the village) until a
-    wild boar or bats appear. Fight with **Lawan** or run with **Lari**.
+    wild boar or bats appear, or walk up to one roaming at night. Fight with **Lawan** (F) or run with **Lari** (Esc).
+12. Finish a town project quickly (mock server only, `npm run dev:mock`): Dev panel → **Beri bahan (mock)**, then the
+    project board → **Sumbang semua yang bisa** under the bridge → "Proyek desa selesai! Dusun Seberang sekarang
+    terbuka", the bridge appears and the map opens the hamlet across the river for everyone.
 
 ## Run locally
 

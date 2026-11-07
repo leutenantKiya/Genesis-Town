@@ -230,18 +230,20 @@ grows only through server-issued vouchers (8 offers in the config), never throug
 
 ## Presence and chat
 
-Live players and chat are server memory only: positions seen in the last 10 s and the last 50 chat lines per world.
-- **Rate limits**: one chat line per 2 s per account, an IP limiter on `/api/chat`, a limiter on `/api/pos`, at most
-  4 open streams per account. Messages are at most 80 characters, control characters are removed, and a short word list
-  is masked.
-- **Text only**: names and chat are drawn with `textContent`, never as HTML. Names are 3-16 characters (letters, digits,
-  space, `_`, `-`) and unique.
-- **Private islands**: streaming, chatting and appearing in `IS-<id>` need `worldFor`, which admits the owner and the
-  invite list only. Everyone else gets 409.
-- **World must match**: a position report counts only if its world is the one the server tracks for that player
-  (worlds change only through the `travel` action at a dock) and the tile is walkable on that world's map. Claiming
-  another world, or a tile outside the map, is ignored.
-- Requests are signed with the session key like other requests; chat needs a chosen display name.
+One system (`server/src/social.ts`, client `players.js`), in memory only: players seen in the last 15 s and the last 300 chat
+lines. The client polls `POST /api/presence` about every 0.7 s and gets the other players of its own world and the new lines.
+- **Rate limits**: one chat line per 2 s and 8 per minute per account, an IP limiter on `/api/chat` (the client address
+  from the TRUST_PROXY helper), a limiter on `/api/presence`. Lines are at most 80 characters, control characters are
+  removed, and a short word list is masked. Frozen accounts (`assertActive`) cannot chat or rename.
+- **Text only**: names and chat are drawn with `textContent` or canvas text, never as HTML. Names are 3-16 characters
+  (letters, digits, space, `_`, `-`), unique ignoring case, kept in the one `names` table; reserved words (merchants,
+  staff) and `Warga_*` are refused. Chat needs a chosen name (409 before that).
+- **Per world**: public lines and positions reach only players in the same world (`public` or `IS-<id>`). `/msg name text`
+  is 1:1 and also reaches a player in another world; only the two players receive it. `/block` is local to the browser.
+- **Private islands**: presence and chat in `IS-<id>` need `worldFor`, which admits the owner and the invite list only.
+  Everyone else gets 409, and a guest taken off the list is refused on the next poll and stops being shown to others.
+- **World must match**: a poll or chat line counts only if its world is the one the server tracks for that player (worlds
+  change only through the `travel` action at a dock; otherwise 409) and an outdoor tile is walkable on that world's map.
 - Not defended: many accounts spamming (each needs a login) and moderation beyond the word list. Players can mute
   others locally.
 
