@@ -13,7 +13,7 @@
   if (!GT) return;
 
   var others = {};        // account -> { nick, title, x, y, fx, fy, dir, t0, moving, seen }
-  var me = null, online = 0, last = 0, timer = 0, busy = false, backoff = 0, curWorld = null, promptedFor = null, nameModal = null;
+  var me = null, online = 0, last = 0, timer = 0, busy = false, backoff = 0, curWorld = null, promptedFor = null, nameModal = null, named = true; // named: has the server a chosen display name for me
   var lines = [];         // chat lines shown in the box
   var bubbles = {};       // nick (lower) -> { text, t }
   var box = null, list = null, input = null, head = null;
@@ -38,7 +38,7 @@
       if (r.world !== curWorld) return;
       backoff = 0;
       me = r.me; online = r.online;
-      if (c.state.st && c.state.st.name && GT.setPlayerName) GT.setPlayerName(c.state.st.name);
+      named = r.named !== false; if (named && GT.setPlayerName) GT.setPlayerName(me);
       var now = performance.now(), keep = {};
       (r.players || []).forEach(function (q) {
         keep[q.account] = 1;
@@ -51,7 +51,7 @@
       (r.chat || []).forEach(addLine);
       last = r.last || last;
       renderHead();
-      if (c.state.st && !c.state.st.name && !GT.isUiOpen()) promptName(false);
+      if (!named && !GT.isUiOpen()) promptName(false);
     }, function () { backoff = Math.min(8, backoff + 1); }).then(function () { busy = false; });
   }
   function ease(o, now) { return Math.min(1, (now - o.t0) / STEP_MS); }
@@ -163,7 +163,7 @@
     if (prefill != null) input.value = prefill;
     fade();
     setTimeout(function () { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 0);
-    if (C().state.st && !C().state.st.name) promptName(true);
+    if (!named) promptName(true);
   }
   function closeChat() {
     if (!box) return;
@@ -185,7 +185,7 @@
       input.value = ''; return;
     }
     if ((m = /^\/(nama|nick)\s+(.+)$/i.exec(text))) {
-      C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; if (C().state.st) C().state.st.name = r.name; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note('Namamu sekarang ' + r.name + '.'); }, function (e) { note(e.message); });
+      C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; named = true; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note('Namamu sekarang ' + r.name + '.'); }, function (e) { note(e.message); });
       input.value = ''; return;
     }
     input.value = '';
@@ -207,7 +207,7 @@
         var v = String(inp.value || '').trim();
         if (!/^[A-Za-z0-9 _-]{3,16}$/.test(v)) { GT.toast('Nama harus 3-16 karakter: huruf, angka, spasi, _ atau -.'); return false; }
         c.api('/name', { method: 'POST', body: { name: v } }).then(function (r) {
-          if (c.state.st) c.state.st.name = r.name;
+          named = true;
           me = r.name; renderHead();
           if (GT.setPlayerName) GT.setPlayerName(r.name);
           GT.toast('Halo, ' + r.name + '!');

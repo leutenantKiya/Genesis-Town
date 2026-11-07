@@ -232,7 +232,7 @@ export function createApp(deps: AppDeps) {
         if (onTile) social.report(acct, w, b);
         const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, account: s.account, x: s.x, y: s.y, dir: s.dir, title: titleFor(bazaar.points(s.account)) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
-        return send(res, 200, { me: social.nick(acct), online: social.online(), world: w, players, chat, last: social.seq });
+        return send(res, 200, { me: social.nick(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq });
       }
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);
