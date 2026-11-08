@@ -4,7 +4,7 @@
  * someone's lines in this browser; "/nama NamaBaru" changes your name. Click another player for their card
  * (message them, look at their stall). Indoors you are hidden; your house stays yours.
  * Everything is per world: you see and talk to players on the same island only ("public" or "IS-<id>"); "/msg" is
- * 1:1 and also reaches players in another world. The first time you sign in you pick a name (3-16 characters).
+ * 1:1 and also reaches players in another world. Name, #tag and look are picked on the character screen after login (mods/charscreen.js).
  * The server keeps presence and chat in memory (server/src/social.ts); the economy is unchanged.
  */
 (function () {
@@ -13,7 +13,7 @@
   if (!GT) return;
 
   var others = {};        // account -> { nick, title, x, y, fx, fy, dir, t0, moving, seen }
-  var me = null, online = 0, last = 0, timer = 0, busy = false, backoff = 0, curWorld = null, promptedFor = null, nameModal = null, named = true; // named: has the server a chosen display name for me
+  var me = null, online = 0, last = 0, timer = 0, busy = false, backoff = 0, curWorld = null, named = true; // named: has the server a chosen display name for me
   var lines = [];         // chat lines shown in the box
   var bubbles = {};       // nick (lower) -> { text, t }
   var box = null, list = null, input = null, head = null;
@@ -39,19 +39,19 @@
       backoff = 0;
       me = r.me; online = r.online;
       named = r.named !== false; if (named && GT.setPlayerName) GT.setPlayerName(me);
+      if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.setMine(r.me, r.tag, r.look, named);
       var now = performance.now(), keep = {};
       (r.players || []).forEach(function (q) {
         keep[q.account] = 1;
         var o = others[q.account];
         if (!o) o = others[q.account] = { fx: q.x, fy: q.y, x: q.x, y: q.y, t0: now };
         if (o.x !== q.x || o.y !== q.y) { o.fx = curX(o, now); o.fy = curY(o, now); o.x = q.x; o.y = q.y; o.t0 = now; }
-        o.nick = q.nick; o.title = q.title; o.dir = q.dir; o.account = q.account; o.seen = now;
+        o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.dir = q.dir; o.account = q.account; o.seen = now;
       });
       Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
       (r.chat || []).forEach(addLine);
       last = r.last || last;
       renderHead();
-      if (!named && !GT.isUiOpen()) promptName(false);
     }, function () { backoff = Math.min(8, backoff + 1); }).then(function () { busy = false; });
   }
   function ease(o, now) { return Math.min(1, (now - o.t0) / STEP_MS); }
@@ -65,7 +65,7 @@
     Object.keys(others).forEach(function (a) {
       var o = others[a], x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
       var moving = ease(o, now) < 1, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
-      ents.push({ py: py, draw: function () { GT.drawChar(ctx, px - camX, py - camY, pal(o.nick || a), o.dir, step); } });
+      ents.push({ py: py, draw: function () { GT.drawChar(ctx, px - camX, py - camY, (o.look != null ? o.look : pal(o.nick || a)), o.dir, step); } });
     });
   }
   function onDraw(ctx, camX, camY, T) {
@@ -163,7 +163,7 @@
     if (prefill != null) input.value = prefill;
     fade();
     setTimeout(function () { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 0);
-    if (!named) promptName(true);
+    if (!named && window.GT_CHARSCREEN) { GT.toast('Pilih namamu dulu di layar karakter.'); window.GT_CHARSCREEN.open(); }
   }
   function closeChat() {
     if (!box) return;
@@ -185,39 +185,11 @@
       input.value = ''; return;
     }
     if ((m = /^\/(nama|nick)\s+(.+)$/i.exec(text))) {
-      C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; named = true; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note('Namamu sekarang ' + r.name + '.'); }, function (e) { note(e.message); });
+      C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; named = r.named !== false; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note('Namamu sekarang ' + r.name + '#' + r.tag + '.'); }, function (e) { note(e.message); });
       input.value = ''; return;
     }
     input.value = '';
     C().api('/chat', { method: 'POST', body: { world: (GT.worldId && GT.worldId()) || 'public', text: text } }).then(function () { tick(); }, function (e) { note(e.message); input.value = text; });
-  }
-
-  /* ---------------------------------------------------------------- display name (first login) */
-  function promptName(force) {
-    var c = C(), acct = c && c.state.account;
-    if (!acct || nameModal || (!force && promptedFor === acct)) return;
-    promptedFor = acct;
-    var body = el('div');
-    body.appendChild(el('p', null, 'Pilih nama yang dilihat pemain lain di atas karaktermu. 3-16 karakter: huruf, angka, spasi, _ atau -. Nama tidak boleh sama dengan pemain lain.'));
-    var inp = el('input'); inp.type = 'text'; inp.maxLength = 16; inp.autocomplete = 'off'; inp.placeholder = 'Namamu'; inp.setAttribute('data-autofocus', '');
-    body.appendChild(inp);
-    var h = GT.modal({ title: 'Pilih nama', body: body, actions: [
-      { label: 'Nanti saja' },
-      { label: 'Simpan', primary: true, onClick: function (mh) {
-        var v = String(inp.value || '').trim();
-        if (!/^[A-Za-z0-9 _-]{3,16}$/.test(v)) { GT.toast('Nama harus 3-16 karakter: huruf, angka, spasi, _ atau -.'); return false; }
-        c.api('/name', { method: 'POST', body: { name: v } }).then(function (r) {
-          named = true;
-          me = r.name; renderHead();
-          if (GT.setPlayerName) GT.setPlayerName(r.name);
-          GT.toast('Halo, ' + r.name + '!');
-          mh.close('ok');
-        }, function (e) { GT.toast(e && e.message || 'Nama gagal disimpan.'); });
-        return false;
-      } }
-    ], onClose: function () { nameModal = null; } });
-    nameModal = h;
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); var pb = h.el && h.el.querySelector('.primary'); if (pb) pb.click(); } });
   }
 
   /* ---------------------------------------------------------------- player card */
@@ -230,8 +202,8 @@
     var body = el('div', 'gt-pcard');
     body.appendChild(el('p', 'gt-pcard-title', o.title || 'Pedagang baru'));
     body.appendChild(el('p', 'chain-dim', 'Warga desa yang sedang jalan-jalan.'));
-    GT.modal({ title: o.nick, body: body, actions: [
-      { label: 'Kirim pesan', primary: true, onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + ' '); return true; } },
+    GT.modal({ title: o.nick + (o.tag ? '#' + o.tag : ''), body: body, actions: [
+      { label: 'Kirim pesan', primary: true, onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + (o.tag ? '#' + o.tag : '') + ' '); return true; } },
       { label: 'Lihat lapaknya', onClick: function (h) { h.close('ok'); var c = C(); c.state.marketSeller = { account: o.account, nick: o.nick }; c.state.marketTab = 'lapak'; c.open('market'); return true; } }
     ] });
   }
@@ -260,6 +232,6 @@
   }
 
   function refresh() { others = {}; curWorld = null; backoff = 0; tick(); } // after sailing: forget the old world's players at once
-  window.GT_PLAYERS = { refresh: refresh, promptName: function () { promptName(true); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
+  window.GT_PLAYERS = { refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
   GT.register({ id: 'players', init: init, onEntities: onEntities, onDraw: onDraw, onKey: onKey });
 })();

@@ -230,9 +230,9 @@ export function createApp(deps: AppDeps) {
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
         if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, false).map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
         if (onTile) social.report(acct, w, b);
-        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, account: s.account, x: s.x, y: s.y, dir: s.dir, title: titleFor(bazaar.points(s.account)) }));
+        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, title: titleFor(bazaar.points(s.account)) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
-        return send(res, 200, { me: social.nick(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq });
+        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq });
       }
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);
@@ -249,7 +249,10 @@ export function createApp(deps: AppDeps) {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
         game.assertActive(acct);
-        return send(res, 200, { name: social.setNick(acct, parseJson(raw).name) });
+        const b = parseJson(raw) as { name?: unknown; look?: unknown };
+        if (b.look !== undefined) social.setLook(acct, b.look); // validated first: a bad look changes nothing
+        if (b.name !== undefined) social.setNick(acct, b.name);
+        return send(res, 200, { name: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct) });
       }
       if (req.method === 'GET' && p === '/api/state') {
         const acct = accountOf(req, url);

@@ -37,15 +37,18 @@ async function rig() {
 }
 const P1 = 'p1.players.test', P2 = 'p2.players.test', P3 = 'p3.players.test';
 
-test('names: one table, 3-16 characters, unique ignoring case, frozen accounts refused', async () => {
+test('names: one table, 3-16 characters, repeatable (name#tag is unique), frozen accounts refused', async () => {
   const r = await rig();
   try {
     assert.equal((await r.post(P1, '/api/name', { name: 'Ayu' })).status, 200);
     assert.equal(r.s.store.nameOf(P1), 'Ayu');
-    assert.equal((await r.post(P2, '/api/name', { name: 'ayu' })).status, 409);
+    assert.equal((await r.post(P2, '/api/name', { name: 'ayu' })).status, 200, 'names may repeat now; the tag tells them apart');
     assert.equal((await r.post(P2, '/api/name', { name: 'a' })).status, 400);
     assert.equal((await r.post(P2, '/api/name', { name: 'a<b>c' })).status, 400);
     assert.equal((await r.post(P2, '/api/name', { name: 'Budi Santoso' })).status, 200);
+    const nm = await r.post(P2, '/api/name', { look: 3 });
+    assert.equal(nm.status, 200); assert.equal(nm.json.name, 'Budi Santoso'); assert.equal(nm.json.look, 3); assert.match(nm.json.tag, /^[0-9]{5}$/);
+    assert.equal((await r.post(P2, '/api/name', { look: 9 })).status, 400);
     r.game.gs.recordShortfall(1, 0, P3, 'fish', -5, -3);
     assert.equal((await r.post(P3, '/api/name', { name: 'Cici' })).status, 403);
     assert.equal((await r.post(P3, '/api/chat', { world: 'public', text: 'hai' })).status, 403);

@@ -54,10 +54,6 @@ export class Store {
         status TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS names (
-        account TEXT PRIMARY KEY,
-        name TEXT NOT NULL UNIQUE COLLATE NOCASE
-      );
       CREATE TABLE IF NOT EXISTS pending_mints (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         account_id TEXT NOT NULL,
@@ -68,32 +64,83 @@ export class Store {
         created_at INTEGER NOT NULL
       );
     `);
+    this.migrateNames();
     // Older databases have no tokens column on history.
     const cols = this.db.prepare('PRAGMA table_info(history)').all() as unknown as Array<{ name: string }>;
     if (!cols.some((c) => c.name === 'tokens')) this.db.exec('ALTER TABLE history ADD COLUMN tokens TEXT');
   }
 
-  nameOf(account: string): string | null {
-    return (this.db.prepare('SELECT name FROM names WHERE account = ?').get(account) as { name: string } | undefined)?.name ?? null;
+  /** names: display name (may repeat; unique together with the 5-digit tag), tag, look (palette 0-7). Older tables had a UNIQUE name column: rebuild without it, keep the rows, tags come lazily. */
+  private migrateNames() {
+    const cols = this.db.prepare('PRAGMA table_info(names)').all() as unknown as Array<{ name: string }>;
+    if (!cols.length) {
+      this.db.exec('CREATE TABLE names (account TEXT PRIMARY KEY, name TEXT, tag TEXT, look INTEGER NOT NULL DEFAULT 0)');
+    } else if (!cols.some((c) => c.name === 'tag')) {
+      this.db.exec(`
+        ALTER TABLE names RENAME TO names_old;
+        CREATE TABLE names (account TEXT PRIMARY KEY, name TEXT, tag TEXT, look INTEGER NOT NULL DEFAULT 0);
+        INSERT INTO names (account, name) SELECT account, name FROM names_old;
+        DROP TABLE names_old;`);
+    }
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS names_name_tag ON names (name COLLATE NOCASE, tag)');
   }
 
-  /** The account that uses this display name (ignoring case), if any. */
+  nameOf(account: string): string | null {
+    return (this.db.prepare('SELECT name FROM names WHERE account = ?').get(account) as { name: string | null } | undefined)?.name ?? null;
+  }
+
+  /** The account that uses this display name (ignoring case), if exactly one does. */
   accountByName(name: string): string | null {
-    return (this.db.prepare('SELECT account FROM names WHERE name = ?').get(name) as { account: string } | undefined)?.account ?? null;
+    const rows = this.accountsByName(name);
+    return rows.length === 1 ? rows[0] : null;
+  }
+  /** Every account using this display name (ignoring case); names may repeat, name#tag may not. */
+  accountsByName(name: string): string[] {
+    return (this.db.prepare('SELECT account FROM names WHERE name = ? COLLATE NOCASE').all(name) as Array<{ account: string }>).map((r) => r.account);
+  }
+  accountByNameTag(name: string, tag: string): string | null {
+    return (this.db.prepare('SELECT account FROM names WHERE name = ? COLLATE NOCASE AND tag = ?').get(name, tag) as { account: string } | undefined)?.account ?? null;
+  }
+
+  /** The account's 5-digit tag (10000-99999); a random free one is assigned on first call and then never changes. */
+  tagOf(account: string): string {
+    const row = this.db.prepare('SELECT name, tag FROM names WHERE account = ?').get(account) as { name: string | null; tag: string | null } | undefined;
+    if (row?.tag) return row.tag;
+    const tag = this.freeTag(row?.name ?? null);
+    this.db.prepare('INSERT INTO names (account, tag) VALUES (?, ?) ON CONFLICT(account) DO UPDATE SET tag = excluded.tag').run(account, tag);
+    return tag;
+  }
+  private freeTag(name: string | null): string {
+    for (let i = 0; i < 200; i++) {
+      const tag = String(10000 + Math.floor(Math.random() * 90000));
+      if (!name || !this.accountByNameTag(name, tag)) return tag;
+    }
+    throw new HttpError(503, 'Tidak ada tag kosong, coba nama lain');
+  }
+
+  lookOf(account: string): number {
+    return (this.db.prepare('SELECT look FROM names WHERE account = ?').get(account) as { look: number } | undefined)?.look ?? 0;
+  }
+  setLook(account: string, look: number) {
+    if (!Number.isInteger(look) || look < 0 || look > 7) throw new HttpError(400, 'Penampilan harus 0-7.');
+    this.db.prepare('INSERT INTO names (account, look) VALUES (?, ?) ON CONFLICT(account) DO UPDATE SET look = excluded.look').run(account, look);
   }
 
   isPlayer(account: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM players WHERE account_id = ?').get(account);
   }
 
-  /** Sets (or changes) the display name; names are unique ignoring case. */
-  setName(account: string, name: string) {
-    try {
-      this.db.prepare('INSERT INTO names (account, name) VALUES (?, ?) ON CONFLICT(account) DO UPDATE SET name = excluded.name').run(account, name);
-    } catch (e) {
-      if (/UNIQUE/i.test(String((e as Error).message))) throw new HttpError(409, 'Nama itu sudah dipakai pemain lain');
-      throw e;
+  /** Sets (or changes) the display name. The tag is kept; name+tag must be free (ignoring case): a clash re-rolls the tag, unless one was given explicitly (then 409). */
+  setName(account: string, name: string, tag?: string) {
+    const cur = this.db.prepare('SELECT tag FROM names WHERE account = ?').get(account) as { tag: string | null } | undefined;
+    let use = tag ?? cur?.tag ?? null;
+    const holder = use ? this.accountByNameTag(name, use) : null;
+    if (holder && holder !== account) {
+      if (tag) throw new HttpError(409, 'Nama itu sudah dipakai pemain lain');
+      use = null;
     }
+    if (!use) use = this.freeTag(name);
+    this.db.prepare('INSERT INTO names (account, name, tag) VALUES (?, ?, ?) ON CONFLICT(account) DO UPDATE SET name = excluded.name, tag = excluded.tag').run(account, name, use);
   }
 
   playerBySub(sub: string) {

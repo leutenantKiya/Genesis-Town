@@ -6,12 +6,15 @@
 import { HttpError } from './auth.ts';
 import { RateLimiter } from './relayer.ts';
 
-export interface Seen { account: string; world: string; nick: string; x: number; y: number; dir: string; scene: string; t: number }
+export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number }
 export interface ChatMsg { id: number; t: number; from: string; to: string | null; text: string }
 interface Stored extends ChatMsg { fromAcc: string; toAcc: string | null; world: string }
 
 /** The slice of Store that names need (src/db.ts). */
-export interface NameStore { nameOf(account: string): string | null; accountByName(name: string): string | null; setName(account: string, name: string): void }
+export interface NameStore {
+  nameOf(account: string): string | null; accountsByName(name: string): string[]; accountByNameTag(name: string, tag: string): string | null;
+  setName(account: string, name: string): void; tagOf(account: string): string; lookOf(account: string): number; setLook(account: string, look: number): void;
+}
 
 export const CHAT_MAX = 80;       // characters per line
 export const CHAT_GAP_MS = 2000;  // one line per account per 2 s
@@ -51,7 +54,22 @@ export class Social {
   constructor(names: NameStore, now: () => number = Date.now) { this.names = names; this.now = now; }
 
   nick(account: string): string { return this.names.nameOf(account) || defaultNick(account); }
-  accountOf(nick: string): string | null { return this.names.accountByName(nick); }
+  tag(account: string): string { return this.names.tagOf(account); }
+  look(account: string): number { return this.names.lookOf(account); }
+  /** "name#12345" always resolves; a plain "name" only when exactly one player uses it. */
+  accountOf(nick: string): string | null {
+    const m = /^(.+)#(\d{5})$/.exec(nick);
+    if (m) return this.names.accountByNameTag(m[1], m[2]);
+    const all = this.names.accountsByName(nick);
+    return all.length === 1 ? all[0] : null;
+  }
+  isAmbiguous(nick: string): boolean { return !/#\d{5}$/.test(nick) && this.names.accountsByName(nick).length > 1; }
+  setLook(account: string, raw: unknown) {
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0 || raw > 7) throw new HttpError(400, 'Penampilan harus 0-7.');
+    this.names.setLook(account, raw);
+    const s = this.seen.get(account); if (s) s.look = raw;
+    return raw;
+  }
   /** Display name rule: 3-16 characters, letters, digits, space, underscore, hyphen. Returns the trimmed name. */
   static validName(raw: unknown): string {
     const n = typeof raw === 'string' ? raw.trim().replace(/ {2,}/g, ' ') : '';
@@ -61,12 +79,11 @@ export class Social {
   }
   setNick(account: string, raw: unknown) {
     const nick = Social.validName(raw);
-    const other = this.accountOf(nick);
-    if (other && other !== account) throw new HttpError(409, 'Nama itu sudah dipakai pemain lain.');
-    // only real changes count toward the limit, so a typo does not lock the player out
+    if (this.names.nameOf(account) === nick) return nick; // unchanged
+    // names may repeat: the 5-digit tag tells players apart. Only real changes count toward the limit, so a typo does not lock the player out
     if (!this.nickLimiter.take(account, this.now())) throw new HttpError(429, 'Terlalu sering ganti nama. Coba lagi nanti.');
     this.names.setName(account, nick);
-    const s = this.seen.get(account); if (s) s.nick = nick;
+    const s = this.seen.get(account); if (s) { s.nick = nick; s.tag = this.tag(account); }
     return nick;
   }
 
@@ -77,7 +94,7 @@ export class Social {
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 999 || y > 999) throw new HttpError(400, 'bad position');
     const dir = typeof p.dir === 'string' && DIRS.has(p.dir) ? p.dir : 'down';
     const scene = p.scene === 'out' ? 'out' : 'in';
-    this.seen.set(account, { account, world, nick: this.nick(account), x, y, dir, scene, t: this.now() });
+    this.seen.set(account, { account, world, nick: this.nick(account), tag: this.tag(account), look: this.look(account), x, y, dir, scene, t: this.now() });
   }
   /** Other players outdoors in the same world within `radius` tiles who reported in the last 15 seconds. */
   nearby(account: string, world: string, radius = 30, maxAge = 15_000) {
@@ -108,6 +125,7 @@ export class Social {
         if (t) { toAcc = t; text = words.slice(k).join(' '); }
       }
       if (!toAcc) {
+        for (let k = Math.min(words.length - 1, 4); k >= 1; k--) if (this.isAmbiguous(words.slice(0, k).join(' '))) throw new HttpError(409, `Ada beberapa pemain bernama ${words.slice(0, k).join(' ')}. Pakai nama#tag.`);
         if (words.length < 2) throw new HttpError(400, 'Cara pakai: /msg nama pesan');
         throw new HttpError(404, `Tidak ada pemain bernama ${words[0]}.`);
       }
