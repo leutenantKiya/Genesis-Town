@@ -343,7 +343,7 @@
     S.poll = setTimeout(function () { refresh(false).then(schedulePoll); }, 5000);
   }
 
-  // 'public' or 'IS-<id>': which outdoor world the player is in (islands.js switches it).
+  // 'public' or 'HL-<id>': which outdoor world the player is in (homeland.js switches it).
   function worldNow() { return (GT.worldId && GT.worldId()) || 'public'; }
   // Where the player stands for the server's checks: the tile outdoors, or the door front of the building they are in.
   function standPos() {
@@ -427,7 +427,7 @@
   // Roaming monsters this game hour (same list the server checks), each wandering a little around its spot.
   function roamers() {
     var st = S.st, L = GT.world && GT.world.layout;
-    if (worldNow() !== 'public') return []; // no monsters on Private Islands
+    if (worldNow() !== 'public') return []; // no monsters in Homelands
     if (!st || !st.night || !st.night.now || st.night.guarded || !L || !window.GTVillage || !S.cfg || !S.cfg.monsters) return [];
     return GTVillage.monstersAt(L, st.time.totalHours, S.cfg.monsters.roaming);
   }
@@ -1009,7 +1009,6 @@
     wrap.appendChild(bagDetail(sel));
     wrap.appendChild($('p', 'chain-dim', (document.documentElement.classList.contains('gt-phone') ? 'Ketuk barang untuk melihat, lalu Pegang. ' : 'Klik untuk melihat, klik kanan untuk memegang. ') + 'Barang "hari ini" tersimpan permanen pukul 06:00' + (chainUI() ? ' (di NEAR).' : '.')));
     if (S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
-    if (window.GT_ISLANDS && GT_ISLANDS.bagSection) { var isl = GT_ISLANDS.bagSection(); if (isl) wrap.appendChild(isl); }
     wrap.appendChild(button('Semua riwayat', function () { open('history'); }));
     wrap.appendChild(button('Keluar (ganti akun)', function () { signOut(); }));
     return wrap;
@@ -1401,7 +1400,7 @@
 
   function onWorld() {
     S.npcs = {}; villagers = []; S.plots = [];
-    if (worldNow() === 'public') { placeMerchants(); spawnVillagers(); } // islands have no merchants or townsfolk
+    if (worldNow() === 'public') { placeMerchants(); spawnVillagers(); } // Homelands have no merchants or townsfolk
     findPlots();
     renderGoals();
   }

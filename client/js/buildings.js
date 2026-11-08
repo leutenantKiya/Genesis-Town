@@ -1,7 +1,8 @@
 /*
  * buildings.js - pixel art for the village's public buildings and the river bridge (all original, drawn in code).
  * Extends window.SPRITES (after sprites.js and art.js):
- *   SPRITES.drawPublic(g, kind, x, y, wTiles, hTiles)   kinds: hall, church, clinic, post, broker, warung
+ *   SPRITES.drawPublic(g, kind, x, y, wTiles, hTiles)   kinds: hall, church, clinic, post, broker, warung, and the Homeland
+ *   buildings townhall (Balai Kota, 4x4), kolam (Kolam Ikan), tambang, restoran (3x3)
  *   'bridge' ground tile (planks over water), used by the layered world cache.
  * Each building: a roof band, a wall with windows, a sign with a small icon over the door, the door at the bottom of
  * the middle column (where village.js puts it). Light comes from the top-left like the houses.
@@ -20,7 +21,11 @@
     clinic: { roof: '#2e8a86', roofD: '#1c5c5a', roofL: '#5cb8b0', wall: '#f6f6f2', wallD: '#d8dcd8', sign: '#ffffff' },
     post:   { roof: '#d0702c', roofD: '#8e4a1c', roofL: '#f0a050', wall: '#f4e6c8', wallD: '#d8c49c', sign: '#fff4dc' },
     broker: { roof: '#3c7a48', roofD: '#24502e', roofL: '#68a870', wall: '#efe4cc', wallD: '#d0c0a0', sign: '#fff8e4' },
-    warung: { roof: '#8a5a30', roofD: '#5a3a1e', roofL: '#b07a44', wall: '#c89a62', wallD: '#a87a48', sign: '#fff0d8' }
+    warung: { roof: '#8a5a30', roofD: '#5a3a1e', roofL: '#b07a44', wall: '#c89a62', wallD: '#a87a48', sign: '#fff0d8' },
+    townhall: { roof: '#2f5fa8', roofD: '#1c3c70', roofL: '#5c8ed8', wall: '#f2e8cc', wallD: '#d8c89c', sign: '#fff6d8' },
+    kolam:    { roof: '#2a7ab0', roofD: '#1a4e78', roofL: '#5cb0e0', wall: '#e4f0ec', wallD: '#bcd4cc', sign: '#f2fbff' },
+    tambang:  { roof: '#5c5868', roofD: '#3a3644', roofL: '#8a8698', wall: '#a8a2a0', wallD: '#847e80', sign: '#ece8e0' },
+    restoran: { roof: '#b8422e', roofD: '#7a2a1e', roofL: '#e0705a', wall: '#f6e4c8', wallD: '#dcc09a', sign: '#fff4dc' }
   };
 
   function roof(g, w, top, rows, st) {
@@ -59,6 +64,10 @@
     clinic: function (g, cx, y) { R(g, cx - 1, y, 2, 6, '#d83c3c'); R(g, cx - 3, y + 2, 6, 2, '#d83c3c'); },
     post: function (g, cx, y) { R(g, cx - 4, y + 1, 8, 5, '#f0c050'); R(g, cx - 4, y + 1, 8, 1, '#8e4a1c'); R(g, cx - 3, y + 2, 2, 1, '#8e4a1c'); R(g, cx + 1, y + 2, 2, 1, '#8e4a1c'); R(g, cx - 1, y + 3, 2, 1, '#8e4a1c'); },
     broker: function (g, cx, y) { R(g, cx - 2, y, 5, 6, '#e8b830'); R(g, cx - 3, y + 1, 7, 4, '#e8b830'); R(g, cx - 1, y + 1, 3, 4, '#f8e078'); R(g, cx, y + 2, 1, 2, '#a07018'); },
+    townhall: function (g, cx, y) { R(g, cx - 5, y + 1, 10, 5, '#f8f4e4'); R(g, cx - 5, y + 1, 10, 1, '#c8a030'); R(g, cx - 1, y + 2, 2, 4, '#2f5fa8'); R(g, cx - 3, y + 2, 1, 4, '#c8a030'); R(g, cx + 2, y + 2, 1, 4, '#c8a030'); },
+    kolam: function (g, cx, y) { R(g, cx - 4, y + 2, 7, 3, '#3d7fc2'); R(g, cx + 3, y + 1, 2, 5, '#3d7fc2'); R(g, cx - 3, y + 3, 1, 1, '#ffffff'); R(g, cx - 1, y + 2, 1, 1, '#9ad8ff'); },
+    tambang: function (g, cx, y) { R(g, cx - 4, y + 1, 8, 1, '#6a6678'); R(g, cx - 4, y + 1, 2, 2, '#6a6678'); R(g, cx + 2, y + 1, 2, 2, '#6a6678'); R(g, cx - 1, y + 2, 2, 4, '#8a5a30'); },
+    restoran: function (g, cx, y) { R(g, cx - 4, y + 3, 8, 2, '#f8f8f8'); R(g, cx - 3, y + 2, 6, 1, '#d0d0d0'); R(g, cx + 3, y + 1, 1, 5, '#c8c8c8'); R(g, cx - 4, y + 1, 1, 3, '#c8c8c8'); },
     warung: function (g, cx, y) { R(g, cx - 3, y + 2, 5, 4, '#f8f8f8'); R(g, cx - 3, y + 2, 5, 1, '#6a4020'); R(g, cx + 2, y + 3, 2, 2, '#f8f8f8'); R(g, cx - 2, y + 1, 1, 1, '#c8c8c8'); R(g, cx, y, 1, 1, '#c8c8c8'); }
   };
 
@@ -85,21 +94,28 @@
     }
     roof(g, w, 0, roofRows, st);
     wall(g, w, wallTop, h, st);
-    if (kind === 'warung') {
+    if (kind === 'warung' || kind === 'restoran') {
       // striped awning across the front and an open counter
       R(g, 1, wallTop + 2, w - 2, 5, OL);
       for (var x = 2; x < w - 2; x++) R(g, x, wallTop + 3, 1, 3, Math.floor((x - 2) / 3) % 2 ? '#f8f8f8' : '#d83c3c');
       R(g, 4, wallTop + 11, 10, 6, OL); R(g, 5, wallTop + 12, 8, 4, '#3a2a1e'); R(g, 6, wallTop + 13, 2, 2, '#f0d048');
+    } else if (kind === 'tambang') {
+      // stone blocks and a dark mine mouth beside the door with a cart rail
+      for (var by = wallTop + 3; by < h - 4; by += 5) for (var bx = 2 + ((by / 5) % 2 ? 3 : 0); bx < w - 6; bx += 7) R(g, bx, by, 6, 1, st.wallD);
+      R(g, 4, wallTop + 7, 9, 12, OL); R(g, 5, wallTop + 8, 7, 11, '#14101c'); R(g, 4, wallTop + 6, 9, 1, '#6a4020'); R(g, 3, wallTop + 7, 1, 12, '#6a4020'); R(g, 13, wallTop + 7, 1, 12, '#6a4020');
+      R(g, w - 12, wallTop + 14, 8, 4, OL); R(g, w - 11, wallTop + 11, 6, 4, '#b07840'); R(g, w - 11, wallTop + 11, 6, 1, '#d49c5c'); R(g, w - 11, wallTop + 17, 2, 2, '#d0d0d0'); R(g, w - 7, wallTop + 17, 2, 2, '#d0d0d0');
     } else {
-      windowAt(g, 5, wallTop + 6, kind === 'clinic' ? '#c8f0ec' : null);
-      windowAt(g, w - 13, wallTop + 6, kind === 'clinic' ? '#c8f0ec' : null);
+      var glass = kind === 'clinic' ? '#c8f0ec' : kind === 'kolam' ? '#7cc8f0' : null;
+      windowAt(g, 5, wallTop + 6, glass);
+      windowAt(g, w - 13, wallTop + 6, glass);
       if (wt >= 5) { windowAt(g, cx - 18, wallTop + 6); windowAt(g, cx + 10, wallTop + 6); }
     }
-    if (kind === 'hall') {
+    if (kind === 'hall' || kind === 'townhall') {
       // two columns beside the door and a flag pole on the roof
       R(g, cx - 9, h - 16, 3, 13, '#fafaf0'); R(g, cx + 6, h - 16, 3, 13, '#fafaf0');
       R(g, w - 8, 0, 1, roofRows - 2, '#6a6a6a'); R(g, w - 7, 1, 5, 2, '#d83c3c'); R(g, w - 7, 3, 5, 2, '#f8f8f8');
     }
+    if (kind === 'kolam') { R(g, 2, h - 6, w - 4, 2, '#3d7fc2'); R(g, 2, h - 6, w - 4, 1, '#9ad8ff'); }
     sign(g, cx, h - 24, st, ICON[kind]);
     door(g, cx, h - 1, kind === 'clinic' ? '#5cb8b0' : kind === 'post' ? '#c86028' : null);
     return cv;
