@@ -25,7 +25,7 @@ async function harness() {
   chain.add(TOWN, 'coin', 5000n);
   for (const [id, d] of Object.entries(econ.merchants)) chain.addMerchant(`${id}.gt.test`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, base);
   const store = new Store(':memory:');
-  const game = new Game(store, chain, { merchantParent: 'gt.test', town: TOWN, now: () => 1_800_000_000_000, rng: () => 0.99, econ, chunkSize: 5, worldSeed: 20261114, contractId: cfg.gameContractId });
+  const game = new Game(store, chain, { merchantParent: 'gt.test', town: TOWN, now: () => 1_800_000_000_000, rng: () => 0.99, econ, chunkSize: 5, worldSeed: 20261114 });
   await game.init();
   store.addPlayer(P, 'sub-p1', 'ed25519:o');
   await chain.registerPlayer(P);
@@ -58,7 +58,7 @@ test('JSON bodies that are not objects are 400 on every POST', async () => {
         assert.equal(r.status, 400, `${path} ${body}`);
         assert.equal(r.json.error, 'body must be a JSON object');
       }
-      for (const path of ['/api/act', '/api/presence', '/api/chat', '/api/name', '/api/talk', '/api/islands/voucher', '/api/islands/invite']) {
+      for (const path of ['/api/act', '/api/presence', '/api/chat', '/api/name', '/api/talk', '/api/homeland/invite']) {
         const r = await h.call('POST', path, body);
         assert.equal(r.status, 400, `${path} ${body}`);
       }
@@ -143,7 +143,7 @@ test('invite accounts must be an array', async () => {
   const h = await harness();
   try {
     for (const accounts of ['p2.players.test', null, 5, {}, undefined]) {
-      const r = await h.call('POST', '/api/islands/invite', JSON.stringify({ island_id: 1, accounts }));
+      const r = await h.call('POST', '/api/homeland/invite', JSON.stringify({ accounts }));
       assert.equal(r.status, 400, JSON.stringify(accounts));
     }
   } finally { h.close(); }

@@ -12,6 +12,7 @@ const Q = 'p2.players.test';
 
 async function world(opts: { rng?: () => number } = {}) {
   const econ = loadEcon();
+  econ.homeland.publicTradeOnly = false; // these tests are about village mechanics
   const chain = new MockChain();
   const base = Object.fromEntries(Object.entries(econ.items).map(([t, i]) => [t, i.base]));
   chain.accounts.add(TOWN);
@@ -272,6 +273,7 @@ test('settlement updates cached balances from what it wrote, even when a read ri
 test('shared map: gathering must match the map, inside open areas; a finished project opens its area', async () => {
   const { WorldMap } = await import('../src/game/worldmap.ts');
   const econ = (await import('../src/game/econ.ts')).loadEcon();
+  econ.homeland.publicTradeOnly = false; // village mechanics
   const chain = new MockChain();
   chain.accounts.add(TOWN);
   chain.add(TOWN, 'coin', 5000n);
@@ -317,6 +319,7 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
 
 test('positions: actions happen where the player stands, and nobody jumps across the map', async () => {
   const econ = (await import('../src/game/econ.ts')).loadEcon();
+  econ.homeland.publicTradeOnly = false; // village mechanics
   const chain = new MockChain();
   chain.accounts.add(TOWN);
   chain.add(TOWN, 'coin', 5000n);

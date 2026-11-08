@@ -14,14 +14,6 @@ export interface MerchantDef {
 }
 export interface SeasonDef { yield: Record<string, number>; demand: Record<string, number>; harvestBonus?: number }
 
-export interface IslandOffer { island_id: number; name: string; seed: number; size_level: number; fertility_level: number; price: number }
-export interface IslandsConfig {
-  broker: string;
-  offers: IslandOffer[];
-  upgrades: Record<string, Array<{ level: number; cost: Record<string, number> }>>;
-  fertility: Array<{ level: number; growFactor: number; yieldBonus: number }>;
-}
-
 export type Cost = Record<string, number>;
 export interface TownhallStep { level: number; cost: Cost; secs: number }
 export interface ChunkStep { n: number; th: number; cost: Cost; secs: number }
@@ -55,7 +47,6 @@ export interface Econ {
   projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number> }>;
   monsters: MonsterConfig;
   homeland: HomelandConfig;
-  islands: IslandsConfig;
 }
 
 export function loadEcon(): Econ {

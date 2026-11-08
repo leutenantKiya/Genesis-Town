@@ -3,7 +3,6 @@
 // Gathering is checked against it: the tile must really be that kind, inside an open area. (Checking the player's
 // own position is planned for M4.)
 import '../../../client/js/world/village.js';
-import '../../../client/js/world/island.js';
 import '../../../client/js/world/homeland.js';
 import { HttpError } from '../auth.ts';
 
@@ -32,14 +31,6 @@ interface VillageApi {
 }
 export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos } }).GTVillage;
 
-/** A Private Island (client/js/world/island.js), the same generator the browser runs. */
-export interface IslandLayout {
-  seed: number; w: number; h: number; tiles: string[]; chunks: Chunk[];
-  buildings: Layout['buildings']; farm: Layout['farm']; spawn: Pos; dock: Pos; market: { stalls: Array<{ x: number; y: number }> };
-}
-export interface IslandSpecLevels { size_level: number; fertility_level: number }
-const Island = (globalThis as unknown as { GTIsland: { generate(seed: number, spec: IslandSpecLevels): IslandLayout } }).GTIsland;
-
 /** A player's Homeland (client/js/world/homeland.js): the same generator the browser runs. */
 export interface HomelandProgress { open: string[]; th: number; built: Array<{ kind: string; lot: string }> }
 export interface HomelandLot { id: string; kind: string; chunk: string; x: number; y: number; w: number; h: number; door: Pos }
@@ -50,7 +41,7 @@ interface HomelandApi {
 }
 export const Homeland = (globalThis as unknown as { GTHomeland: HomelandApi }).GTHomeland;
 
-/** What a world map offers to the game: the public village and islands answer the same questions. */
+/** What a world map offers to the game: the public village and Homelands answer the same questions. */
 export interface GameMap {
   layout: { spawn: Pos };
   walkable(x: number, y: number): boolean;
@@ -58,7 +49,7 @@ export interface GameMap {
   nearPlot(p: Pos, idx: number): boolean;
   atOwnHouse(p: Pos): boolean;
   checkGather(tile: string, x: number, y: number): void;
-  dock(): Pos;
+  portal(): Pos;
 }
 
 export class WorldMap implements GameMap {
@@ -70,7 +61,7 @@ export class WorldMap implements GameMap {
   }
   get unlocked() { return this.layout.unlocked; }
   /** Where boats leave from: the shore tile next to the water closest to the plaza (a village.js helper). */
-  dock(): Pos { return Village.dockOf(this.layout); }
+  portal(): Pos { return Village.dockOf(this.layout); }
   tileAt(x: number, y: number): string | null {
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= this.layout.w || y >= this.layout.h) return null;
     return this.layout.tiles[y * this.layout.w + x];
@@ -103,33 +94,6 @@ export class WorldMap implements GameMap {
   view() { return { seed: this.seed, unlocked: this.layout.unlocked, version: this.layout.version, chunks: this.layout.chunks, projects: this.layout.projects }; }
 }
 
-export class IslandMap implements GameMap {
-  seed: number;
-  layout: IslandLayout;
-  constructor(seed: number, spec: IslandSpecLevels) {
-    this.seed = seed >>> 0;
-    this.layout = Island.generate(this.seed, spec);
-  }
-  tileAt(x: number, y: number): string | null {
-    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= this.layout.w || y >= this.layout.h) return null;
-    return this.layout.tiles[y * this.layout.w + x];
-  }
-  walkable(x: number, y: number): boolean {
-    const t = this.tileAt(x, y);
-    if (t === null || SOLID.has(t)) return false;
-    return !this.layout.buildings.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
-  }
-  nearStall() { return false; } // no merchants on a Private Island
-  nearPlot(p: Pos, idx: number) { const q = this.layout.farm.plots[idx]; return !!q && dist(p, q) <= 1; }
-  atOwnHouse(p: Pos) { const h = this.layout.buildings.find((b) => b.own); return !!h && dist(p, { x: h.dx, y: h.dy + 1 }) <= 1; }
-  checkGather(tile: string, x: number, y: number) {
-    const t = this.tileAt(x, y);
-    if (t === null) throw new HttpError(400, 'bad tile');
-    if (t !== tile) throw new HttpError(409, 'Tidak ada yang bisa dikumpulkan di sini.');
-  }
-  dock(): Pos { return this.layout.dock; }
-}
-
 export class HomelandMap implements GameMap {
   seed: number;
   layout: HomelandLayout;
@@ -158,8 +122,6 @@ export class HomelandMap implements GameMap {
     if (!c.open) throw new HttpError(409, `${c.name} belum dibuka.`);
   }
   portal(): Pos { return this.layout.portal; }
-  /** Task 3 renames GameMap.dock() to portal(); until then both answer. */
-  dock(): Pos { return this.layout.portal; }
   /** Within one tile of the lot's door (the door tile itself or the way in below it). */
   nearLot(p: Pos, lot: string): boolean {
     const l = this.layout.lots.find((x) => x.id === lot);
@@ -173,8 +135,8 @@ export class HomelandMap implements GameMap {
  * area, and the move since the last report must fit the walking speed (the spawn is always allowed: that is where a
  * player appears after loading the page). This stops gathering, trading and farming from across the map; a modified
  * client can still walk anywhere a player could walk.
- * Each player is in one world (the public island or a Private Island). Only `travel` changes it; the one exception is a
- * page reload, which puts the client back on the public spawn.
+ * Each player is in one world (the public area or a Homeland). Only `travel` changes it; the exception is a page reload or
+ * Start: a report exactly on the player's own Homeland spawn moves them there.
  */
 export class Positions {
   last = new Map<string, Pos & { t: number }>();
@@ -191,17 +153,16 @@ export class Positions {
   /** Back to the public island with no remembered position (the next report starts fresh). */
   reset(account: string) { this.worlds.delete(account); this.last.delete(account); }
   /** `world` is the world the client says it is in, `map` that world's map (the caller already checked access to it). */
-  report(account: string, raw: unknown, now: number, world = 'public', map: GameMap = this.map): Pos {
+  report(account: string, raw: unknown, now: number, world = 'public', map: GameMap = this.map, home?: { world: string; spawn: Pos }): Pos {
     const r = raw as { x?: unknown; y?: unknown } | null;
     const p = { x: Number(r?.x), y: Number(r?.y) };
     if (!r || !Number.isInteger(p.x) || !Number.isInteger(p.y)) throw new HttpError(400, 'posisi pemain tidak ada');
     if (world !== this.worldOf(account)) {
       const pub = this.map.layout.spawn;
-      const here = map.layout, dock = map.dock();
       if (world === 'public' && p.x === pub.x && p.y === pub.y) { this.worlds.delete(account); this.last.delete(account); }
-      // the server forgot this player (restart): believe a report from an island's spawn or dock, the caller checked access
-      else if (world !== 'public' && !this.worlds.has(account) && !this.last.has(account) && ((p.x === here.spawn.x && p.y === here.spawn.y) || (p.x === dock.x && p.y === dock.y))) this.worlds.set(account, world);
-      else throw new HttpError(409, 'Pindah pulau lewat dermaga.');
+      // a reload (or Start) puts the client on its own Homeland spawn: always believed, wherever the server had the player
+      else if (home && world === home.world && p.x === home.spawn.x && p.y === home.spawn.y) { this.worlds.set(account, world); this.last.delete(account); }
+      else throw new HttpError(409, 'Pindah dunia lewat portal.');
     }
     if (!map.walkable(p.x, p.y)) throw new HttpError(409, 'Posisi tidak valid.');
     const prev = this.last.get(account);

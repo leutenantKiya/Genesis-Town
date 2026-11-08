@@ -1,8 +1,8 @@
-// Seeing each other: display names, who is walking where (presence) and chat, per world ("public" or "IS-<id>").
+// Seeing each other: display names, who is walking where (presence) and chat, per world ("public" or "HL-<n>").
 // Players see and chat only with players in the same world; "/msg name text" is a 1:1 line and crosses worlds.
 // Presence and chat live in memory: they are about right now, not history, and nothing in them touches the economy.
 // Positions sent here are only drawn for other players; the anti-teleport check (game.reportPosition) still applies.
-// Display names live in the Store `names` table (unique ignoring case); the invite editor of Private Islands uses it too.
+// Display names live in the Store `names` table (unique ignoring case); the Homeland invite editor resolves name#tag through it.
 import { HttpError } from './auth.ts';
 import { RateLimiter } from './relayer.ts';
 
@@ -20,7 +20,7 @@ export const CHAT_MAX = 80;       // characters per line
 export const CHAT_GAP_MS = 2000;  // one line per account per 2 s
 export const CHAT_KEEP = 50;      // lines a newcomer gets per world
 
-export function worldIdOk(w: unknown): w is string { return typeof w === 'string' && /^(public|IS-[1-9]\d{0,9})$/.test(w); }
+export function worldIdOk(w: unknown): w is string { return typeof w === 'string' && /^(public|HL-[1-9]\d{0,9})$/.test(w); }
 
 const NICK_RE = /^[A-Za-z0-9 _-]{3,16}$/;
 // names that would confuse players: the merchants, the town and staff words
@@ -48,7 +48,7 @@ export class Social {
   lastSay = new Map<string, number>();
   now: () => number;
   names: NameStore;
-  /** Gate set by the app: may this account be in this world? (Private Islands: owner and invited guests only.) */
+  /** Gate set by the app: may this account be in this world? (Homelands: owner and invited guests only.) */
   access: (account: string, world: string) => boolean = () => true;
 
   constructor(names: NameStore, now: () => number = Date.now) { this.names = names; this.now = now; }
@@ -102,7 +102,7 @@ export class Social {
     for (const s of this.seen.values()) {
       if (now - s.t > maxAge) { this.seen.delete(s.account); continue; }
       if (s.account === account || s.scene !== 'out' || s.world !== world) continue;
-      if (!this.access(s.account, world)) continue; // an uninvited guest vanishes from the island at once
+      if (!this.access(s.account, world)) continue; // an uninvited guest vanishes from the Homeland at once
       if (me && (Math.abs(s.x - me.x) > radius || Math.abs(s.y - me.y) > radius)) continue;
       out.push(s);
     }

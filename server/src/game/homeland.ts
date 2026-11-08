@@ -11,7 +11,7 @@ import type { GameStore, HomelandRow } from './gamestore.ts';
 import { HttpError } from '../auth.ts';
 import { Homeland, HomelandMap, type HomelandProgress } from './worldmap.ts';
 
-export interface PlayerDir { nameOf(account: string): string | null; accountByName(name: string): string | null; isPlayer(account: string): boolean }
+export interface PlayerDir { nameOf(account: string): string | null; tagOf(account: string): string; accountByNameTag(name: string, tag: string): string | null; isPlayer(account: string): boolean }
 export interface HomelandDeps { econ: Econ; gs: GameStore; worldSeed: number; now: () => number; players?: PlayerDir; town: string }
 
 export interface BuildingOption extends BuildingDef { lot: string | null; can: boolean; why: string | null }
@@ -21,7 +21,7 @@ export interface HomelandView {
   jobs: Array<{ target: string; kind: string; ends_at: number }>;
   builders: { total: number; busy: number };
   next: { th: TownhallStep | null; chunk: ChunkStep | null; buildings: Record<string, BuildingOption> };
-  guests: string[];
+  guests: Array<{ account: string; name: string; tag: string }>;
 }
 export type { HomelandRow };
 
@@ -203,7 +203,7 @@ export class Homelands {
       jobs: jobs.map((j) => ({ target: j.target, kind: j.kind, ends_at: j.ends_at })),
       builders: { total: this.cfg.builders, busy: jobs.length },
       next: { th: this.thStep(row), chunk: this.chunkStep(row), buildings },
-      guests: gs.homelandInvites(row.id).map((a) => this.d.players?.nameOf(a) ?? a),
+      guests: gs.homelandInvites(row.id).map((a) => ({ account: a, name: this.d.players?.nameOf(a) ?? a, tag: this.d.players?.tagOf(a) ?? '' })),
     };
   }
 
@@ -222,7 +222,13 @@ export class Homelands {
     const row = this.ensure(account);
     const list: string[] = [], unknown: string[] = [];
     for (const raw of accounts.map((a) => String(a).trim()).filter(Boolean)) {
-      const acct = this.d.players ? ((this.d.players.isPlayer(raw) ? raw : null) ?? this.d.players.accountByName(raw)) : raw;
+      let acct: string | null = raw;
+      if (this.d.players) {
+        const m = /^(.+)#(\d{5})$/.exec(raw);
+        if (m) acct = this.d.players.accountByNameTag(m[1].trim(), m[2]);
+        else if (this.d.players.isPlayer(raw)) acct = raw;
+        else throw new HttpError(400, 'Tulis nama#tag pemain (contoh: Budi#12345).');
+      }
       if (!acct) unknown.push(raw.slice(0, 30)); else if (acct !== account && !list.includes(acct)) list.push(acct);
     }
     if (unknown.length) throw new HttpError(400, `Pemain tidak ditemukan: ${unknown.join(', ')}. Tulis nama pemain persis seperti di permainan.`);
@@ -231,7 +237,7 @@ export class Homelands {
     return list;
   }
 
-  invitedTo(account: string): Array<{ id: number; world: string; owner_name: string }> {
-    return this.d.gs.homelandsInvitedTo(account).map((r) => ({ id: r.id, world: homeWorld(r.id), owner_name: this.d.players?.nameOf(r.account) ?? r.account }));
+  invitedTo(account: string): Array<{ id: number; world: string; owner_name: string; owner_tag: string }> {
+    return this.d.gs.homelandsInvitedTo(account).map((r) => ({ id: r.id, world: homeWorld(r.id), owner_name: this.d.players?.nameOf(r.account) ?? r.account, owner_tag: this.d.players?.tagOf(r.account) ?? '' }));
   }
 }

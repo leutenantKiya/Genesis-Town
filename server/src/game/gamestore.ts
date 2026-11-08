@@ -8,8 +8,6 @@ export interface PlayerState { account: string; energy: number; energy_hour: num
 export interface Plot { account: string; idx: number; state: 'empty' | 'tilled' | 'planted' | 'ready'; planted_day: number; grown: number; watered_day: number }
 export interface MarketRow { merchant: string; token: string; mid: number; bought: number; sold: number; ask: number; bid: number; reason: string; change_pct: number; hour: number }
 
-export interface IslandRow { island_id: number; owner: string; version: number; seed: number; size_level: number; fertility_level: number; updated_at: number }
-export interface IslandUpgradeRow { island_id: number; attr: string; level: number; seqs: string; created_at: number }
 
 export interface HomelandRow { account: string; id: number; seed: number; gen: number; th: number; open: string[]; created_at: number }
 export interface HomelandBuildingRow { account: string; lot: string; kind: string; last_collect: number }
@@ -39,11 +37,6 @@ export class GameStore {
         ask INTEGER NOT NULL, bid INTEGER NOT NULL, reason TEXT NOT NULL, change_pct INTEGER NOT NULL, hour INTEGER NOT NULL, PRIMARY KEY (merchant, token));
       CREATE TABLE IF NOT EXISTS settlements (day INTEGER NOT NULL, chunk INTEGER NOT NULL, root TEXT NOT NULL, tx_hash TEXT, status TEXT NOT NULL,
         accounts TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (day, chunk));
-      CREATE TABLE IF NOT EXISTS islands (island_id INTEGER PRIMARY KEY, owner TEXT NOT NULL, version INTEGER NOT NULL, seed INTEGER NOT NULL,
-        size_level INTEGER NOT NULL, fertility_level INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS island_upgrades (island_id INTEGER NOT NULL, attr TEXT NOT NULL, level INTEGER NOT NULL, seqs TEXT NOT NULL,
-        created_at INTEGER NOT NULL, PRIMARY KEY (island_id, attr, level));
-      CREATE TABLE IF NOT EXISTS island_invites (island_id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (island_id, account));
       CREATE TABLE IF NOT EXISTS homelands (account TEXT PRIMARY KEY, id INTEGER UNIQUE NOT NULL, seed INTEGER NOT NULL, gen INTEGER NOT NULL,
         th INTEGER NOT NULL, open TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS homeland_buildings (account TEXT NOT NULL, lot TEXT NOT NULL, kind TEXT NOT NULL, last_collect INTEGER NOT NULL, PRIMARY KEY (account, lot));
@@ -222,54 +215,11 @@ export class GameStore {
     return this.db.prepare('SELECT day, chunk, root, tx_hash, status, created_at FROM settlements ORDER BY day DESC, chunk DESC LIMIT ?').all(limit);
   }
 
-  /* ------------------------------------------------------------ islands (cache of the chain, plus off-chain upgrades) */
-
-  island(id: number): IslandRow | undefined {
-    return this.db.prepare('SELECT * FROM islands WHERE island_id = ?').get(id) as IslandRow | undefined;
-  }
-  islandsOf(owner: string): IslandRow[] {
-    return this.db.prepare('SELECT * FROM islands WHERE owner = ? ORDER BY island_id').all(owner) as unknown as IslandRow[];
-  }
-  saveIsland(r: Omit<IslandRow, 'updated_at'>) {
-    this.db.prepare(`INSERT INTO islands (island_id, owner, version, seed, size_level, fertility_level, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(island_id) DO UPDATE SET owner = excluded.owner, version = excluded.version, seed = excluded.seed,
-      size_level = excluded.size_level, fertility_level = excluded.fertility_level, updated_at = excluded.updated_at`)
-      .run(r.island_id, r.owner, r.version, r.seed, r.size_level, r.fertility_level, Date.now());
-  }
-  deleteIsland(id: number) {
-    this.db.prepare('DELETE FROM islands WHERE island_id = ?').run(id);
-    this.db.prepare('DELETE FROM island_upgrades WHERE island_id = ?').run(id);
-    this.db.prepare('DELETE FROM island_invites WHERE island_id = ?').run(id);
-  }
-  islandUpgrades(id: number): IslandUpgradeRow[] {
-    return this.db.prepare('SELECT * FROM island_upgrades WHERE island_id = ? ORDER BY attr, level').all(id) as unknown as IslandUpgradeRow[];
-  }
-  addIslandUpgrade(id: number, attr: string, level: number, seqs: number[]) {
-    this.db.prepare('INSERT INTO island_upgrades (island_id, attr, level, seqs, created_at) VALUES (?, ?, ?, ?, ?)').run(id, attr, level, JSON.stringify(seqs), Date.now());
-  }
-  /** Drops upgrades the chain already has (level <= saved) or all of them (a new owner starts from the saved spec). */
-  dropIslandUpgrades(id: number, attr: string | null, upToLevel: number) {
-    if (attr) this.db.prepare('DELETE FROM island_upgrades WHERE island_id = ? AND attr = ? AND level <= ?').run(id, attr, upToLevel);
-    else this.db.prepare('DELETE FROM island_upgrades WHERE island_id = ?').run(id);
-  }
   /** True when every one of these ledger rows is part of a finished settlement. */
   rowsSettled(seqs: number[]): boolean {
     const st = this.db.prepare('SELECT settled FROM ledger WHERE seq = ?');
     return seqs.every((q) => (st.get(q) as { settled: number } | undefined)?.settled === 1);
   }
-  invites(id: number): string[] {
-    return (this.db.prepare('SELECT account FROM island_invites WHERE island_id = ? ORDER BY account').all(id) as unknown as Array<{ account: string }>).map((r) => r.account);
-  }
-  /** Islands whose invite list holds this account. */
-  invitedIslands(account: string): IslandRow[] {
-    return this.db.prepare('SELECT i.* FROM islands i JOIN island_invites v ON v.island_id = i.island_id WHERE v.account = ? ORDER BY i.island_id').all(account) as unknown as IslandRow[];
-  }
-  setInvites(id: number, accounts: string[]) {
-    this.db.prepare('DELETE FROM island_invites WHERE island_id = ?').run(id);
-    const st = this.db.prepare('INSERT OR IGNORE INTO island_invites (island_id, account) VALUES (?, ?)');
-    for (const a of accounts) st.run(id, a);
-  }
-  clearInvites(id: number) { this.db.prepare('DELETE FROM island_invites WHERE island_id = ?').run(id); }
 
   /* ------------------------------------------------------------ homelands (off-chain; costs and gains are ledger rows) */
 

@@ -155,34 +155,6 @@
       "restoran": { "name": "Restoran",   "th": 3, "cost": { "wood": 40, "ore": 10, "coin": 60 }, "secs": 240, "produces": "meal", "perGameHour": 1, "capacity": 4 }
     }
   },
-  "islands": {
-    "broker": "makelar",
-    "offers": [
-      { "island_id": 1, "name": "Pulau Kelapa",  "seed": 7101, "size_level": 1, "fertility_level": 1, "price": 500 },
-      { "island_id": 2, "name": "Pulau Pisang",  "seed": 7102, "size_level": 1, "fertility_level": 1, "price": 650 },
-      { "island_id": 3, "name": "Pulau Mangga",  "seed": 7103, "size_level": 1, "fertility_level": 1, "price": 800 },
-      { "island_id": 4, "name": "Pulau Cengkeh", "seed": 7104, "size_level": 2, "fertility_level": 1, "price": 1100 },
-      { "island_id": 5, "name": "Pulau Pala",    "seed": 7105, "size_level": 2, "fertility_level": 1, "price": 1400 },
-      { "island_id": 6, "name": "Pulau Melati",  "seed": 7106, "size_level": 2, "fertility_level": 2, "price": 1800 },
-      { "island_id": 7, "name": "Pulau Anggrek", "seed": 7107, "size_level": 3, "fertility_level": 1, "price": 2300 },
-      { "island_id": 8, "name": "Pulau Kenanga", "seed": 7108, "size_level": 3, "fertility_level": 2, "price": 3000 }
-    ],
-    "upgrades": {
-      "fertility": [
-        { "level": 2, "cost": { "wood": 30, "coin": 60 } },
-        { "level": 3, "cost": { "wood": 60, "ore": 12, "coin": 150 } },
-        { "level": 4, "cost": { "wood": 80, "ore": 20, "coin": 300, "permata": 5 } },
-        { "level": 5, "cost": { "wood": 120, "ore": 30, "coin": 500, "permata": 12 } }
-      ]
-    },
-    "fertility": [
-      { "level": 1, "growFactor": 1,   "yieldBonus": 0 },
-      { "level": 2, "growFactor": 1.5, "yieldBonus": 0 },
-      { "level": 3, "growFactor": 1.5, "yieldBonus": 1 },
-      { "level": 4, "growFactor": 3,   "yieldBonus": 1 },
-      { "level": 5, "growFactor": 3,   "yieldBonus": 2 }
-    ]
-  },
   "monsters": {
     "chunk": "hutan",
     "nightFrom": 19,

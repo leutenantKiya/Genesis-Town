@@ -177,7 +177,8 @@ test('collect over the daily cap: 409 and stored unchanged', () => {
 test('guest access: invited 200, stranger 409', () => {
   const dir: PlayerDir = {
     nameOf: (a) => (a === A ? 'Andi' : a === B ? 'Budi' : null),
-    accountByName: (n) => (n === 'Budi' ? B : n === 'Andi' ? A : null),
+    tagOf: (a) => (a === A ? '11111' : '22222'),
+    accountByNameTag: (n, t) => (n.toLowerCase() === 'budi' && t === '22222' ? B : n === 'Andi' && t === '11111' ? A : null),
     isPlayer: (a) => a === A || a === B,
   };
   const { hl } = setup({ players: dir });
@@ -186,10 +187,12 @@ test('guest access: invited 200, stranger 409', () => {
   assert.equal(hl.access(A, row.id).owner, true);
   fails(() => hl.access(B, row.id), 409, 'Kamu tidak diundang ke dunia ini.');
   fails(() => hl.access(B, 99), 404, /./);
-  assert.deepEqual(hl.setInvites(A, ['Budi', A, 'Budi']), [B]);
+  assert.deepEqual(hl.setInvites(A, ['Budi#22222', A, 'budi#22222']), [B]);
   const g = hl.access(B, row.id);
   assert.equal(g.owner, false);
-  assert.deepEqual(hl.view(A).guests, ['Budi']);
-  assert.deepEqual(hl.invitedTo(B), [{ id: row.id, world: 'HL-1', owner_name: 'Andi' }]);
-  fails(() => hl.setInvites(A, ['Nobody']), 400, /Pemain tidak ditemukan/);
+  assert.deepEqual(hl.view(A).guests, [{ account: B, name: 'Budi', tag: '22222' }]);
+  assert.deepEqual(hl.invitedTo(B), [{ id: row.id, world: 'HL-1', owner_name: 'Andi', owner_tag: '11111' }]);
+  fails(() => hl.setInvites(A, ['Budi']), 400, 'Tulis nama#tag pemain (contoh: Budi#12345).');
+  fails(() => hl.setInvites(A, ['Budi#99999']), 400, /Pemain tidak ditemukan/);
+  assert.deepEqual(hl.setInvites(A, [B]), [B], 'an exact account id still works');
 });

@@ -14,6 +14,7 @@ import { addDeviceKey } from './newdevice.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
 import { Social, worldIdOk } from './social.ts';
 import type { Game } from './game/game.ts';
+import { homeWorld, parseHome } from './game/homeland.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
 import { Worker } from 'node:worker_threads';
 import type { SimResult } from './game/sim.ts';
@@ -102,13 +103,12 @@ export function createApp(deps: AppDeps) {
     await game.settlement.refresh(accts);
     if (method.startsWith('restore')) await game.settlement.refreshShops();
     if (method === 'project_contribute') await game.syncProjects();
-    if (method === 'buy_island' || method === 'save_island') await game.islands.syncOne(Number(args.island_id));
     // the player market's two sides: remember Lapak or Pasar Gelap for a new listing; a Lapak sale earns popularity
     if (method === 'list_item') bazaar.recordListing(await deps.chain.listListings(50), sender, args, relayBody.anonymous === true);
     if (method === 'buy_listing' && extra[0]) bazaar.recordSale(Number(args.listing_id), extra[0], Number(args.amount));
   };
 
-  // Private Islands: only the owner and invited guests may report, chat or show up there.
+  // Homelands: only the owner and invited guests may report, chat or show up there.
   social.access = (a, w) => {
     if (w === 'public') return true;
     try { game.worldFor(a, w, false); return true; } catch { return false; }
@@ -149,28 +149,29 @@ export function createApp(deps: AppDeps) {
     return list[list.length - 1] ?? direct;
   }
 
-  /** Private Islands: /api/islands, /api/islands/voucher|layout|invite. Returns true when it answered. */
-  async function islandsApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
-    if (p !== '/api/islands' && !p.startsWith('/api/islands/')) return false;
-    if (req.method === 'GET' && p === '/api/islands') {
-      send(res, 200, await game.islands.view(accountOf(req, url)));
-    } else if (req.method === 'GET' && p === '/api/islands/layout') {
-      const acct = accountOf(req, url), iid = Number(url.searchParams.get('island_id'));
-      await game.prepare(acct, { island_id: iid });
-      send(res, 200, game.islands.layout(acct, iid));
-    } else if (req.method === 'POST' && (p === '/api/islands/voucher' || p === '/api/islands/invite')) {
+  /** Homelands: GET /api/homeland, GET /api/homeland/layout?world=HL-<n>, POST /api/homeland/invite. Returns true when it answered. */
+  async function homelandApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
+    if (p !== '/api/homeland' && !p.startsWith('/api/homeland/')) return false;
+    if (req.method === 'GET' && p === '/api/homeland') {
+      const acct = accountOf(req, url);
+      send(res, 200, { ...game.homelands.view(acct), invited: game.homelands.invitedTo(acct) });
+    } else if (req.method === 'GET' && p === '/api/homeland/layout') {
+      const acct = accountOf(req, url), w = url.searchParams.get('world') ?? '';
+      const id = parseHome(w);
+      if (id === null) throw new HttpError(400, 'Dunia tidak dikenal.');
+      const { row } = game.homelands.access(acct, id);
+      game.homelands.settle(row.account);
+      const built = game.gs.homelandBuildings(row.account).map((b) => ({ lot: b.lot, kind: b.kind }));
+      send(res, 200, { world: homeWorld(row.id), seed: row.seed, gen: row.gen, th: row.th, open: row.open, built });
+    } else if (req.method === 'POST' && p === '/api/homeland/invite') {
       const raw = await readRaw(req);
       const acct = accountOf(req, url, raw);
       if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
       game.assertActive(acct);
-      const b = parseJson(raw), id = Number(b.island_id);
-      if (p === '/api/islands/invite' && !Array.isArray(b.accounts)) throw new HttpError(400, 'accounts must be a list');
-      if (p === '/api/islands/voucher') send(res, 200, await game.islands.voucher(acct, String(b.kind ?? ''), id));
-      else {
-        await game.prepare(acct, { island_id: id });
-        game.islands.setInvites(acct, id, (b.accounts as unknown[]).map(String));
-        send(res, 200, { invite: game.islands.guestsOf(id) });
-      }
+      const b = parseJson(raw);
+      if (!Array.isArray(b.accounts)) throw new HttpError(400, 'accounts must be a list');
+      game.homelands.setInvites(acct, (b.accounts as unknown[]).map(String));
+      send(res, 200, { invite: game.homelands.view(acct).guests });
     } else throw new HttpError(404, 'no such route');
     return true;
   }
@@ -179,7 +180,7 @@ export function createApp(deps: AppDeps) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const p = url.pathname;
     if (p.startsWith('/api/')) {
-      if (await islandsApi(req, res, url, p)) return;
+      if (await homelandApi(req, res, url, p)) return;
       if (req.method === 'GET' && p === '/api/config') {
         return send(res, 200, {
           chainMode: deps.chain.mode,
@@ -224,7 +225,7 @@ export function createApp(deps: AppDeps) {
         const acct = accountOf(req, url, raw);
         if (!presenceLimiter.take(acct)) throw new HttpError(429, 'too many presence reports');
         const b = parseJson(raw) as { world?: unknown; x?: unknown; y?: unknown; dir?: unknown; scene?: unknown; since?: unknown };
-        game.fixWorld(acct); // an island sold or a guest uninvited while standing there: back to the public island first
+        game.fixWorld(acct); // a guest uninvited while standing there: back to the public area first
         const w = await checkedWorld(acct, b.world);
         game.reportPosition(acct, { x: Number(b.x), y: Number(b.y) }, w);
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown

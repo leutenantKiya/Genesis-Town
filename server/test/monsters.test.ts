@@ -10,6 +10,7 @@ const TOWN = 'town.gt.test', P = 'p1.players.test';
 // a world with the shared map, a clock we control, and a scripted random sequence
 async function world() {
   const econ = loadEcon();
+  econ.homeland.publicTradeOnly = false; // these tests are about village mechanics
   const chain = new MockChain();
   chain.accounts.add(TOWN); chain.add(TOWN, 'coin', 5000n);
   for (const [id, d] of Object.entries(econ.merchants)) chain.addMerchant(`${id}.gt.test`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, {});

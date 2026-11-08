@@ -18,6 +18,7 @@ const FROZEN = /Akun ini dibekukan karena saldo on-chain tidak cocok dengan perm
 
 async function world(opts: { seed?: number; rng?: () => number } = {}) {
   const econ = loadEcon();
+  econ.homeland.publicTradeOnly = false; // monsters exist only when the public area is not trade-only
   const chain = new MockChain();
   const base = Object.fromEntries(Object.entries(econ.items).map(([t, i]) => [t, i.base]));
   chain.accounts.add(TOWN);

@@ -41,9 +41,9 @@ test('a gathering node gives exactly its charges per cycle, every cycle', async 
   }
 });
 
-test('an island node is limited per cycle too', async () => {
+test('a Homeland node is limited per cycle too', async () => {
   const { game, clock, econ } = await world();
-  const g = () => game.world.gather(P, 'water', 7, 7, 'IS-1-1:');
+  const g = () => game.world.gather(P, 'water', 7, 7, 'HL-1:');
   for (let cycle = 0; cycle < 2; cycle++) {
     for (let i = 0; i < econ.gather.charges; i++) g();
     assert.throws(g, /Sudah habis/);

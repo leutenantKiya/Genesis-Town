@@ -72,9 +72,9 @@ test('chat needs a name and shows up in presence polls of the same world only', 
     const got = await r.post(P2, '/api/presence', at);
     assert.deepEqual(got.json.chat.map((m: any) => [m.from, m.text]), [['Ayu', 'halo semua']]);
     assert.equal((await r.post(P1, '/api/presence', { ...at, world: 'bogus' })).status, 400);
-    // the server-tracked world is public: asking for an island is refused
-    assert.equal((await r.post(P1, '/api/presence', { ...at, world: 'IS-1' })).status, 409);
-    assert.equal((await r.post(P1, '/api/chat', { world: 'IS-1', text: 'hai' })).status, 409);
+    // the server-tracked world is public: asking for a Homeland is refused
+    assert.equal((await r.post(P1, '/api/presence', { ...at, world: 'HL-1' })).status, 409);
+    assert.equal((await r.post(P1, '/api/chat', { world: 'HL-1', text: 'hai' })).status, 409);
     // a private message is delivered to the receiver only
     await new Promise((res) => setTimeout(res, 2100));
     assert.equal((await r.post(P1, '/api/chat', { world: 'public', text: '/msg Bude rahasia' })).status, 200);

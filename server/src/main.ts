@@ -9,7 +9,6 @@ import { blockHeightSource } from './relayer.ts';
 import { createApp } from './app.ts';
 import { Game } from './game/game.ts';
 import { loadEcon } from './game/econ.ts';
-import { KeyPair, type KeyPairString } from 'near-api-js';
 
 try { process.loadEnvFile(join(dirname(fileURLToPath(import.meta.url)), '../../.env')); } catch { /* no .env: use the real environment */ }
 const cfg = loadConfig();
@@ -20,9 +19,6 @@ if (cfg.chainMode === 'mock' && cfg.dbPath !== ':memory:') {
 const store = new Store(cfg.dbPath);
 const econ = loadEcon();
 
-// Island vouchers are signed with the settler key on testnet (its public key is the contract's voucher key); the mock
-// chain gets a fresh key of its own.
-const voucherKey = cfg.chainMode === 'mock' ? KeyPair.fromRandom('ed25519') : KeyPair.fromString(cfg.settlerPrivateKey as KeyPairString);
 let chain;
 if (cfg.chainMode === 'mock') {
   // The mock chain mirrors the deployed setup: town treasury and the four registered shops.
@@ -31,9 +27,6 @@ if (cfg.chainMode === 'mock') {
   m.accounts.add(cfg.townAccountId);
   m.townAccount = cfg.townAccountId;
   m.contractId = cfg.gameContractId;
-  m.voucherKey = voucherKey.getPublicKey();
-  m.brokerId = cfg.brokerAccountId;
-  m.accounts.add(cfg.brokerAccountId);
   m.add(cfg.townAccountId, 'coin', 5000n);
   for (const [id, d] of Object.entries(econ.merchants)) {
     m.addMerchant(`${id}.${cfg.merchantParentId}`, d.shop, { coin: d.restore.coin, ...d.restore.items }, { coin: d.startCash, ...d.startStock }, base);
@@ -44,7 +37,7 @@ if (cfg.chainMode === 'mock') {
   chain = new TestnetChain(cfg);
 }
 
-const game = new Game(store, chain, { merchantParent: cfg.merchantParentId, town: cfg.townAccountId, chunkSize: cfg.settleChunk, econ, worldSeed: cfg.worldSeed, contractId: cfg.gameContractId, voucherSigner: voucherKey });
+const game = new Game(store, chain, { merchantParent: cfg.merchantParentId, town: cfg.townAccountId, chunkSize: cfg.settleChunk, econ, worldSeed: cfg.worldSeed });
 await game.init();
 game.start();
 

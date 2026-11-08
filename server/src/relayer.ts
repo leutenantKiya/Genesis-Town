@@ -113,8 +113,6 @@ const SUMMARY: Record<string, (a: Record<string, unknown>, n: (t: unknown) => st
   cancel_listing: (a) => `Tarik lapak #${a.listing_id} dari Pasar Pemain`,
   project_contribute: (a, n) => `Sumbang ke proyek desa ${a.id}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${n(l.token_id)}`).join(', ')}`,
   project_withdraw: (a) => `Tarik sumbangan dari proyek desa ${a.id}`,
-  buy_island: (a) => `Beli Pulau Pribadi #${a.island_id} seharga ${a.price} koin`,
-  save_island: (a) => `Simpan Dunia Pulau #${a.island_id}: versi ${a.from_version} jadi ${Number(a.from_version) + 1}`,
 };
 
 /** Items a relayed method is about (buy_listing doesn't say which item; it only moves coin). */
@@ -123,7 +121,7 @@ export function relayTokens(method: string, raw: unknown): string[] {
   const out = new Set<string>();
   if (typeof args.token_id === 'string') out.add(args.token_id);
   if (Array.isArray(args.contribution)) for (const l of args.contribution as Array<{ token_id?: unknown }>) if (typeof l?.token_id === 'string') out.add(l.token_id);
-  if (method === 'buy_listing' || method === 'claim_dividends' || method === 'buy_island') out.add('coin');
+  if (method === 'buy_listing' || method === 'claim_dividends') out.add('coin');
   return [...out];
 }
 
