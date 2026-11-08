@@ -42,6 +42,9 @@ test('chat: per world, /msg only for the two players (any world), rude words mas
   assert.deepEqual(forB.map((m) => m.text), ['mau beli ikan?', 'dasar g*****'], 'B hears its island plus its private line, not the public square');
   assert.deepEqual(forB2.map((m) => m.text), ['Halo semua!', 'mau beli ikan?', 'di sini publik']);
   assert.equal(forB[0].to, 'Budi_2');
+  assert.equal(forB[0].toTag, social.tag(B));
+  assert.equal(forB[0].fromTag, social.tag(A), 'every line carries the sender tag so equal names cannot impersonate');
+  assert.match(forB2[0].fromTag, /^\d{5}$/);
   assert.deepEqual(forC.map((m) => m.text), ['Halo semua!', 'di sini publik'], 'C never sees the private line nor the island');
   assert.equal(social.since(B, P, forB2[1].id).length, 1, 'since returns only newer lines');
   assert.throws(() => social.say(A, P, '/msg'), /Cara pakai/);

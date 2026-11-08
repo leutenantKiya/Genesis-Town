@@ -13,7 +13,7 @@
   if (!GT) return;
 
   var others = {};        // account -> { nick, title, x, y, fx, fy, dir, t0, moving, seen }
-  var me = null, online = 0, last = 0, timer = 0, busy = false, backoff = 0, curWorld = null, named = true; // named: has the server a chosen display name for me
+  var meTag = '', me = null, online = 0, last = 0, timer = 0, busy = false, backoff = 0, curWorld = null, named = true; // named: has the server a chosen display name for me
   var lines = [];         // chat lines shown in the box
   var bubbles = {};       // nick (lower) -> { text, t }
   var box = null, list = null, input = null, head = null;
@@ -24,7 +24,10 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function blocked() { try { return JSON.parse(localStorage.getItem(LS_BLOCK) || '[]') || []; } catch (e) { return []; } }
   function setBlocked(a) { try { localStorage.setItem(LS_BLOCK, JSON.stringify(a)); } catch (e) { /* storage blocked */ } }
-  function isBlocked(nick) { return blocked().indexOf(String(nick).toLowerCase()) >= 0; }
+  // chat identity is always name#tag (names repeat, tags do not), never the plain name
+  function key(nick, tag) { return String(nick).toLowerCase() + '#' + (tag || ''); }
+  function isBlocked(nick, tag) { return blocked().indexOf(key(nick, tag)) >= 0; }
+  function tagsOfName(name) { var n = String(name).toLowerCase(), t = {}; Object.keys(others).forEach(function (a) { var o = others[a]; if (String(o.nick).toLowerCase() === n && o.tag) t[o.tag] = 1; }); lines.forEach(function (m) { if (m.fromTag && String(m.from).toLowerCase() === n && m.from !== me) t[m.fromTag] = 1; }); return Object.keys(t); }
   function pal(nick) { var h = 0; for (var i = 0; i < nick.length; i++) h = (h * 31 + nick.charCodeAt(i)) | 0; return Math.abs(h) % 9; }
   function active() { var c = C(); return !!(c && c.state.account && c.state.mode !== 'offline' && c.state.mode !== 'loading'); }
 
@@ -37,7 +40,7 @@
     c.api('/presence', { method: 'POST', body: { world: w, x: pos.x, y: pos.y, dir: p.dir, scene: sc && sc.kind === 'out' ? 'out' : 'in', since: last } }).then(function (r) {
       if (r.world !== curWorld) return;
       backoff = 0;
-      me = r.me; online = r.online;
+      me = r.me; meTag = r.tag || meTag; online = r.online;
       named = r.named !== false; if (named && GT.setPlayerName) GT.setPlayerName(me);
       if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.setMine(r.me, r.tag, r.look, named);
       var now = performance.now(), keep = {};
@@ -74,7 +77,7 @@
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     // my own last line first, so other players' names stay on top of it
-    if (me) { var p = GT.player; bubble(ctx, me, Math.round(p.x * T - camX + T / 2), Math.round(p.y * T - camY - 4), now); }
+    if (me) { var p = GT.player; bubble(ctx, key(me, meTag), Math.round(p.x * T - camX + T / 2), Math.round(p.y * T - camY - 4), now); }
     Object.keys(others).forEach(function (a) {
       var o = others[a], x = Math.round(curX(o, now) * T - camX + T / 2), y = Math.round(curY(o, now) * T - camY - 3);
       ctx.font = '6px "Pixelify Sans", sans-serif';
@@ -82,12 +85,12 @@
       var w = ctx.measureText(tag).width;
       ctx.fillStyle = 'rgba(10,12,24,0.7)'; ctx.fillRect(Math.round(x - w / 2 - 2), y - 7, Math.ceil(w + 4), 8);
       ctx.fillStyle = '#e8f0ff'; ctx.fillText(tag, x, y);
-      bubble(ctx, o.nick, x, y - 9, now);
+      bubble(ctx, key(o.nick, o.tag), x, y - 9, now);
     });
     ctx.restore();
   }
-  function bubble(ctx, nick, x, y, now) {
-    var b = bubbles[String(nick).toLowerCase()];
+  function bubble(ctx, k, x, y, now) {
+    var b = bubbles[k];
     if (!b || now - b.t > 6000) return;
     var text = b.text.length > 34 ? b.text.slice(0, 33) + '…' : b.text;
     ctx.font = '7px "Pixelify Sans", sans-serif';
@@ -125,23 +128,24 @@
     head.textContent = (me ? 'Kamu: ' + me : 'Obrolan') + (online ? ' · ' + online + ' online' : '');
   }
   function addLine(m) {
-    if (isBlocked(m.from)) return;
+    if (!m.note && isBlocked(m.from, m.fromTag)) return;
     lines.push(m);
     if (lines.length > 60) lines.shift();
-    if (!m.to) bubbles[String(m.from).toLowerCase()] = { text: m.text, t: performance.now() };
+    if (!m.to) bubbles[key(m.from, m.fromTag)] = { text: m.text, t: performance.now() };
     renderList();
   }
   function note(text) { lines.push({ id: 0, t: Date.now(), from: '', to: null, text: text, note: true }); renderList(); }
   function renderList() {
     if (!list) return;
     list.textContent = '';
-    var mine = String(me || '').toLowerCase();
+    var mine = key(me || '', meTag);
     lines.slice(-30).forEach(function (m) {
       var row = el('div', 'gt-chat-line' + (m.to ? ' private' : '') + (m.note ? ' note' : ''));
       row.dataset.t = String(m.t || Date.now());
       if (m.note) row.textContent = m.text;
       else {
-        var who = m.to ? (String(m.from).toLowerCase() === mine ? 'kamu → ' + m.to : m.from + ' → kamu') : m.from;
+        var from = m.from + (m.fromTag ? '#' + m.fromTag : ''), to = m.to ? m.to + (m.toTag ? '#' + m.toTag : '') : '';
+        var who = m.to ? (key(m.from, m.fromTag) === mine ? 'kamu → ' + to : from + ' → kamu') : from;
         row.appendChild(el('b', null, who + ': '));
         row.appendChild(document.createTextNode(m.text));
       }
@@ -178,14 +182,20 @@
     var m;
     if (/^\/help$/i.test(text)) { note('Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama'); input.value = ''; return; }
     if ((m = /^\/(block|unblock)\s+(.+)$/i.exec(text))) {
-      m[2] = m[2].trim();
-      var b = blocked().filter(function (n) { return n !== m[2].toLowerCase(); });
-      if (m[1].toLowerCase() === 'block') b.push(m[2].toLowerCase());
-      setBlocked(b); note(m[1].toLowerCase() === 'block' ? m[2] + ' disembunyikan di browser ini.' : m[2] + ' terlihat lagi.');
+      var target = m[2].trim(), tm = /^(.+)#(\d{5})$/.exec(target), tk;
+      if (tm) tk = key(tm[1], tm[2]);
+      else {
+        var ts = tagsOfName(target);
+        if (ts.length !== 1) { note(ts.length ? 'Ada beberapa pemain bernama ' + target + '. Pakai nama#tag.' : 'Pemain ' + target + ' belum terlihat. Pakai nama#tag.'); input.value = ''; return; }
+        tk = key(target, ts[0]);
+      }
+      var b = blocked().filter(function (n) { return n !== tk; });
+      if (m[1].toLowerCase() === 'block') b.push(tk);
+      setBlocked(b); note(m[1].toLowerCase() === 'block' ? target + ' disembunyikan di browser ini.' : target + ' terlihat lagi.');
       input.value = ''; return;
     }
     if ((m = /^\/(nama|nick)\s+(.+)$/i.exec(text))) {
-      C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; named = r.named !== false; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note('Namamu sekarang ' + r.name + '#' + r.tag + '.'); }, function (e) { note(e.message); });
+      C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; meTag = r.tag || meTag; named = r.named !== false; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note('Namamu sekarang ' + r.name + '#' + r.tag + '.'); }, function (e) { note(e.message); });
       input.value = ''; return;
     }
     input.value = '';

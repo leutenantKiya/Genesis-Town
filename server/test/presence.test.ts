@@ -83,3 +83,18 @@ test('chat needs a name and shows up in presence polls of the same world only', 
     assert.ok(!(await r.post(P3, '/api/presence', at)).json.chat.some((m: any) => m.text === 'rahasia'));
   } finally { r.close(); }
 });
+
+test('presence on the own Homeland spawn moves a player there (reload lands at home, no 409)', async () => {
+  const r = await rig();
+  try {
+    const row = r.game.homelands.ensure(P1);
+    const spawn = r.game.homelands.map(row).layout.spawn;
+    const body = { world: `HL-${row.id}`, x: spawn.x, y: spawn.y, dir: 'down', scene: 'out', since: 0 };
+    const res = await r.post(P1, '/api/presence', body);
+    assert.equal(res.status, 200);
+    assert.equal(res.json.world, `HL-${row.id}`);
+    assert.equal(r.game.positions!.worldOf(P1), `HL-${row.id}`);
+    // not on the spawn: still refused
+    assert.equal((await r.post(P2, '/api/presence', { ...body, world: `HL-${r.game.homelands.ensure(P2).id}`, x: spawn.x + 1 })).status, 409);
+  } finally { r.close(); }
+});

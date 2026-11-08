@@ -116,10 +116,11 @@ export function createApp(deps: AppDeps) {
   const chatIpLimiter = new RateLimiter(30, 2000);
   const worldOf = (v: unknown) => (v == null || v === '' ? 'public' : worldIdOk(v) ? v : (() => { throw new HttpError(400, 'bad world'); })());
   /** The world a presence or chat request is about: it must be one the player may be in AND the one the server has them in. */
-  async function checkedWorld(acct: string, v: unknown) {
+  async function checkedWorld(acct: string, v: unknown, at?: { x: number; y: number }) {
     const w = worldOf(v);
     await game.prepare(acct, { world: w });
     if (!social.access(acct, w)) throw new HttpError(409, 'Kamu tidak boleh ke sana.');
+    if (at) game.reportPosition(acct, at, w); // a reload on the own Homeland spawn moves the player there first
     if (game.positions && game.positions.worldOf(acct) !== w) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
     return w;
   }
@@ -226,8 +227,7 @@ export function createApp(deps: AppDeps) {
         if (!presenceLimiter.take(acct)) throw new HttpError(429, 'too many presence reports');
         const b = parseJson(raw) as { world?: unknown; x?: unknown; y?: unknown; dir?: unknown; scene?: unknown; since?: unknown };
         game.fixWorld(acct); // a guest uninvited while standing there: back to the public area first
-        const w = await checkedWorld(acct, b.world);
-        game.reportPosition(acct, { x: Number(b.x), y: Number(b.y) }, w);
+        const w = await checkedWorld(acct, b.world, { x: Number(b.x), y: Number(b.y) });
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
         if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, false).map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
         if (onTile) social.report(acct, w, b);

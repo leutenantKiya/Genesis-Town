@@ -7,7 +7,7 @@ import { HttpError } from './auth.ts';
 import { RateLimiter } from './relayer.ts';
 
 export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number }
-export interface ChatMsg { id: number; t: number; from: string; to: string | null; text: string }
+export interface ChatMsg { id: number; t: number; from: string; fromTag: string; to: string | null; toTag: string | null; text: string }
 interface Stored extends ChatMsg { fromAcc: string; toAcc: string | null; world: string }
 
 /** The slice of Store that names need (src/db.ts). */
@@ -35,7 +35,7 @@ export function cleanText(s: string) {
   // no control characters, one line, trimmed, and rude words masked
   return s.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u2028-\u202e]/g, ' ').replace(/\s+/g, ' ').trim().replace(ROUGH_RE, (w) => w[0] + '*'.repeat(w.length - 1));
 }
-function strip(m: Stored): ChatMsg { return { id: m.id, t: m.t, from: m.from, to: m.to, text: m.text }; }
+function strip(m: Stored): ChatMsg { return { id: m.id, t: m.t, from: m.from, fromTag: m.fromTag, to: m.to, toTag: m.toTag, text: m.text }; }
 /** What an account without a chosen name is shown as. */
 export function defaultNick(account: string) { return 'Warga_' + account.replace(/^p/, '').slice(0, 4); }
 
@@ -115,7 +115,7 @@ export class Social {
     if (typeof raw !== 'string') throw new HttpError(400, 'Pesan kosong.');
     if (!worldIdOk(world)) throw new HttpError(400, 'bad world');
     if (raw.length > 400) throw new HttpError(400, `Pesan terlalu panjang (maks ${CHAT_MAX} huruf).`);
-    let text = cleanText(raw), to: string | null = null, toAcc: string | null = null;
+    let text = cleanText(raw), to: string | null = null, toTag: string | null = null, toAcc: string | null = null;
     const pm = /^\/(msg|w|pm)\b\s*([\s\S]*)$/i.exec(text);
     if (pm) {
       // the name may contain spaces: take the longest run of words that is a player's name
@@ -130,7 +130,7 @@ export class Social {
         throw new HttpError(404, `Tidak ada pemain bernama ${words[0]}.`);
       }
       if (toAcc === account) throw new HttpError(400, 'Itu namamu sendiri.');
-      to = this.nick(toAcc);
+      to = this.nick(toAcc); toTag = this.tag(toAcc);
     } else if (text.startsWith('/')) throw new HttpError(400, 'Perintah: /msg nama pesan · /block nama · /unblock nama · /nama NamaBaru · /help');
     if (!text) throw new HttpError(400, 'Pesan kosong.');
     if (Array.from(text).length > CHAT_MAX) throw new HttpError(400, `Pesan terlalu panjang (maks ${CHAT_MAX} huruf).`);
@@ -139,7 +139,7 @@ export class Social {
     if (!this.chatLimiter.take(account, now)) throw new HttpError(429, 'Pelan-pelan, terlalu banyak pesan.');
     this.lastSay.set(account, now);
     if (this.lastSay.size > 5000) for (const [a, t] of this.lastSay) if (now - t > CHAT_GAP_MS) this.lastSay.delete(a);
-    const msg: Stored = { id: ++this.seq, t: now, from: this.nick(account), to, text, fromAcc: account, toAcc, world };
+    const msg: Stored = { id: ++this.seq, t: now, from: this.nick(account), fromTag: this.tag(account), to, toTag, text, fromAcc: account, toAcc, world };
     this.chat.push(msg);
     if (this.chat.length > 300) this.chat.splice(0, this.chat.length - 300);
     return strip(msg);
