@@ -81,9 +81,9 @@
     // my own last line first, so other players' names stay on top of it
     if (me) { var p = GT.player; bubble(ctx, key(me, meTag), Math.round(p.x * T - camX + T / 2), Math.round(p.y * T - camY - 4), now); }
     Object.keys(others).forEach(function (a) {
-      var o = others[a], x = Math.round(curX(o, now) * T - camX + T / 2), y = Math.round(curY(o, now) * T - camY - 3);
+      var o = others[a], x = Math.round(curX(o, now) * T - camX + T / 2), y = Math.round(curY(o, now) * T - camY - 3 - (o.npc && Math.round(curX(o, now)) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
       ctx.font = '6px "Pixelify Sans", sans-serif';
-      var tag = o.nick + (o.title && o.title !== 'Pedagang baru' ? ' · ' + o.title : '');
+      var tag = o.nick + (!o.npc && o.title && o.title !== 'Pedagang baru' ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
       var w = ctx.measureText(tag).width;
       ctx.fillStyle = 'rgba(10,12,24,0.7)'; ctx.fillRect(Math.round(x - w / 2 - 2), y - 7, Math.ceil(w + 4), 8);
       ctx.fillStyle = '#e8f0ff'; ctx.fillText(tag, x, y);

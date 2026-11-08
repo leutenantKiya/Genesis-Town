@@ -174,7 +174,8 @@
       if (!r.rows.length) body.appendChild($('p', 'chain-dim', 'Belum ada yang berjualan.'));
       r.rows.forEach(function (x) {
         var row = $('div', 'chain-item');
-        row.appendChild($('span', 'grow', '#' + x.rank + '  ' + x.name + '#' + x.tag));
+        var nm = $('span', 'grow', '#' + x.rank + '  ' + x.name + '#' + x.tag); nm.style.marginRight = '12px';
+        row.appendChild(nm);
         row.appendChild($('span', null, x.sold_qty + ' barang · ' + x.coin + ' koin'));
         body.appendChild(row);
       });
@@ -203,7 +204,7 @@
     if (pollT <= 0) { pollT = 3; poll(); }
   }
   function label(ctx, txt, x, y) {
-    ctx.font = 'bold 6px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     var w = ctx.measureText(txt).width + 4;
     ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(x - w / 2), Math.round(y - 4), Math.round(w), 8);
     ctx.fillStyle = '#f6ead0'; ctx.fillText(txt, Math.round(x), Math.round(y + 0.5));
@@ -217,14 +218,14 @@
     ctx.fillStyle = '#b8864a'; ctx.fillRect(x + 1, y + 5, T - 2, 2);
     for (var i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#f6ead0' : '#c8503c'; ctx.fillRect(x + 1 + i * 3, y + 1, 3, 4); }
     ctx.fillStyle = '#e8c070'; ctx.fillRect(x + 4, y + 7, 4, 3);
-    label(ctx, 'Titip Jual', x + T / 2, y - 4);
+    label(ctx, 'Titip Jual', x + T / 2, y + T + 5); // below the stall: the merchants' name tags sit on the row above
     // Papan Juara: a board on two posts with a gold star
     x = m.board.x * T - camX; y = m.board.y * T - camY;
     ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 2, y + 6, 1, T - 6); ctx.fillRect(x + T - 3, y + 6, 1, T - 6);
     ctx.fillStyle = '#3a2a40'; ctx.fillRect(x, y + 1, T, 7);
     ctx.fillStyle = '#f6ead0'; ctx.fillRect(x + 1, y + 2, T - 2, 5);
     ctx.fillStyle = '#e8b030'; ctx.fillRect(x + 5, y + 3, 2, 3); ctx.fillRect(x + 4, y + 4, 4, 1);
-    label(ctx, 'Papan Juara', x + T / 2, y - 4);
+    label(ctx, 'Papan Juara', x + T / 2, y + T + 5);
     ctx.restore();
   }
 
