@@ -89,3 +89,14 @@ test('cancel by either side', async () => {
   w.game.trade.cancel(Q, o.id);
   fails(() => w.game.trade.accept(Q, o.id), 409, /sudah/);
 });
+
+test('frozen accounts cannot offer or accept trades', async () => {
+  const w = await world();
+  w.give(P, 'fish', 5); w.give(Q, 'coin', 100);
+  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  const o = w.game.trade.offer(P, { to: Q, give: { fish: 5 }, want: { coin: 40 } });
+  w.game.gs.recordShortfall(1, 0, P, 'fish', -5, -3); // offerer frozen: the receiver cannot accept either
+  fails(() => w.game.trade.accept(Q, o.id), 403, /dibekukan/);
+  fails(() => w.game.trade.offer(P, { to: Q, give: { fish: 1 } }), 403, /dibekukan/);
+  assert.equal(w.bal(Q, 'fish'), 0);
+});

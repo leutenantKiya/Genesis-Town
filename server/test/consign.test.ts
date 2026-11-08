@@ -61,3 +61,33 @@ test('consign needs the stall, the items and respects the per-item cap', async (
   w.game.consign.deposit(P, 'fish', 50, 1);
   fails(() => w.game.consign.deposit(P, 'fish', 1, 1), 409, /maks/i);
 });
+
+test('consign sales use up the merchants daily buy cap and stop at it', async () => {
+  const w = await world();
+  w.give(P, 'fish', 50);
+  w.stand(P, 'consign');
+  const buyers = w.game.market.ids().filter((id) => w.econ.merchants[id].buys.includes('fish'));
+  const day = w.day();
+  for (const id of buyers) { // leave room for exactly one unit per merchant
+    const room = w.game.market.buyRoom(id, 'fish');
+    w.game.gs.setMeta(`consign.bought.${day}.${w.game.market.account(id)}.fish`, String(room - 1));
+  }
+  w.game.consign.deposit(P, 'fish', 50, 1);
+  for (let i = 0; i < 20; i++) w.game.consign.tick();
+  assert.equal(w.game.consign.lots(P)[0].sold, buyers.length);
+  for (const id of buyers) {
+    assert.equal(w.game.market.buyRoom(id, 'fish'), 0);
+    assert.throws(() => w.game.market.sell(P, id, 'fish', 1), (e: any) => e.status === 409 && /sudah cukup membeli/.test(e.message));
+  }
+});
+
+test('withdraw answers 409 when returning the items would pass the daily gain cap', async () => {
+  const w = await world();
+  w.give(P, 'fish', 50);
+  w.stand(P, 'consign');
+  w.game.consign.deposit(P, 'fish', 50, 100000);
+  w.adv(25 * 60 * 1000); // next game day: the deposit no longer offsets today's gains
+  w.give(P, 'fish', 180);
+  fails(() => w.game.consign.withdraw(P, 'fish'), 409, /Batas harian Ikan tercapai\. Ambil sisanya besok\./);
+  assert.equal(w.game.consign.lots(P)[0].qty, 50);
+});

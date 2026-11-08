@@ -88,6 +88,20 @@ export class Market {
     return { unit, total: unit * qty };
   }
 
+  private consignKey(acct: string, token: string, day: number) { return `consign.bought.${day}.${acct}.${token}`; }
+  /** Units the consignment stall already sold to this merchant's demand today (they count against its daily buy cap). */
+  consignedToday(acct: string, token: string, day: number): number { return Number(this.gs.meta(this.consignKey(acct, token, day)) ?? 0); }
+  addConsigned(id: string, token: string, qty: number) {
+    const acct = this.account(id), day = this.clock.time().settleDay;
+    this.gs.setMeta(this.consignKey(acct, token, day), String(this.consignedToday(acct, token, day) + qty));
+  }
+  /** How many more units of `token` merchant `id` will still buy today (the cap `sell` enforces). */
+  buyRoom(id: string, token: string): number {
+    const d = this.def(id), acct = this.account(id), day = this.clock.time().settleDay;
+    const cap = (this.personality(d).buyCapMult ?? this.econ.pricing.dailyBuyCapPerTarget) * (d.target[token] ?? 10);
+    return Math.max(0, cap - this.gs.boughtToday(acct, token, day) - this.consignedToday(acct, token, day));
+  }
+
   /** Player sells `qty` of `token` to merchant `id` (off-chain; settled at 06:00). */
   sell(account: string, id: string, token: string, qty: number) {
     const d = this.def(id);
@@ -96,7 +110,7 @@ export class Market {
     const t = this.clock.time();
     const acct = this.account(id);
     const cap = (this.personality(d).buyCapMult ?? this.econ.pricing.dailyBuyCapPerTarget) * (d.target[token] ?? 10);
-    if (this.gs.boughtToday(acct, token, t.settleDay) + qty > cap) throw new HttpError(409, `${d.name} sudah cukup membeli ${this.econ.items[token].name} hari ini.`);
+    if (this.gs.boughtToday(acct, token, t.settleDay) + this.consignedToday(acct, token, t.settleDay) + qty > cap) throw new HttpError(409, `${d.name} sudah cukup membeli ${this.econ.items[token].name} hari ini.`);
     if (this.gs.balance(account, token) < qty) throw new HttpError(409, 'Barangmu tidak cukup.');
     const { unit, total } = this.quote(id, token, 'sell', qty);
     if (this.gs.balance(acct, 'coin') < total) throw new HttpError(409, `${d.name} tidak punya cukup uang.`);

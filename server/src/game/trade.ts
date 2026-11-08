@@ -21,6 +21,8 @@ export interface TradeDeps {
   /** Where a player stands: null when the server has no shared map (unit tests), else their world and last tile. */
   where: (account: string) => { world: string; pos: Pos | null } | null;
   history: (account: string, summary: string, tokens: string[]) => void;
+  /** Throws 403 for a frozen account (Game.assertActive). */
+  assertActive: (account: string) => void;
 }
 
 const MAX_OPEN = 10;
@@ -70,6 +72,7 @@ export class Trade {
   }
 
   offer(from: string, body: { to?: unknown; give?: unknown; want?: unknown }): { id: number; expires_at: number } {
+    this.d.assertActive(from);
     const to = this.resolve(body.to);
     if (to === from) throw new HttpError(400, 'Tidak bisa berdagang dengan diri sendiri.');
     const give = this.lines(body.give, 'give'), want = this.lines(body.want, 'want');
@@ -110,6 +113,7 @@ export class Trade {
 
   accept(account: string, id: unknown): { toast: string } {
     const r = this.load(id, account, true);
+    this.d.assertActive(r.from_acct); this.d.assertActive(r.to_acct);
     if (r.expires_at <= this.d.now()) throw new HttpError(409, 'Tawaran kedaluwarsa.');
     this.together(r.from_acct, r.to_acct);
     const give = JSON.parse(r.give) as Lines, want = JSON.parse(r.want) as Lines;

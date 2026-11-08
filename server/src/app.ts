@@ -186,6 +186,7 @@ export function createApp(deps: AppDeps) {
     return true;
   }
 
+  const boardCache = new Map<string, { at: number; body: unknown }>(); // Papan Juara: one heavy query per period and caller per 30 s
   /** Public-area economy: POST /api/trade/{offer,accept,cancel}, GET /api/trade, GET|POST /api/consign, POST /api/consign/withdraw, GET /api/leaderboard. */
   async function tradeApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
     const isTrade = p === '/api/trade' || p.startsWith('/api/trade/'), isConsign = p === '/api/consign' || p === '/api/consign/withdraw';
@@ -197,7 +198,12 @@ export function createApp(deps: AppDeps) {
       if (p === '/api/leaderboard') {
         const period = url.searchParams.get('period') ?? 'day';
         if (period !== 'day' && period !== 'all') throw new HttpError(400, 'period must be day or all');
-        return send(res, 200, game.leaderboard(period, acct)), true;
+        const key = `${period}|${acct ?? ''}`, nowMs = Date.now(), hit = boardCache.get(key);
+        if (hit && nowMs - hit.at < 30_000) return send(res, 200, hit.body), true;
+        const body = game.leaderboard(period, acct);
+        if (boardCache.size > 500) boardCache.clear();
+        boardCache.set(key, { at: nowMs, body });
+        return send(res, 200, body), true;
       }
       throw new HttpError(404, 'no such route');
     }

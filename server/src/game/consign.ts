@@ -60,6 +60,7 @@ export class Consign {
     const lot = this.lot(account, token);
     if (!lot || lot.qty < 1) throw new HttpError(409, 'Tidak ada titipan yang bisa diambil.');
     const day = this.d.clock.time().settleDay;
+    try { this.d.world.checkGain(account, token, lot.qty); } catch { throw new HttpError(409, `Batas harian ${econ.items[token].name} tercapai. Ambil sisanya besok.`); }
     gs.tx(() => {
       gs.add(day, this.d.town, token, -lot.qty, 'consign_out', `${account}:${token}:${lot.qty}`);
       gs.add(day, account, token, lot.qty, 'consign_out', `consign:${token}:${lot.qty}`);
@@ -70,13 +71,14 @@ export class Consign {
     return { toast, lots: this.lots(account) };
   }
 
-  /** The best price an open merchant pays for one unit of `token` right now (0 when nobody buys). */
-  bestBid(token: string): number {
+  /** The open merchant paying most for `token` right now that will still buy some today (bid 0 when nobody does). */
+  bestBuyer(token: string): { id: string; bid: number; room: number } | null {
     const { market, econ } = this.d;
-    let best = 0;
+    let best: { id: string; bid: number; room: number } | null = null;
     for (const id of market.ids()) {
       if (!market.isOpen(id) || !econ.merchants[id].buys.includes(token)) continue;
-      best = Math.max(best, market.row(id, token).bid);
+      const room = market.buyRoom(id, token), bid = market.row(id, token).bid;
+      if (room > 0 && (!best || bid > best.bid)) best = { id, bid, room };
     }
     return best;
   }
@@ -87,10 +89,11 @@ export class Consign {
     const day = this.d.clock.time().settleDay;
     const lots = gs.db.prepare('SELECT account, token, qty, min_price FROM consign_lots WHERE qty > 0 ORDER BY account, token').all() as unknown as Array<Lot & { account: string }>;
     for (const lot of lots) {
-      const unit = this.bestBid(lot.token);
-      if (unit < 1 || unit < lot.min_price) continue;
+      const buyer = this.bestBuyer(lot.token);
+      const unit = buyer?.bid ?? 0;
+      if (!buyer || unit < 1 || unit < lot.min_price) continue;
       const feeOf = (k: number) => Math.floor((unit * k * econ.consign.feeBps) / 10000);
-      let k = Math.min(lot.qty, econ.consign.sellPerGameHour);
+      let k = Math.min(lot.qty, econ.consign.sellPerGameHour, buyer.room);
       for (; k >= 1; k--) {
         if (market.faucetLeft(day) < unit * k) continue;
         try { world.checkGain(lot.account, 'coin', unit * k - feeOf(k)); } catch { continue; }
@@ -99,6 +102,7 @@ export class Consign {
       if (k < 1) continue; // faucet empty or the owner's daily coin cap reached: try again next hour
       const fee = feeOf(k), net = unit * k - fee, ref = `consign:${lot.token}:${k}@${unit}`;
       gs.tx(() => {
+        market.addConsigned(buyer.id, lot.token, k);
         gs.add(day, lot.account, 'coin', net, 'consign_sale', ref);
         if (fee > 0) gs.add(day, town, 'coin', fee, 'consign_fee', ref);
         gs.db.prepare('UPDATE consign_lots SET qty = qty - ?, sold = sold + ?, earned = earned + ? WHERE account = ? AND token = ?').run(k, k, net, lot.account, lot.token);

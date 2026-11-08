@@ -45,3 +45,23 @@ test('leaderboard shows own rank beyond top 10', async () => {
   assert.equal(b.me?.rank, 12);
   assert.equal(b.me?.sold_qty, 1);
 });
+
+test('GET /api/leaderboard is cached for 30 s per period', async () => {
+  const { createApp } = await import('../src/app.ts');
+  const { setup } = await import('./helpers.ts');
+  const { Game } = await import('../src/game/game.ts');
+  const s = setup();
+  const game = new Game(s.store, s.chain, { merchantParent: 'gt.test', town: 'town.gt.test', worldSeed: 42 });
+  await game.init();
+  let calls = 0; const orig = game.leaderboard.bind(game);
+  game.leaderboard = ((...a: Parameters<typeof orig>) => { calls++; return orig(...a); }) as typeof game.leaderboard;
+  const { server } = createApp({ ...s, game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    for (let i = 0; i < 3; i++) assert.equal((await fetch(base + '/api/leaderboard?period=day')).status, 200);
+    assert.equal(calls, 1);
+    assert.equal((await fetch(base + '/api/leaderboard?period=all')).status, 200);
+    assert.equal(calls, 2);
+  } finally { server.closeAllConnections(); server.close(); }
+});
