@@ -57,6 +57,9 @@ test('hire charges coin to the town', async () => {
   fails(() => w.hire(P, 'builder'), 409, /Koin kurang \(punya 50, perlu 150\)/);
   fails(() => w.hire(P, 'petani'), 409, 'Balai Kota perlu level 2.');
   fails(() => w.hire(P, 'nope'), 400, /./);
+  // inherited object keys are not jobs: no NaN coin rows
+  for (const job of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) fails(() => w.hire(P, job), 400, /Pekerja tidak dikenal/);
+  assert.equal(w.gs.balance(P, 'coin'), 50);
 });
 
 test('second builder runs two jobs at once', async () => {

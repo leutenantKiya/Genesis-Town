@@ -112,15 +112,21 @@ export class Homelands {
 
   /* ------------------------------------------------------------ worker bots */
 
+  /** A bot definition by job name: own config keys only (never 'constructor', '__proto__' and the like). */
+  private botDef(job: string) {
+    const all = this.cfg.bots ?? {};
+    return Object.hasOwn(all, job) ? all[job] : undefined;
+  }
+
   bots(account: string): Array<{ id: number; job: string; name: string }> {
-    return this.d.gs.homelandBots(account).filter((b) => this.cfg.bots?.[b.job]).map((b) => ({ id: b.id, job: b.job, name: this.cfg.bots[b.job].name }));
+    return this.d.gs.homelandBots(account).filter((b) => this.botDef(b.job)).map((b) => ({ id: b.id, job: b.job, name: this.botDef(b.job)!.name }));
   }
 
   /** What the owner's bots add up to. Factors multiply per bot, bonuses add. */
   effects(account: string): BotEffects {
     const e: BotEffects = { builders: 0, farmGrowFactor: 1, fishRate: 1, woodBonus: 0 };
     for (const b of this.d.gs.homelandBots(account)) {
-      const x = this.cfg.bots?.[b.job]?.effect;
+      const x = this.botDef(b.job)?.effect;
       if (!x) continue;
       e.builders += x.builders ?? 0;
       e.woodBonus += x.woodBonus ?? 0;
@@ -133,7 +139,7 @@ export class Homelands {
 
   /** Why this job cannot be hired right now, or null. Pure. */
   private hireWhy(account: string, th: number, job: string): string | null {
-    const def = this.cfg.bots?.[job];
+    const def = this.botDef(job);
     if (!def) return 'Pekerja tidak dikenal.';
     const have = this.d.gs.homelandBots(account).filter((b) => b.job === job).length;
     if (have >= def.max) return `Pekerja ${def.name} sudah penuh (maks ${def.max}).`;
@@ -147,7 +153,7 @@ export class Homelands {
   hire(account: string, job: string, day: number): { toast: string; tags: string[] } {
     this.settle(account);
     const row = this.ensure(account);
-    const def = this.cfg.bots?.[String(job)];
+    const def = this.botDef(String(job));
     if (!def) throw new HttpError(400, 'Pekerja tidak dikenal.');
     const why = this.hireWhy(account, row.th, job);
     if (why) throw new HttpError(409, why);
