@@ -878,9 +878,10 @@
     add(name, 'Halo! Mau tanya apa? Harga, stok, atau kenapa harga berubah?');
     var input = $('input'); input.type = 'text'; input.maxLength = 200; input.placeholder = 'mis. "kenapa harga ikan turun?"';
     body.appendChild(log); body.appendChild(input);
-    body.appendChild($('p', 'chain-dim', S.cfg && S.cfg.dialogue === 'nearai'
-      ? 'Jawaban dari NEAR AI Cloud (inferensi privat) berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.'
-      : 'Jawaban disusun dari harga asli toko. (NEAR AI Cloud belum aktif di server ini.)'));
+    var prov = S.cfg && S.cfg.dialogue;
+    body.appendChild($('p', 'chain-dim', prov === 'nearai' ? 'Jawaban dari NEAR AI Cloud (inferensi privat) berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.'
+      : prov === 'anthropic' ? 'Jawaban dari Claude berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.'
+      : 'Jawaban disusun dari harga asli toko. (AI belum aktif di server ini.)'));
     var waiting = false;
     function ask() {
       var t = String(input.value || '').trim();

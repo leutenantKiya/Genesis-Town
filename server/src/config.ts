@@ -28,6 +28,8 @@ export interface Config {
   devLogin: boolean; // mock chain only: accept idToken "dev:<name>" so tests run without a Google account
   // Merchant dialogue via NEAR AI Cloud (optional; local lines without a key). Base URL: near-ai-cloud skill / docs.near.ai.
   nearai: { apiKey?: string; model?: string; baseUrl: string; timeoutMs: number };
+  /** Which AI writes merchant lines: DIALOGUE_PROVIDER (anthropic | nearai | local), ANTHROPIC_API_KEY, DIALOGUE_MODEL. Env only. */
+  dialogue: { provider?: string; anthropicKey?: string; anthropicModel?: string };
   /** Seed of the shared village map (client/js/world/village.js). One world per server. */
   worldSeed: number;
 }
@@ -86,6 +88,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       model: env.NEARAI_MODEL || undefined,
       baseUrl: env.NEARAI_BASE_URL || 'https://cloud-api.near.ai/v1',
       timeoutMs: Number(env.NEARAI_TIMEOUT_MS ?? 8000),
+    },
+    dialogue: {
+      provider: env.DIALOGUE_PROVIDER || undefined,
+      anthropicKey: env.ANTHROPIC_API_KEY || undefined,
+      anthropicModel: env.DIALOGUE_MODEL || undefined,
     },
   };
 }

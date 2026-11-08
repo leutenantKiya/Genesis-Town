@@ -90,11 +90,20 @@ export function createApp(deps: AppDeps) {
   const simLimiter = new RateLimiter(6, 300); // simulations per IP (each new parameter set starts a worker thread)
   const talkLimiter = new RateLimiter(6, 150);
   const deviceLimiter = new RateLimiter(3, 20); // new-device key additions per IP (each costs the relayer a NEAR Auth sign call) // merchant questions per account (each may be one NEAR AI call)
-  const dialogue = deps.dialogue ?? new Dialogue(deps.cfg.nearai);
+  const dialogue = deps.dialogue ?? new Dialogue({ ...deps.cfg.nearai, ...deps.cfg.dialogue });
   const clientRoot = resolve(deps.clientDir);
   const checkSpend = spendGuard(deps.chain, game);
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
+  // Merchants walk the public area as players tagged NPC: behind their stall (as the client draws them); "/msg Sari ..." asks them through the dialogue provider.
+  const MERCHANT_LOOK: Record<string, number> = { sari: 3, budi: 2, wati: 5, joko: 4 };
+  const stalls = game.map?.layout.market.stalls ?? [];
+  social.setNpcs(game.market.ids().flatMap((id, k) => stalls[k] ? [{ id, account: game.market.account(id), name: game.econ.merchants[id].name, look: MERCHANT_LOOK[id] ?? k % 8, x: stalls[k].x, y: stalls[k].y - 1, title: game.econ.merchants[id].shop }] : []));
+  social.onNpcMsg = (npc, from, text) => {
+    if (!talkLimiter.take(from)) throw new HttpError(429, 'Pedagangnya sedang sibuk melayani. Coba sebentar lagi.');
+    void dialogue.reply(game.market.view(npc.id), game.econ.merchants[npc.id].personality, text)
+      .then((r) => { social.npcSay(npc, from, r.line); }, () => { /* the player simply gets no answer */ });
+  };
   const presenceLimiter = new RateLimiter(240, 100_000); // about 2 reports a second per account
   const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
     const accts = [sender, ...extra];
@@ -191,7 +200,7 @@ export function createApp(deps: AppDeps) {
           fastAuth: deps.cfg.fastAuth,
           devLogin: deps.cfg.devLogin,
           devTools: devAllowed(req),
-          dialogue: dialogue.enabled ? 'nearai' : 'local',
+          dialogue: dialogue.provider,
           world: game.map?.view() ?? null,
           econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time },
           monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, reach: game.econ.monsters.reach } : null,
@@ -231,7 +240,7 @@ export function createApp(deps: AppDeps) {
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
         if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, false).map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
         if (onTile) social.report(acct, w, b);
-        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, title: titleFor(bazaar.points(s.account)) }));
+        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : { title: titleFor(bazaar.points(s.account)) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
         return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq });
       }
