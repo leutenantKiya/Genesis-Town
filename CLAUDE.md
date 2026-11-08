@@ -22,10 +22,11 @@ NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play
 | `client/js/world/village.js` | Seeded village generator, run by BOTH browser and server (same map for everyone, `WORLD_SEED`) |
 | `client/vendor/near.js` | esbuild bundle of near-api-js + fast-auth (`client/build/`), gitignored, made by `npm run build:client` |
 | `server/src/main.ts` | Entry: config → SQLite `Store` → `MockChain` or `TestnetChain` → `Game` loop → HTTP app |
-| `server/src/app.ts` | Hand-written router (no framework): `/api/config, auth/register, auth/add-key, relay, time, state, act, market, quote, shops, talk, projects, listings, history, sim, dev/*`; homeland: `homeland` (GET state), `homeland/layout` (GET), `homeland/invite` (POST, by name#tag); live: `presence` (POST, polled ~0.7 s: position in, same-world players and chat out), `chat`, `name` (name#tag and look); `health`; `dev/grant` (mock chain, local only: `items` and `coin`) |
+| `server/src/app.ts` | Hand-written router (no framework): `/api/config, auth/register, auth/add-key, relay, time, state, act, market, quote, shops, talk, projects, listings, history, sim, dev/*`; homeland: `homeland` (GET state), `homeland/layout` (GET), `homeland/invite` (POST, by name#tag); public-area economy: `trade` (GET), `trade/offer|accept|cancel` (POST), `consign` (GET/POST), `consign/withdraw`, `leaderboard` (GET `?period=day|all`); live: `presence` (POST, polled ~0.7 s: position in, same-world players and chat out), `chat`, `name` (name#tag and look); `health`; `dev/grant` (mock chain, local only: `items` and `coin`) |
 | `server/src/game/game.ts` | Game loop (tick 2 s) + `/api/act` switch: `gather, fight, engage, flee, craft, eat, farm, travel, build, collect, ship, sell, ...` |
 | `server/src/game/` | `world.ts` (off-chain actions → ledger rows), `market.ts` (merchant trades), `bazaar.ts` (Lapak / Pasar Gelap side), `settlement.ts` + `merkle.ts`, `monsters.ts`, `clock.ts`, `worldmap.ts`, `gamestore.ts`, `sim.ts` |
-| `server/src/game/homeland.ts` | Homelands: Town Hall level, open chunks, builder jobs with `ends_at`, building production (lazy, capped), invites by name#tag, world ids `HL-<n>` |
+| `server/src/game/trade.ts`, `consign.ts`, `leaderboard.ts` | Direct player-to-player trade (offers, atomic accept, `p2p:` ledger rows), the Titip Jual consignment stall (Mbok Darmi, hourly sales within the faucet, 5% fee), the Papan Juara top-seller board read from the ledger. UI: `client/js/mods/trade.js` |
+| `server/src/game/homeland.ts` | Homelands: worker bots (hire Tukang, Petani, Nelayan, Penebang; coin goes to the town), Town Hall level, open chunks, builder jobs with `ends_at`, building production (lazy, capped), invites by name#tag, world ids `HL-<n>` |
 | `server/src/social.ts` | Display names (Store `names` table), presence and chat, per world (`public` or `HL-<n>`), in memory only; `client/js/mods/players.js` is its client (name tags, bubbles, chat box, `/msg /block /nama`, player cards, first-login name prompt) |
 | `client/js/world/homeland.js` | Homeland generator (seed, 3 x 3 chunks), run by browser and server like `village.js`; `client/js/mods/homeland.js` is the UI (Town Hall menu, lots, builder, portal), `client/js/mods/charscreen.js` the post-login character screen (name#tag, look, Mulai) |
 | `server/src/` | `chain.ts`, `relayer.ts` (NEP-366), `auth.ts` (Auth0 JWT), `reqauth.ts` (session-key signed requests), `newdevice.ts`, `dialogue.ts` (Anthropic Claude or NEAR AI Cloud, local fallback; merchants chat as NPC players via `social.ts`), `db.ts` |
@@ -48,12 +49,13 @@ NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play
   timers are server-authoritative (`ends_at`, one builder, one job at a time); buildings produce lazily, capped by
   capacity and `caps.dailyGainPerItem`. The public area (`public`) is trade-only: merchants, Pasar, players. Guests are
   invited by `name#tag`, walk and chat, never build. Settlement uses the token registry only.
+- **Direct player trade** (`/api/trade/*`, public area, within 3 tiles) is off-chain ledger rows settled daily like merchant trades; Pasar listings and gifts stay on chain. Consignment sells inside the same coin faucet. Worker bots never hold items or coin and never trade.
 - Coin is minted only by town demand, capped per day + money-supply throttle (`docs/economy.md`).
 
 ## Adding an off-chain action (typical path)
 
 client mod → `POST /api/act {kind, ...}` (signed) → `game.ts` switch → `world.ts`/`market.ts` method → ledger row
-via `gamestore.ts` → shows in Riwayat as "menunggu settlement" → `settlement.ts` at 06:00. Requests that happen inside a Homeland carry `world` (`public` or `IS-<id>`); positions and gather checks use that
+via `gamestore.ts` → shows in Riwayat as "menunggu settlement" → `settlement.ts` at 06:00. Requests that happen inside a Homeland carry `world` (`public` or `HL-<n>`); positions and gather checks use that
 world's map (`Game.worldFor`). Add tests in
 `server/test/`. Balance/tuning numbers go in `economy/config.json`, not code.
 

@@ -29,6 +29,10 @@ Everything a player does alone, many times a minute, stays off chain until the d
 | "Simpan sekarang" (settle my bag now) | **on-chain** on demand, limited to once per game day | immediately |
 | Account creation | **on-chain**, once | immediately |
 | Homeland: Town Hall upgrade, open a chunk, build, builder timers, building production, collecting | **off-chain**, server-authoritative: costs leave as ledger rows, `ends_at` timers are kept by the server, collected goods enter as ledger rows under the daily gain cap | at the next daily settlement |
+| Homeland worker bots: hire (coin to the town) and their effects on builders, crop timers, Kolam output and wood per tree | **off-chain**, a `hire` ledger row plus a SQLite row; effects are computed by the server | coin at the next daily settlement |
+| Direct trade between two players in the public area (items and `coin`, accept within 120 s) | **off-chain**, atomic ledger rows both ways (`trade`, ref `p2p:`), re-checked at accept | at the next daily settlement |
+| Titip Jual consignment (deposit, hourly sales, withdraw) | **off-chain**, rows `consign_in`, `consign_sale`, `consign_fee`, `consign_out`; sales pay coin inside the daily faucet | at the next daily settlement |
+| Papan Juara leaderboard | **off-chain**, read from the ledger, never stored on chain | n/a |
 | Homeland invites (by name#tag), portal travel, live positions, chat, look | **off-chain**, SQLite or server memory, never on chain. Homelands are not NFTs and cannot be sold | n/a |
 
 One game day lasts 24 real minutes, so a player sees a settlement about every 24 minutes. Judges get a

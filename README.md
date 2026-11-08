@@ -1,6 +1,6 @@
 # Genesis Town
 
-> **Status (2026-11-08): M3 done, M4 (hardening) in progress; Homeland phase A built on branch `homeland`.** Done and tested:
+> **Status (2026-11-08): M3 done, M4 (hardening) in progress; Homeland phases A and B built on branch `homeland`.** Done and tested:
 > - M2 (Checkpoint 3): off-chain play (gathering, energy, crafting, farm plot, shipping, trading with four merchants
 >   priced by `economy/pricing.ts`), a daily settlement on NEAR testnet with the ledger's Merkle root, and shop
 >   bankruptcy and restoration with shares, all in an end-to-end testnet run;
@@ -83,9 +83,18 @@
 >   the [Homeland spec](docs/superpowers/specs/2026-11-08-homeland-design.md).
 > - The contract still has the v5 island methods (`buy_island`, `save_island`); the game does not use them and v5 is not deployed to testnet.
 >
+> - **Homeland, phase B** (branch `homeland`): at the Town Hall you hire **worker bots** for coin (Tukang = a second builder,
+>   Petani = faster crops, Nelayan = faster Kolam Ikan, Penebang = +1 wood per tree); bots stay in your Homeland, never hold
+>   items or coin and never trade. In the public area the four **merchants walk around as NPC players** (name tag `NPC`) and
+>   answer private messages (`/msg Sari harga ikan?`) through **Claude** (`claude-sonnet-5-5`, low effort), or NEAR AI Cloud,
+>   or a local line when no key is set; the model's text is display-only. Players can **trade face to face** (items and coin,
+>   both must be in the public area within 3 tiles; atomic accept, off-chain ledger rows settled daily). **Titip Jual**: leave
+>   goods with Mbok Darmi and a minimum price; she sells a few units each game hour, even while you are offline, for a 5% fee.
+>   **Papan Juara** shows the top sellers of the day and of all time. Numbers: `economy/config.json` -> `homeland.bots`,
+>   `trade`, `consign`; plan: [phase B](docs/superpowers/plans/2026-11-09-homeland-phase-b.md).
+>
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
-> and M5 (demo video, submission). Also *(planned)*: Homeland phase B (job bots, AI merchant dialogue on Claude, player-to-player
-> trade, consignment merchant, top-seller board, more builders) and phase C (cosmetics, Hunter and Chef bonuses), agent wallets. Anything marked *(planned)* does not exist yet.
+> and M5 (demo video, submission). Also *(planned)*: Homeland phase C (cosmetics, Hunter and Chef bonuses) and agent wallets. Anything marked *(planned)* does not exist yet.
 >
 > **M4.5 Online** *(planned, target 2026-11-07)*: a public HTTPS URL anyone can play on testnet.
 > - Host: one long-running Node 24 process (the game loop ticks every 2 s, one game hour is one real minute,
@@ -329,7 +338,10 @@ NEP-245 contract (`/contracts`), and shared economy code (`/economy`).
 - Libraries: near-sdk 5.29 (Rust contract), near-sandbox 0.3.12 and near-api 0.8 (contract integration test),
   near-api-js 7.4.0 (server and browser), `@fast-auth-near/browser-sdk` 1.4.2 and `@fast-auth-near/javascript-provider`
   1.4.1 (NEAR Auth login), jose 6.2.14 (Auth0 token checks), borsh 2.0.0, esbuild 0.28.2 (browser bundle).
-- NEAR AI Cloud is called over its OpenAI-compatible HTTP API with `fetch`; no SDK.
+- AI used in the product: **Claude** (Anthropic Messages API, model `claude-sonnet-5-5`, low effort) writes the merchants'
+  replies to private messages, and NEAR AI Cloud is the alternative provider; both are called with `fetch` (OpenAI-compatible
+  HTTP for NEAR AI), no SDK. The developer picks the provider with env vars; the model's text is display-only and never
+  triggers a trade, price change or chain action.
 
 ## Known limits
 
@@ -340,7 +352,7 @@ NEP-245 contract (`/contracts`), and shared economy code (`/economy`).
 - Off-chain requests are signed with the player's session key, and actions are checked against where the player
   stands (M4). A modified client can still walk anywhere a player could walk.
 - Pure offline mode (`?mode=offline`) supports gathering only. For the full game without testnet, run `npm run dev:mock`.
-- Merchant dialogue needs `NEARAI_API_KEY` for NEAR AI Cloud; without it the server uses local lines. The model's
+- Merchant dialogue needs `ANTHROPIC_API_KEY` (Claude) or `NEARAI_API_KEY` (NEAR AI Cloud); without either the server uses local lines. The model's
   text is display-only and can't trigger trades. Chat signatures (TEE attestation) are not verified in the client yet.
 - Testnet only. NEAR Intents has no testnet, so it is out of scope unless approved as a mainnet stretch.
 

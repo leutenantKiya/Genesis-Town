@@ -51,8 +51,8 @@
 - `view()` adds `bots: Array<{ id, job, name }>` and `hire: Record<job, { name, price, rarity, max, have, th, can, why }>`.
 - `/api/act {action:'hire', job, world, pos}` - owner, in own Homeland, standing at the Town Hall (`atOwnHouse`).
 - Client: Balai Kota modal gets a "Pekerja" section (hire buttons with price, have/max, why). Each bot walks/idles near its workplace (farm for Petani, Kolam Ikan for Nelayan, forest edge for Penebang, Town Hall for extra Tukang) with its job name above its head.
-- [ ] Tests (`homeland-bots.test.ts`): `hire charges coin to the town`; `second builder runs two jobs at once`; `max per job answers 409`; `petani makes homeland crops grow faster`; `nelayan raises kolam output`; `penebang adds wood per tree at home only`; `hire outside own homeland answers 409`.
-- [ ] Implement, `npm test` green, browser check: hire a Nelayan, see it standing at the Kolam, collect is faster.
+- [x] Tests (`homeland-bots.test.ts`): `hire charges coin to the town`; `second builder runs two jobs at once`; `max per job answers 409`; `petani makes homeland crops grow faster`; `nelayan raises kolam output`; `penebang adds wood per tree at home only`; `hire outside own homeland answers 409`.
+- [x] Implement, `npm test` green, browser check: hire a Nelayan, see it standing at the Kolam, collect is faster.
 
 ### Task B2: Merchants act like players and talk through Claude
 
@@ -64,8 +64,8 @@
 - Merchants in presence: in world `public`, `players[]` includes one entry per merchant `{ account: <merchant account>, nick: <merchant name>, tag: 'NPC', look: <fixed per merchant>, x, y (in front of their stall), dir: 'down', npc: true, title: <role> }`. They show in the online list with an NPC badge.
 - `/msg Sari <text>` (or `/msg Sari#NPC`) from public: the line appears as a private chat line to the player, and the merchant's AI answer comes back as a private line `from: Sari, fromTag: 'NPC'` (uses the existing `/api/talk` rate limit: 6 per minute per account). From a Homeland: 409 `Pedagang ada di area publik.`
 - Player card of a merchant: "Lihat dagangan" opens that merchant's shop (existing chain.js shop modal), "Tanya" prefills `/msg <name> `.
-- [ ] Tests: `anthropic provider sends model claude-sonnet-5-5 and returns its text` (fake fetch); `anthropic error or timeout falls back to a local line`; `no key uses local`; `merchants appear in public presence with tag NPC`; `/msg to a merchant from a homeland answers 409`.
-- [ ] Implement, `npm test` green, browser check with no key: merchants visible with name tags, `/msg Sari harga ikan?` gets a local answer bubble.
+- [x] Tests: `anthropic provider sends model claude-sonnet-5-5 and returns its text` (fake fetch); `anthropic error or timeout falls back to a local line`; `no key uses local`; `merchants appear in public presence with tag NPC`; `/msg to a merchant from a homeland answers 409`.
+- [x] Implement, `npm test` green, browser check with no key: merchants visible with name tags, `/msg Sari harga ikan?` gets a local answer bubble.
 
 ### Task B3: Public-area economy: trade, consignment, leaderboard
 
@@ -82,8 +82,8 @@
   - Hourly in `Game.step()`: for each lot, up to `sellPerGameHour` units sell to the town (like town demand) when the best merchant buy price for that token >= `min_price`; the player gets `price x n` minus `feeBps` (kind `consign_sale`, fee to the town), respecting `checkGain` (stop selling when capped). Items sold this way are burned from consignment (they left the player at deposit).
 - **Leaderboard:** `GET /api/leaderboard?period=day|all` -> `{ period, rows: [{ rank, account, name, tag, sold_qty, coin }] }` top 10 by items sold (merchant `sell` + `consign_sale` + items given in `trade` for coin), from ledger rows. A board in the public area ("Papan Juara") opens it; current player's own rank shown even if not top 10.
 - Client `trade.js`: player card gets "Ajak dagang" (offer modal: pick from your Tas, ask for items/coin); incoming offer toast + modal with Terima/Tolak; Titip Jual stall modal; Papan Juara modal.
-- [ ] Tests: `trade swaps items and coin atomically`; `accept fails when offerer spent the items`; `double accept: second answers 409`; `expired offer answers 409`; `trade only in public and near each other`; `consign sells only at or above min price, fee to town`; `consign never sells more than deposited, withdraw returns the rest`; `leaderboard counts sells and consign sales, ranks by quantity`.
-- [ ] Implement, `npm test` green, browser check: two dev logins in two tabs trade fish for coin; consign 5 fish; Papan Juara shows both.
+- [x] Tests: `trade swaps items and coin atomically`; `accept fails when offerer spent the items`; `double accept: second answers 409`; `expired offer answers 409`; `trade only in public and near each other`; `consign sells only at or above min price, fee to town`; `consign never sells more than deposited, withdraw returns the rest`; `leaderboard counts sells and consign sales, ranks by quantity`.
+- [x] Implement, `npm test` green, browser check: two dev logins in two tabs trade fish for coin; consign 5 fish; Papan Juara shows both.
 
 ### Task B4: Merge, docs, verification (orchestrator + one worker)
 

@@ -72,7 +72,7 @@ are mostly taken, and true chunk streaming for a world without fixed edges.
 
 ## Homeland
 
-Status: phase A built on branch `homeland` (2026-11-08). Code:
+Status: phases A and B built on branch `homeland` (A 2026-11-08, B 2026-11-09). Code:
 [`client/js/world/homeland.js`](../client/js/world/homeland.js) (generator),
 [`server/src/game/homeland.ts`](../server/src/game/homeland.ts) (state, timers, production),
 [`client/js/mods/homeland.js`](../client/js/mods/homeland.js) (UI) and `client/js/mods/charscreen.js` (character screen).
@@ -119,11 +119,28 @@ finishes it when the clock passes it; the client only draws it. Production is la
 out what accrued since the last collection, capped by the building's capacity, writes ledger rows like a gather and
 counts it against `caps.dailyGainPerItem`. What does not fit under the daily cap stays stored.
 
+### Worker bots
+
+Hired at the Town Hall (the `hire` action, owner, in their own Homeland). The coin price goes to the town treasury. Each
+job has a maximum and a Town Hall level (`homeland.bots`):
+
+| Bot | Price | Max | Town Hall | Effect per bot |
+| --- | --- | --- | --- | --- |
+| Tukang | 150 | 3 | 1 | one more builder: another job can run at the same time |
+| Petani | 120 | 2 | 2 | Homeland crops grow 1.5x faster (`ceil(growDays / 1.5^n)`, minimum 1 day) |
+| Nelayan | 120 | 2 | 2 | Kolam Ikan makes 1.5x more per game hour |
+| Penebang | 120 | 2 | 2 | +1 wood for every tree gathered in the owner's Homeland |
+
+Bots only exist in their owner's Homeland: they walk near their workplace with the job name overhead, never hold items or
+coin, and no API lets them trade. Hiring past the maximum, below the Town Hall level, without the coin or outside your own
+Homeland answers 409. Effects are applied by the server when it computes timers and gains, so they stay under
+`caps.dailyGainPerItem`.
+
 ### Portal and travel
 
 Every Homeland has a portal to the public area, and the public area has one back to the player's own Homeland. The
 `travel` action moves you; the server tracks which world each player is in and changes it only that way. A world you
-may not enter answers 409. Bots (Phase B) will stay in their Homeland.
+may not enter answers 409.
 
 ### Guests
 
@@ -136,3 +153,18 @@ build.
 Players in the same world see each other with `name#tag`, their look (skin, hair, shirt) and chat bubbles (key C,
 80 characters). The server keeps positions and the last 50 chat lines per world in memory; names are 3-16 characters
 plus a 5-digit tag, unique as `name#tag`. Nothing of this is stored on chain.
+
+### Public area: NPC merchants, Titip Jual and Papan Juara
+
+- **Merchants as NPC players.** Sari, Budi, Wati and Joko appear in public presence with the tag `NPC`, a fixed look and a
+  place in front of their stall. Their player card has "Lihat dagangan" (their shop) and "Tanya" (prefills `/msg`). A
+  private message to a merchant is answered privately by the merchant's AI (Claude by default when `ANTHROPIC_API_KEY` is
+  set, else NEAR AI Cloud, else a local line); from a Homeland the merchant is not there and the server answers 409.
+  Same limits as `/api/talk` (6 questions a minute, 200 characters). Model text is display-only.
+- **Direct trade.** From another player's card, "Ajak dagang" offers up to 4 token lines each way (`coin` allowed). The
+  receiver gets a toast and accepts or declines within 120 s. Both players must be in `public` and within 3 tiles.
+- **Titip Jual.** Mbok Darmi's stall: deposit up to 50 units of an item with a minimum price. Every game hour up to 3 units
+  per lot sell to the town at the best merchant buy price if it is at least your minimum, even while you are offline.
+  Her fee is 5%. Withdraw returns the unsold units.
+- **Papan Juara.** A board on the plaza ranks the top 10 sellers by items sold, for today or all time, and shows your own
+  rank. Counted: sales to merchants, consignment sales and items given in a direct trade that paid you coin.

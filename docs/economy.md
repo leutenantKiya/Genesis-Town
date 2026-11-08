@@ -95,6 +95,8 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 | Firewood | `wood` | bought (then burned) by the town |
 | Tool wear | `tool` | 1 tool burned every 20 uses |
 | Crafting inputs | raw items | burned on every craft |
+| Worker bots | player `coin` | 120-150 coin per hire, paid to the town treasury (a transfer to the town, not a burn) |
+| Consignment fee | seller `coin` | 5% of each Titip Jual sale, to the town treasury |
 
 ### The faucet throttle (why money supply stays bounded)
 
@@ -221,6 +223,17 @@ Built in M3: contract v3 (`contracts/game/src/market.rs`), on chain right away a
 
 Player-market trades do **not** feed merchant demand counts (B, S), so wash trading between your own accounts cannot
 move merchant prices, and every wash trade burns 5%.
+
+## 6b. Direct trade and consignment
+
+- **Direct trade.** Two players swap items and `coin` face to face in the public area. It is a transfer only: nothing is
+  minted or burned, no merchant counter (B, S) moves, and each receiver's gain counts against `caps.dailyGainPerItem`.
+  Rows are off-chain and settle daily like merchant trades.
+- **Titip Jual (consignment).** Deposited items sit on the town account. Each game hour up to `sellPerGameHour` (3) units
+  per lot sell to the town at the best merchant buy price, only if it is at least the owner's minimum. The coin paid is
+  town demand, so it comes out of the same daily faucet `W_day` (section 3) and is stopped by the same cap and throttle; it
+  is not a second faucet. The 5% fee goes to the town treasury, and a lot never sells more than was deposited (max 50
+  per item).
 
 ## 7. How the economy changes without a dev patch
 

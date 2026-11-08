@@ -39,7 +39,10 @@ private keys are typed by you into the host, never committed and never put in a 
 | `MERCHANT_PARENT_ACCOUNT_ID` | as in `.env` |
 | `WORLD_SEED` | empty (keeps the current village) |
 | `FASTAUTH_CLIENT_ID`, `FASTAUTH_DOMAIN` | empty, or the client id and Auth0 domain NEAR Auth gives for the public domain (see Login below) |
-| `NEARAI_API_KEY` | optional (**secret**); without it merchants answer with local lines |
+| `ANTHROPIC_API_KEY` | optional (**secret**); Claude writes merchant replies; without any AI key merchants answer with local lines |
+| `DIALOGUE_PROVIDER` | empty (`anthropic` if the Anthropic key is set, else `nearai` if its key is set, else `local`), or `anthropic` / `nearai` / `local` |
+| `DIALOGUE_MODEL` | empty (default `claude-sonnet-5-5`, low effort) |
+| `NEARAI_API_KEY` | optional (**secret**); NEAR AI Cloud as the alternative provider |
 | `DEV_TOOLS` | **empty** |
 | `TRUST_PROXY` | `1` (the Dockerfile sets it) |
 | `PORT` | usually set by the host; the Dockerfile defaults to 3000 |

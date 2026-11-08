@@ -23,6 +23,7 @@ cargo-near.
 | `create_project(id, name, chunk, need)` | owner | a town project that opens map area `chunk` when complete (max 20) |
 | `project_contribute(id, contribution)` | player, **no deposit** | pledges goods or coin; only what is still needed is taken; when every line is met the pledges are burned and the project is done |
 | `project_withdraw(id)` | player | takes a pledge back while the project is not done |
+| *The game no longer uses the island methods below (`buy_island`, `save_island`, `set_voucher_key`, `set_broker`, `migrate`): Homeland is off-chain. They stay in the source only.* | | |
 | `buy_island(island_id, spec, price, expires_ns, signature)` | player, **no deposit** | buys a Private Island with a server voucher (ed25519 over `GT-ISLAND-BUY\|contract\|id\|buyer\|price\|seed\|size\|fertility\|expires_ns`, key from `set_voucher_key`). Coin buyer → broker, burned from the broker, `IS-<id>-1` minted to the broker and moved to the buyer, in one call. An island id can be bought once |
 | `save_island(island_id, from_version, spec, expires_ns, signature)` | island owner, **no deposit** | Save World: burns `IS-<id>-<v>`, mints `IS-<id>-<v+1>` with the upgraded spec (same seed, levels never lower). Voucher message `GT-ISLAND-SAVE\|contract\|id\|owner\|from_version\|seed\|size\|fertility\|expires_ns` |
 | `set_voucher_key(public_key)`, `set_broker(broker_id)` | owner | voucher signer (ed25519) and the broker account (gets registered) |

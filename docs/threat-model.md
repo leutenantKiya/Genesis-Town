@@ -121,14 +121,16 @@ action, so a modified client cannot skip a fight or gather past it. A knock-out 
 never removes items or coins. Wins add one item through the normal ledger, so the contract's daily gain caps still
 apply. Pos Ronda is read from the chain (`done`), like the bridge.
 
-## Merchant dialogue (NEAR AI Cloud)
+## Merchant dialogue (Claude, NEAR AI Cloud)
 
-The player's question and the shop's current prices go to NEAR AI Cloud (private inference in a TEE); the answer is
+The player's question and the shop's current prices go to the AI provider (Claude through the Anthropic Messages API by default, or NEAR AI Cloud with its TEE inference); the answer is
 shown in the chat window and nothing else. It cannot trigger a trade, change a price or touch the chain, so a prompt
 injection in the question can at most make the merchant say something wrong. The system prompt tells the model to
 use only the listed prices, and the UI says the answer comes from the shop's real prices. Questions are capped at
-200 characters and 6 per minute per account. Without `NEARAI_API_KEY`, or on error or timeout (8 s), the server
-answers with a line built from the same facts.
+200 characters and 6 per minute per account. The provider is chosen only by the developer through env (`DIALOGUE_PROVIDER`, `DIALOGUE_MODEL`); the client cannot pick one,
+and `ANTHROPIC_API_KEY` and `NEARAI_API_KEY` live only in env and never reach the browser or logs. Without a key, or on
+error or timeout (8 s), the server answers with a line built from the same facts. Merchants also answer `/msg` as NPC
+players; only the model's text is shown, and it never starts a trade, price change or chain action.
 
 ## New device (adding a session key)
 
@@ -216,6 +218,28 @@ about the server's own rules.
   game action can mint another kind of token.
 - The v5 island methods (`buy_island`, `save_island`) remain in the contract source but the game never calls them and
   the server issues no vouchers.
+
+## Worker bots
+
+Hiring is an owner-only `hire` in the owner's own Homeland. The job name must be one of the configured bots, looked up with
+an own-property check, so names like `constructor` cannot reach prototype keys or write broken coin rows. The price is
+charged once and credited to the town, and a per-job maximum and Town Hall level apply (409 otherwise). Bots hold no items
+or coin and no API lets them act outside their owner's Homeland. Their effects change only timers and amounts, and gains
+still pass `checkGain`.
+
+## Direct trade and consignment
+
+- **Trade atomicity.** `accept` runs in one SQLite transaction that re-checks both balances (409 `<Item> kurang.`), that both
+  players are in `public` within 3 tiles, and that the offer has not expired (120 s) or already been used. Items are not
+  reserved at offer time, so an offerer who spent them makes the accept fail cleanly; a second accept of the same offer
+  answers 409. No balance can go negative, and each receiver is capped by `caps.dailyGainPerItem`. Offers allow 4 token
+  lines per side and registry tokens only.
+- **Consignment.** Deposited items leave the player at once; a lot sells only when the merchant's buy price is at least the
+  owner's minimum, never more than was deposited (max 50 per item), and at most 3 units per lot per game hour. The coin is
+  paid within the daily faucet and `checkGain`, so offline sales cannot exceed the cap; the 5% fee goes to the town.
+  Withdraw returns what is unsold.
+- **Leaderboard** is read-only from the ledger; direct trades count only when they paid coin, so swapping items back and
+  forth for nothing does not climb the board.
 
 ## Presence and chat
 
