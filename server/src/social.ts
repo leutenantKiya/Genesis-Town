@@ -6,7 +6,10 @@
 import { HttpError } from './auth.ts';
 import { RateLimiter } from './relayer.ts';
 
-export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number }
+export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string }
+/** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
+export interface Npc { id: string; account: string; name: string; look: number; x: number; y: number; title: string }
+export const NPC_TAG = 'NPC';
 export interface ChatMsg { id: number; t: number; from: string; fromTag: string; to: string | null; toTag: string | null; text: string }
 interface Stored extends ChatMsg { fromAcc: string; toAcc: string | null; world: string }
 
@@ -51,7 +54,25 @@ export class Social {
   /** Gate set by the app: may this account be in this world? (Homelands: owner and invited guests only.) */
   access: (account: string, world: string) => boolean = () => true;
 
+  npcs: Npc[] = [];
+  /** Set by the app: a player wrote to a merchant. May throw HttpError (rate limit); the answer comes later through npcSay. */
+  onNpcMsg?: (npc: Npc, fromAccount: string, text: string) => void;
+
   constructor(names: NameStore, now: () => number = Date.now) { this.names = names; this.now = now; }
+
+  setNpcs(list: Npc[]) { this.npcs = list; }
+  /** "Sari" or "Sari#NPC" (any case) -> the merchant. Player names cannot be a merchant's name (RESERVED). */
+  npcByName(raw: string): Npc | null {
+    const n = raw.replace(new RegExp('#' + NPC_TAG + '$', 'i'), '').toLowerCase();
+    return this.npcs.find((m) => m.name.toLowerCase() === n) ?? null;
+  }
+  /** A merchant's private answer to one player. */
+  npcSay(npc: Npc, toAccount: string, text: string): ChatMsg {
+    const msg: Stored = { id: ++this.seq, t: this.now(), from: npc.name, fromTag: NPC_TAG, to: this.nick(toAccount), toTag: this.tag(toAccount), text: cleanText(text).slice(0, 280), fromAcc: npc.account, toAcc: toAccount, world: 'public' };
+    this.chat.push(msg);
+    if (this.chat.length > 300) this.chat.splice(0, this.chat.length - 300);
+    return strip(msg);
+  }
 
   nick(account: string): string { return this.names.nameOf(account) || defaultNick(account); }
   tag(account: string): string { return this.names.tagOf(account); }
@@ -99,6 +120,12 @@ export class Social {
   /** Other players outdoors in the same world within `radius` tiles who reported in the last 15 seconds. */
   nearby(account: string, world: string, radius = 30, maxAge = 15_000) {
     const me = this.seen.get(account), now = this.now(), out: Seen[] = [];
+    if (world === 'public') {
+      for (const n of this.npcs) {
+        if (me && (Math.abs(n.x - me.x) > radius || Math.abs(n.y - me.y) > radius)) continue;
+        out.push({ account: n.account, world, nick: n.name, tag: NPC_TAG, look: n.look, x: n.x, y: n.y, dir: 'down', scene: 'out', t: now, npc: true, title: n.title, merchant: n.id });
+      }
+    }
     for (const s of this.seen.values()) {
       if (now - s.t > maxAge) { this.seen.delete(s.account); continue; }
       if (s.account === account || s.scene !== 'out' || s.world !== world) continue;
@@ -115,22 +142,31 @@ export class Social {
     if (typeof raw !== 'string') throw new HttpError(400, 'Pesan kosong.');
     if (!worldIdOk(world)) throw new HttpError(400, 'bad world');
     if (raw.length > 400) throw new HttpError(400, `Pesan terlalu panjang (maks ${CHAT_MAX} huruf).`);
-    let text = cleanText(raw), to: string | null = null, toTag: string | null = null, toAcc: string | null = null;
+    let text = cleanText(raw), to: string | null = null, toTag: string | null = null, toAcc: string | null = null, toNpc: Npc | null = null;
     const pm = /^\/(msg|w|pm)\b\s*([\s\S]*)$/i.exec(text);
     if (pm) {
       // the name may contain spaces: take the longest run of words that is a player's name
       const words = pm[2].split(' ').filter(Boolean);
-      for (let k = Math.min(words.length - 1, 4); k >= 1 && !toAcc; k--) {
-        const t = this.accountOf(words.slice(0, k).join(' '));
-        if (t) { toAcc = t; text = words.slice(k).join(' '); }
+      for (let k = Math.min(words.length - 1, 4); k >= 1 && !toNpc; k--) {
+        const n = this.npcByName(words.slice(0, k).join(' '));
+        if (n) { toNpc = n; text = words.slice(k).join(' '); }
       }
-      if (!toAcc) {
-        for (let k = Math.min(words.length - 1, 4); k >= 1; k--) if (this.isAmbiguous(words.slice(0, k).join(' '))) throw new HttpError(409, `Ada beberapa pemain bernama ${words.slice(0, k).join(' ')}. Pakai nama#tag.`);
-        if (words.length < 2) throw new HttpError(400, 'Cara pakai: /msg nama pesan');
-        throw new HttpError(404, `Tidak ada pemain bernama ${words[0]}.`);
+      if (toNpc) {
+        if (world !== 'public') throw new HttpError(409, 'Pedagang ada di area publik.');
+        to = toNpc.name; toTag = NPC_TAG;
+      } else {
+        for (let k = Math.min(words.length - 1, 4); k >= 1 && !toAcc; k--) {
+          const t = this.accountOf(words.slice(0, k).join(' '));
+          if (t) { toAcc = t; text = words.slice(k).join(' '); }
+        }
+        if (!toAcc) {
+          for (let k = Math.min(words.length - 1, 4); k >= 1; k--) if (this.isAmbiguous(words.slice(0, k).join(' '))) throw new HttpError(409, `Ada beberapa pemain bernama ${words.slice(0, k).join(' ')}. Pakai nama#tag.`);
+          if (words.length < 2) throw new HttpError(400, 'Cara pakai: /msg nama pesan');
+          throw new HttpError(404, `Tidak ada pemain bernama ${words[0]}.`);
+        }
+        if (toAcc === account) throw new HttpError(400, 'Itu namamu sendiri.');
+        to = this.nick(toAcc); toTag = this.tag(toAcc);
       }
-      if (toAcc === account) throw new HttpError(400, 'Itu namamu sendiri.');
-      to = this.nick(toAcc); toTag = this.tag(toAcc);
     } else if (text.startsWith('/')) throw new HttpError(400, 'Perintah: /msg nama pesan · /block nama · /unblock nama · /nama NamaBaru · /help');
     if (!text) throw new HttpError(400, 'Pesan kosong.');
     if (Array.from(text).length > CHAT_MAX) throw new HttpError(400, `Pesan terlalu panjang (maks ${CHAT_MAX} huruf).`);
@@ -139,7 +175,8 @@ export class Social {
     if (!this.chatLimiter.take(account, now)) throw new HttpError(429, 'Pelan-pelan, terlalu banyak pesan.');
     this.lastSay.set(account, now);
     if (this.lastSay.size > 5000) for (const [a, t] of this.lastSay) if (now - t > CHAT_GAP_MS) this.lastSay.delete(a);
-    const msg: Stored = { id: ++this.seq, t: now, from: this.nick(account), fromTag: this.tag(account), to, toTag, text, fromAcc: account, toAcc, world };
+    if (toNpc) this.onNpcMsg?.(toNpc, account, text); // may throw 429 before anything is stored
+    const msg: Stored = { id: ++this.seq, t: now, from: this.nick(account), fromTag: this.tag(account), to, toTag, text, fromAcc: account, toAcc: toAcc ?? toNpc?.account ?? null, world };
     this.chat.push(msg);
     if (this.chat.length > 300) this.chat.splice(0, this.chat.length - 300);
     return strip(msg);

@@ -100,3 +100,49 @@ test('presence: only players outdoors, in the same world, nearby, seen in the la
   assert.deepEqual(social.nearby(A, 'HL-1'), [], 'stale players drop out');
   assert.throws(() => social.report(A, P, { x: -1, y: 3 }), /bad position/);
 });
+
+const NPCS = [
+  { id: 'sari', account: 'sari.gt.test', name: 'Sari', look: 3, x: 10, y: 10, title: 'Lapak Ikan Sari' },
+  { id: 'budi', account: 'budi.gt.test', name: 'Budi', look: 2, x: 14, y: 10, title: 'Bengkel Budi' },
+];
+
+test('merchants appear in public presence with tag NPC, not in a Homeland, and not in the online count', () => {
+  const { social } = world();
+  social.setNpcs(NPCS);
+  social.setNick(A, 'Ani');
+  social.report(A, P, { x: 12, y: 12, scene: 'out' });
+  const npcs = social.nearby(A, P).filter((s) => s.npc);
+  assert.deepEqual(npcs.map((s) => [s.account, s.nick, s.tag, s.look, s.dir, s.title, s.x, s.y]),
+    [['sari.gt.test', 'Sari', 'NPC', 3, 'down', 'Lapak Ikan Sari', 10, 10], ['budi.gt.test', 'Budi', 'NPC', 2, 'down', 'Bengkel Budi', 14, 10]]);
+  assert.equal(social.online(), 1);
+  social.report(A, 'HL-1', { x: 12, y: 12, scene: 'out' });
+  assert.equal(social.nearby(A, 'HL-1').filter((s) => s.npc).length, 0);
+  social.report(A, P, { x: 200, y: 200, scene: 'out' });
+  assert.equal(social.nearby(A, P).filter((s) => s.npc).length, 0, 'far merchants are not sent');
+});
+
+test('/msg to a merchant from public is a private line and asks the merchant; Sari#NPC works too', () => {
+  const { social, tick } = world();
+  social.setNpcs(NPCS);
+  social.setNick(A, 'Ani'); social.setNick(B, 'Budi_2');
+  const asked: Array<[string, string, string]> = [];
+  social.onNpcMsg = (npc, from, text) => { asked.push([npc.id, from, text]); };
+  const m = social.say(A, P, '/msg Sari harga ikan?');
+  assert.equal(m.to, 'Sari'); assert.equal(m.toTag, 'NPC'); assert.equal(m.text, 'harga ikan?');
+  tick(2100); social.say(A, P, '/msg sari#NPC halo');
+  assert.deepEqual(asked, [['sari', A, 'harga ikan?'], ['sari', A, 'halo']]);
+  social.npcSay(NPCS[0], A, 'Ikan 9 koin.');
+  const mine = social.since(A, P, 0), others = social.since(B, P, 0);
+  const reply = mine.find((x) => x.from === 'Sari');
+  assert.ok(reply && reply.fromTag === 'NPC' && reply.to === 'Ani' && reply.text === 'Ikan 9 koin.');
+  assert.equal(others.length, 0, 'other players never see the exchange');
+});
+
+test('/msg to a merchant from a Homeland answers 409 and asks nobody', () => {
+  const { social } = world();
+  social.setNpcs(NPCS);
+  let called = 0;
+  social.onNpcMsg = () => { called++; };
+  assert.throws(() => social.say(A, 'HL-1', '/msg Sari harga ikan?'), (e: any) => e.status === 409 && /Pedagang ada di area publik\./.test(e.message));
+  assert.equal(called, 0);
+});

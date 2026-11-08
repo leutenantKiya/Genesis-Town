@@ -8,8 +8,24 @@
 // prompt-injection in the player's question can at most make the merchant say something odd.
 import type { MerchantView } from './game/market.ts';
 
-export interface DialogueConfig { apiKey?: string; model?: string; baseUrl: string; timeoutMs: number }
-export interface DialogueReply { line: string; source: 'nearai' | 'local'; model?: string; chatId?: string }
+export interface DialogueConfig {
+  apiKey?: string; model?: string; baseUrl: string; timeoutMs: number; // NEAR AI Cloud
+  /** 'anthropic' | 'nearai' | 'local'. Developer-only (env); the client can never choose. */
+  provider?: string; anthropicKey?: string; anthropicModel?: string; anthropicUrl?: string;
+}
+export interface DialogueReply { line: string; source: 'anthropic' | 'nearai' | 'local'; model?: string; chatId?: string }
+
+export type Provider = 'anthropic' | 'nearai' | 'local';
+export const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+export const ANTHROPIC_MODEL = 'claude-sonnet-5-5';
+
+/** Explicit DIALOGUE_PROVIDER (only if its key exists), else anthropic if ANTHROPIC_API_KEY, else nearai if NEARAI_API_KEY, else local. */
+export function resolveProvider(c: DialogueConfig): Provider {
+  if (c.provider === 'local') return 'local';
+  if (c.provider === 'anthropic') return c.anthropicKey ? 'anthropic' : 'local';
+  if (c.provider === 'nearai') return c.apiKey ? 'nearai' : 'local';
+  return c.anthropicKey ? 'anthropic' : c.apiKey ? 'nearai' : 'local';
+}
 
 const PERSONA: Record<string, string> = {
   fair: 'jujur dan ramah, suka menjelaskan alasan harga',
@@ -55,12 +71,42 @@ export class Dialogue {
   constructor(cfg: DialogueConfig, fetchFn: typeof fetch = fetch) {
     this.cfg = cfg;
     this.fetch = fetchFn;
+    this.provider = resolveProvider(cfg);
     this.model = cfg.model;
-    this.ready = cfg.apiKey && !cfg.model ? this.discover() : Promise.resolve();
+    this.ready = this.provider === 'nearai' && !cfg.model ? this.discover() : Promise.resolve();
   }
   fetch: typeof fetch;
+  provider: Provider;
 
-  get enabled() { return Boolean(this.cfg.apiKey); }
+  get enabled() { return this.provider !== 'local'; }
+
+  /** Anthropic Messages API over plain fetch. Thinking off (between_tools) and effort low: short chatty lines, and no thinking tokens eating max_tokens. The key goes only in a header and is never logged. */
+  async askAnthropic(m: MerchantView, personality: string, question: string, local: () => DialogueReply): Promise<DialogueReply> {
+    const model = this.cfg.anthropicModel || ANTHROPIC_MODEL;
+    try {
+      const r = await this.fetch(this.cfg.anthropicUrl || ANTHROPIC_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': this.cfg.anthropicKey ?? '', 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model, max_tokens: 200,
+          system: `${facts(m, personality)}\n\n${RULES}`,
+          messages: [{ role: 'user', content: question }],
+          thinking: { type: 'between_tools' },
+          output_config: { effort: 'low' },
+        }),
+        signal: AbortSignal.timeout(Math.min(this.cfg.timeoutMs, 8000)),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = (await r.json()) as { id?: string; stop_reason?: string; content?: Array<{ type: string; text?: string }> };
+      if (j.stop_reason === 'refusal') throw new Error('refusal');
+      const line = clean((j.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join(' '));
+      if (!line) throw new Error('empty reply');
+      return { line, source: 'anthropic', model, chatId: j.id };
+    } catch (e) {
+      console.log('Anthropic dialogue failed, local line used:', (e as Error).message);
+      return local();
+    }
+  }
 
   /** Picks the first chat model the provider lists. Logged so the operator can pin it with NEARAI_MODEL. */
   async discover() {
@@ -78,6 +124,7 @@ export class Dialogue {
     const question = text.replace(/\s+/g, ' ').trim().slice(0, 200) || 'Halo! Ada kabar apa di tokomu hari ini?';
     const local = (): DialogueReply => ({ line: localLine(m, question), source: 'local' });
     if (!this.enabled) return local();
+    if (this.provider === 'anthropic') return this.askAnthropic(m, personality, question, local);
     await this.ready;
     if (!this.model) return local();
     try {

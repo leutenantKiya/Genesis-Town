@@ -49,7 +49,7 @@
         var o = others[q.account];
         if (!o) o = others[q.account] = { fx: q.x, fy: q.y, x: q.x, y: q.y, t0: now };
         if (o.x !== q.x || o.y !== q.y) { o.fx = curX(o, now); o.fy = curY(o, now); o.x = q.x; o.y = q.y; o.t0 = now; }
-        o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.dir = q.dir; o.account = q.account; o.seen = now;
+        o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.merchant = q.merchant; o.dir = q.dir; o.account = q.account; o.seen = now;
       });
       Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
       (r.chat || []).forEach(addLine);
@@ -66,7 +66,9 @@
     if (!GT.scene || GT.scene.kind !== 'out') return;
     var now = performance.now();
     Object.keys(others).forEach(function (a) {
-      var o = others[a], x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
+      var o = others[a];
+      if (o.npc) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
+      var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
       var moving = ease(o, now) < 1, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
       ents.push({ py: py, draw: function () { GT.drawChar(ctx, px - camX, py - camY, (o.look != null ? o.look : pal(o.nick || a)), o.dir, step); } });
     });
@@ -210,6 +212,15 @@
   }
   function card(o) {
     var body = el('div', 'gt-pcard');
+    if (o.npc) {
+      body.appendChild(el('p', 'gt-pcard-title', o.title || 'Pedagang'));
+      body.appendChild(el('p', 'chain-dim', 'Pedagang desa. Tanyakan harga lewat obrolan, atau lihat dagangannya.'));
+      GT.modal({ title: o.nick + '#' + (o.tag || 'NPC'), body: body, actions: [
+        { label: 'Lihat dagangan', primary: true, onClick: function (h) { h.close('ok'); var c = C(); if (c && o.merchant) c.open('shop', o.merchant); return true; } },
+        { label: 'Tanya', onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + ' '); return true; } }
+      ] });
+      return;
+    }
     body.appendChild(el('p', 'gt-pcard-title', o.title || 'Pedagang baru'));
     body.appendChild(el('p', 'chain-dim', 'Warga desa yang sedang jalan-jalan.'));
     GT.modal({ title: o.nick + (o.tag ? '#' + o.tag : ''), body: body, actions: [
