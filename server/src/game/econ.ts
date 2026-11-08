@@ -47,6 +47,8 @@ export interface Econ {
   projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number> }>;
   monsters: MonsterConfig;
   homeland: HomelandConfig;
+  trade: { expireSecs: number; maxLines: number };
+  consign: { merchant: string; feeBps: number; maxPerItem: number; sellPerGameHour: number };
 }
 
 export function loadEcon(): Econ {

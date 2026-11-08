@@ -14,6 +14,9 @@ import type { HomelandRow } from './gamestore.ts';
 import { MockChain } from '../chain.ts';
 import { Monsters } from './monsters.ts';
 import { worldIdOk } from '../social.ts';
+import { Trade } from './trade.ts';
+import { Consign } from './consign.ts';
+import { leaderboard } from './leaderboard.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
@@ -31,6 +34,8 @@ export class Game {
   positions: Positions | null = null;
   monsters: Monsters | null = null;
   homelands: Homelands;
+  trade: Trade;
+  consign: Consign;
   now: () => number;
   store: Store;
   chain: Chain;
@@ -50,6 +55,20 @@ export class Game {
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
     this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
+    const hist = (a: string, summary: string, tokens: string[]) => { store.addHistory(a, 'trade', summary, 'offchain', null, null, tokens.filter((t) => t in this.econ.items)); };
+    this.trade = new Trade({
+      econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, now: this.now, history: hist,
+      names: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) },
+      where: (a) => (this.positions ? { world: this.positions.worldOf(a), pos: this.positions.last.get(a) ?? null } : null),
+    });
+    this.consign = new Consign({
+      econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, market: this.market, town: o.town, history: hist,
+      atStall: (a) => {
+        if (!this.map || !this.positions) return;
+        const p = this.positions.worldOf(a) === 'public' ? this.positions.last.get(a) : undefined;
+        if (!p || !this.map.nearLandmark(p, 'consign')) throw new HttpError(409, `Datang ke lapak Titip Jual (${this.econ.consign.merchant}) di pasar.`);
+      },
+    });
     if (o.worldSeed != null) {
       this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
       this.positions = new Positions(this.map);
@@ -160,6 +179,7 @@ export class Game {
         this.market.tickAll();
         if (busy) this.market.merchantCraft();
         this.market.townDemand();
+        this.consign.tick();
       }
       this.gs.setMeta('clock.hour', String(now));
       await this.settlement.settleDue();
@@ -298,6 +318,13 @@ export class Game {
       night: this.monsters ? { now: this.monsters.isNight(), guarded: this.monsters.guarded() } : null,
       weather,
     };
+  }
+
+  /** Papan Juara. */
+  leaderboard(period: 'day' | 'all', me: string | null) {
+    const merchants = new Set(this.market.ids().map((id) => this.market.account(id)));
+    return leaderboard(this.gs, period, this.clock.time().settleDay, me, (a) => a !== this.town && !merchants.has(a),
+      (a) => ({ name: this.store.nameOf(a) ?? a.split('.')[0], tag: this.store.tagOf(a) }));
   }
 
   merchants() { return this.market.ids().map((id) => this.market.view(id)); }

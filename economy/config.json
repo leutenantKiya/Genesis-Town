@@ -130,6 +130,8 @@
     { "id": "jembatan-timur", "name": "Jembatan ke Dusun Seberang", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } },
     { "id": "pos-ronda", "name": "Pos Ronda di Hutan Utara", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 } }
   ],
+  "trade": { "expireSecs": 120, "maxLines": 4 },
+  "consign": { "merchant": "Mbok Darmi", "feeBps": 500, "maxPerItem": 50, "sellPerGameHour": 3 },
   "homeland": {
     "builders": 1,
     "publicTradeOnly": true,

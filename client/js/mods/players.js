@@ -208,14 +208,16 @@
     Object.keys(others).forEach(function (a) { var o = others[a]; if (Math.round(curX(o, now)) === t.x && Math.round(curY(o, now)) === t.y) hit = o; });
     return hit;
   }
+  var cardActions = []; // other mods add buttons: fn(player) -> {label, onClick(handle)} | null
   function card(o) {
     var body = el('div', 'gt-pcard');
     body.appendChild(el('p', 'gt-pcard-title', o.title || 'Pedagang baru'));
     body.appendChild(el('p', 'chain-dim', 'Warga desa yang sedang jalan-jalan.'));
+    var extra = cardActions.map(function (f) { try { return f(o); } catch (e) { return null; } }).filter(Boolean);
     GT.modal({ title: o.nick + (o.tag ? '#' + o.tag : ''), body: body, actions: [
       { label: 'Kirim pesan', primary: true, onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + (o.tag ? '#' + o.tag : '') + ' '); return true; } },
       { label: 'Lihat lapaknya', onClick: function (h) { h.close('ok'); var c = C(); c.state.marketSeller = { account: o.account, nick: o.nick }; c.state.marketTab = 'lapak'; c.open('market'); return true; } }
-    ] });
+    ].concat(extra) });
   }
 
   function onKey(e) {
@@ -242,6 +244,6 @@
   }
 
   function refresh() { others = {}; curWorld = null; backoff = 0; tick(); } // after sailing: forget the old world's players at once
-  window.GT_PLAYERS = { refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
+  window.GT_PLAYERS = { addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
   GT.register({ id: 'players', init: init, onEntities: onEntities, onDraw: onDraw, onKey: onKey });
 })();

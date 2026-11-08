@@ -41,8 +41,19 @@ export class GameStore {
         th INTEGER NOT NULL, open TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS homeland_buildings (account TEXT NOT NULL, lot TEXT NOT NULL, kind TEXT NOT NULL, last_collect INTEGER NOT NULL, PRIMARY KEY (account, lot));
       CREATE TABLE IF NOT EXISTS homeland_jobs (account TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL, ends_at INTEGER NOT NULL, PRIMARY KEY (account, target));
+      CREATE TABLE IF NOT EXISTS trade_offers (id INTEGER PRIMARY KEY AUTOINCREMENT, from_acct TEXT NOT NULL, to_acct TEXT NOT NULL,
+        give TEXT NOT NULL, want TEXT NOT NULL, expires_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS consign_lots (account TEXT NOT NULL, token TEXT NOT NULL, qty INTEGER NOT NULL, min_price INTEGER NOT NULL,
+        sold INTEGER NOT NULL DEFAULT 0, earned INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, token));
       CREATE TABLE IF NOT EXISTS homeland_invites (id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));
     `);
+  }
+
+  /** Runs `fn` in one sqlite transaction (joins an outer one); any throw undoes every row. */
+  tx<T>(fn: () => T): T {
+    if (this.db.isTransaction) return fn();
+    this.db.exec('BEGIN');
+    try { const r = fn(); this.db.exec('COMMIT'); return r; } catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }
 
   meta(key: string): string | undefined {
@@ -144,7 +155,7 @@ export class GameStore {
 
   /** New coin created today (town purchases and shipping), for the off-chain faucet check. */
   newCoin(day: number): number {
-    return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND token = 'coin' AND kind IN ('town_buy', 'ship_pay')").get(day) as { s: number }).s;
+    return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND token = 'coin' AND kind IN ('town_buy', 'ship_pay', 'consign_sale', 'consign_fee')").get(day) as { s: number }).s;
   }
 
   /* ------------------------------------------------------------ players */
