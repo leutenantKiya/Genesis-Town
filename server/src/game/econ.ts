@@ -22,6 +22,18 @@ export interface IslandsConfig {
   fertility: Array<{ level: number; growFactor: number; yieldBonus: number }>;
 }
 
+export type Cost = Record<string, number>;
+export interface TownhallStep { level: number; cost: Cost; secs: number }
+export interface ChunkStep { n: number; th: number; cost: Cost; secs: number }
+export interface BuildingDef { name: string; th: number; cost: Cost; secs: number; produces: string; perGameHour: number; capacity: number; needsChunk?: boolean }
+export interface HomelandConfig {
+  builders: number;
+  publicTradeOnly: boolean;
+  townhall: TownhallStep[];
+  chunks: ChunkStep[];
+  buildings: Record<string, BuildingDef>;
+}
+
 export interface Econ {
   time: TimeConfig;
   items: Record<string, ItemDef>;
@@ -42,6 +54,7 @@ export interface Econ {
   /** Town projects; the contract holds the live state (create_project with these values). */
   projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number> }>;
   monsters: MonsterConfig;
+  homeland: HomelandConfig;
   islands: IslandsConfig;
 }
 

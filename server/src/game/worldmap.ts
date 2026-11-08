@@ -4,6 +4,7 @@
 // own position is planned for M4.)
 import '../../../client/js/world/village.js';
 import '../../../client/js/world/island.js';
+import '../../../client/js/world/homeland.js';
 import { HttpError } from '../auth.ts';
 
 export interface Chunk { id: string; name: string; cx: number; cy: number; biome: string; open: boolean; project: string | null }
@@ -38,6 +39,16 @@ export interface IslandLayout {
 }
 export interface IslandSpecLevels { size_level: number; fertility_level: number }
 const Island = (globalThis as unknown as { GTIsland: { generate(seed: number, spec: IslandSpecLevels): IslandLayout } }).GTIsland;
+
+/** A player's Homeland (client/js/world/homeland.js): the same generator the browser runs. */
+export interface HomelandProgress { open: string[]; th: number; built: Array<{ kind: string; lot: string }> }
+export interface HomelandLot { id: string; kind: string; chunk: string; x: number; y: number; w: number; h: number; door: Pos }
+export interface HomelandLayout extends Omit<Layout, 'projects'> { portal: Pos; lots: HomelandLot[] }
+interface HomelandApi {
+  VERSION: number; CHUNKS: string[];
+  generate(seed: number, prog: HomelandProgress): HomelandLayout; chunkOf(L: HomelandLayout, x: number, y: number): Chunk;
+}
+export const Homeland = (globalThis as unknown as { GTHomeland: HomelandApi }).GTHomeland;
 
 /** What a world map offers to the game: the public village and islands answer the same questions. */
 export interface GameMap {
@@ -117,6 +128,43 @@ export class IslandMap implements GameMap {
     if (t !== tile) throw new HttpError(409, 'Tidak ada yang bisa dikumpulkan di sini.');
   }
   dock(): Pos { return this.layout.dock; }
+}
+
+export class HomelandMap implements GameMap {
+  seed: number;
+  layout: HomelandLayout;
+  constructor(seed: number, prog: HomelandProgress) {
+    this.seed = seed >>> 0;
+    this.layout = Homeland.generate(this.seed, prog);
+  }
+  tileAt(x: number, y: number): string | null {
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= this.layout.w || y >= this.layout.h) return null;
+    return this.layout.tiles[y * this.layout.w + x];
+  }
+  chunkAt(x: number, y: number): Chunk { return Homeland.chunkOf(this.layout, x, y); }
+  walkable(x: number, y: number): boolean {
+    const t = this.tileAt(x, y);
+    if (t === null || SOLID.has(t) || !this.chunkAt(x, y).open) return false;
+    return !this.layout.buildings.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  }
+  nearStall() { return false; } // no merchants in a Homeland
+  nearPlot(p: Pos, idx: number) { const q = this.layout.farm.plots[idx]; return !!q && dist(p, q) <= 1; }
+  atOwnHouse(p: Pos) { const h = this.layout.buildings.find((b) => b.kind === 'townhall'); return !!h && dist(p, { x: h.dx, y: h.dy + 1 }) <= 1; }
+  checkGather(tile: string, x: number, y: number) {
+    const t = this.tileAt(x, y);
+    if (t === null) throw new HttpError(400, 'bad tile');
+    if (t !== tile) throw new HttpError(409, 'Tidak ada yang bisa dikumpulkan di sini.');
+    const c = this.chunkAt(x, y);
+    if (!c.open) throw new HttpError(409, `${c.name} belum dibuka.`);
+  }
+  portal(): Pos { return this.layout.portal; }
+  /** Task 3 renames GameMap.dock() to portal(); until then both answer. */
+  dock(): Pos { return this.layout.portal; }
+  /** Within one tile of the lot's door (the door tile itself or the way in below it). */
+  nearLot(p: Pos, lot: string): boolean {
+    const l = this.layout.lots.find((x) => x.id === lot);
+    return !!l && dist(p, l.door) <= 1;
+  }
 }
 
 /**

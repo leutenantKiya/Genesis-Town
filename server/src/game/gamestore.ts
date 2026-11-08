@@ -11,6 +11,10 @@ export interface MarketRow { merchant: string; token: string; mid: number; bough
 export interface IslandRow { island_id: number; owner: string; version: number; seed: number; size_level: number; fertility_level: number; updated_at: number }
 export interface IslandUpgradeRow { island_id: number; attr: string; level: number; seqs: string; created_at: number }
 
+export interface HomelandRow { account: string; id: number; seed: number; gen: number; th: number; open: string[]; created_at: number }
+export interface HomelandBuildingRow { account: string; lot: string; kind: string; last_collect: number }
+export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build'; ends_at: number }
+
 export class GameStore {
   db: DatabaseSync;
 
@@ -40,6 +44,11 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS island_upgrades (island_id INTEGER NOT NULL, attr TEXT NOT NULL, level INTEGER NOT NULL, seqs TEXT NOT NULL,
         created_at INTEGER NOT NULL, PRIMARY KEY (island_id, attr, level));
       CREATE TABLE IF NOT EXISTS island_invites (island_id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (island_id, account));
+      CREATE TABLE IF NOT EXISTS homelands (account TEXT PRIMARY KEY, id INTEGER UNIQUE NOT NULL, seed INTEGER NOT NULL, gen INTEGER NOT NULL,
+        th INTEGER NOT NULL, open TEXT NOT NULL, created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS homeland_buildings (account TEXT NOT NULL, lot TEXT NOT NULL, kind TEXT NOT NULL, last_collect INTEGER NOT NULL, PRIMARY KEY (account, lot));
+      CREATE TABLE IF NOT EXISTS homeland_jobs (account TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL, ends_at INTEGER NOT NULL, PRIMARY KEY (account, target));
+      CREATE TABLE IF NOT EXISTS homeland_invites (id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));
     `);
   }
 
@@ -261,4 +270,54 @@ export class GameStore {
     for (const a of accounts) st.run(id, a);
   }
   clearInvites(id: number) { this.db.prepare('DELETE FROM island_invites WHERE island_id = ?').run(id); }
+
+  /* ------------------------------------------------------------ homelands (off-chain; costs and gains are ledger rows) */
+
+  private homelandRow(r: Record<string, unknown> | undefined): HomelandRow | undefined {
+    return r ? { ...(r as unknown as Omit<HomelandRow, 'open'>), open: JSON.parse(String(r.open)) as string[] } : undefined;
+  }
+  homelandOf(account: string): HomelandRow | undefined {
+    return this.homelandRow(this.db.prepare('SELECT * FROM homelands WHERE account = ?').get(account));
+  }
+  homelandById(id: number): HomelandRow | undefined {
+    return this.homelandRow(this.db.prepare('SELECT * FROM homelands WHERE id = ?').get(id));
+  }
+  createHomeland(account: string, seed: number, gen: number, now: number): HomelandRow {
+    const id = ((this.db.prepare('SELECT COALESCE(MAX(id), 0) AS m FROM homelands').get() as { m: number }).m) + 1;
+    this.db.prepare('INSERT INTO homelands (account, id, seed, gen, th, open, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)').run(account, id, seed, gen, '[]', now);
+    return this.homelandOf(account)!;
+  }
+  setHomelandTh(account: string, th: number) { this.db.prepare('UPDATE homelands SET th = ? WHERE account = ?').run(th, account); }
+  setHomelandOpen(account: string, open: string[]) { this.db.prepare('UPDATE homelands SET open = ? WHERE account = ?').run(JSON.stringify(open), account); }
+  homelandBuildings(account: string): HomelandBuildingRow[] {
+    return this.db.prepare('SELECT * FROM homeland_buildings WHERE account = ? ORDER BY lot').all(account) as unknown as HomelandBuildingRow[];
+  }
+  addHomelandBuilding(account: string, lot: string, kind: string, lastCollect: number) {
+    this.db.prepare('INSERT OR IGNORE INTO homeland_buildings (account, lot, kind, last_collect) VALUES (?, ?, ?, ?)').run(account, lot, kind, lastCollect);
+  }
+  setHomelandCollect(account: string, lot: string, lastCollect: number) {
+    this.db.prepare('UPDATE homeland_buildings SET last_collect = ? WHERE account = ? AND lot = ?').run(lastCollect, account, lot);
+  }
+  homelandJobs(account: string): HomelandJobRow[] {
+    return this.db.prepare('SELECT * FROM homeland_jobs WHERE account = ? ORDER BY ends_at, target').all(account) as unknown as HomelandJobRow[];
+  }
+  addHomelandJob(account: string, target: string, kind: string, endsAt: number) {
+    this.db.prepare('INSERT INTO homeland_jobs (account, target, kind, ends_at) VALUES (?, ?, ?, ?)').run(account, target, kind, endsAt);
+  }
+  /** True when this call removed the job (so exactly one caller applies its result). */
+  deleteHomelandJob(account: string, target: string): boolean {
+    return Number(this.db.prepare('DELETE FROM homeland_jobs WHERE account = ? AND target = ?').run(account, target).changes) === 1;
+  }
+  homelandInvites(id: number): string[] {
+    return (this.db.prepare('SELECT account FROM homeland_invites WHERE id = ? ORDER BY account').all(id) as unknown as Array<{ account: string }>).map((r) => r.account);
+  }
+  setHomelandInvites(id: number, accounts: string[]) {
+    this.db.prepare('DELETE FROM homeland_invites WHERE id = ?').run(id);
+    const st = this.db.prepare('INSERT OR IGNORE INTO homeland_invites (id, account) VALUES (?, ?)');
+    for (const a of accounts) st.run(id, a);
+  }
+  /** Homelands whose invite list holds this account. */
+  homelandsInvitedTo(account: string): HomelandRow[] {
+    return this.db.prepare('SELECT h.* FROM homelands h JOIN homeland_invites v ON v.id = h.id WHERE v.account = ? ORDER BY h.id').all(account).map((r) => this.homelandRow(r)!);
+  }
 }
