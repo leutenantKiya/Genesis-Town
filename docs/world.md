@@ -70,49 +70,69 @@ arrive, and the burn is a sink for coin and goods. New areas spread new players 
 Later (not built): more projects for the other chunks, a rule that offers the next project when the open house lots
 are mostly taken, and true chunk streaming for a world without fixed edges.
 
-## Islands
+## Homeland
 
-Status: phase 1a and 1b built on branch `islands` (2026-11-06); contract v5 is not deployed to testnet yet. Code:
-[`client/js/world/island.js`](../client/js/world/island.js) (generator),
-[`server/src/game/islands.ts`](../server/src/game/islands.ts), [`contracts/game/src/islands.rs`](../contracts/game/src/islands.rs).
-Design: [the islands spec](superpowers/specs/2026-11-06-islands-design.md).
+Status: phase A built on branch `homeland` (2026-11-08). Code:
+[`client/js/world/homeland.js`](../client/js/world/homeland.js) (generator),
+[`server/src/game/homeland.ts`](../server/src/game/homeland.ts) (state, timers, production),
+[`client/js/mods/homeland.js`](../client/js/mods/homeland.js) (UI) and `client/js/mods/charscreen.js` (character screen).
+Design: [the Homeland spec](superpowers/specs/2026-11-08-homeland-design.md). It replaces the broker-sold Private
+Islands; Homelands are off-chain, not NFTs, and cannot be sold.
 
-### Public vs Private
+### Public area vs Homeland
 
-| | Public Island (the village above) | Private Island |
+| | Public area (the village above) | Homeland |
 | --- | --- | --- |
-| Resources | everything the village has | basic goods only (Kayu, Ikan, Bijih, Gandum). Emas from upgrades and Permata from the mining shaft *(planned, phase 1c)* |
-| Selling | merchants, Pasar, broker | none: bring goods to the Public Island |
+| Purpose | trading only: merchants, the Pasar, other players | gathering, farming, building, producing |
+| Gathering, farming, monsters | none | yes, in your own world |
 | People | everyone, live | the owner and invited guests, live |
-| Farming | the starter farm | 6 / 9 / 12 plots by size level; Kesuburan makes crops grow faster (levels 2-3 x1.5, 4-5 x3) and yield more (+1 at level 3, +2 at level 5) |
+| World id | `public` | `HL-<n>` (one per player, a counter assigned at the first Homeland request) |
 
-### Island generator
+### Generator
 
-`island.js` makes one 32 x 32 map from `{seed, size_level, fertility_level}`: a landmass in the sea with the owner's
-house, a fenced farm, a rock outcrop, trees, a pond and a dock on the shore. No merchants or stalls. The same seed and
-spec give the same island in the browser and on the server (`IslandMap` in `worldmap.ts` checks positions and gather
-tiles). The size level sets the plot count; fertility only adds flowers around the field.
+`homeland.js` makes one 3 x 3 chunk map (16 x 16 tiles each, 48 x 48 in all) from the player's seed (stored with the
+Homeland row, with a `gen` version so later generator changes do not move existing worlds). The Town Hall stands in the
+middle chunk with a farm plot, a few trees and rocks, and the portal. Each of the eight outer chunks gets a biome
+(forest, rock, pond or shore); every seed has a forest and water next to the centre. Building lots are fixed per chunk.
+The browser and the server run the same file, so the server checks positions and gather tiles (`HomelandMap` in
+`worldmap.ts`). Locked chunks are drawn under fog.
 
-### Docks and travel
+### Town Hall, chunks and costs
 
-Every world has a dock (Dermaga). Standing within 2 tiles of it, the `travel` action takes you to the Public Island
-or to an island you own or are invited to; you arrive at the target's spawn (an island's house door, the village dock).
-Every request carries a world id (`public` or `IS-<id>`); the server tracks which world each player is in and changes
-it only by sailing. An island you may not enter answers 409.
+All numbers are in `economy/config.json` -> `homeland`.
+- Town Hall levels 1-5. Each upgrade costs wood, ore and coin and a timer (level 2: 30 wood, 5 ore, 50 coin, 120 s;
+  level 5: 200 wood, 100 ore, 900 coin, 30 min). Each level raises how many chunks may be open and which buildings exist.
+- Chunks open one at a time, each needing a minimum Town Hall level, items, coin and time, rising with each chunk (the
+  first: Town Hall 1, 10 wood, 30 s). The player picks which adjacent locked chunk to open.
+
+### Buildings and the builder
+
+| Building | Town Hall | Produces |
+| --- | --- | --- |
+| Kolam Ikan | 1 | fish, 2 per game hour, stores 6 |
+| Tambang | 2, on a rock chunk | ore, 2 per game hour, stores 8 |
+| Restoran | 3 | meal, 1 per game hour, stores 4 |
+
+Buildings go on fixed lots. There is one **Builder** (`builders: 1`): it takes one job at a time (Town Hall, chunk or
+building) and is shown at the construction with a hammer while busy. The server stores `ends_at` for the job and
+finishes it when the clock passes it; the client only draws it. Production is lazy: when you collect, the server works
+out what accrued since the last collection, capped by the building's capacity, writes ledger rows like a gather and
+counts it against `caps.dailyGainPerItem`. What does not fit under the daily cap stays stored.
+
+### Portal and travel
+
+Every Homeland has a portal to the public area, and the public area has one back to the player's own Homeland. The
+`travel` action moves you; the server tracks which world each player is in and changes it only that way. A world you
+may not enter answers 409. Bots (Phase B) will stay in their Homeland.
 
 ### Guests
 
-The owner keeps an invite list (up to 20 players, typed as display names or account ids; stored as account ids, off
-chain, cleared when ownership changes). Invited islands show up in the dock menu as "Pulau teman". Guests can travel there,
-walk around and chat. They cannot gather, farm or upgrade: those need the owner, on their own island.
-
-### Buying and saving
-
-The broker sells 8 offers (`economy/config.json` -> `islands.offers`, 500 to 3000 coin). The server issues a voucher
-only when the buyer's settled coin covers the price. What is on chain: [onchain-offchain.md](onchain-offchain.md).
+The owner keeps an invite list (up to 20 players), typed as `name#tag`; it is stored as account ids, off chain.
+Guests find the Homeland under "invited" in the Homeland menu, can walk around and chat, and cannot gather, farm or
+build.
 
 ### Seeing each other
 
-Players in the same world see each other with names and chat bubbles (key C, 80 characters). The server keeps positions
-and the last 50 chat lines per world in memory and streams them over Server-Sent Events; display names are 3-16
-characters and unique. Nothing of this is stored on chain.
+Players in the same world see each other with `name#tag`, their look (skin, hair, shirt) and chat bubbles (key C,
+80 characters). The server keeps positions and the last 50 chat lines per world in memory; names are 3-16 characters
+plus a 5-digit tag, unique as `name#tag`. Nothing of this is stored on chain.

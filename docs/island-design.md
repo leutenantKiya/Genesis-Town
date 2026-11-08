@@ -1,4 +1,4 @@
-> Branch `islands` contains a built alternative (Private Islands bought from the broker as versioned NFTs, see docs/superpowers/specs/2026-11-06-islands-design.md); which design ships is under discussion.
+> Note (2026-11-08): the Homeland design was chosen: every player has an off-chain Homeland with a Town Hall, and the public area is trade-only. See docs/superpowers/specs/2026-11-08-homeland-design.md. The broker-sold islands on branch `islands` are gone; this page stays as background for bots, NPC souls and schematics.
 
 # Islands, NPC souls and schematics
 

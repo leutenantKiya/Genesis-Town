@@ -22,15 +22,15 @@ NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play
 | `client/js/world/village.js` | Seeded village generator, run by BOTH browser and server (same map for everyone, `WORLD_SEED`) |
 | `client/vendor/near.js` | esbuild bundle of near-api-js + fast-auth (`client/build/`), gitignored, made by `npm run build:client` |
 | `server/src/main.ts` | Entry: config → SQLite `Store` → `MockChain` or `TestnetChain` → `Game` loop → HTTP app |
-| `server/src/app.ts` | Hand-written router (no framework): `/api/config, auth/register, auth/add-key, relay, time, state, act, market, quote, shops, talk, projects, listings, history, sim, dev/*`; islands: `islands, islands/voucher|layout|invite`; live: `presence` (POST, polled ~0.7 s: position in, same-world players and chat out), `chat`, `name`; `health`; `dev/grant` (mock chain, local only: `items` and `coin`) |
-| `server/src/game/game.ts` | Game loop (tick 2 s) + `/api/act` switch: `gather, fight, engage, flee, craft, eat, farm, ship, sell, ...` |
+| `server/src/app.ts` | Hand-written router (no framework): `/api/config, auth/register, auth/add-key, relay, time, state, act, market, quote, shops, talk, projects, listings, history, sim, dev/*`; homeland: `homeland` (GET state), `homeland/layout` (GET), `homeland/invite` (POST, by name#tag); live: `presence` (POST, polled ~0.7 s: position in, same-world players and chat out), `chat`, `name` (name#tag and look); `health`; `dev/grant` (mock chain, local only: `items` and `coin`) |
+| `server/src/game/game.ts` | Game loop (tick 2 s) + `/api/act` switch: `gather, fight, engage, flee, craft, eat, farm, travel, build, collect, ship, sell, ...` |
 | `server/src/game/` | `world.ts` (off-chain actions → ledger rows), `market.ts` (merchant trades), `bazaar.ts` (Lapak / Pasar Gelap side), `settlement.ts` + `merkle.ts`, `monsters.ts`, `clock.ts`, `worldmap.ts`, `gamestore.ts`, `sim.ts` |
-| `server/src/game/islands.ts` | Private Islands: offers, vouchers (ed25519, settler key), upgrade (Kesuburan), Save World spec, invites, per-island maps (`IslandMap` in `worldmap.ts`) |
-| `server/src/social.ts` | Display names (Store `names` table), presence and chat, per world (`public` or `IS-<id>`), in memory only; `client/js/mods/players.js` is its client (name tags, bubbles, chat box, `/msg /block /nama`, player cards, first-login name prompt) |
-| `client/js/world/island.js` | Private Island generator (seed + spec), run by browser and server like `village.js`; `client/js/mods/islands.js` is the UI (broker, dock menu, island board) |
+| `server/src/game/homeland.ts` | Homelands: Town Hall level, open chunks, builder jobs with `ends_at`, building production (lazy, capped), invites by name#tag, world ids `HL-<n>` |
+| `server/src/social.ts` | Display names (Store `names` table), presence and chat, per world (`public` or `HL-<n>`), in memory only; `client/js/mods/players.js` is its client (name tags, bubbles, chat box, `/msg /block /nama`, player cards, first-login name prompt) |
+| `client/js/world/homeland.js` | Homeland generator (seed, 3 x 3 chunks), run by browser and server like `village.js`; `client/js/mods/homeland.js` is the UI (Town Hall menu, lots, builder, portal), `client/js/mods/charscreen.js` the post-login character screen (name#tag, look, Mulai) |
 | `server/src/` | `chain.ts`, `relayer.ts` (NEP-366), `auth.ts` (Auth0 JWT), `reqauth.ts` (session-key signed requests), `newdevice.ts`, `dialogue.ts` (NEAR AI Cloud + local fallback), `db.ts` |
 | `economy/` | `config.json` (items, recipes, merchants, seasons, fees, caps, projects, monsters) + `pricing.ts` + `time.ts`; shared by server and simulator |
-| `contracts/game/src/` | Rust near-sdk 5: `mt.rs` (NEP-245), `storage.rs` (NEP-145), `settle.rs`, `market.rs` (escrow, 5% burn), `shops.rs` (bankruptcy/restore/shares/dividends), `projects.rs` (bridge, Pos Ronda), `islands.rs` (island NFTs, vouchers, v4 to v5 `migrate`), `events.rs`. Method table in `contracts/game/README.md` |
+| `contracts/game/src/` | Rust near-sdk 5: `mt.rs` (NEP-245), `storage.rs` (NEP-145), `settle.rs`, `market.rs` (escrow, 5% burn), `shops.rs` (bankruptcy/restore/shares/dividends), `projects.rs` (bridge, Pos Ronda), `islands.rs` (v5 island NFTs, unused by the game), `events.rs`. Method table in `contracts/game/README.md` |
 | `docs/` | `architecture, economy, game-loop, onchain-offchain, world, threat-model, sources, sim-report-30d` |
 | `prototype/` | Pre-hackathon single-file baseline. Reference only, never served, never edited |
 
@@ -44,16 +44,16 @@ NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play
   can't attach 1 yocto → gameplay uses game methods, not `mt_transfer`. Server holds no player or merchant keys.
 - **Secrets only in env** (`.env`, see `.env.example`). Run `node scripts/check-secrets.mjs` before commits that touch config.
 - Server validates actions against where the player stands (shared `village.js` map).
-- **Islands**: one live version per island (`IS-<id>-<v>`; older versions have supply 0). Buying and Save World are
-  contract calls the player signs with a voucher the server signs (settler key, 10 min expiry, island id or version
-  makes replays fail). Save World writes only upgrades whose cost rows are already settled. Settlement uses the token
-  registry only, so it can never mint islands. The chain (`get_island`) decides the owner, never the SQLite copy.
+- **Homeland**: every player has an off-chain world (`HL-<n>`), not an NFT and not sellable. Town Hall, chunk and building
+  timers are server-authoritative (`ends_at`, one builder, one job at a time); buildings produce lazily, capped by
+  capacity and `caps.dailyGainPerItem`. The public area (`public`) is trade-only: merchants, Pasar, players. Guests are
+  invited by `name#tag`, walk and chat, never build. Settlement uses the token registry only.
 - Coin is minted only by town demand, capped per day + money-supply throttle (`docs/economy.md`).
 
 ## Adding an off-chain action (typical path)
 
 client mod → `POST /api/act {kind, ...}` (signed) → `game.ts` switch → `world.ts`/`market.ts` method → ledger row
-via `gamestore.ts` → shows in Riwayat as "menunggu settlement" → `settlement.ts` at 06:00. Requests that happen inside an island carry `world` (`public` or `IS-<id>`); positions and gather checks use that
+via `gamestore.ts` → shows in Riwayat as "menunggu settlement" → `settlement.ts` at 06:00. Requests that happen inside a Homeland carry `world` (`public` or `IS-<id>`); positions and gather checks use that
 world's map (`Game.worldFor`). Add tests in
 `server/test/`. Balance/tuning numbers go in `economy/config.json`, not code.
 

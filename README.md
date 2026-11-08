@@ -1,6 +1,6 @@
 # Genesis Town
 
-> **Status (2026-11-02): M3 done, M4 (hardening) in progress.** Done and tested:
+> **Status (2026-11-08): M3 done, M4 (hardening) in progress; Homeland phase A built on branch `homeland`.** Done and tested:
 > - M2 (Checkpoint 3): off-chain play (gathering, energy, crafting, farm plot, shipping, trading with four merchants
 >   priced by `economy/pricing.ts`), a daily settlement on NEAR testnet with the ledger's Merkle root, and shop
 >   bankruptcy and restoration with shares, all in an end-to-end testnet run;
@@ -32,9 +32,9 @@
 > - **Players see each other**: everyone outdoors walks around the same village with their name and market title over
 >   their head (your house stays private). Global chat (C, or the Chat tab on phones) with `/msg name text` for private
 >   lines, `/block name`, `/nama NamaBaru` and `/help`; long lines are capped, rude words masked and sending is
->   rate-limited (80 characters, one line per 2 s). Players and chat are per world: on a Private Island you only meet the
->   people on that island (`/msg` still reaches anyone). You pick a name (3–16 characters, unique) the first time you
->   sign in. Presence and chat live in server memory and never touch the chain. Click another player for their card:
+>   rate-limited (80 characters, one line per 2 s). Players and chat are per world: in a Homeland you only meet the
+>   owner and the guests there (`/msg` still reaches anyone). Your name is `name#tag` (3–16 characters plus a 5-digit tag, set on the
+>   character screen after sign-in), and chat lines carry the tag. Presence and chat live in server memory and never touch the chain. Click another player for their card:
 >   message them or open their stall in the market.
 > - **Fights play out in the world**: a slim battle bar (Lawan / Lari, F / Esc) replaces the pop-up; each attack swings
 >   the axe at the monster (sparks and a white flash on a hit, "Meleset!" on a miss, the damage rising over it), then the
@@ -70,22 +70,22 @@
 >   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,
 >   snow, bright summer sun); rain waters the farm. Calmer HUD and a first-steps guide.
 >
-> - **Private Islands** (phase 1a/1b, built on branch `islands`): the broker in Kantor Makelar sells 8 islands. A purchase
->   mints the NFT `IS-<id>-1` to the broker and transfers it to the player in one contract call; the coin price is
->   burned. Kesuburan Tanah upgrades are paid off chain (goods and coin, effect at once); **Save World** swaps
->   `IS-<id>-v` for `IS-<id>-v+1`, and only upgrades already settled at 06:00 are written. Islands are invite-only
->   (the owner edits the list). Boats leave from a dock on each island. Prices: the cheapest island is 500 coin, about
->   10 h of play (the 30-day simulation nets 19.9 coin per game day); the 8 offers go up to 3000 coin.
->   A Private Island produces only basic goods; merchants and the Pasar stay on the Public Island ([docs/world.md](docs/world.md)).
-> - **Contract v5 is written and unit-tested (55 tests) but not deployed to testnet yet.** The owner deploys it with
->   `contracts/game/migrate-v5-testnet.json` after filling `voucher_key` with the settler's public key. Until then,
->   buying and Save World work only on the mock chain (`npm run dev:mock`). On testnet the broker still lists the
->   islands, but **Beli** fails with "Data pulau sedang tidak bisa diperiksa" because the v4 contract has no
->   `get_island`; live players and chat work on testnet as they are.
+> - **Homeland, phase A** (built on branch `homeland`; replaces the broker-sold Private Islands, which are gone): after
+>   login a character screen shows `name#12345` (rename it, pick skin, hair and shirt) and **Mulai** drops you into your
+>   own world. Every player has a **Homeland**: a seeded 3 x 3 chunk map (48 x 48 tiles) with a Town Hall in the middle and
+>   eight chunks of forest, rock, pond or shore under fog. You upgrade the Town Hall (levels 1-5), open chunks (items,
+>   coin and a timer each), and build **Kolam Ikan**, **Tambang** and **Restoran** on fixed lots. The one **Builder** works
+>   on one job at a time; timers are kept by the server. Buildings fill up over time and you tap to collect (same daily
+>   gain cap as gathering). A **portal** leads to the **public area**: the old village, now for trading only (merchants,
+>   Pasar, other players; no gathering, farming or monsters). Selling there pays `coin`, which settles on chain at 06:00
+>   as before. Homelands are off-chain, not NFTs, and cannot be sold. The owner invites guests by `name#tag`; guests walk
+>   and chat but cannot build. Numbers: `economy/config.json` -> `homeland`; design: [docs/world.md](docs/world.md) and
+>   the [Homeland spec](docs/superpowers/specs/2026-11-08-homeland-design.md).
+> - The contract still has the v5 island methods (`buy_island`, `save_island`); the game does not use them and v5 is not deployed to testnet.
 >
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
-> and M5 (demo video, submission). Also *(planned)*: the mining shaft with Emas and Permata (phase 1c; Kesuburan 4-5
-> stay locked until then), Luas Ladang upgrades, selling islands in the Pasar, agent wallets. Anything marked *(planned)* does not exist yet.
+> and M5 (demo video, submission). Also *(planned)*: Homeland phase B (job bots, AI merchant dialogue on Claude, player-to-player
+> trade, consignment merchant, top-seller board, more builders) and phase C (cosmetics, Hunter and Chef bonuses), agent wallets. Anything marked *(planned)* does not exist yet.
 >
 > **M4.5 Online** *(planned, target 2026-11-07)*: a public HTTPS URL anyone can play on testnet.
 > - Host: one long-running Node 24 process (the game loop ticks every 2 s, one game hour is one real minute,
@@ -135,7 +135,7 @@ burns, rent), so anyone can verify them, while staying invisible in the normal l
 
 Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [world](docs/world.md) · [architecture](docs/architecture.md) ·
 [threat model](docs/threat-model.md) · [on-chain vs off-chain](docs/onchain-offchain.md) · [sources](docs/sources.md) ·
-[islands, NPC souls and schematics](docs/island-design.md) *(planned)*
+[Homeland spec](docs/superpowers/specs/2026-11-08-homeland-design.md) · [NPC souls and schematics](docs/island-design.md) *(planned)*
 
 ## What is on-chain (NEAR testnet)
 
@@ -152,8 +152,8 @@ Contract methods: NEP-245 `mt_transfer`, `mt_batch_transfer`, `mt_transfer_call`
 `mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`; NEP-145 `storage_*`. Game methods:
 `settle_day`, `register_player`, `register_merchant`, `close_shop`, `restore_contribute`, `restore_withdraw`,
 `pay_dividend`, `claim_dividends`, `send_item`, `list_item`, `buy_listing`, `cancel_listing`, `create_project`,
-`project_contribute`, `project_withdraw`, `buy_island`, `save_island`, `set_voucher_key`, `set_broker`, `get_island` (view),
-`migrate`. Full table: [contracts/game/README.md](contracts/game/README.md).
+`project_contribute`, `project_withdraw`, `migrate`; the v5 island methods (`buy_island`, `save_island`, `set_voucher_key`, `set_broker`,
+`get_island`) exist but the game does not use them. Full table: [contracts/game/README.md](contracts/game/README.md).
 
 Example transactions from the M2 end-to-end run (`node server/scripts/e2e-testnet.ts`, server stopped):
 - daily settlement of day 0 (45 ledger rows, root stored on chain):

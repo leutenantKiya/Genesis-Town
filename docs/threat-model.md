@@ -98,7 +98,7 @@ that account's credits in the chunk (each recorded as a `withheld` row, wanted =
 so selling settled items off-chain and then moving them away on chain no longer pays. Merchants and the town are never
 withheld.
 
-Freezing: an account with a `shortfall` record is frozen. `Game.act`, `/api/relay`, the island voucher/invite routes and
+Freezing: an account with a `shortfall` record is frozen. `Game.act`, `/api/relay`, the Homeland invite route and
 chat answer 403 `Akun ini dibekukan karena saldo on-chain tidak cocok dengan permainan. Hubungi pengelola.` The operator
 lifts it with `POST /api/dev/unfreeze {account}` (DEV_TOOLS, local only). `cap_clamp` records do not freeze.
 Monster bonuses and drops check the daily gain cap before they are written, so they cannot cause a cap clamp.
@@ -201,36 +201,21 @@ storage registered only by the server at account creation, max 5 listings per ac
 and applied settlement keys kept only as a compact per-day bitmap. The `minter`/`town` accounts fund storage top-ups. This follows the NEAR docs'
 guidance to bound state growth that users don't pay for.
 
-## Island vouchers (buy and Save World)
+## Homeland timers and production
 
-Buying an island and Save World are player calls (`buy_island`, `save_island`, session key, no deposit) that the
-contract accepts only with an ed25519 signature from the server's voucher key (`voucher_pk`, the settler's public key;
-the owner can replace it with `set_voucher_key`). The signed message names the contract, island id, buyer or owner,
-price or `from_version`, the spec and an expiry (10 minutes).
-- **A leaked voucher** is useless to anyone else: the message binds the account that must call. The holder can submit
-  it only before it expires.
-- **Replay**: `buy_island` fails when the island id exists, so a voucher buys once; `save_island` requires
-  `from_version` to equal the current version, and every save increments it.
-- **Forged vouchers** need the settler key. If it leaks, an attacker can buy islands only with coin they burn, and can
-  save only what the checks allow (same seed, levels never lower). `set_voucher_key` rotates it.
-- **Cost is real**: the server issues a buy voucher only if the account's settled coin (and today's coin) covers the
-  price, and the contract moves and burns that coin in the same call. A Save World voucher carries only upgrades whose
-  ledger rows are in a finished settlement, so the NFT never shows an unpaid upgrade.
-- The server never trusts its own copy of the owner: vouchers and syncs read `get_island` from the chain.
-
-## Settlement cannot mint islands
-
-`settle_day`, `send_item` and the Pasar (`list_item`) validate tokens with `require_token`, which knows only the
-registry (items and `coin`). Island ids (`IS-...`) are rejected there, and `migrate` refuses new registry tokens whose
-id starts with `IS-`. Island tokens are created only inside `buy_island` and `save_island`, and moved only by
-`mt_transfer` (1 yocto, a real wallet). So islands cannot be listed in the Pasar yet *(planned)*. Whoever receives the
-current version becomes the owner; `save_island` requires the caller to be the owner, and old versions have supply 0.
-
-## Island scan in `storage_unregister`
-
-`storage_unregister` refuses accounts that own an island by scanning `island_ids` (every island ever bought). The list
-grows only through server-issued vouchers (8 offers in the config), never through player input, so the scan is bounded.
-*(Planned, phase 2: a per-owner counter instead of a scan, if islands grow to hundreds.)*
+Homelands are off-chain and not NFTs, so there are no vouchers and no settler-key island signatures. The threats are
+about the server's own rules.
+- **Builder timers are server-authoritative.** `build` stores `ends_at` from the server clock and the cost is taken
+  when the job starts; the client only draws progress. A job needs the one builder to be free and the Town Hall level,
+  items and coin to be there; a second `build` while busy is refused. Nothing a client sends can shorten a timer.
+- **Lazy production is capped.** A building accrues goods per game hour up to its capacity; `collect` computes the
+  amount on the server and counts it against `caps.dailyGainPerItem`, the same cap as gathering. Waiting never yields
+  more than the capacity, and spamming `collect` yields nothing extra.
+- **Only the owner builds.** Guests may walk and chat in a Homeland, never `build`, `collect` or gather.
+- **Settlement stays registry-only.** `settle_day`, `send_item` and the Pasar accept items and `coin` only, so no
+  game action can mint another kind of token.
+- The v5 island methods (`buy_island`, `save_island`) remain in the contract source but the game never calls them and
+  the server issues no vouchers.
 
 ## Presence and chat
 
@@ -240,14 +225,14 @@ lines. The client polls `POST /api/presence` about every 0.7 s and gets the othe
   from the TRUST_PROXY helper), a limiter on `/api/presence`. Lines are at most 80 characters, control characters are
   removed, and a short word list is masked. Frozen accounts (`assertActive`) cannot chat or rename.
 - **Text only**: names and chat are drawn with `textContent` or canvas text, never as HTML. Names are 3-16 characters
-  (letters, digits, space, `_`, `-`), unique ignoring case, kept in the one `names` table; reserved words (merchants,
+  (letters, digits, space, `_`, `-`), kept in the one `names` table with a 5-digit tag, unique as `name#tag`; chat lines and player cards carry the tag, so equal names cannot impersonate each other, and invites name a player as `name#tag`; reserved words (merchants,
   staff) and `Warga_*` are refused. Chat needs a chosen name (409 before that).
-- **Per world**: public lines and positions reach only players in the same world (`public` or `IS-<id>`). `/msg name text`
+- **Per world**: public lines and positions reach only players in the same world (`public` or `HL-<n>`). `/msg name text`
   is 1:1 and also reaches a player in another world; only the two players receive it. `/block` is local to the browser.
-- **Private islands**: presence and chat in `IS-<id>` need `worldFor`, which admits the owner and the invite list only.
+- **Homelands**: presence and chat in `HL-<n>` need `worldFor`, which admits the owner and the invite list only.
   Everyone else gets 409, and a guest taken off the list is refused on the next poll and stops being shown to others.
 - **World must match**: a poll or chat line counts only if its world is the one the server tracks for that player (worlds
-  change only through the `travel` action at a dock; otherwise 409) and an outdoor tile is walkable on that world's map.
+  change only through the `travel` action at a portal; otherwise 409) and an outdoor tile is walkable on that world's map.
 - Not defended: many accounts spamming (each needs a login) and moderation beyond the word list. Players can mute
   others locally.
 

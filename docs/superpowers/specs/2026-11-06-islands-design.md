@@ -1,3 +1,5 @@
+> Superseded by the Homeland design (2026-11-08): see `2026-11-08-homeland-design.md`. Kept as history.
+
 # Islands: Public Island, Private Islands as versioned NFTs, upgrades, mining shaft
 
 Status: design, 2026-11-06. Phases 1a and 1b are built (branch `islands`, see "As built"); contract v5 is not deployed to testnet yet. Phase 1c is not built. Owner: OyenCar. Calls marked **(Claude's call)** were not discussed with
