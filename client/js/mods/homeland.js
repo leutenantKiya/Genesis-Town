@@ -8,7 +8,8 @@
  *   GT_HOME      { enter, travel, state } - enter() is called by the character screen when "Mulai" ends
  *
  * Server API used: GET /api/homeland, GET /api/homeland/layout?world=HL-n, POST /api/homeland/invite,
- * POST /api/act {action: build | collect | travel}. All user-provided text (names) is set with textContent / value.
+ * POST /api/act {action: build | collect | hire | travel}.
+ * Worker bots (H.bots, H.hire): hired at the Town Hall ("Pekerja"), shown as NPCs at their workplace. All user-provided text (names) is set with textContent / value.
  */
 (function () {
   'use strict';
@@ -21,6 +22,7 @@
   var lastClose = 0, clockT = 0;
   var pops = [];                         // floating "+n" after a collect: { x, y, text, t }
   var builder = null, builderSig = '';
+  var botNpcs = [], botSig = '';          // NPCs of the hired worker bots
   var NEIGH = {
     nw: ['n', 'w'], n: ['nw', 'c', 'ne'], ne: ['n', 'e'], w: ['nw', 'c', 'sw'], c: ['n', 'w', 'e', 's'],
     e: ['ne', 'c', 'se'], sw: ['w', 's'], s: ['sw', 'c', 'se'], se: ['s', 'e']
@@ -74,7 +76,7 @@
     loading = C.api('/homeland').then(function (r) {
       H = r; lastLoad = Date.now();
       if (inOwnHome() && signature(H) !== layoutSig) rebuild();
-      builderSig = ''; placeBuilder();
+      builderSig = ''; placeBuilder(); placeBots();
     }, function () { /* keep the old numbers */ })
       .then(function () { loading = null; redrawWin(); return H; });
     return loading;
@@ -258,6 +260,19 @@
     }
     wrap.appendChild(ob);
 
+    // Pekerja: worker bots
+    var pk = $('div', 'gt-detail'), pt = $('div', 'grow');
+    pt.appendChild($('div', 'gt-detail-name', 'Pekerja'));
+    pt.appendChild($('div', 'chain-dim', 'Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.'));
+    var hireMap = H.hire || {};
+    Object.keys(hireMap).forEach(function (job) {
+      var d = hireMap[job], row = $('div', 'gt-detail-acts');
+      pt.appendChild($('div', null, d.name + ' · ' + d.have + '/' + d.max + ' · ' + d.price + ' ' + itemName('coin') + (d.can || !d.why ? '' : ' · ' + d.why)));
+      row.appendChild(btn('Pekerjakan ' + d.name + ' (' + d.price + ')', function () { run({ action: 'hire', job: job }); }, 'primary', !d.can || !!(win && win.busy)));
+      pt.appendChild(row);
+    });
+    pk.appendChild(pt); wrap.appendChild(pk);
+
     // invites
     var iv = $('div', 'gt-detail');
     iv.appendChild($('div', 'gt-detail-name', 'Undang teman'));
@@ -369,6 +384,53 @@
     if (builder) { builder.dir = dir; builder.working = !!f; }
   }
 
+  /* ---- worker bots: stand at their workplace with the job name above their head ---- */
+  function walkableAt(x, y) {
+    var m = GT.world; if (!m || x < 1 || y < 1 || x >= m.w - 1 || y >= m.h - 1) return false;
+    var i = y * m.w + x; return m.walk[i] === 1 && !(m.locked && m.locked[i]);
+  }
+  function spotNear(cx, cy, taken) {
+    var best = null, bd = 1e9, x, y;
+    for (y = Math.max(1, cy - 6); y < cy + 7; y++) for (x = Math.max(1, cx - 6); x < cx + 7; x++) {
+      if (!walkableAt(x, y) || taken[x + ',' + y]) continue;
+      var d = Math.abs(x - cx) + Math.abs(y - cy);
+      if (d < bd) { bd = d; best = { x: x, y: y }; }
+    }
+    return best;
+  }
+  function workplace(job, L) {
+    var th = L.buildings && L.buildings[0], i, k;
+    if (job === 'petani' && L.farm && L.farm.plots && L.farm.plots[0]) return { x: L.farm.plots[0].x + 1, y: L.farm.plots[0].y + 1 };
+    if (job === 'nelayan') { for (i = 0; i < (H.built || []).length; i++) if (H.built[i].kind === 'kolam') { var lot = lotById(H.built[i].lot); if (lot) return { x: lot.door.x + 1, y: lot.door.y + 1 }; } }
+    if (job === 'penebang' && th && L.tiles) {
+      var best = null, bd = 1e9, x, y;
+      for (y = 1; y < L.h - 1; y++) for (x = 1; x < L.w - 1; x++) {
+        var t = L.tiles[y * L.w + x]; if (t !== 'tree') continue;
+        var d = Math.abs(x - th.dx) + Math.abs(y - th.dy); if (d < bd) { bd = d; best = { x: x, y: y }; }
+      }
+      if (best) return best;
+    }
+    return th ? { x: th.dx + 3, y: th.dy + 2 } : null;
+  }
+  function placeBots() {
+    var L = layoutOf(), sig = !inOwnHome() || !L || !H ? '' : wid() + '|' + layoutSig + '|' + (H.bots || []).map(function (b) { return b.id + b.job; }).join('.');
+    if (sig === botSig && botNpcs.every(function (n) { try { return GT.findNpc(n.key) === n.npc; } catch (e) { return false; } })) return;
+    botSig = sig;
+    botNpcs.forEach(function (n) { try { GT.removeNpc(n.npc); } catch (e) { /* gone with the world */ } });
+    botNpcs = [];
+    if (!sig || !GT.getScene) return;
+    var taken = {};
+    (H.bots || []).forEach(function (b) {
+      var w = workplace(b.job, L); if (!w) return;
+      var spot = spotNear(w.x, w.y, taken); if (!spot) return;
+      taken[spot.x + ',' + spot.y] = 1;
+      var key = 'homeland:bot:' + b.id, dx = w.x - spot.x, dy = w.y - spot.y;
+      var dir = dx === 0 && dy === 0 ? 'down' : Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+      var npc = GT.addNpc('out', { name: b.name, pal: 2 + (b.id % 4), x: spot.x, y: spot.y, key: key, dir: dir, lines: [['Siap bekerja, Juragan!'], ['Aku ' + b.name + '. Gajiku sudah lunas.']] });
+      if (npc) { npc.working = b.job !== 'builder'; botNpcs.push({ key: key, npc: npc }); }
+    });
+  }
+
   /* ------------------------------------------------------------ engine hooks */
   function withinLot(t) {
     var L = layoutOf();
@@ -424,8 +486,8 @@
     nearHint = n;
   }
   function onWorld() {
-    nearHint = nearPortal(); pops.length = 0; builder = null; builderSig = '';
-    if (isHL(wid())) placeBuilder();
+    nearHint = nearPortal(); pops.length = 0; builder = null; builderSig = ''; botNpcs = []; botSig = '';
+    if (isHL(wid())) { placeBuilder(); placeBots(); }
   }
 
   /* ---- drawing over the world ---- */

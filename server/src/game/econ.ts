@@ -18,8 +18,10 @@ export type Cost = Record<string, number>;
 export interface TownhallStep { level: number; cost: Cost; secs: number }
 export interface ChunkStep { n: number; th: number; cost: Cost; secs: number }
 export interface BuildingDef { name: string; th: number; cost: Cost; secs: number; produces: string; perGameHour: number; capacity: number; needsChunk?: boolean }
+export interface BotDef { name: string; rarity: string; price: number; max: number; th?: number; effect: { builders?: number; farmGrowFactor?: number; fishRate?: number; woodBonus?: number } }
 export interface HomelandConfig {
   builders: number;
+  bots: Record<string, BotDef>;
   publicTradeOnly: boolean;
   townhall: TownhallStep[];
   chunks: ChunkStep[];

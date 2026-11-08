@@ -41,7 +41,8 @@ export class GameStore {
         th INTEGER NOT NULL, open TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS homeland_buildings (account TEXT NOT NULL, lot TEXT NOT NULL, kind TEXT NOT NULL, last_collect INTEGER NOT NULL, PRIMARY KEY (account, lot));
       CREATE TABLE IF NOT EXISTS homeland_jobs (account TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL, ends_at INTEGER NOT NULL, PRIMARY KEY (account, target));
-      CREATE TABLE IF NOT EXISTS homeland_invites (id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));
+      CREATE TABLE IF NOT EXISTS homeland_bots (account TEXT NOT NULL, id INTEGER NOT NULL, job TEXT NOT NULL, hired_at INTEGER NOT NULL, PRIMARY KEY (account, id));
+      CREATE TABLE IF NOT EXISTS homeland_invites(id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));
     `);
   }
 
@@ -257,6 +258,14 @@ export class GameStore {
   /** True when this call removed the job (so exactly one caller applies its result). */
   deleteHomelandJob(account: string, target: string): boolean {
     return Number(this.db.prepare('DELETE FROM homeland_jobs WHERE account = ? AND target = ?').run(account, target).changes) === 1;
+  }
+  homelandBots(account: string): Array<{ account: string; id: number; job: string; hired_at: number }> {
+    return this.db.prepare('SELECT * FROM homeland_bots WHERE account = ? ORDER BY id').all(account) as unknown as Array<{ account: string; id: number; job: string; hired_at: number }>;
+  }
+  addHomelandBot(account: string, job: string, hiredAt: number): number {
+    const id = ((this.db.prepare('SELECT COALESCE(MAX(id), 0) AS m FROM homeland_bots WHERE account = ?').get(account) as { m: number }).m) + 1;
+    this.db.prepare('INSERT INTO homeland_bots (account, id, job, hired_at) VALUES (?, ?, ?, ?)').run(account, id, job, hiredAt);
+    return id;
   }
   homelandInvites(id: number): string[] {
     return (this.db.prepare('SELECT account FROM homeland_invites WHERE id = ? ORDER BY account').all(id) as unknown as Array<{ account: string }>).map((r) => r.account);

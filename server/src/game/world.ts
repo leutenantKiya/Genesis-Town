@@ -81,7 +81,8 @@ export class World {
     }
   }
 
-  gather(account: string, tile: string, x: number, y: number, nodePrefix = ''): ActionResult {
+  /** `bonus`: extra units per successful gather (Penebang bots in the owner's Homeland). */
+  gather(account: string, tile: string, x: number, y: number, nodePrefix = '', bonus = 0): ActionResult {
     const g = this.econ.gather;
     const token = g.tiles[tile];
     if (!token) throw new HttpError(400, 'Tidak ada yang bisa dikumpulkan di sini.');
@@ -102,7 +103,8 @@ export class World {
     const p = this.state(account);
     this.spendEnergy(p, g.energyCost); // in memory only: nothing is saved if the gain cap refuses below
     const mult = this.econ.seasons[t.season]?.yield[token] ?? 1;
-    const amount = mult >= 1 ? 1 + (this.rng() < mult - 1 ? 1 : 0) : (this.rng() < mult ? 1 : 0);
+    let amount = mult >= 1 ? 1 + (this.rng() < mult - 1 ? 1 : 0) : (this.rng() < mult ? 1 : 0);
+    if (amount > 0) amount += bonus;
     this.checkGain(account, token, amount);
     charges -= 1;
     this.gs.saveNode(key, charges, charges === 0 ? t.totalHours + g.respawnGameHours : refillHour);

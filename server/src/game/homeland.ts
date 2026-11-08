@@ -22,7 +22,10 @@ export interface HomelandView {
   builders: { total: number; busy: number };
   next: { th: TownhallStep | null; chunk: ChunkStep | null; buildings: Record<string, BuildingOption> };
   guests: Array<{ account: string; name: string; tag: string }>;
+  bots: Array<{ id: number; job: string; name: string }>;
+  hire: Record<string, { name: string; price: number; rarity: string; max: number; have: number; th: number; can: boolean; why: string | null }>;
 }
+export interface BotEffects { builders: number; farmGrowFactor: number; fishRate: number; woodBonus: number }
 export type { HomelandRow };
 
 export const homeWorld = (id: number): string => `HL-${id}`;
@@ -98,9 +101,62 @@ export class Homelands {
 
   /* ------------------------------------------------------------ production */
 
-  private storedOf(def: BuildingDef, lastCollect: number): number {
+  /** Output per game hour: Nelayan bots speed up the fish ponds. */
+  private rateOf(account: string, def: BuildingDef): number {
+    return def.perGameHour * (def.produces === 'fish' ? this.effects(account).fishRate : 1);
+  }
+  private storedOf(account: string, def: BuildingDef, lastCollect: number): number {
     const gh = Math.max(0, this.now() - lastCollect) / this.msPerHour();
-    return Math.min(def.capacity, Math.floor(def.perGameHour * gh + 1e-9));
+    return Math.min(def.capacity, Math.floor(this.rateOf(account, def) * gh + 1e-9));
+  }
+
+  /* ------------------------------------------------------------ worker bots */
+
+  bots(account: string): Array<{ id: number; job: string; name: string }> {
+    return this.d.gs.homelandBots(account).filter((b) => this.cfg.bots?.[b.job]).map((b) => ({ id: b.id, job: b.job, name: this.cfg.bots[b.job].name }));
+  }
+
+  /** What the owner's bots add up to. Factors multiply per bot, bonuses add. */
+  effects(account: string): BotEffects {
+    const e: BotEffects = { builders: 0, farmGrowFactor: 1, fishRate: 1, woodBonus: 0 };
+    for (const b of this.d.gs.homelandBots(account)) {
+      const x = this.cfg.bots?.[b.job]?.effect;
+      if (!x) continue;
+      e.builders += x.builders ?? 0;
+      e.woodBonus += x.woodBonus ?? 0;
+      if (x.farmGrowFactor) e.farmGrowFactor *= x.farmGrowFactor;
+      if (x.fishRate) e.fishRate *= x.fishRate;
+    }
+    return e;
+  }
+  private builderSlots(account: string) { return this.cfg.builders + this.effects(account).builders; }
+
+  /** Why this job cannot be hired right now, or null. Pure. */
+  private hireWhy(account: string, th: number, job: string): string | null {
+    const def = this.cfg.bots?.[job];
+    if (!def) return 'Pekerja tidak dikenal.';
+    const have = this.d.gs.homelandBots(account).filter((b) => b.job === job).length;
+    if (have >= def.max) return `Pekerja ${def.name} sudah penuh (maks ${def.max}).`;
+    const need = def.th ?? (job === 'builder' ? 1 : 2);
+    if (th < need) return `Balai Kota perlu level ${need}.`;
+    const coin = this.d.gs.balance(account, 'coin');
+    if (coin < def.price) return `Koin kurang (punya ${coin}, perlu ${def.price}).`;
+    return null;
+  }
+
+  hire(account: string, job: string, day: number): { toast: string; tags: string[] } {
+    this.settle(account);
+    const row = this.ensure(account);
+    const def = this.cfg.bots?.[String(job)];
+    if (!def) throw new HttpError(400, 'Pekerja tidak dikenal.');
+    const why = this.hireWhy(account, row.th, job);
+    if (why) throw new HttpError(409, why);
+    const gs = this.d.gs;
+    const ref = `${homeWorld(row.id)}:hire:${job}`;
+    gs.add(day, account, 'coin', -def.price, 'hire', ref);
+    gs.add(day, this.d.town, 'coin', def.price, 'hire', ref);
+    gs.addHomelandBot(account, job, this.now());
+    return { toast: `${def.name} dipekerjakan (-${def.price} koin).`, tags: ['coin'] };
   }
 
   collect(account: string, lot: string, day: number, checkGain: (a: string, t: string, n: number) => void): { toast: string; tags: string[]; gained: Record<string, number> } {
@@ -109,13 +165,13 @@ export class Homelands {
     const b = gs.homelandBuildings(account).find((x) => x.lot === lot);
     const def = b && this.cfg.buildings[b.kind];
     if (!b || !def) throw new HttpError(409, 'Belum ada bangunan di sini.');
-    const stored = this.storedOf(def, b.last_collect);
+    const stored = this.storedOf(account, def, b.last_collect);
     if (stored <= 0) throw new HttpError(409, 'Belum ada hasil.');
     checkGain(account, def.produces, stored); // throws on a full daily cap; nothing has changed yet
     const world = homeWorld(gs.homelandOf(account)!.id);
     gs.add(day, account, def.produces, stored, 'collect', `${world}:${lot}`);
     const full = stored >= def.capacity;
-    gs.setHomelandCollect(account, lot, full ? this.now() : Math.round(b.last_collect + (stored / def.perGameHour) * this.msPerHour()));
+    gs.setHomelandCollect(account, lot, full ? this.now() : Math.round(b.last_collect + (stored / this.rateOf(account, def)) * this.msPerHour()));
     return { toast: `+${stored} ${this.name(def.produces)}`, tags: [def.produces], gained: { [def.produces]: stored } };
   }
 
@@ -132,7 +188,7 @@ export class Homelands {
   private plan(row: HomelandRow, kind: string, target: string): { cost: Cost; secs: number; label: string } {
     const gs = this.d.gs, account = row.account;
     const jobs = gs.homelandJobs(account);
-    if (jobs.length >= this.cfg.builders) throw new HttpError(409, 'Builder sedang bekerja.');
+    if (jobs.length >= this.builderSlots(account)) throw new HttpError(409, 'Builder sedang bekerja.');
     let plan: { cost: Cost; secs: number; label: string };
     if (kind === 'th') {
       const step = this.thStep(row);
@@ -198,11 +254,16 @@ export class Homelands {
       id: row.id, world: homeWorld(row.id), seed: row.seed, gen: row.gen, th: row.th, open: row.open,
       built: built.map((b) => {
         const def = this.cfg.buildings[b.kind];
-        return { lot: b.lot, kind: b.kind, stored: def ? this.storedOf(def, b.last_collect) : 0, capacity: def?.capacity ?? 0 };
+        return { lot: b.lot, kind: b.kind, stored: def ? this.storedOf(account, def, b.last_collect) : 0, capacity: def?.capacity ?? 0 };
       }),
       jobs: jobs.map((j) => ({ target: j.target, kind: j.kind, ends_at: j.ends_at })),
-      builders: { total: this.cfg.builders, busy: jobs.length },
+      builders: { total: this.builderSlots(account), busy: jobs.length },
       next: { th: this.thStep(row), chunk: this.chunkStep(row), buildings },
+      bots: this.bots(account),
+      hire: Object.fromEntries(Object.entries(this.cfg.bots ?? {}).map(([job, d]) => {
+        const why = this.hireWhy(account, row.th, job);
+        return [job, { name: d.name, price: d.price, rarity: d.rarity, max: d.max, have: gs.homelandBots(account).filter((b) => b.job === job).length, th: d.th ?? (job === 'builder' ? 1 : 2), can: why === null, why }];
+      })),
       guests: gs.homelandInvites(row.id).map((a) => ({ account: a, name: this.d.players?.nameOf(a) ?? a, tag: this.d.players?.tagOf(a) ?? '' })),
     };
   }
