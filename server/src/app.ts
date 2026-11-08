@@ -186,11 +186,43 @@ export function createApp(deps: AppDeps) {
     return true;
   }
 
+  /** Public-area economy: POST /api/trade/{offer,accept,cancel}, GET /api/trade, GET|POST /api/consign, POST /api/consign/withdraw, GET /api/leaderboard. */
+  async function tradeApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
+    const isTrade = p === '/api/trade' || p.startsWith('/api/trade/'), isConsign = p === '/api/consign' || p === '/api/consign/withdraw';
+    if (!isTrade && !isConsign && p !== '/api/leaderboard') return false;
+    if (req.method === 'GET') {
+      const acct = p === '/api/leaderboard' ? (() => { try { return accountOf(req, url); } catch { return null; } })() : accountOf(req, url);
+      if (p === '/api/trade') return send(res, 200, game.trade.list(acct!)), true;
+      if (p === '/api/consign') return send(res, 200, { lots: game.consign.lots(acct!), merchant: game.econ.consign.merchant, feeBps: game.econ.consign.feeBps, maxPerItem: game.econ.consign.maxPerItem }), true;
+      if (p === '/api/leaderboard') {
+        const period = url.searchParams.get('period') ?? 'day';
+        if (period !== 'day' && period !== 'all') throw new HttpError(400, 'period must be day or all');
+        return send(res, 200, game.leaderboard(period, acct)), true;
+      }
+      throw new HttpError(404, 'no such route');
+    }
+    if (req.method !== 'POST') throw new HttpError(404, 'no such route');
+    const raw = await readRaw(req);
+    const acct = accountOf(req, url, raw);
+    if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
+    game.assertActive(acct);
+    const b = parseJson(raw);
+    if (b.pos !== undefined) game.reportPosition(acct, b.pos as { x: number; y: number }, 'public'); // the client's tile, checked like any report
+    if (p === '/api/trade/offer') send(res, 200, game.trade.offer(acct, b));
+    else if (p === '/api/trade/accept') send(res, 200, { ...game.trade.accept(acct, b.id), state: game.state(acct) });
+    else if (p === '/api/trade/cancel') send(res, 200, game.trade.cancel(acct, b.id));
+    else if (p === '/api/consign') send(res, 200, { ...game.consign.deposit(acct, b.token, b.qty, b.min_price), state: game.state(acct) });
+    else if (p === '/api/consign/withdraw') send(res, 200, { ...game.consign.withdraw(acct, b.token), state: game.state(acct) });
+    else throw new HttpError(404, 'no such route');
+    return true;
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const p = url.pathname;
     if (p.startsWith('/api/')) {
       if (await homelandApi(req, res, url, p)) return;
+      if (await tradeApi(req, res, url, p)) return;
       if (req.method === 'GET' && p === '/api/config') {
         return send(res, 200, {
           chainMode: deps.chain.mode,

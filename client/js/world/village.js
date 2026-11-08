@@ -458,6 +458,14 @@
     return best;
   }
 
-  var api = { VERSION: VERSION, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf };
+  // Fixed public-area spots next to the market, derived only from market.stalls (no RNG, no tile changed): the Titip Jual
+  // stall stands in the gap between the 2nd and 3rd merchant stall, the Papan Juara board just east of the last stall.
+  // Both are plaza tiles in the stall row; people stand in front (south) of them.
+  function landmarks(L) {
+    var s = L.market.stalls, y = s[0].y;
+    return { consign: { x: s[1].x + 1, y: y }, board: { x: s[s.length - 1].x + 1, y: y } };
+  }
+
+  var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf };
   root.GTVillage = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
