@@ -1,6 +1,6 @@
 /* Service worker: makes the game installable and keeps the app shell available offline.
  * Network-first for everything, so game code is never stale while online. /api/* is never touched. */
-var CACHE = 'gt-shell-v13';
+var CACHE = 'gt-shell-v14';
 var SHELL = [
   '/', '/manifest.json',
   '/css/game.css', '/css/chain.css', '/css/settings.css', '/css/sim.css', '/css/phone.css',

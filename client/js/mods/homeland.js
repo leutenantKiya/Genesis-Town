@@ -487,9 +487,14 @@
   }
 
   /* ---- cosmetics drawn on the Tukang and the bots, in the cosmetic's colour ---- */
-  function drawHat(ctx, n, name, camX, camY, T) {
+  function isSick(slot) {
+    var w = null; (H && H.workers || []).forEach(function (x) { if (x.slot === slot) w = x; });
+    return !!(w && w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now());
+  }
+  function drawHat(ctx, n, name, camX, camY, T, sick) {
     var d = name && H.cosmetics && H.cosmetics[name]; if (!d || !n) return;
     var sx = Math.round(n.x * T - camX), sy = Math.round(n.y * T - camY);
+    if (sick) { if (name === 'syal') return; sx -= 2; sy += 5; } // a collapsed worker lies down: the hat goes on the lying head
     ctx.fillStyle = '#2a2430';
     if (name === 'syal') { ctx.fillRect(sx + 3, sy + 7, 10, 3); ctx.fillStyle = d.color; ctx.fillRect(sx + 4, sy + 8, 8, 1); ctx.fillRect(sx + 9, sy + 8, 2, 4); return; }
     if (name === 'mahkota') { ctx.fillRect(sx + 4, sy - 1, 8, 4); ctx.fillStyle = d.color; ctx.fillRect(sx + 5, sy + 1, 6, 2); ctx.fillRect(sx + 5, sy - 1, 1, 2); ctx.fillRect(sx + 7, sy - 2, 2, 3); ctx.fillRect(sx + 10, sy - 1, 1, 2); return; }
@@ -629,15 +634,17 @@
         ctx.fillStyle = b.stored >= b.capacity ? '#ffcf5a' : '#f6ead0'; ctx.fillRect(Math.round(x - w / 2), Math.round(y - 4), Math.round(w), 9);
         ctx.fillStyle = '#2a2430'; ctx.fillText(txt, Math.round(x), Math.round(y + 0.5));
       });
-      // hats
-      if (builder) drawHat(ctx, builder, H.workers && H.workers[0] && H.workers[0].cosmetic, camX, camY, T);
-      botNpcs.forEach(function (q) { (H.bots || []).forEach(function (b) { if (q.key === 'homeland:bot:' + b.id) drawHat(ctx, q.npc, b.cosmetic, camX, camY, T); }); });
+      // hats (a sick worker's hat is drawn on the lying figure below)
+      if (builder && !isSick(0)) drawHat(ctx, builder, H.workers && H.workers[0] && H.workers[0].cosmetic, camX, camY, T);
+      botNpcs.forEach(function (q) { (H.bots || []).forEach(function (b) { if (q.key === 'homeland:bot:' + b.id && !isSick(b.id)) drawHat(ctx, q.npc, b.cosmetic, camX, camY, T); }); });
       // a collapsed contractor lies down under a blanket with a red cross over the head
       (H.workers || []).forEach(function (wk) {
-        if (!(wk.sick_until && endMs({ ends_at: wk.sick_until }) > now)) return;
         var n = wk.slot === 0 ? builder : null;
         if (wk.slot !== 0) botNpcs.forEach(function (q) { if (q.key === 'homeland:bot:' + wk.slot) n = q.npc; });
         if (!n) return;
+        var sickNow = !!(wk.sick_until && endMs({ ends_at: wk.sick_until }) > now);
+        if (n.hidden !== sickNow) GT.npcHide(n, sickNow); // the standing figure makes room for the one lying down
+        if (!sickNow) return;
         n.working = false;
         var sx = n.x * T - camX, sy = n.y * T - camY;
         ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(sx - 1), Math.round(sy + 4), T + 2, 8);
@@ -647,6 +654,7 @@
         var cy2 = Math.round(sy - 6 + Math.sin(tt * 2 + n.x) * 1);
         ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(sx + T / 2 - 4), cy2 - 1, 8, 8);
         ctx.fillStyle = '#d83c3c'; ctx.fillRect(Math.round(sx + T / 2 - 1), cy2, 2, 6); ctx.fillRect(Math.round(sx + T / 2 - 3), cy2 + 2, 6, 2);
+        drawHat(ctx, n, wk.cosmetic, camX, camY, T, true);
       });
       // builder at work: hammer swing, sparks and the countdown over the target
       var f = jobFocus();

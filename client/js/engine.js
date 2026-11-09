@@ -616,9 +616,9 @@ function tryWorld(seed, att){
   return m;
 }
 
-var HOME_NAMES = { townhall:'Balai Kota', kolam:'Kolam Ikan', tambang:'Tambang', restoran:'Restoran' };
-var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1, townhall:1, kolam:1, tambang:1, restoran:1 };
-var HOME_KINDS = { townhall:1, kolam:1, tambang:1, restoran:1 };
+var HOME_NAMES = { townhall:'Balai Kota', kolam:'Kolam Ikan', tambang:'Tambang', restoran:'Restoran', rumah:'Rumah Pekerja', rumahsakit:'Rumah Sakit' };
+var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1, townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1 };
+var HOME_KINDS = { townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1 };
 function layoutChunk(L, x, y){ return homeLayout && window.GTHomeland ? GTHomeland.chunkOf(L, x, y) : GTVillage.chunkOf(L, x, y); }
 function fromLayout(L){
   var R = makeR((L.seed ^ 0x9e3779b9) >>> 0), x, y, i;

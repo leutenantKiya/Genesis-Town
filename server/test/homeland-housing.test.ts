@@ -186,6 +186,24 @@ test('collapse makes a contractor sick, rumah sakit heals faster', async () => {
   }
 });
 
+test('a contractor is healed the moment the sickness ends, not a serving step later', async () => {
+  const w = await setup();
+  const { H, gs, ms } = w;
+  w.give(P, 'wood', 100); w.give(P, 'coin', 100);
+  gs.addHomelandBuilding(P, 'rumahsakit-c', 'rumahsakit', 0); gs.setFurnitureLevel(P, 'rumahsakit-c', 1);
+  gs.setHomelandTh(P, 3);
+  w.prime(P, { 0: 100 });
+  const t0 = w.now();
+  const r = H.start(P, 'chunk', 'n', 1);
+  w.adv(r.ends_at - t0 + 1000);
+  const sickUntil = w.view(P).workers[0].sick_until;
+  assert.ok(sickUntil > 0);
+  w.adv(sickUntil - w.now() + 1000); // 1 s past the end, well inside a game hour
+  const wk = w.view(P).workers[0];
+  assert.equal(wk.sick_until, 0);
+  assert.equal(wk.fatigue, 0);
+});
+
 test('sick contractor takes no job, another does', async () => {
   const w = await setup();
   const { H, gs } = w;

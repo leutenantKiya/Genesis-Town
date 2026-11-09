@@ -125,6 +125,8 @@ export class Homelands {
       }
     }
     applyEnded(now);
+    // a worker whose sickness ended inside the last, unfinished step is healed now, not one step later
+    for (const w of workers.values()) if (w.sick_until && w.sick_until <= now) { w.sick_until = 0; w.fatigue = 0; dirty.add(w.slot); }
     for (const slot of dirty) { const w = workers.get(slot)!; w.updated_at = now; gs.saveWorker(w); }
     if (pantry !== st.pantry || cursor !== st.tick_at) gs.savePantry(account, pantry, cursor);
   }
