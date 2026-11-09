@@ -20,7 +20,7 @@ import { leaderboard } from './leaderboard.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock'] as const;
 
 export class Game {
   econ: Econ;
@@ -54,7 +54,7 @@ export class Game {
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
-    this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
+    this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, clock: this.clock, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
     const hist = (a: string, summary: string, tokens: string[]) => { store.addHistory(a, 'trade', summary, 'offchain', null, null, tokens.filter((t) => t in this.econ.items)); };
     this.trade = new Trade({
       econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, now: this.now, history: hist, assertActive: (a) => this.assertActive(a),
@@ -223,7 +223,7 @@ export class Game {
     if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'Area publik hanya untuk berdagang.');
     if (w.row && a === 'ship') throw new HttpError(409, 'Kotak Kirim hanya ada di area publik.');
     if (w.row && a === 'engage') throw new HttpError(409, 'Tidak ada monster di Homeland.');
-    if ((a === 'build' || a === 'collect' || a === 'hire') && !w.row) throw new HttpError(409, 'Bangun dan panen di Homeland-mu sendiri.');
+    if ((a === 'build' || a === 'collect' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock') && !w.row) throw new HttpError(409, 'Bangun dan panen di Homeland-mu sendiri.');
     let pos: Pos | null = null;
     if (this.map && this.positions && w.map) {
       pos = this.positions.report(account, body.pos, this.now(), wid, w.map, this.homeFor(account, wid));
@@ -236,7 +236,12 @@ export class Game {
         if (s('kind') === 'build') { if (!w.map.nearLot(pos, s('target'))) far('Berdiri di dekat lahan itu.'); }
         else if (!w.map.atOwnHouse(pos)) far('Berdiri di depan Balai Kota.');
       }
-      if (a === 'hire' && !w.map.atOwnHouse(pos)) far('Berdiri di depan Balai Kota.');
+      if (a === 'cook' || a === 'stock') {
+        const lot = this.homelands.restoranLot(account);
+        if (!lot) far('Bangun Restoran dulu.');
+        else if (!(w.map instanceof HomelandMap) || !w.map.nearLot(pos, lot)) far('Berdiri di dekat pintu Restoran.');
+      }
+      if ((a === 'hire' || a === 'forage') && !w.map.atOwnHouse(pos)) far('Berdiri di depan Balai Kota.');
       if (a === 'collect' && w.map instanceof HomelandMap && !w.map.nearLot(pos, s('lot'))) far('Berdiri di dekat bangunannya.');
     }
     let res: { toast: string; tags?: string[]; world?: string; arrive?: Pos; gained?: Record<string, number> };
@@ -261,6 +266,9 @@ export class Game {
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
       case 'build': res = this.homelands.start(account, s('kind') as 'th' | 'chunk' | 'build', s('target'), this.clock.time().settleDay); break;
       case 'hire': res = this.homelands.hire(account, s('job'), this.clock.time().settleDay); break;
+      case 'forage': res = this.homelands.forage(account, this.clock.time().settleDay, (acc, t, q) => this.world.checkGain(acc, t, q)); break;
+      case 'cook': res = this.homelands.cook(account, body.qty, this.clock.time().settleDay); break;
+      case 'stock': res = this.homelands.stock(account, s('token'), body.qty, this.clock.time().settleDay); break;
       case 'collect': res = this.homelands.collect(account, s('lot'), this.clock.time().settleDay, (acc, t, q) => this.world.checkGain(acc, t, q)); break;
       case 'ship': res = this.world.ship(account, s('token'), n('qty')); break;
       case 'sell': {

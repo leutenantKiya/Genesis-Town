@@ -135,6 +135,8 @@
   "homeland": {
     "builders": 1,
     "publicTradeOnly": true,
+    "fatigue": { "perJobMinute": 10, "idleRecoverPerGameHour": 5, "collapseAt": 100, "slowdownAt100": 1.0, "sickGameHours": 24 },
+    "restoran": { "pantryMax": 20, "serveEveryGameHours": 1, "serveRelief": 30, "serveMinFatigue": 20, "chefServeFactor": 2 },
     "townhall": [
       { "level": 2, "cost": { "wood": 30, "ore": 5, "coin": 50 }, "secs": 120 },
       { "level": 3, "cost": { "wood": 60, "ore": 20, "coin": 150 }, "secs": 300 },
@@ -155,12 +157,14 @@
       "builder":  { "name": "Tukang",   "rarity": "common", "price": 150, "max": 3, "th": 1, "effect": { "builders": 1 } },
       "petani":   { "name": "Petani",   "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "farmGrowFactor": 1.5 } },
       "nelayan":  { "name": "Nelayan",  "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "fishRate": 1.5 } },
-      "penebang": { "name": "Penebang", "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "woodBonus": 1 } }
+      "penebang": { "name": "Penebang", "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "woodBonus": 1 } },
+      "hunter":   { "name": "Pemburu",  "rarity": "rare",   "price": 400, "max": 1, "th": 3, "effect": { "forage": { "items": ["fish", "wood"], "perGameHour": 1, "capacity": 6, "winterFactor": 2 } } },
+      "chef":     { "name": "Koki",     "rarity": "rare",   "price": 350, "max": 1, "th": 3, "effect": { "chef": true } }
     },
     "buildings": {
       "kolam":   { "name": "Kolam Ikan", "th": 1, "cost": { "wood": 5 },  "secs": 45,  "produces": "fish", "perGameHour": 2, "capacity": 6 },
       "tambang":  { "name": "Tambang",    "th": 2, "cost": { "wood": 20, "coin": 30 }, "secs": 120, "produces": "ore", "perGameHour": 2, "capacity": 8, "needsChunk": true },
-      "restoran": { "name": "Restoran",   "th": 3, "cost": { "wood": 40, "ore": 10, "coin": 60 }, "secs": 240, "produces": "meal", "perGameHour": 1, "capacity": 4 }
+      "restoran": { "name": "Restoran",   "th": 3, "cost": { "wood": 40, "ore": 10, "coin": 60 }, "secs": 240, "cooks": "meal" }
     }
   },
   "monsters": {

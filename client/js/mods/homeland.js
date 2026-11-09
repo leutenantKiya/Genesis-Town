@@ -211,6 +211,8 @@
     return what + ' · sisa ' + clock(left);
   }
 
+  function fatBar(f) { var n = Math.max(0, Math.min(10, Math.round(f / 10))); return '[' + '#'.repeat(n) + '-'.repeat(10 - n) + ']'; }
+
   /* ---- Balai Kota ---- */
   function hallBody() {
     var wrap = $('div', 'gt-isl');
@@ -226,7 +228,25 @@
     bt.appendChild($('div', 'gt-detail-name', 'Pembangun · ' + H.builders.busy + ' dari ' + H.builders.total + ' sibuk'));
     if (H.jobs.length) H.jobs.forEach(function (j) { bt.appendChild($('div', null, jobLine(j))); });
     else bt.appendChild($('div', 'chain-dim', 'Pembangun menganggur. Beri dia pekerjaan.'));
+    (H.workers || []).forEach(function (w) {
+      var line = $('div', 'gt-fat'), sick = w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now();
+      line.appendChild($('span', null, w.name + (sick ? ' · sakit' : w.busy ? ' · bekerja' : ' · menganggur') + ' · lelah '));
+      var bar = $('span', null, fatBar(w.fatigue)); bar.style.fontFamily = 'monospace'; bar.style.color = w.fatigue >= 70 ? '#c83838' : w.fatigue >= 40 ? '#d8a030' : '#4a9a4a';
+      line.appendChild(bar); line.appendChild($('span', 'chain-dim', ' ' + Math.round(w.fatigue) + '%'));
+      bt.appendChild(line);
+    });
+    if (H.workers && H.workers.some(function (w) { return w.fatigue >= 40; })) bt.appendChild($('div', 'chain-dim', 'Tukang yang lelah bekerja lebih lambat. Restoran memberi mereka makan dari lemarinya.'));
     bs.appendChild(bt); wrap.appendChild(bs);
+
+    if (H.forage) {
+      var fb = $('div', 'gt-detail'), ft = $('div', 'grow'), fs = H.forage.stored || {}, tot = 0;
+      var parts = Object.keys(fs).map(function (t) { tot += fs[t]; return fs[t] + ' ' + itemName(t); });
+      ft.appendChild($('div', 'gt-detail-name', 'Pemburu membawa: ' + parts.join(', ') + ' (maks ' + H.forage.capacity + ')'));
+      ft.appendChild($('div', 'chain-dim', 'Mencari ikan dan kayu sendiri. Musim dingin hasilnya dua kali lipat.'));
+      var fa = $('div', 'gt-detail-acts');
+      fa.appendChild(btn('Ambil', function () { run({ action: 'forage' }); }, 'primary', tot <= 0 || !!(win && win.busy)));
+      ft.appendChild(fa); fb.appendChild(ft); wrap.appendChild(fb);
+    }
 
     var busy = busyJob(), why = busy ? 'Pembangun sedang bekerja.' : null;
     var th = H.next && H.next.th;
@@ -263,12 +283,12 @@
     // Pekerja: worker bots
     var pk = $('div', 'gt-detail'), pt = $('div', 'grow');
     pt.appendChild($('div', 'gt-detail-name', 'Pekerja'));
-    pt.appendChild($('div', 'chain-dim', 'Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.'));
+    pt.appendChild($('div', 'chain-dim', 'Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Pemburu mencari ikan dan kayu; Koki mempercepat Restoran memberi makan Tukang; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.'));
     var hireMap = H.hire || {};
     Object.keys(hireMap).forEach(function (job) {
       var d = hireMap[job], row = $('div', 'gt-detail-acts');
       pt.appendChild($('div', null, d.name + ' · ' + d.have + '/' + d.max + ' · ' + d.price + ' ' + itemName('coin') + (d.can || !d.why ? '' : ' · ' + d.why)));
-      row.appendChild(btn('Pekerjakan ' + d.name + ' (' + d.price + ')', function () { run({ action: 'hire', job: job }); }, 'primary', !d.can || !!(win && win.busy)));
+      if (d.rarity === 'rare') { var badge = $('span', 'chain-dim', 'Langka'); badge.style.color = '#e0a020'; badge.style.fontWeight = 'bold'; pt.appendChild(badge); }      row.appendChild(btn('Pekerjakan ' + d.name + ' (' + d.price + ')', function () { run({ action: 'hire', job: job }); }, 'primary', !d.can || !!(win && win.busy)));
       pt.appendChild(row);
     });
     pk.appendChild(pt); wrap.appendChild(pk);
@@ -309,6 +329,7 @@
     if (!owner) { wrap.appendChild($('p', null, b ? 'Bangunan milik pemilik dunia ini.' : 'Lahan kosong milik pemilik dunia ini.')); return wrap; }
     var job = null;
     H.jobs.forEach(function (j) { if (j.kind === 'build' && j.target === lotId) job = j; });
+    if (b && def && def.cooks) { wrap.appendChild(restoranBody(lotId)); return wrap; }
     if (b) {
       var box = $('div', 'gt-detail'), txt = $('div', 'grow'), prod = def && def.produces ? itemName(def.produces) : 'hasil';
       txt.appendChild($('div', 'gt-detail-name', name + ' · menghasilkan ' + prod));
@@ -327,9 +348,31 @@
     if (!why && busyJob()) why = 'Pembangun sedang bekerja.';
     if (!why && short.length) why = 'Kurang ' + short.map(itemName).join(', ') + '.';
     var can = !why && (!sameLot || def.can);
-    wrap.appendChild(stepBlock('Bangun ' + (def.name || name), 'Menghasilkan ' + itemName(def.produces) + ' terus-menerus, simpan sampai ' + def.capacity + '. Perlu Balai Kota level ' + def.th + '.',
+    var blurb = def.cooks ? 'Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level ' + def.th + '.' : 'Menghasilkan ' + itemName(def.produces) + ' terus-menerus, simpan sampai ' + def.capacity + '. Perlu Balai Kota level ' + def.th + '.';
+    wrap.appendChild(stepBlock('Bangun ' + (def.name || name), blurb,
       def, can, why, 'Bangun · ' + secsLine(def.secs), function () { run({ action: 'build', kind: 'build', target: lotId }); }));
     return wrap;
+  }
+  /* ---- Restoran: cook into the pantry, put food in, see the pantry ---- */
+  function restoranBody(lotId) {
+    var box = $('div', 'gt-detail'), txt = $('div', 'grow'), R = H.restoran || { pantry: 0, pantryMax: 0 }, ck = H.cook;
+    txt.appendChild($('div', 'gt-detail-name', 'Restoran · lemari makanan ' + R.pantry + ' dari ' + R.pantryMax));
+    txt.appendChild($('div', 'chain-dim', 'Makanan di lemari diberikan otomatis ke Tukang yang lelah' + (H.bots && H.bots.some(function (b) { return b.job === 'chef'; }) ? ' (Koki: dua kali lebih cepat)' : '') + '. Makanan di Tasmu tidak dipakai kecuali kamu menaruhnya.'));
+    if (ck) txt.appendChild($('div', null, 'Resep: ' + Object.keys(ck.recipe.inputs).map(function (t) { return ck.recipe.inputs[t] + ' ' + itemName(t); }).join(' + ') + ' → 1 ' + itemName(ck.recipe.output) + (ck.can ? '' : ' · ' + ck.why)));
+    var busy = !!(win && win.busy);
+    var cookRow = $('div', 'gt-detail-acts');
+    cookRow.appendChild($('span', 'chain-dim', 'Masak: '));
+    [1, 5, 10].forEach(function (q) { cookRow.appendChild(btn('x' + q, function () { run({ action: 'cook', qty: q }); }, 'primary', busy || !ck || R.pantry + q > R.pantryMax)); });
+    txt.appendChild(cookRow);
+    var putRow = $('div', 'gt-detail-acts');
+    putRow.appendChild($('span', 'chain-dim', 'Taruh makanan dari Tas: '));
+    ['bread', 'meal'].forEach(function (t) {
+      var n = have(t), q = Math.min(n, Math.max(0, R.pantryMax - R.pantry));
+      putRow.appendChild(btn(itemName(t) + ' (' + n + ')', function () { run({ action: 'stock', token: t, qty: q }); }, 'primary', busy || q <= 0));
+    });
+    txt.appendChild(putRow);
+    box.appendChild(txt);
+    return box;
   }
   function collect(lotId) {
     var lot = lotById(lotId), b = builtOf(lotId), n = b ? b.stored : 0;
@@ -381,7 +424,7 @@
     if (f) { var dx = f.fx - x, dy = f.fy - y; dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down'); }
     if (alive) GT.moveNpc(builder, 'out', x, y);
     else builder = GT.addNpc('out', { name: 'Tukang', pal: 3, x: x, y: y, key: 'homeland:builder', dir: dir, lines: [['Pembangunnya lagi semangat!', 'Beri aku pekerjaan lewat Balai Kota.'], ['Palu, paku, dan kayu. Cukup.']] });
-    if (builder) { builder.dir = dir; builder.working = !!f; }
+    if (builder) { builder.dir = dir; builder.working = !!f; var tw = H && H.workers && H.workers[0]; builder.tired = tw ? tw.fatigue / 100 : 0; }
   }
 
   /* ---- worker bots: stand at their workplace with the job name above their head ---- */

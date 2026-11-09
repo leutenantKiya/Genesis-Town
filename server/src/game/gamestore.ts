@@ -11,7 +11,8 @@ export interface MarketRow { merchant: string; token: string; mid: number; bough
 
 export interface HomelandRow { account: string; id: number; seed: number; gen: number; th: number; open: string[]; created_at: number }
 export interface HomelandBuildingRow { account: string; lot: string; kind: string; last_collect: number }
-export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build'; ends_at: number }
+export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build'; ends_at: number; worker: number; base_secs: number; started_at: number }
+export interface WorkerRow { account: string; slot: number; fatigue: number; updated_at: number; sick_until: number }
 
 export class GameStore {
   db: DatabaseSync;
@@ -40,14 +41,19 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS homelands (account TEXT PRIMARY KEY, id INTEGER UNIQUE NOT NULL, seed INTEGER NOT NULL, gen INTEGER NOT NULL,
         th INTEGER NOT NULL, open TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS homeland_buildings (account TEXT NOT NULL, lot TEXT NOT NULL, kind TEXT NOT NULL, last_collect INTEGER NOT NULL, PRIMARY KEY (account, lot));
-      CREATE TABLE IF NOT EXISTS homeland_jobs (account TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL, ends_at INTEGER NOT NULL, PRIMARY KEY (account, target));
+      CREATE TABLE IF NOT EXISTS homeland_jobs (account TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL, ends_at INTEGER NOT NULL, worker INTEGER NOT NULL DEFAULT 0, base_secs INTEGER NOT NULL DEFAULT 0, started_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, target));
       CREATE TABLE IF NOT EXISTS homeland_bots (account TEXT NOT NULL, id INTEGER NOT NULL, job TEXT NOT NULL, hired_at INTEGER NOT NULL, PRIMARY KEY (account, id));
+      CREATE TABLE IF NOT EXISTS homeland_workers (account TEXT NOT NULL, slot INTEGER NOT NULL, fatigue REAL NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, sick_until INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, slot));
+      CREATE TABLE IF NOT EXISTS homeland_pantry (account TEXT PRIMARY KEY, pantry INTEGER NOT NULL DEFAULT 0, tick_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS homeland_forage (account TEXT PRIMARY KEY, last INTEGER NOT NULL, carry REAL NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS trade_offers (id INTEGER PRIMARY KEY AUTOINCREMENT, from_acct TEXT NOT NULL, to_acct TEXT NOT NULL,
         give TEXT NOT NULL, want TEXT NOT NULL, expires_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS consign_lots (account TEXT NOT NULL, token TEXT NOT NULL, qty INTEGER NOT NULL, min_price INTEGER NOT NULL,
         sold INTEGER NOT NULL DEFAULT 0, earned INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, token));
       CREATE TABLE IF NOT EXISTS homeland_invites (id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));
     `);
+    const jc = (this.db.prepare('PRAGMA table_info(homeland_jobs)').all() as Array<{ name: string }>).map((c) => c.name);
+    for (const c of ['worker', 'base_secs', 'started_at']) if (!jc.includes(c)) this.db.exec(`ALTER TABLE homeland_jobs ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
   }
 
   /** Runs `fn` in one sqlite transaction (joins an outer one); any throw undoes every row. */
@@ -260,11 +266,23 @@ export class GameStore {
   setHomelandCollect(account: string, lot: string, lastCollect: number) {
     this.db.prepare('UPDATE homeland_buildings SET last_collect = ? WHERE account = ? AND lot = ?').run(lastCollect, account, lot);
   }
+  workerRows(account: string): WorkerRow[] {
+    return this.db.prepare('SELECT * FROM homeland_workers WHERE account = ? ORDER BY slot').all(account) as unknown as WorkerRow[];
+  }
+  saveWorker(w: WorkerRow) {
+    this.db.prepare('INSERT INTO homeland_workers (account, slot, fatigue, updated_at, sick_until) VALUES (?, ?, ?, ?, ?) ON CONFLICT(account, slot) DO UPDATE SET fatigue = excluded.fatigue, updated_at = excluded.updated_at, sick_until = excluded.sick_until').run(w.account, w.slot, w.fatigue, w.updated_at, w.sick_until);
+  }
+  pantryOf(account: string): { pantry: number; tick_at: number } | undefined {
+    return this.db.prepare('SELECT pantry, tick_at FROM homeland_pantry WHERE account = ?').get(account) as { pantry: number; tick_at: number } | undefined;
+  }
+  savePantry(account: string, pantry: number, tickAt: number) {
+    this.db.prepare('INSERT INTO homeland_pantry (account, pantry, tick_at) VALUES (?, ?, ?) ON CONFLICT(account) DO UPDATE SET pantry = excluded.pantry, tick_at = excluded.tick_at').run(account, pantry, tickAt);
+  }
   homelandJobs(account: string): HomelandJobRow[] {
     return this.db.prepare('SELECT * FROM homeland_jobs WHERE account = ? ORDER BY ends_at, target').all(account) as unknown as HomelandJobRow[];
   }
-  addHomelandJob(account: string, target: string, kind: string, endsAt: number) {
-    this.db.prepare('INSERT INTO homeland_jobs (account, target, kind, ends_at) VALUES (?, ?, ?, ?)').run(account, target, kind, endsAt);
+  addHomelandJob(account: string, target: string, kind: string, endsAt: number, worker = 0, baseSecs = 0, startedAt = 0) {
+    this.db.prepare('INSERT INTO homeland_jobs (account, target, kind, ends_at, worker, base_secs, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(account, target, kind, endsAt, worker, baseSecs, startedAt);
   }
   /** True when this call removed the job (so exactly one caller applies its result). */
   deleteHomelandJob(account: string, target: string): boolean {
@@ -277,6 +295,12 @@ export class GameStore {
     const id = ((this.db.prepare('SELECT COALESCE(MAX(id), 0) AS m FROM homeland_bots WHERE account = ?').get(account) as { m: number }).m) + 1;
     this.db.prepare('INSERT INTO homeland_bots (account, id, job, hired_at) VALUES (?, ?, ?, ?)').run(account, id, job, hiredAt);
     return id;
+  }
+  forageOf(account: string): { last: number; carry: number } | undefined {
+    return this.db.prepare('SELECT last, carry FROM homeland_forage WHERE account = ?').get(account) as { last: number; carry: number } | undefined;
+  }
+  setForage(account: string, last: number, carry: number) {
+    this.db.prepare('INSERT INTO homeland_forage (account, last, carry) VALUES (?, ?, ?) ON CONFLICT(account) DO UPDATE SET last = excluded.last, carry = excluded.carry').run(account, last, carry);
   }
   homelandInvites(id: number): string[] {
     return (this.db.prepare('SELECT account FROM homeland_invites WHERE id = ? ORDER BY account').all(id) as unknown as Array<{ account: string }>).map((r) => r.account);

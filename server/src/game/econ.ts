@@ -17,11 +17,14 @@ export interface SeasonDef { yield: Record<string, number>; demand: Record<strin
 export type Cost = Record<string, number>;
 export interface TownhallStep { level: number; cost: Cost; secs: number }
 export interface ChunkStep { n: number; th: number; cost: Cost; secs: number }
-export interface BuildingDef { name: string; th: number; cost: Cost; secs: number; produces: string; perGameHour: number; capacity: number; needsChunk?: boolean }
-export interface BotDef { name: string; rarity: string; price: number; max: number; th?: number; effect: { builders?: number; farmGrowFactor?: number; fishRate?: number; woodBonus?: number } }
+export interface BuildingDef { name: string; th: number; cost: Cost; secs: number; produces?: string; perGameHour?: number; capacity?: number; cooks?: string; needsChunk?: boolean }
+export interface ForageDef { items: string[]; perGameHour: number; capacity: number; winterFactor: number }
+export interface BotDef { name: string; rarity: string; price: number; max: number; th?: number; effect: { builders?: number; farmGrowFactor?: number; fishRate?: number; woodBonus?: number; chef?: boolean; forage?: ForageDef } }
 export interface HomelandConfig {
   builders: number;
   bots: Record<string, BotDef>;
+  fatigue: { perJobMinute: number; idleRecoverPerGameHour: number; collapseAt: number; slowdownAt100: number; sickGameHours: number };
+  restoran: { pantryMax: number; serveEveryGameHours: number; serveRelief: number; serveMinFatigue: number; chefServeFactor: number };
   publicTradeOnly: boolean;
   townhall: TownhallStep[];
   chunks: ChunkStep[];

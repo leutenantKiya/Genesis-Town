@@ -49,7 +49,7 @@
 - Koki (rare, max 1, TH3, price 350): only the serving speed factor.
 - `view()` adds `workers: [{slot, name, fatigue, busy, sick_until}]`, `restoran: { pantry, pantryMax, nextServeAt } | null`, `forage`.
 - Client: Balai Kota shows each contractor with a fatigue bar; Restoran lot menu "Masak" (qty) and "Taruh makanan" (from Tas) and the pantry count; a tired contractor sprite slows its hammer; "Langka" badge on rare bots.
-- [ ] Tests: `fresh tukang builds kolam in 45 s`; `fatigue grows per job and slows the next job`; `idle contractors recover over game hours`; `restoran serves the most tired contractor from its pantry`; `koki doubles serving speed`; `empty pantry serves nothing`; `cook fills the pantry not the bag, 409 without ingredients`; `pemburu forages and doubles in winter`; `restart mid-job finishes once`.
+- [x] Tests: `fresh tukang builds kolam in 45 s`; `fatigue grows per job and slows the next job`; `idle contractors recover over game hours`; `restoran serves the most tired contractor from its pantry`; `koki doubles serving speed`; `empty pantry serves nothing`; `cook fills the pantry not the bag, 409 without ingredients`; `pemburu forages and doubles in winter`; `restart mid-job finishes once`.
 
 ### Task C2: Rumah Pekerja with furniture, motivation, Rumah Sakit
 
