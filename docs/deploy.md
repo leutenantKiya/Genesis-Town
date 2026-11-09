@@ -44,7 +44,7 @@ private keys are typed by you into the host, never committed and never put in a 
 | `DIALOGUE_MODEL` | empty (default `claude-sonnet-5-5`, low effort) |
 | `NEARAI_API_KEY` | optional (**secret**); NEAR AI Cloud as the alternative provider |
 | `DEV_TOOLS` | **empty** |
-| `TRUST_PROXY` | `1` (the Dockerfile sets it) |
+| `TRUST_PROXY` | `1` when the host puts a proxy in front (Railway, Render, Fly, nginx); **empty** when the container is reached directly (`docker run -p` on a VPS), or a client could fake `X-Forwarded-For` and dodge the per-address limits |
 | `PORT` | usually set by the host; the Dockerfile defaults to 3000 |
 | `DB_PATH` | `/data/genesis-town.db` (the Dockerfile sets it) |
 

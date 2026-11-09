@@ -18,8 +18,9 @@ RUN npm run build:client && rm -rf client/build/node_modules \
 
 ENV NODE_ENV=production \
     PORT=3000 \
-    DB_PATH=/data/genesis-town.db \
-    TRUST_PROXY=1
+    DB_PATH=/data/genesis-town.db
+# TRUST_PROXY=1 is set on the host, only when a proxy sits in front: without one a client could fake X-Forwarded-For
+# and dodge the per-address limits (docs/deploy.md).
 VOLUME ["/data"]
 EXPOSE 3000
 USER node

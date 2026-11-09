@@ -1,5 +1,6 @@
 /*
- * charscreen.js - the character screen shown after every login (and on page load when already signed in):
+ * charscreen.js - the character screen shown after every login (and on the first page load of a tab when already
+ * signed in; after "Mulai" a reload in the same tab skips it and enters the Homeland directly):
  * a big preview of your character, your name with its fixed #tag above it, 8 look swatches and a big "Mulai" button.
  * "Mulai" saves name + look (POST /api/name {name?, look?} -> {name, tag, look, named}), plays a ~1.6 s animation
  * (the character is thrown up from the bottom of the screen, spins, falls with a dust puff; reduced motion = a fade)
@@ -132,7 +133,14 @@
     setTimeout(function () { try { input.focus(); } catch (e) { /* detached */ } }, 0);
   }
 
+  /* Once "Mulai" went through in this tab, a reload skips the screen and goes straight home (sessionStorage: a new tab
+   * or a new login shows it again). Wrapped in try/catch: private windows can refuse storage. */
+  var DONE_KEY = 'gt-cs-done:';
+  function doneFor(acct) { try { return sessionStorage.getItem(DONE_KEY + acct) === '1'; } catch (e) { return false; } }
+  function markDone(acct, on) { try { if (on) sessionStorage.setItem(DONE_KEY + acct, '1'); else sessionStorage.removeItem(DONE_KEY + acct); } catch (e) { /* no storage */ } }
+
   function finish() {
+    var c = C(); if (c && c.state.account) markDone(c.state.account, true);
     close();
     try { if (window.GT_HOME && window.GT_HOME.enter) window.GT_HOME.enter(); } catch (e) { console.error(e); }
   }
@@ -188,11 +196,18 @@
   }
   function onFrame() {
     wrapCharDraw();
-    // once per login / page load: show the screen as soon as the game knows the account
+    // once per login: show the screen as soon as the game knows the account (a reload in the same tab goes straight home)
     if (!root && active()) {
       var acct = C().state.account;
-      if (shownFor !== acct) { shownFor = acct; open(); }
-    } else if (!active() && shownFor) { shownFor = null; if (root) close(); } // signed out: next login shows it again
+      if (shownFor !== acct) {
+        shownFor = acct;
+        if (doneFor(acct)) { try { if (window.GT_HOME && window.GT_HOME.enter) window.GT_HOME.enter(); } catch (e) { console.error(e); } }
+        else open();
+      }
+    } else if (!active() && shownFor) { // signed out: next login shows it again
+      var c = C(); if (c && !c.state.account) markDone(shownFor, false);
+      shownFor = null; if (root) close();
+    }
   }
   function onKey() { return !!root; }
 
