@@ -45,6 +45,7 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS homeland_bots (account TEXT NOT NULL, id INTEGER NOT NULL, job TEXT NOT NULL, hired_at INTEGER NOT NULL, PRIMARY KEY (account, id));
       CREATE TABLE IF NOT EXISTS homeland_workers (account TEXT NOT NULL, slot INTEGER NOT NULL, fatigue REAL NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, sick_until INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, slot));
       CREATE TABLE IF NOT EXISTS homeland_furniture (account TEXT NOT NULL, key TEXT NOT NULL, level INTEGER NOT NULL, PRIMARY KEY (account, key));
+      CREATE TABLE IF NOT EXISTS homeland_cosmetics (account TEXT NOT NULL, slot INTEGER NOT NULL, cosmetic TEXT NOT NULL, PRIMARY KEY (account, slot));
       CREATE TABLE IF NOT EXISTS homeland_pantry (account TEXT PRIMARY KEY, pantry INTEGER NOT NULL DEFAULT 0, tick_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS homeland_forage (account TEXT PRIMARY KEY, last INTEGER NOT NULL, carry REAL NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS trade_offers (id INTEGER PRIMARY KEY AUTOINCREMENT, from_acct TEXT NOT NULL, to_acct TEXT NOT NULL,
@@ -304,6 +305,14 @@ export class GameStore {
   }
   setFurnitureLevel(account: string, key: string, level: number) {
     this.db.prepare('INSERT INTO homeland_furniture (account, key, level) VALUES (?, ?, ?) ON CONFLICT(account, key) DO UPDATE SET level = excluded.level').run(account, key, level);
+  }
+  cosmeticsOf(account: string): Record<number, string> {
+    const r: Record<number, string> = {};
+    for (const x of this.db.prepare('SELECT slot, cosmetic FROM homeland_cosmetics WHERE account = ?').all(account) as unknown as Array<{ slot: number; cosmetic: string }>) r[x.slot] = x.cosmetic;
+    return r;
+  }
+  setCosmetic(account: string, slot: number, cosmetic: string) {
+    this.db.prepare('INSERT INTO homeland_cosmetics (account, slot, cosmetic) VALUES (?, ?, ?) ON CONFLICT(account, slot) DO UPDATE SET cosmetic = excluded.cosmetic').run(account, slot, cosmetic);
   }
   forageOf(account: string): { last: number; carry: number } | undefined {
     return this.db.prepare('SELECT last, carry FROM homeland_forage WHERE account = ?').get(account) as { last: number; carry: number } | undefined;

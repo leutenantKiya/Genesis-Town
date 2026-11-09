@@ -286,6 +286,22 @@
     pt.appendChild($('div', 'chain-dim', 'Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Pemburu mencari ikan dan kayu; Koki mempercepat Restoran memberi makan Tukang; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.'));
     var bd = H.beds || { total: 0, used: 0 };
     pt.appendChild($('div', bd.used >= bd.total ? 'gt-detail-name' : 'chain-dim', 'Kasur terpakai ' + bd.used + ' dari ' + bd.total + (bd.used >= bd.total ? '. Bangun Rumah Pekerja atau tambah kasur.' : '.')));
+    // cosmetics: a hat for the Tukang or a bot; better output, or less fatigue for a Tukang
+    var cat = H.cosmetics || {}, crew = [{ id: 0, name: 'Tukang Balai Kota', cosmetic: (H.workers && H.workers[0] && H.workers[0].cosmetic) || null }];
+    (H.bots || []).forEach(function (b) { crew.push({ id: b.id, name: b.name + ' ' + b.id, cosmetic: b.cosmetic || null }); });
+    if (Object.keys(cat).length) {
+      pt.appendChild($('div', 'gt-detail-name', 'Perlengkapan'));
+      pt.appendChild($('div', 'chain-dim', 'Topi dan syal: Tukang jadi kurang lelah, pekerja lain lebih rajin. Pakai yang baru menggantikan yang lama, tanpa uang kembali.'));
+      crew.forEach(function (c) {
+        var cr = $('div', 'gt-detail-acts');
+        cr.appendChild($('span', null, c.name + ' · ' + (c.cosmetic && cat[c.cosmetic] ? cat[c.cosmetic].name : 'polos') + ' '));
+        Object.keys(cat).forEach(function (k) {
+          var d = cat[k];
+          cr.appendChild(btn(d.name + ' (' + d.price + ', +' + Math.round(d.boost * 100) + '%)', function () { run({ action: 'dress', bot: c.id, cosmetic: k }); }, 'primary', c.cosmetic === k || have('coin') < d.price || !!(win && win.busy)));
+        });
+        pt.appendChild(cr);
+      });
+    }
     var hireMap = H.hire || {};
     Object.keys(hireMap).forEach(function (job) {
       var d = hireMap[job], row = $('div', 'gt-detail-acts');
@@ -470,6 +486,17 @@
     if (builder) { builder.dir = dir; builder.working = !!f; var tw = H && H.workers && H.workers[0]; builder.tired = tw ? tw.fatigue / 100 : 0; }
   }
 
+  /* ---- cosmetics drawn on the Tukang and the bots, in the cosmetic's colour ---- */
+  function drawHat(ctx, n, name, camX, camY, T) {
+    var d = name && H.cosmetics && H.cosmetics[name]; if (!d || !n) return;
+    var sx = Math.round(n.x * T - camX), sy = Math.round(n.y * T - camY);
+    ctx.fillStyle = '#2a2430';
+    if (name === 'syal') { ctx.fillRect(sx + 3, sy + 7, 10, 3); ctx.fillStyle = d.color; ctx.fillRect(sx + 4, sy + 8, 8, 1); ctx.fillRect(sx + 9, sy + 8, 2, 4); return; }
+    if (name === 'mahkota') { ctx.fillRect(sx + 4, sy - 1, 8, 4); ctx.fillStyle = d.color; ctx.fillRect(sx + 5, sy + 1, 6, 2); ctx.fillRect(sx + 5, sy - 1, 1, 2); ctx.fillRect(sx + 7, sy - 2, 2, 3); ctx.fillRect(sx + 10, sy - 1, 1, 2); return; }
+    ctx.fillRect(sx + 1, sy + 1, 14, 3); ctx.fillRect(sx + 4, sy - 1, 8, 3); // caping: wide round hat
+    ctx.fillStyle = d.color; ctx.fillRect(sx + 2, sy + 2, 12, 1); ctx.fillRect(sx + 5, sy, 6, 2);
+  }
+
   /* ---- worker bots: stand at their workplace with the job name above their head ---- */
   function walkableAt(x, y) {
     var m = GT.world; if (!m || x < 1 || y < 1 || x >= m.w - 1 || y >= m.h - 1) return false;
@@ -602,6 +629,9 @@
         ctx.fillStyle = b.stored >= b.capacity ? '#ffcf5a' : '#f6ead0'; ctx.fillRect(Math.round(x - w / 2), Math.round(y - 4), Math.round(w), 9);
         ctx.fillStyle = '#2a2430'; ctx.fillText(txt, Math.round(x), Math.round(y + 0.5));
       });
+      // hats
+      if (builder) drawHat(ctx, builder, H.workers && H.workers[0] && H.workers[0].cosmetic, camX, camY, T);
+      botNpcs.forEach(function (q) { (H.bots || []).forEach(function (b) { if (q.key === 'homeland:bot:' + b.id) drawHat(ctx, q.npc, b.cosmetic, camX, camY, T); }); });
       // a collapsed contractor lies down under a blanket with a red cross over the head
       (H.workers || []).forEach(function (wk) {
         if (!(wk.sick_until && endMs({ ends_at: wk.sick_until }) > now)) return;

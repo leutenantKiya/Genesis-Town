@@ -20,7 +20,7 @@ import { leaderboard } from './leaderboard.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress'] as const;
 
 export class Game {
   econ: Econ;
@@ -223,7 +223,7 @@ export class Game {
     if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'Area publik hanya untuk berdagang.');
     if (w.row && a === 'ship') throw new HttpError(409, 'Kotak Kirim hanya ada di area publik.');
     if (w.row && a === 'engage') throw new HttpError(409, 'Tidak ada monster di Homeland.');
-    if ((a === 'build' || a === 'collect' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock') && !w.row) throw new HttpError(409, 'Bangun dan panen di Homeland-mu sendiri.');
+    if ((a === 'build' || a === 'collect' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Bangun dan panen di Homeland-mu sendiri.');
     let pos: Pos | null = null;
     if (this.map && this.positions && w.map) {
       pos = this.positions.report(account, body.pos, this.now(), wid, w.map, this.homeFor(account, wid));
@@ -241,7 +241,7 @@ export class Game {
         if (!lot) far('Bangun Restoran dulu.');
         else if (!(w.map instanceof HomelandMap) || !w.map.nearLot(pos, lot)) far('Berdiri di dekat pintu Restoran.');
       }
-      if ((a === 'hire' || a === 'forage') && !w.map.atOwnHouse(pos)) far('Berdiri di depan Balai Kota.');
+      if ((a === 'hire' || a === 'forage' || a === 'dress') && !w.map.atOwnHouse(pos)) far('Berdiri di depan Balai Kota.');
       if (a === 'collect' && w.map instanceof HomelandMap && !w.map.nearLot(pos, s('lot'))) far('Berdiri di dekat bangunannya.');
     }
     let res: { toast: string; tags?: string[]; world?: string; arrive?: Pos; gained?: Record<string, number> };
@@ -265,6 +265,7 @@ export class Game {
       case 'farm': res = this.world.farm(account, s('op'), n('plot', -1), w.row ? { plotAccount: `${account}@${wid}`, count: this.farmCount(w.row), growDays: Math.max(1, Math.ceil(this.econ.farm.growDays / this.homelands.effects(account).farmGrowFactor - 1e-9)), yieldBonus: 0 } : undefined); break;
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
       case 'build': res = this.homelands.start(account, s('kind') as 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay); break;
+      case 'dress': res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay); break;
       case 'hire': res = this.homelands.hire(account, s('job'), this.clock.time().settleDay); break;
       case 'forage': res = this.homelands.forage(account, this.clock.time().settleDay, (acc, t, q) => this.world.checkGain(acc, t, q)); break;
       case 'cook': res = this.homelands.cook(account, body.qty, this.clock.time().settleDay); break;

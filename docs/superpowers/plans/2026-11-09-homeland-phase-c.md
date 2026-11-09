@@ -77,7 +77,7 @@
 
 **Files:** `economy/config.json` (`homeland.cosmetics`: caping 80 coin boost 0.2, syal 150 boost 0.35, mahkota 300 boost 0.5, each with a `color`), `server/src/game/gamestore.ts` (bot column `cosmetic`, guarded `ALTER TABLE`), `homeland.ts`, `game.ts` (act `dress {bot, cosmetic}` at the Balai Kota; slot 0 Tukang can be dressed too), `client/js/mods/homeland.js` (shop in "Pekerja", hats drawn); tests `server/test/homeland-cosmetics.test.ts`.
 - Effect with boost `b`: a contractor's fatigue gain x `(1 - b)`; producer bots' effect excess x `(1 + b)`; Pemburu rate x `(1 + b)`; Koki serve factor x `(1 + b)`.
-- [ ] Tests: `dress charges coin to the town`; `dressing another player's bot 409, no coin`; `unknown or prototype cosmetic 400`; `dressed tukang tires slower`; `dressed nelayan raises fish rate`.
+- [x] Tests: `dress charges coin to the town`; `dressing another player's bot 409, no coin`; `unknown or prototype cosmetic 400`; `dressed tukang tires slower`; `dressed nelayan raises fish rate`.
 
 ### Task C4: Docs, smoke, push
 

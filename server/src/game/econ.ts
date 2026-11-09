@@ -25,6 +25,7 @@ export interface HomelandConfig {
   builders: number;
   bots: Record<string, BotDef>;
   fatigue: { perJobMinute: number; idleRecoverPerGameHour: number; collapseAt: number; slowdownAt100: number; sickGameHoursWithoutHospital: number };
+  cosmetics: Record<string, { name: string; price: number; boost: number; color: string }>;
   motivation: { tukang: number; base: number; perHiburan: number; factorBase: number; factorSpan: number };
   restoran: { pantryMax: number; serveEveryGameHours: number; serveRelief: number; serveMinFatigue: number; chefServeFactor: number };
   publicTradeOnly: boolean;

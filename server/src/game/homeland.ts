@@ -24,8 +24,9 @@ export interface HomelandView {
   builders: { total: number; busy: number };
   next: { th: TownhallStep | null; chunk: ChunkStep | null; buildings: Record<string, BuildingOption> };
   guests: Array<{ account: string; name: string; tag: string }>;
-  bots: Array<{ id: number; job: string; name: string; house: string | null }>;
-  workers: Array<{ slot: number; name: string; fatigue: number; busy: boolean; sick_until: number; motivation: number }>;
+  bots: Array<{ id: number; job: string; name: string; house: string | null; cosmetic: string | null }>;
+  workers: Array<{ slot: number; name: string; fatigue: number; busy: boolean; sick_until: number; motivation: number; cosmetic: string | null }>;
+  cosmetics: Record<string, { name: string; price: number; boost: number; color: string }>;
   houses: Array<{ lot: string; beds: number; used: number; kasur: number; kasurMax: number; hiburan: number; hiburanMax: number; hiburanName: string | null; motivation: number; nextKasur: { cost: Cost; secs: number } | null; nextHiburan: { cost: Cost; secs: number; name: string | null } | null }>;
   beds: { total: number; used: number };
   hospital: { lot: string; level: number; maxLevel: number; healGameHours: number; next: { cost: Cost; secs: number } | null } | null;
@@ -34,7 +35,7 @@ export interface HomelandView {
   cook: { recipe: { inputs: Record<string, number>; output: string }; can: boolean; why: string | null } | null;
   hire: Record<string, { name: string; price: number; rarity: string; max: number; have: number; th: number; can: boolean; why: string | null }>;
 }
-export interface BotEffects { builders: number; farmGrowFactor: number; fishRate: number; woodBonus: number; chef: boolean; forage: ForageDef | null }
+export interface BotEffects { builders: number; farmGrowFactor: number; fishRate: number; woodBonus: number; chef: boolean; chefBoost: number; forage: ForageDef | null }
 export type { HomelandRow };
 
 export const homeWorld = (id: number): string => `HL-${id}`;
@@ -82,8 +83,7 @@ export class Homelands {
     const gs = this.d.gs, fc = this.cfg.fatigue, rc = this.cfg.restoran;
     const now = this.now(), hourMs = this.msPerHour();
     if (!gs.homelandOf(account)) return;
-    const chef = this.effects(account).chef;
-    const interval = rc.serveEveryGameHours / (chef ? rc.chefServeFactor : 1); // game hours between servings
+    const interval = this.serveInterval(account); // game hours between servings
     const stepMs = Math.max(1, Math.round(hourMs * Math.min(1, interval)));
     let st = gs.pantryOf(account);
     if (!st) { gs.savePantry(account, 0, now); st = { pantry: 0, tick_at: now }; }
@@ -105,7 +105,7 @@ export class Homelands {
         else gs.addHomelandBuilding(account, j.target, j.target.split('-')[0], j.ends_at);
         const w = workers.get(j.worker);
         if (w) {
-          w.fatigue = Math.min(100, w.fatigue + fc.perJobMinute * (j.base_secs / 60));
+          w.fatigue = Math.min(100, w.fatigue + fc.perJobMinute * (j.base_secs / 60) * (1 - this.boostOf(account, w.slot)));
           if (w.fatigue >= fc.collapseAt && !w.sick_until) w.sick_until = j.ends_at + this.sickHours(account) * hourMs;
           dirty.add(w.slot);
         }
@@ -136,6 +136,38 @@ export class Homelands {
   private workerOf(account: string, slot: number): WorkerRow {
     return this.d.gs.workerRows(account).find((w) => w.slot === slot) ?? { account, slot, fatigue: 0, updated_at: this.now(), sick_until: 0 };
   }
+  /* ------------------------------------------------------------ cosmetics */
+
+  private cosmeticDef(name: string | undefined) {
+    const all = this.cfg.cosmetics ?? {};
+    return name && Object.hasOwn(all, name) ? all[name] : undefined;
+  }
+  /** Boost of the cosmetic a slot (0 = the default Tukang) or bot id wears; 0 when bare. */
+  private boostOf(account: string, slot: number): number { return this.cosmeticDef(this.d.gs.cosmeticsOf(account)[slot])?.boost ?? 0; }
+  /** Game hours between Restoran servings: a Koki halves it, a dressed Koki a little more. */
+  private serveInterval(account: string): number {
+    const rc = this.cfg.restoran, e = this.effects(account);
+    return rc.serveEveryGameHours / (e.chef ? rc.chefServeFactor * (1 + e.chefBoost) : 1);
+  }
+
+  /** Dresses the Tukang (bot 0) or one of the owner's bots; the coin goes to the town and a new hat replaces the old without refund. */
+  dress(account: string, bot: unknown, cosmetic: unknown, day: number): { toast: string; tags: string[] } {
+    this.settle(account);
+    const def = typeof cosmetic === 'string' ? this.cosmeticDef(cosmetic) : undefined;
+    if (!def) throw new HttpError(400, 'Perlengkapan tidak dikenal.');
+    const id = Number(bot);
+    if (bot === null || bot === '' || typeof bot === 'boolean' || !Number.isInteger(id) || id < 0) throw new HttpError(400, 'Pekerja tidak dikenal.');
+    const gs = this.d.gs;
+    if (id !== 0 && !gs.homelandBots(account).some((b) => b.id === id)) throw new HttpError(409, 'Pekerja itu bukan milikmu.');
+    const coin = gs.balance(account, 'coin');
+    if (coin < def.price) throw new HttpError(409, `Koin kurang (punya ${coin}, perlu ${def.price}).`);
+    const ref = `${homeWorld(this.ensure(account).id)}:dress:${id}`;
+    gs.add(day, account, 'coin', -def.price, 'cosmetic', ref);
+    gs.add(day, this.d.town, 'coin', def.price, 'cosmetic', ref);
+    gs.setCosmetic(account, id, cosmetic as string);
+    return { toast: `${def.name} dipasang (-${def.price} koin).`, tags: ['coin'] };
+  }
+
   /* ------------------------------------------------------------ houses, motivation, hospital */
 
   /** Built houses (buildings whose config has furniture) with their lot ids, in lot order. */
@@ -323,22 +355,22 @@ export class Homelands {
     return Object.hasOwn(all, job) ? all[job] : undefined;
   }
 
-  bots(account: string): Array<{ id: number; job: string; name: string; house: string | null }> {
-    return this.d.gs.homelandBots(account).filter((b) => this.botDef(b.job)).map((b) => ({ id: b.id, job: b.job, name: this.botDef(b.job)!.name, house: b.house || null }));
+  bots(account: string): Array<{ id: number; job: string; name: string; house: string | null; cosmetic: string | null }> {
+    return this.d.gs.homelandBots(account).filter((b) => this.botDef(b.job)).map((b) => ({ id: b.id, job: b.job, name: this.botDef(b.job)!.name, house: b.house || null, cosmetic: this.d.gs.cosmeticsOf(account)[b.id] ?? null }));
   }
 
   /** What the owner's bots add up to. Factors multiply per bot, bonuses add. */
   effects(account: string): BotEffects {
-    const e: BotEffects = { builders: 0, farmGrowFactor: 1, fishRate: 1, woodBonus: 0, chef: false, forage: null };
+    const e: BotEffects = { builders: 0, farmGrowFactor: 1, fishRate: 1, woodBonus: 0, chef: false, chefBoost: 0, forage: null };
     for (const b of this.d.gs.homelandBots(account)) {
       const x = this.botDef(b.job)?.effect;
       if (!x) continue;
-      const mf = this.motivationFactor(account, b.id); // motivated bots work harder, bored ones slower
+      const cb = this.boostOf(account, b.id), mf = this.motivationFactor(account, b.id) * (1 + cb); // a hat adds to the excess like motivation does // motivated bots work harder, bored ones slower
       e.builders += x.builders ?? 0;
       e.woodBonus += x.woodBonus ?? 0;
       if (x.farmGrowFactor) e.farmGrowFactor *= 1 + (x.farmGrowFactor - 1) * mf;
       if (x.fishRate) e.fishRate *= 1 + (x.fishRate - 1) * mf;
-      if (x.chef) e.chef = true;
+      if (x.chef) { e.chef = true; e.chefBoost = cb; }
       if (x.forage) e.forage = { ...x.forage, perGameHour: x.forage.perGameHour * mf };
     }
     return e;
@@ -527,12 +559,13 @@ export class Homelands {
       bots: this.bots(account),
       workers: this.contractorSlots(account).map((slot) => {
         const w = this.workerOf(account, slot), busy = jobs.some((j) => j.worker === slot);
-        return { slot, name: slot === 0 ? 'Tukang Balai Kota' : `Tukang ${slot}`, fatigue: Math.round(w.fatigue * 10) / 10, busy, sick_until: w.sick_until, motivation: this.motivationOf(account, slot) };
+        return { slot, name: slot === 0 ? 'Tukang Balai Kota' : `Tukang ${slot}`, fatigue: Math.round(w.fatigue * 10) / 10, busy, sick_until: w.sick_until, motivation: this.motivationOf(account, slot), cosmetic: this.d.gs.cosmeticsOf(account)[slot] ?? null };
       }),
+      cosmetics: this.cfg.cosmetics ?? {},
       houses: this.houseLots(account).map((lot) => this.houseView(account, lot)),
       beds: this.bedInfo(account),
       hospital: (() => { const h = this.hospital(account); if (!h) return null; const st = h.def.upgrade?.[h.level - 1]; return { lot: h.lot, level: h.level, maxLevel: h.def.maxLevel ?? 1, healGameHours: h.def.healGameHours![h.level - 1], next: h.level < (h.def.maxLevel ?? 1) && st ? { cost: st.cost, secs: st.secs } : null }; })(),
-      restoran: this.restoranLot(account) ? { pantry: this.pantryOf(account), pantryMax: this.cfg.restoran.pantryMax, nextServeAt: (gs.pantryOf(account)?.tick_at ?? this.now()) + Math.round(this.msPerHour() * Math.min(1, this.cfg.restoran.serveEveryGameHours / (this.effects(account).chef ? this.cfg.restoran.chefServeFactor : 1))) } : null,
+      restoran: this.restoranLot(account) ? { pantry: this.pantryOf(account), pantryMax: this.cfg.restoran.pantryMax, nextServeAt: (gs.pantryOf(account)?.tick_at ?? this.now()) + Math.round(this.msPerHour() * Math.min(1, this.serveInterval(account))) } : null,
       forage: (() => { const f = this.forageStored(account); return f ? { stored: f.stored, capacity: f.capacity } : null; })(),
       cook: (() => { const r = this.cookRecipe(account); if (!r) return null; const why = this.cookWhy(account, r, 1); return { recipe: r, can: why === null, why }; })(),
       hire: Object.fromEntries(Object.entries(this.cfg.bots ?? {}).map(([job, d]) => {
