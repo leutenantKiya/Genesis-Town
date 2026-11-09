@@ -16,6 +16,10 @@ export function spendGuard(chain: Chain, game: Game) {
       need.set(t, (need.get(t) ?? 0) + v);
     };
     const extra: string[] = [];
+    if (method === 'project_contribute') {
+      const r = game.econ.projects.find((p) => p.id === args.id)?.retired;
+      if (r) throw new HttpError(409, `Proyek ini dihentikan. ${r} Sumbangan yang sudah masuk bisa ditarik.`);
+    }
     if (method === 'send_item' || method === 'list_item') add(args.token_id, args.amount);
     else if (method === 'restore_contribute' || method === 'project_contribute') for (const l of (args.contribution as Array<{ token_id: string; amount: string }>) ?? []) add(l.token_id, l.amount);
     else if (method === 'buy_listing') {

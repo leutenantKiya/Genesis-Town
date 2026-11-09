@@ -128,7 +128,7 @@
   },
   "projects": [
     { "id": "jembatan-timur", "name": "Jembatan ke Dusun Seberang", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } },
-    { "id": "pos-ronda", "name": "Pos Ronda di Hutan Utara", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 } }
+    { "id": "pos-ronda", "name": "Pos Ronda di Hutan Utara", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 }, "retired": "Monster sekarang ada di Homeland masing-masing, jadi hutan desa tidak perlu dijaga lagi." }
   ],
   "trade": { "expireSecs": 120, "maxLines": 4 },
   "consign": { "merchant": "Mbok Darmi", "feeBps": 500, "maxPerItem": 50, "sellPerGameHour": 3 },
@@ -188,6 +188,7 @@
       "bat": { "name": "Kelelawar tambang", "hp": 2, "hit": 3, "drop": "ore" }
     },
     "roaming": { "boar": 5, "bat": 3 },
+    "homeland": { "roaming": { "boar": 3, "bat": 2 } },
     "reach": 2,
     "fightEnergy": 5,
     "fleeEnergy": 4,

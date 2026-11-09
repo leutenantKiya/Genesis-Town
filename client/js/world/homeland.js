@@ -261,5 +261,52 @@
   /** The chunk covering tile (x, y). Same call shape as GTVillage.chunkOf. */
   function chunkOf(L, x, y) { return L.chunks[Math.floor(y / CH) * N + Math.floor(x / CH)]; }
 
-  root.GTHomeland = { VERSION: VERSION, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, generate: generate, chunkOf: chunkOf };
+  /* ---------------------------------------------------------------- night monsters */
+  // Monsters live in the wild: open forest and rock chunks, never the centre around the Town Hall. Opening a wild chunk
+  // brings its resources and its night danger. Pure functions of a finished layout: no RNG state, no tile changes.
+  var WILD = { forest: 'boar', rock: 'bat' };
+  /** The kind of monster that lives at (x, y) at night, or null outside the open wild chunks. */
+  function wild(L, x, y) {
+    if (x < 0 || y < 0 || x >= L.w || y >= L.h) return null;
+    var c = chunkOf(L, x, y);
+    return c && c.open && c.id !== 'c' ? (WILD[c.biome] || null) : null;
+  }
+  function monsterCandidates(L) {
+    if (L._monsters) return L._monsters;
+    var taken = new Uint8Array(L.w * L.h), out = { boar: [], bat: [] }, x, y;
+    // keep lots, buildings, the farm and the portal clear
+    L.lots.forEach(function (l) { for (var yy = l.y - 1; yy <= l.y + l.h; yy++) for (var xx = l.x - 1; xx <= l.x + l.w; xx++) if (xx >= 0 && yy >= 0 && xx < L.w && yy < L.h) taken[I(xx, yy)] = 1; });
+    L.buildings.forEach(function (b) { for (var yy = b.y; yy < b.y + b.h; yy++) for (var xx = b.x; xx < b.x + b.w; xx++) taken[I(xx, yy)] = 1; });
+    for (y = L.farm.y0; y <= L.farm.y1; y++) for (x = L.farm.x0; x <= L.farm.x1; x++) taken[I(x, y)] = 1;
+    for (y = 1; y < L.h - 1; y++) for (x = 1; x < L.w - 1; x++) {
+      var k = I(x, y), t = L.tiles[k], kind = wild(L, x, y);
+      if (!kind || taken[k] || SOLID[t] || t === 'water') continue;
+      if (Math.abs(x - L.portal.x) + Math.abs(y - L.portal.y) <= 2) continue;
+      if (kind === 'bat') {
+        // bats hang about the rocks
+        var near = false;
+        for (var dy = -2; dy <= 2 && !near; dy++) for (var dx = -2; dx <= 2 && !near; dx++) { var xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < L.w && yy < L.h && L.tiles[I(xx, yy)] === 'rock') near = true; }
+        if (!near) continue;
+      }
+      out[kind].push([x, y]);
+    }
+    L._monsters = out;
+    return out;
+  }
+  /** Where the roaming monsters stand in game hour `hour`. Same shape as GTVillage.monstersAt: [{id, kind, x, y}]. */
+  function monstersAt(L, hour, counts) {
+    counts = counts || { boar: 3, bat: 2 };
+    var c = monsterCandidates(L), out = [];
+    Object.keys(counts).forEach(function (kind) {
+      var pool = c[kind] || [];
+      if (!pool.length) return;
+      for (var i = 0; i < counts[kind]; i++) {
+        var q = pool[Math.floor(hash3(L.seed | 0, (hour | 0) * 31 + i, kind === 'bat' ? 0xba7 : 0xb0a2) * pool.length)];
+        out.push({ id: kind + '-' + i, kind: kind, x: q[0], y: q[1] });
+      }
+    });
+    return out;
+  }
+
+  root.GTHomeland = { VERSION: VERSION, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, generate: generate, chunkOf: chunkOf, wild: wild, monstersAt: monstersAt };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

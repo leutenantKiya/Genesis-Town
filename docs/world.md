@@ -72,7 +72,7 @@ are mostly taken, and true chunk streaming for a world without fixed edges.
 
 ## Homeland
 
-Status: phases A, B and C built on branch `homeland` (A 2026-11-08, B and C 2026-11-09). Code:
+Status: phases A, B and C built and merged into `main` (A 2026-11-08, B and C 2026-11-09). Code:
 [`client/js/world/homeland.js`](../client/js/world/homeland.js) (generator),
 [`server/src/game/homeland.ts`](../server/src/game/homeland.ts) (state, timers, production),
 [`client/js/mods/homeland.js`](../client/js/mods/homeland.js) (UI) and `client/js/mods/charscreen.js` (character screen).
@@ -84,7 +84,7 @@ Islands; Homelands are off-chain, not NFTs, and cannot be sold.
 | | Public area (the village above) | Homeland |
 | --- | --- | --- |
 | Purpose | trading only: merchants, the Pasar, other players | gathering, farming, building, producing |
-| Gathering, farming, monsters | none | yes, in your own world |
+| Gathering, farming, monsters | none | yes, in your own world (monsters: open forest and rock chunks at night, never the centre) |
 | People | everyone, live | the owner and invited guests, live |
 | World id | `public` | `HL-<n>` (one per player, a counter assigned at the first Homeland request) |
 

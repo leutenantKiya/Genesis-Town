@@ -425,11 +425,19 @@
     R(9, 5, 1, 1, '#ff5a5a'); R(10, 8, 1, 1, '#f0f0e0'); R(2, 9, 1, 2, '#3a2414'); R(7, 9, 1, 2, '#3a2414'); R(0, 5, 1, 1, '#3a2414');
   }
   // Roaming monsters this game hour (same list the server checks), each wandering a little around its spot.
+  // Night monsters roam the wild part of the Homeland (open forest and rock chunks); the same shared generator tells
+  // the server where they stand, so the fight is checked there. The trade-only public area has none.
   function roamers() {
-    var st = S.st, L = GT.world && GT.world.layout;
-    if (worldNow() !== 'public') return []; // no monsters in Homelands
-    if (!st || !st.night || !st.night.now || st.night.guarded || !L || !window.GTVillage || !S.cfg || !S.cfg.monsters) return [];
-    return GTVillage.monstersAt(L, st.time.totalHours, S.cfg.monsters.roaming);
+    var st = S.st, L = GT.world && GT.world.layout, mc = S.cfg && S.cfg.monsters;
+    if (!st || !st.night || !st.night.now || st.night.guarded || !L || !mc) return [];
+    if (worldNow() === 'public') return mc.publicMonsters && window.GTVillage ? GTVillage.monstersAt(L, st.time.totalHours, mc.roaming) : [];
+    return window.GTHomeland && L.lots ? GTHomeland.monstersAt(L, st.time.totalHours, mc.homelandRoaming || mc.roaming) : [];
+  }
+  function wildAt(L, x, y) {
+    var mc = S.cfg && S.cfg.monsters;
+    if (!mc || !L) return false;
+    if (worldNow() === 'public') return !!mc.publicMonsters && !!window.GTVillage && GTVillage.chunkOf(L, x, y).id === 'hutan';
+    return !!(window.GTHomeland && L.lots && GTHomeland.wild(L, x, y));
   }
   function wander(m, t) { var h = 0; for (var i = 0; i < m.id.length; i++) h = (h * 31 + m.id.charCodeAt(i)) | 0; return { dx: Math.sin(t * 0.7 + h) * 0.45, dy: Math.cos(t * 0.5 + h * 1.3) * 0.35 }; }
   function onDraw(ctx, camX, camY, T) {
@@ -745,7 +753,7 @@
       var verb = { fish: 'Mancing', ore: 'Nambang', wood: 'Tebang' }[tok];
       var needTool = tok === 'ore' && S.st && (S.st.bag.tool.settled + S.st.bag.tool.today) < 1;
       var L = GT.world && GT.world.layout, night = S.st && S.st.night;
-      var danger = tok !== 'fish' && night && night.now && !night.guarded && L && worldNow() === 'public' && window.GTVillage && GTVillage.chunkOf(L, x, y).id === 'hutan';
+      var danger = tok !== 'fish' && night && night.now && !night.guarded && wildAt(L, x, y);
       var spot = tok === 'fish' && window.GT_FISH && GT_FISH.isSpot(x, y);
       if (tok === 'fish') return spot ? 'Mancing di riak air: ikan berkumpul di sini' : 'Mancing (lebih cepat di riak air)';
       return verb + ' (−4 energi)' + (needTool ? ' · butuh Alat' : '') + (danger ? ' · malam: awas monster' : '');
@@ -952,7 +960,16 @@
     if (!S.projects) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
     if (!S.projects.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada proyek.'));
     S.projects.forEach(function (pj) {
-      wrap.appendChild($('h4', 'chain-h', pj.name + (pj.done ? ' (selesai)' : '')));
+      wrap.appendChild($('h4', 'chain-h', pj.name + (pj.done ? ' (selesai)' : pj.retired ? ' (dihentikan)' : '')));
+      if (pj.retired && !pj.done) {
+        // stopped: no new pledges; whoever pledged can take it back
+        wrap.appendChild($('p', 'chain-dim', pj.retired));
+        var pledged = pj.contributors.filter(function (c) { return c.account_id === S.account; })[0];
+        if (pledged) wrap.appendChild(button('Tarik sumbanganku', function () {
+          signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast('Sumbangan dikembalikan ke tasmu.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+        }));
+        return;
+      }
       var lines = [];
       pj.need.forEach(function (n) {
         var got = 0; pj.pledged.forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });

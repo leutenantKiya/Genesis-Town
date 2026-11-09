@@ -72,7 +72,8 @@ export class Game {
     if (o.worldSeed != null) {
       this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
       this.positions = new Positions(this.map);
-      if (this.econ.monsters && !this.econ.homeland.publicTradeOnly) this.monsters = new Monsters(this.econ, this.gs, this.clock, this.world, this.map, o.rng ?? Math.random);
+      // night monsters live in Homelands (and in the village forest only when the public area is not trade-only)
+      if (this.econ.monsters) this.monsters = new Monsters(this.econ, this.gs, this.clock, this.world, this.map, o.rng ?? Math.random);
     }
   }
 
@@ -222,7 +223,6 @@ export class Game {
     const home = this.econ.homeland;
     if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'Area publik hanya untuk berdagang.');
     if (w.row && a === 'ship') throw new HttpError(409, 'Kotak Kirim hanya ada di area publik.');
-    if (w.row && a === 'engage') throw new HttpError(409, 'Tidak ada monster di Homeland.');
     if ((a === 'build' || a === 'collect' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Bangun dan panen di Homeland-mu sendiri.');
     let pos: Pos | null = null;
     if (this.map && this.positions && w.map) {
@@ -248,14 +248,17 @@ export class Game {
     switch (a) {
       case 'gather': {
         w.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
-        const enc = w.row ? null : this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
+        // a monster can block a gather in the wild part of a Homeland (or the village forest when it is not trade-only)
+        const enc = w.row && w.map instanceof HomelandMap ? this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1), w.map, true)
+          : home.publicTradeOnly ? null : this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
         if (enc) { res = { toast: `${enc.name} menghadang! Lawan atau lari.` }; break; }
         res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1), w.row ? `${wid}:` : '', w.row && this.econ.gather.tiles[s('tile')] === 'wood' ? this.homelands.effects(account).woodBonus : 0); // Homeland nodes are charged per Homeland
         break;
       }
       case 'fight': res = this.need(this.monsters).fight(account); break;
       case 'engage': {
-        const enc = this.need(this.monsters).engage(account, s('monster'), (body.pos ?? {}) as { x: number; y: number });
+        const where = w.row && w.map instanceof HomelandMap ? w.map : this.map!;
+        const enc = this.need(this.monsters).engage(account, s('monster'), (pos ?? body.pos ?? {}) as { x: number; y: number }, where, !!w.row);
         res = { toast: `${enc.name} menyerang! Lawan atau lari.` };
         break;
       }
@@ -326,7 +329,7 @@ export class Game {
       world: this.map ? { seed: this.map.seed, unlocked: this.map.unlocked } : null,
       encounter: this.monsters?.pending.get(account) ?? null,
       koUntil,
-      night: this.monsters ? { now: this.monsters.isNight(), guarded: this.monsters.guarded() } : null,
+      night: this.monsters ? { now: this.monsters.isNight(), guarded: this.monsters.guarded(wid !== 'public') } : null,
       weather,
     };
   }

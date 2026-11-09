@@ -1,6 +1,6 @@
 # Genesis Town
 
-> **Status (2026-11-08): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built on branch `homeland`.** Done and tested:
+> **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
 > - M2 (Checkpoint 3): off-chain play (gathering, energy, crafting, farm plot, shipping, trading with four merchants
 >   priced by `economy/pricing.ts`), a daily settlement on NEAR testnet with the ledger's Merkle root, and shop
 >   bankruptcy and restoration with shares, all in an end-to-end testnet run;
@@ -65,12 +65,14 @@
 >   merchant pays most, Makan / Pegang / Jual / Kirim). **Pasar** groups listings by item, cheapest first, next to the
 >   merchants' prices, shows your listing slots (n/5), and warns when your price after the fee is below what a
 >   merchant would pay.
-> - **Night monsters**: from 19:00 to 06:00, wild boars and mine bats roam Hutan Utara and attack when you walk
->   up to them; gathering there can also disturb one. Fight or flee; losing all energy knocks you out until 06:00, with nothing lost on or off chain. The
->   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,
+> - **Night monsters, in your Homeland**: from 19:00 to 06:00, wild boars roam the open forest chunks and bat swarms
+>   the open rock chunks of your Homeland (the centre around the Town Hall stays safe) and attack when you walk up to
+>   them; gathering there can also disturb one. Fight or flee; losing all energy knocks you out until 06:00, with nothing
+>   lost on or off chain. Opening a wild chunk brings its resources and its night danger. The trade-only public area has
+>   none, so the **Pos Ronda** town project is retired (no new pledges; what was pledged can be withdrawn). **Weather** for everyone each day (rain,
 >   snow, bright summer sun); rain waters the farm. Calmer HUD and a first-steps guide.
 >
-> - **Homeland, phase A** (built on branch `homeland`; replaces the broker-sold Private Islands, which are gone): after
+> - **Homeland, phase A** (replaces the broker-sold Private Islands, which are gone): after
 >   login a character screen shows `name#12345` (rename it, pick skin, hair and shirt) and **Mulai** drops you into your
 >   own world. Every player has a **Homeland**: a seeded 3 x 3 chunk map (48 x 48 tiles) with a Town Hall in the middle and
 >   eight chunks of forest, rock, pond or shore under fog. You upgrade the Town Hall (levels 1-5), open chunks (items,
@@ -83,7 +85,7 @@
 >   the [Homeland spec](docs/superpowers/specs/2026-11-08-homeland-design.md).
 > - The contract still has the v5 island methods (`buy_island`, `save_island`); the game does not use them and v5 is not deployed to testnet.
 >
-> - **Homeland, phase B** (branch `homeland`): at the Town Hall you hire **worker bots** for coin (Tukang = a second builder,
+> - **Homeland, phase B**: at the Town Hall you hire **worker bots** for coin (Tukang = a second builder,
 >   Petani = faster crops, Nelayan = faster Kolam Ikan, Penebang = +1 wood per tree); bots stay in your Homeland, never hold
 >   items or coin and never trade. In the public area the four **merchants walk around as NPC players** (name tag `NPC`) and
 >   answer private messages (`/msg Sari harga ikan?`) through **Claude** (`claude-sonnet-5-5`, low effort), or NEAR AI Cloud,
@@ -93,7 +95,7 @@
 >   **Papan Juara** shows the top sellers of the day and of all time. Numbers: `economy/config.json` -> `homeland.bots`,
 >   `trade`, `consign`; plan: [phase B](docs/superpowers/plans/2026-11-09-homeland-phase-b.md).
 >
-> - **Homeland, phase C** (branch `homeland`): everything feeds building speed. **Contractors** (the default Tukang and hired
+> - **Homeland, phase C**: everything feeds building speed. **Contractors** (the default Tukang and hired
 >   Tukang) get **tired** and build slower; the **Restoran** no longer makes meals on its own but keeps a **pantry** (cook meals
 >   into it, or stock bread/meal from the Tas) and serves the most tired contractor, faster with a **Koki**. A **Pemburu**
 >   forages fish and wood (double in winter). Hired bots need a bed: build a **Rumah Pekerja**, add **Kasur** (more bots per
@@ -218,20 +220,26 @@ it signed through `fast-auth.testnet` and pays the gas. Live run on 2026-11-03: 
 relayed gas-free: https://testnet.nearblocks.io/txns/EQCu9GX2mNWT8YCJVehadGUGjYa1iBa1nY6hmdVdeMr6. Afterwards the
 account has exactly one full-access key (the NEAR Auth key the server stored at sign-up) and two game-only keys.
 
-### Night monsters and Pos Ronda
+### Night monsters in the Homeland (and the retired Pos Ronda)
 
-At night (19:00–06:00) the forest north of the village is dangerous. Five wild boars roam Hutan Utara and three bat
-swarms hang around the mine; walking right up to one makes it attack (beaten, it drops 1 Kayu or 1 Bijih). A gather
-can also disturb a hidden **Babi hutan** (trees) or **Kelelawar tambang** (rocks; more likely). Where the roaming
-monsters stand each game hour comes from the shared village file, so the server checks every fight against it. A small window offers **Lawan**
-(5 energy a round, 70% to hit; the monster hits back while it stands) or **Lari** (4 energy, no gather). Winning gives
-the gather plus one bonus. Running out of energy knocks the player out until 06:00 and sends them home; nothing is
-lost, on chain or off. The server decides every roll (`server/src/game/monsters.ts`, tuning in
-`economy/config.json` → `monsters`), so the cost is real: forest wood and ore are riskier at night.
-The town can end it together: **Pos Ronda di Hutan Utara** (40 Kayu, 10 Bijih, 150 Koin) is a second on-chain town
-project on the Balai Desa board; once it is built, no monster appears (created on testnet:
-https://testnet.nearblocks.io/txns/7WZ9hLavZsXKBwQmUHLGp6vcdqVeMRiQTozC54PqeGZU). Player-versus-player combat and theft
-stay switched off: they would either mean nothing or take things from other players.
+At night (19:00–06:00) the wild part of your Homeland is dangerous: the open **forest** chunks have wild boars and the
+open **rock** chunks bat swarms (3 and 2 per Homeland); the centre around the Town Hall is always safe, and a new
+Homeland, with only its centre open, has none. Opening a wild chunk brings its wood or ore and its night danger.
+Walking right up to a roaming monster makes it attack (beaten, it drops 1 Kayu or 1 Bijih). A gather there can also
+disturb a hidden **Babi hutan** (trees) or **Kelelawar tambang** (rocks; more likely). Where the roaming monsters stand
+each game hour comes from the shared Homeland generator (`client/js/world/homeland.js` → `monstersAt`), so the server
+checks every fight against it. The battle bar offers **Lawan** (F; 5 energy a round, 70% to hit; the monster hits back
+while it stands) or **Lari** (Esc; 4 energy, no gather). Winning gives the gather plus one bonus. Running out of energy
+knocks the player out until 06:00 and sends them to their spawn; nothing is lost, on chain or off. The server decides
+every roll (`server/src/game/monsters.ts`, tuning in `economy/config.json` → `monsters`, Homeland counts in
+`monsters.homeland`), so the cost is real: wild wood and ore are riskier at night.
+
+The public area is trade-only, so it has no monsters. **Pos Ronda di Hutan Utara**, the on-chain town project that
+used to guard the village forest (created on testnet:
+https://testnet.nearblocks.io/txns/7WZ9hLavZsXKBwQmUHLGp6vcdqVeMRiQTozC54PqeGZU), is retired: the server refuses new
+pledges (`economy/config.json` → `projects[].retired`) and the board shows a **Tarik sumbanganku** button so earlier
+pledges can be taken back. Player-versus-player combat and theft stay switched off: they would either mean nothing or
+take things from other players.
 
 ### When shops fail: quiet days and the village relief fund
 
@@ -291,8 +299,9 @@ Run locally (below), open http://localhost:3000.
    stock and price reason.
 10. Walk into the **Balai Desa** next to the plaza and face the shelf at the back → the project board. Pledge toward
     the bridge to Dusun Seberang (the fogged hamlet across the river). Press **Peta** (M) to see the whole village.
-11. Dev panel → **Lompat ke malam**, then gather at a tree or rock in Hutan Utara (north of the village) until a
-    wild boar or bats appear, or walk up to one roaming at night. Fight with **Lawan** (F) or run with **Lari** (Esc).
+11. In your Homeland, open a forest or rock chunk at the Town Hall, then Dev panel → **Lompat ke malam** and gather at
+    a tree or rock there until a wild boar or bats appear, or walk up to one roaming at night. Fight with **Lawan** (F)
+    or run with **Lari** (Esc).
 12. Finish a town project quickly (mock server only, `npm run dev:mock`): Dev panel → **Beri bahan (mock)**, then the
     project board → **Sumbang semua yang bisa** under the bridge → "Proyek desa selesai! Dusun Seberang sekarang
     terbuka", the bridge appears and the map opens the hamlet across the river for everyone.

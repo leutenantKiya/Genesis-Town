@@ -52,7 +52,7 @@ export interface Econ {
   starter: Record<string, number>;
   caps: { dailyGainPerItem: number; dailySends: number; maxSendAmount: number };
   /** Town projects; the contract holds the live state (create_project with these values). */
-  projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number> }>;
+  projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number>; /** why it was stopped: no new pledges, withdrawals still work */ retired?: string }>;
   monsters: MonsterConfig;
   homeland: HomelandConfig;
   trade: { expireSecs: number; maxLines: number };

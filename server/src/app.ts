@@ -241,7 +241,7 @@ export function createApp(deps: AppDeps) {
           dialogue: dialogue.provider,
           world: game.map?.view() ?? null,
           econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time },
-          monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, reach: game.econ.monsters.reach } : null,
+          monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, homelandRoaming: game.econ.monsters.homeland?.roaming ?? game.econ.monsters.roaming, reach: game.econ.monsters.reach, publicMonsters: !game.econ.homeland.publicTradeOnly } : null,
         });
       }
       if (req.method === 'GET' && p === '/api/health') {
@@ -353,7 +353,8 @@ export function createApp(deps: AppDeps) {
       }
       if (req.method === 'GET' && p === '/api/projects') {
         // Town projects as the contract holds them (pledges, contributors, done), plus the map areas they open.
-        return send(res, 200, { projects: await deps.chain.listProjects(), world: game.map?.view() ?? null });
+        const retired = Object.fromEntries(game.econ.projects.filter((p) => p.retired).map((p) => [p.id, p.retired]));
+        return send(res, 200, { projects: (await deps.chain.listProjects()).map((p) => (retired[p.id] ? { ...p, retired: retired[p.id] } : p)), world: game.map?.view() ?? null });
       }
       if (req.method === 'GET' && p === '/api/listings') {
         // Player market: open listings read from the contract (escrowed there), newest first.

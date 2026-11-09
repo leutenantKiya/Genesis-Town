@@ -113,12 +113,14 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
   your request on 2026-11-01. Because it is a large job, it is scheduled after the economy loop works (see the
   milestone plan in the README).
 
-## Night in the forest
+## Night in the wild
 
-From 19:00 to 06:00, gathering in Hutan Utara can meet a wild boar or mine bats. Fight (energy per round) or flee;
-winning gives the gather plus one; running out of energy knocks you out until 06:00 with nothing lost. It makes
-forest wood and ore riskier, and so worth more, at night. The town project **Pos Ronda** (on chain) ends it for
-everyone. Details: README, "Night monsters and Pos Ronda".
+From 19:00 to 06:00, the open forest and rock chunks of your Homeland have wild boars and mine bats (the centre around
+the Town Hall is safe). Gathering there can meet one, and walking into a roaming one makes it attack. Fight (energy per
+round) or flee; winning gives the gather plus one; running out of energy knocks you out until 06:00 with nothing lost.
+It makes wild wood and ore riskier, and so worth more, at night; opening a wild chunk brings its resources and its
+danger. The trade-only public area has none, and the old village guard project **Pos Ronda** is retired. Details:
+README, "Night monsters in the Homeland".
 
 ## What is deliberately not in the loop
 

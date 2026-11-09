@@ -39,6 +39,7 @@ export interface HomelandLayout extends Omit<Layout, 'projects'> { portal: Pos; 
 interface HomelandApi {
   VERSION: number; CHUNKS: string[];
   generate(seed: number, prog: HomelandProgress): HomelandLayout; chunkOf(L: HomelandLayout, x: number, y: number): Chunk;
+  wild(L: HomelandLayout, x: number, y: number): string | null; monstersAt(L: HomelandLayout, hour: number, counts?: Record<string, number>): MonsterSpot[];
 }
 export const Homeland = (globalThis as unknown as { GTHomeland: HomelandApi }).GTHomeland;
 
@@ -53,7 +54,14 @@ export interface GameMap {
   portal(): Pos;
 }
 
-export class WorldMap implements GameMap {
+/** The parts of a map the night monsters need: where they may appear, and where they roam each game hour. */
+export interface MonsterMap {
+  /** The monster kind living at (x, y) at night, or null where the ground is safe. */
+  wild(x: number, y: number): string | null;
+  monstersAt(hour: number, counts?: Record<string, number>): MonsterSpot[];
+}
+
+export class WorldMap implements GameMap, MonsterMap {
   seed: number;
   layout: Layout & { mine?: { x: number; y: number }; seed: number };
   constructor(seed: number, unlocked: string[] = []) {
@@ -94,11 +102,14 @@ export class WorldMap implements GameMap {
   }
   weather(day: number, season: string): Weather { return Village.weather(this.seed, day, season); }
   monstersAt(hour: number, counts?: Record<string, number>): MonsterSpot[] { return Village.monstersAt(this.layout, hour, counts); }
+  /** The village forest (when the public area is not trade-only): boars at trees, bats at rocks, in one named chunk. */
+  wildChunk = 'hutan';
+  wild(x: number, y: number): string | null { return this.chunkAt(x, y).id === this.wildChunk ? 'any' : null; }
   /** What the client needs to build the same map. */
   view() { return { seed: this.seed, unlocked: this.layout.unlocked, version: this.layout.version, chunks: this.layout.chunks, projects: this.layout.projects }; }
 }
 
-export class HomelandMap implements GameMap {
+export class HomelandMap implements GameMap, MonsterMap {
   seed: number;
   layout: HomelandLayout;
   constructor(seed: number, prog: HomelandProgress) {
@@ -126,6 +137,9 @@ export class HomelandMap implements GameMap {
     if (!c.open) throw new HttpError(409, `${c.name} belum dibuka.`);
   }
   portal(): Pos { return this.layout.portal; }
+  /** Night monsters: open forest chunks have boars, open rock chunks bats; the centre around the Town Hall is safe. */
+  wild(x: number, y: number): string | null { return Homeland.wild(this.layout, x, y); }
+  monstersAt(hour: number, counts?: Record<string, number>): MonsterSpot[] { return Homeland.monstersAt(this.layout, hour, counts); }
   /** Within one tile of the lot's door (the door tile itself or the way in below it). */
   nearLot(p: Pos, lot: string): boolean {
     const l = this.layout.lots.find((x) => x.id === lot);
