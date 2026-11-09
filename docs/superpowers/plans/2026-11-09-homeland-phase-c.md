@@ -1,67 +1,86 @@
-# Homeland Phase C Implementation Plan
+# Homeland Phase C Implementation Plan (v2, owner design 2026-11-09)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The rare Hunter who forages through winter, a Chef who makes food better and a Restoran that cooks instead of printing meals, and coin-bought cosmetics that make a bot better at its job.
+**Goal:** Everything in the Homeland feeds one thing, building speed. Contractors get tired; the Restoran feeds them; bots live in houses whose furniture (beds, entertainment) sets how many bots fit and how motivated they are; a Rumah Sakit heals bots that collapse; cosmetics make bots better.
 
-**Architecture:** Extends the phase B bot system in `server/src/game/homeland.ts` (`hire`, `effects`) and its client in `client/js/mods/homeland.js`. All off-chain, ledger rows, no new item tokens (the contract's token registry stays unchanged), no contract change.
+**Architecture:** Extends `server/src/game/homeland.ts` (builder jobs with `ends_at`, bots, lazy production), the generator `client/js/world/homeland.js` (new lots), and `client/js/mods/homeland.js`. Off-chain, ledger rows, existing item tokens only, no contract change. All state is computed lazily from timestamps (no tick job), replaying at most 72 game hours.
 
-**Tech Stack:** as phase B. **Spec:** `docs/superpowers/specs/2026-11-08-homeland-design.md` sections 4.3 and 5; phase B plan `docs/superpowers/plans/2026-11-09-homeland-phase-b.md`.
+**Spec:** `docs/superpowers/specs/2026-11-08-homeland-design.md` sections 4-5, plus the owner's decisions below. Phase B plan for existing APIs.
+
+## Owner decisions (2026-11-09)
+
+- Contractors (Tukang) are paid once when hired; building and upgrades cost resources (coin, wood, ore, ...).
+- Contractors have **fatigue**; tired contractors build slower. The **Restoran** serves food to contractors; faster serving = faster recovery = faster construction. The **Koki** makes serving faster.
+- Bots need **houses**. A house is built on a lot; its **furniture** is upgraded: more **beds** = more bots per house (land efficiency), **entertainment** = more motivation for the bots living there.
+- A **Rumah Sakit** treats bots.
+- Orchestrator calls (owner agreed to the proposal): fatigue -> food, motivation -> entertainment, collapse at 100% fatigue -> hospital. Hunter forages fish/wood, doubled in winter (supplies the Restoran when farms stop). Cosmetics: on a contractor less fatigue, on other bots more output.
 
 ## Global Constraints
 
-- Same as phase B (Indonesian UI text, numbers in `economy/config.json`, ledger rows, `checkGain` on every gain, coin spent goes to the town, own-property lookups only: `Object.hasOwn` for every config key coming from a request).
-- No new item tokens: Hunter and Restoran produce existing items only (`fish`, `wood`, `meal`).
-- **Decisions (orchestrator, owner did not choose):** Restoran no longer produces `meal` from nothing; it cooks `meal` from the `meal` recipe inputs (1 fish + 1 wood). Hunter forages existing items, doubled in winter.
+- Phase B constraints hold (Indonesian UI text, numbers in `economy/config.json` -> `homeland`, ledger rows, `checkGain` on gains, coin spent goes to the town, `Object.hasOwn` for any config key from a request).
+- The demo path stays fast: a fresh player's default Tukang has 0 fatigue and the first Kolam Ikan still finishes in <= 60 s.
+- The default Tukang lives in the Balai Kota (needs no bed, fixed motivation 60). Every hired bot needs a free bed.
+- Generator change: bump `GTHomeland.VERSION` to 2; existing rows keep working (no live players yet; `gen` is informational).
 
 ## Review Focus
 
-1. Restoran cook without enough fish/wood: 409, nothing consumed.
-2. Hunter output while offline across a season change: computed per game hour with the season of that hour (or at worst the current season), never more than capacity.
-3. Cosmetic bought for a bot id that is not the caller's: 403/409, no coin charged.
-4. Chef bonus on `eat` applies only to the owner's own bread/meal eating and never pushes energy over `energyMax`.
-5. A request job/cosmetic name like `constructor` or `__proto__`: 400, nothing charged.
+1. Server restart in the middle of a job / while a bot is sick: everything resumes from timestamps exactly once.
+2. A contractor collapses mid-queue: the job in progress finishes, the contractor is then sick and gets no new job until healed; another free contractor can take jobs.
+3. Hiring with no free bed: 409 `Tidak ada kasur kosong. Bangun Rumah Pekerja atau tambah kasur.`, no coin charged.
+4. Restoran with an empty pantry serves nothing and never goes negative; serving takes meals from the Restoran stock only, never from the player's Tas.
+5. Request names like `constructor` / `__proto__` for furniture, cosmetics, jobs: 400, nothing charged.
 
 ---
 
-### Task C1: Hunter, Chef, Restoran that cooks
+### Task C1: Contractor fatigue, Restoran pantry and serving, Koki, Pemburu
 
-**Files:** `economy/config.json` (`homeland.bots.hunter`, `homeland.bots.chef`, `homeland.buildings.restoran`), `server/src/game/econ.ts`, `server/src/game/homeland.ts`, `server/src/game/game.ts` (acts `cook`, `forage`), `server/src/game/world.ts` (`eat` bonus hook), `client/js/mods/homeland.js`; test `server/test/homeland-c.test.ts`.
+**Files:** `economy/config.json`, `server/src/game/econ.ts`, `server/src/game/gamestore.ts`, `server/src/game/homeland.ts`, `server/src/game/game.ts`, `server/src/game/world.ts` (only if needed), `client/js/mods/homeland.js`; tests `server/test/homeland-fatigue.test.ts`. (Uncommitted C1 v1 work in the tree — Restoran `cooks`, Pemburu forage, Koki config — may be reused; drop the Koki `foodEnergy` player-eating bonus.)
 
-**Interfaces:**
-- Config additions:
+**Interfaces / numbers (config `homeland.fatigue`, `homeland.restoran`):**
 ```json
-"hunter": { "name": "Pemburu", "rarity": "rare", "price": 400, "max": 1, "th": 3, "effect": { "forage": { "items": ["fish", "wood"], "perGameHour": 1, "capacity": 6, "winterFactor": 2 } } },
-"chef":   { "name": "Koki",    "rarity": "rare", "price": 350, "max": 1, "th": 3, "effect": { "foodEnergy": 1.5, "cookBonus": 1 } }
+"fatigue": { "perJobMinute": 10, "idleRecoverPerGameHour": 5, "collapseAt": 100, "slowdownAt100": 1.0 },
+"restoran": { "pantryMax": 20, "serveEveryGameHours": 1, "serveRelief": 30, "serveMinFatigue": 20, "chefServeFactor": 2 }
 ```
-  `restoran` building: remove `produces`/`perGameHour`/`capacity`; add `"cooks": "meal"` (recipe from `econ.recipes.meal`).
-- Hunter: stored forage computed lazily like buildings (`last_forage` per account, new column or table); items alternate fish/wood by game hour index (deterministic); in the winter season (`econ.seasons` entry whose id is `dingin`, the same one `farm.noGrowthSeasons` uses) the hour counts `winterFactor` units. `POST /api/act {action:'forage'}` at the Town Hall collects (409 `Pemburu belum membawa apa-apa.`), through `checkGain` per item.
-- Restoran: `POST /api/act {action:'cook', qty}` (1-10) standing near the built `restoran` lot door: consumes `qty` x recipe inputs, gives `qty` meal plus `cookBonus` extra meal per cook action when a Chef is hired (not per unit), `checkGain` on the meal. 409 `Bahan kurang (perlu n Ikan, n Kayu).`; 409 `Bangun Restoran dulu.`.
-- Chef: `World.eat` multiplies the energy from bread/meal by `foodEnergy` when the eater owns a Chef (capped at `energyMax`).
-- `view()` adds `forage: { stored: Record<item, number>, capacity } | null` and `cook: { recipe, can, why } | null`.
-- Client: Balai Kota shows "Pemburu membawa: n Ikan, n Kayu" with an Ambil button; Restoran lot menu becomes "Masak" with a qty picker; hire list shows rare bots with a "Langka" badge.
-- [ ] Tests (`homeland-c.test.ts`): `restoran cooks meal from fish and wood`; `restoran without ingredients answers 409 and consumes nothing`; `chef adds a bonus meal per cook and more energy when eating, capped`; `hunter forages fish and wood up to capacity`; `hunter doubles in winter`; `forage at the town hall only`; `rare bots max 1 and need town hall 3`.
+- Contractors = the default Tukang (slot 0) + hired `builder` bots. Each has `fatigue` 0-100 and `sick_until` (C2 uses it). Store in a table `homeland_workers (account, slot, fatigue REAL, updated_at INTEGER, sick_until INTEGER, PRIMARY KEY(account, slot))`.
+- Job start picks the free, not-sick contractor with the lowest fatigue; duration = `ceil(secs x (1 + slowdownAt100 x fatigue/100) / motivationFactor)` (motivationFactor from C2; 1.0 until C2 lands). On job end: `fatigue += perJobMinute x secs/60` (cap 100). Idle contractors recover `idleRecoverPerGameHour` per game hour.
+- Restoran pantry: `POST /api/act {action:'cook', qty}` at the Restoran door cooks `qty` meals from recipe `meal` inputs into the **pantry** (not the Tas), cap `pantryMax`; `POST /api/act {action:'stock', token:'bread'|'meal', qty}` moves food from the Tas into the pantry. Every `serveEveryGameHours` (divided by `chefServeFactor` with a Koki) the Restoran serves one portion to the most tired contractor with fatigue >= `serveMinFatigue`: pantry -1, fatigue -`serveRelief`. Lazy replay from the last update.
+- Pemburu (rare, max 1, TH3, price 400): forages fish/wood alternately, `perGameHour` 1, capacity 6, x2 in season `dingin`; `POST /api/act {action:'forage'}` at the Balai Kota.
+- Koki (rare, max 1, TH3, price 350): only the serving speed factor.
+- `view()` adds `workers: [{slot, name, fatigue, busy, sick_until}]`, `restoran: { pantry, pantryMax, nextServeAt } | null`, `forage`.
+- Client: Balai Kota shows each contractor with a fatigue bar; Restoran lot menu "Masak" (qty) and "Taruh makanan" (from Tas) and the pantry count; a tired contractor sprite slows its hammer; "Langka" badge on rare bots.
+- [ ] Tests: `fresh tukang builds kolam in 45 s`; `fatigue grows per job and slows the next job`; `idle contractors recover over game hours`; `restoran serves the most tired contractor from its pantry`; `koki doubles serving speed`; `empty pantry serves nothing`; `cook fills the pantry not the bag, 409 without ingredients`; `pemburu forages and doubles in winter`; `restart mid-job finishes once`.
 
-### Task C2: Cosmetics that boost bots
+### Task C2: Rumah Pekerja with furniture, motivation, Rumah Sakit
 
-**Files:** `economy/config.json` (`homeland.cosmetics`), `server/src/game/econ.ts`, `server/src/game/gamestore.ts` (column `cosmetic TEXT` on `homeland_bots`, added with a guarded `ALTER TABLE`), `server/src/game/homeland.ts`, `server/src/game/game.ts` (act `dress`), `client/js/mods/homeland.js` (shop in the Balai Kota "Pekerja" section, hats drawn on bots); test `server/test/homeland-cosmetics.test.ts`.
+**Files:** `client/js/world/homeland.js` (lots: `rumah-<chunk>` one per chunk incl. `c`, and `rumahsakit-c`; keep validation; `VERSION` 2), `server/test/homeland-gen.test.ts`, `economy/config.json`, `server/src/game/econ.ts`, `server/src/game/gamestore.ts`, `server/src/game/homeland.ts`, `server/src/game/game.ts`, `client/js/mods/homeland.js`, `client/js/buildings.js` (house and hospital art); tests `server/test/homeland-housing.test.ts`.
 
-**Interfaces:**
-- Config:
+**Interfaces / numbers:**
 ```json
-"cosmetics": {
-  "caping":  { "name": "Caping",       "price": 80,  "boost": 0.2,  "color": "#d8b060" },
-  "syal":    { "name": "Syal Merah",   "price": 150, "boost": 0.35, "color": "#c83838" },
-  "mahkota": { "name": "Mahkota Emas", "price": 300, "boost": 0.5,  "color": "#f0c838" }
-}
+"rumah": { "name": "Rumah Pekerja", "th": 1, "cost": { "wood": 15 }, "secs": 60,
+  "furniture": {
+    "kasur":   { "name": "Kasur",   "max": 4, "levels": [ { "cost": { "wood": 10 }, "secs": 30 }, { "cost": { "wood": 20, "coin": 20 }, "secs": 60 }, { "cost": { "wood": 30, "coin": 40 }, "secs": 90 }, { "cost": { "wood": 40, "coin": 80 }, "secs": 120 } ] },
+    "hiburan": { "name": "Hiburan", "max": 3, "names": ["Radio", "TV", "Gamelan"], "levels": [ { "cost": { "wood": 10, "coin": 30 }, "secs": 60 }, { "cost": { "wood": 20, "ore": 10, "coin": 80 }, "secs": 120 }, { "cost": { "wood": 30, "ore": 20, "coin": 150 }, "secs": 240 } ] }
+  } },
+"rumahsakit": { "name": "Rumah Sakit", "th": 2, "cost": { "wood": 30, "ore": 10, "coin": 60 }, "secs": 180, "maxLevel": 3, "healGameHours": [3, 2, 1], "upgrade": [ { "cost": { "wood": 30, "ore": 15, "coin": 100 }, "secs": 240 }, { "cost": { "wood": 50, "ore": 30, "coin": 200 }, "secs": 480 } ] },
+"sickGameHoursWithoutHospital": 24
 ```
-- `POST /api/act {action:'dress', bot, cosmetic}` (owner, own Homeland, at the Town Hall): bot id must be the caller's; replaces any current cosmetic (no refund); coin to the town (kind `cosmetic`). 400 unknown cosmetic, 409 `Pekerja itu bukan milikmu.`, 409 coin short.
-- Boost per bot (`b` = its cosmetic boost, 0 without): factor effects become `1 + (f - 1) * (1 + b)` (farmGrowFactor, fishRate, foodEnergy); `woodBonus` adds an extra wood with probability `b` per gather (use the World rng); Hunter `perGameHour * (1 + b)` (floor at collection, remainder kept as with buildings); Chef `cookBonus` +1 when `b >= 0.5`; a dressed Tukang makes jobs started while it is hired `secs * (1 - 0.5 * maxBuilderBoost)` (rounded up).
-- `view().bots[]` gains `cosmetic: string | null`; `view()` adds `cosmetics: Record<id, { name, price, boost, color }>`.
-- [ ] Tests: `dress charges coin to the town and sets the cosmetic`; `dressing another player's bot answers 409, no coin`; `unknown or prototype cosmetic names answer 400`; `boost raises nelayan fish rate`; `dressed tukang shortens job time`.
+- A built house starts with 1 bed (kasur level 0); each Kasur level adds 1 bed, so a house holds at most `1 + kasur.max` = 5 bots. Furniture upgrades are builder jobs (`build` act with `kind:'furniture'`, `target:'<lot>:kasur|hiburan'`), charged and timed like other builds (fatigue applies).
+- Hiring needs a free bed (sum of beds over built houses minus hired bots); each hired bot is assigned to the house with a free bed and the best entertainment.
+- Motivation of a bot = `min(100, 40 + 20 x hiburanLevel of its house)`; the default Tukang 60. `motivationFactor = 0.75 + 0.5 x motivation/100` multiplies contractor speed (C1 formula) and producer bots' effect strength (`fishRate`, `farmGrowFactor` excess, Pemburu rate).
+- Collapse: a contractor reaching `collapseAt` fatigue becomes sick for `healGameHours[level-1]` with a built Rumah Sakit, else `sickGameHoursWithoutHospital`; on heal fatigue resets to 0. Sick contractors take no jobs.
+- `view()` adds `houses: [{lot, beds, used, hiburan, hiburanName, motivation}]`, `beds: {total, used}`, `hospital: {level, healGameHours} | null`, `workers[].motivation`.
+- Client: house lot menu (build house, Tambah Kasur, Hiburan level with names), bots shown at their house, sick contractors shown lying down with a red cross; hospital art; Balai Kota hire buttons disabled with the bed message when full.
+- [ ] Tests: `house gives one bed, kasur adds beds`; `hire without a free bed answers 409 and charges nothing`; `hiburan raises motivation and speeds builds`; `collapse makes a contractor sick, rumah sakit heals faster`; `sick contractor takes no job, another does`; `generator v2 has a rumah lot per chunk and a rumahsakit lot, all reachable` (in homeland-gen test).
 
-### Task C3: Docs, smoke, push (orchestrator + workers)
+### Task C3: Cosmetics
 
-- [ ] README status (phase C built), `docs/world.md` (bots table + cosmetics + Restoran cooking), `docs/economy.md` (sinks: rare bots, cosmetics; Restoran no longer a source), `docs/threat-model.md` (cosmetic ownership check), plan checkboxes.
-- [ ] Browser smoke: hire Pemburu and Koki at TH3 (dev grant), forage, cook, eat, dress a bot.
+**Files:** `economy/config.json` (`homeland.cosmetics`: caping 80 coin boost 0.2, syal 150 boost 0.35, mahkota 300 boost 0.5, each with a `color`), `server/src/game/gamestore.ts` (bot column `cosmetic`, guarded `ALTER TABLE`), `homeland.ts`, `game.ts` (act `dress {bot, cosmetic}` at the Balai Kota; slot 0 Tukang can be dressed too), `client/js/mods/homeland.js` (shop in "Pekerja", hats drawn); tests `server/test/homeland-cosmetics.test.ts`.
+- Effect with boost `b`: a contractor's fatigue gain x `(1 - b)`; producer bots' effect excess x `(1 + b)`; Pemburu rate x `(1 + b)`; Koki serve factor x `(1 + b)`.
+- [ ] Tests: `dress charges coin to the town`; `dressing another player's bot 409, no coin`; `unknown or prototype cosmetic 400`; `dressed tukang tires slower`; `dressed nelayan raises fish rate`.
+
+### Task C4: Docs, smoke, push
+
+- [ ] README status, `docs/world.md` (contractors, fatigue, Restoran, houses, furniture, motivation, hospital, cosmetics), `docs/economy.md` (sinks), `docs/threat-model.md`, plan checkboxes.
+- [ ] Browser smoke on a mock server with dev grants.
 - [ ] Push `homeland` and fast-forward `main` when the owner says so.
