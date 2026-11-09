@@ -40,7 +40,7 @@ test('ensure is idempotent and ids count up', () => {
   assert.deepEqual(hl.ensure(A), a);
   assert.equal(a.th, 1);
   assert.deepEqual(a.open, []);
-  assert.equal(a.gen, 1);
+  assert.equal(a.gen, 2);
   assert.notEqual(a.seed, b.seed);
   assert.equal(hl.byId(2)!.account, B);
   assert.equal(hl.byId(99), undefined);
@@ -54,13 +54,13 @@ test('kolam build: 5 wood leaves, job ends after 45 s, building exists after', (
   assert.equal(lot, 'kolam-c');
   const r = hl.start(A, 'build', lot, DAY);
   assert.equal(gs.balance(A, 'wood'), 3);
-  assert.equal(r.ends_at, 1_800_000_000_000 + 45_000);
+  assert.equal(r.ends_at, 1_800_000_000_000 + 43_000);
   assert.deepEqual(r.tags, ['wood']);
   let v = hl.view(A);
   assert.equal(v.built.length, 0);
   assert.equal(v.jobs.length, 1);
   assert.deepEqual(v.builders, { total: 1, busy: 1 });
-  advance(44_000);
+  advance(42_000);
   assert.equal(hl.view(A).built.length, 0);
   advance(1_000);
   v = hl.view(A);
@@ -96,7 +96,7 @@ test('finishes once after restart', () => {
   s.mk().settle(A);
   assert.equal(s.gs.homelandBuildings(A).length, 1);
   // production counts from the moment the building was done, not from the restart
-  assert.equal(s.gs.homelandBuildings(A)[0].last_collect, 1_800_000_000_000 + 45_000);
+  assert.equal(s.gs.homelandBuildings(A)[0].last_collect, 1_800_000_000_000 + 43_000);
   assert.equal(hl2.view(A).built[0].stored, 6);
 });
 

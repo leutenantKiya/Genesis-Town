@@ -71,7 +71,7 @@
 - Collapse: a contractor reaching `collapseAt` fatigue becomes sick for `healGameHours[level-1]` with a built Rumah Sakit, else `sickGameHoursWithoutHospital`; on heal fatigue resets to 0. Sick contractors take no jobs.
 - `view()` adds `houses: [{lot, beds, used, hiburan, hiburanName, motivation}]`, `beds: {total, used}`, `hospital: {level, healGameHours} | null`, `workers[].motivation`.
 - Client: house lot menu (build house, Tambah Kasur, Hiburan level with names), bots shown at their house, sick contractors shown lying down with a red cross; hospital art; Balai Kota hire buttons disabled with the bed message when full.
-- [ ] Tests: `house gives one bed, kasur adds beds`; `hire without a free bed answers 409 and charges nothing`; `hiburan raises motivation and speeds builds`; `collapse makes a contractor sick, rumah sakit heals faster`; `sick contractor takes no job, another does`; `generator v2 has a rumah lot per chunk and a rumahsakit lot, all reachable` (in homeland-gen test).
+- [x] Tests: `house gives one bed, kasur adds beds`; `hire without a free bed answers 409 and charges nothing`; `hiburan raises motivation and speeds builds`; `collapse makes a contractor sick, rumah sakit heals faster`; `sick contractor takes no job, another does`; `generator v2 has a rumah lot per chunk and a rumahsakit lot, all reachable` (in homeland-gen test).
 
 ### Task C3: Cosmetics
 

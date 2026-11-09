@@ -24,7 +24,9 @@ async function world() {
   const hl = (a: string) => game.homelands.map(game.homelands.ensure(a));
   /** Standing at the Town Hall door of the owner's Homeland. */
   const hall = (a: string): Pos => { const h = hl(a).layout.buildings.find((b) => b.kind === 'townhall')!; return { x: h.dx, y: h.dy + 1 }; };
-  const hire = (a: string, job: string, pos: Pos = hall(a), world = wid(a)) => { adv(60_000); return game.act(a, { action: 'hire', job, world, pos }) as any; };
+  /** C2: hiring needs a bed, so every test hirer lives in a house with five beds and a radio (motivation 60). */
+  const ensureHouse = (a: string) => { game.homelands.ensure(a); if (!game.gs.homelandBuildings(a).some((b) => b.kind === 'rumah')) { game.gs.addHomelandBuilding(a, 'rumah-c', 'rumah', 0); game.gs.setFurnitureLevel(a, 'rumah-c:kasur', 4); game.gs.setFurnitureLevel(a, 'rumah-c:hiburan', 1); } };
+  const hire = (a: string, job: string, pos: Pos = hall(a), world = wid(a)) => { ensureHouse(a); adv(60_000); return game.act(a, { action: 'hire', job, world, pos }) as any; };
   const give = (a: string, t: string, n: number) => game.gs.add(1, a, t, n, 'test');
   return { game, econ, now: () => now, adv, hl, hall, hire, give, wid, gs: game.gs };
 }
@@ -65,7 +67,7 @@ test('fresh tukang builds kolam in 45 s', async () => {
   w.give(P, 'wood', 20);
   const t0 = w.now();
   const r = w.H.start(P, 'build', 'kolam-c', 1);
-  assert.equal(r.ends_at - t0, 45_000);
+  assert.equal(r.ends_at - t0, 43_000); // 45 s base / 1.05 (default Tukang motivation 60), well inside the 60 s demo budget
   assert.deepEqual(w.H.view(P).workers.map((x) => [x.slot, x.fatigue, x.busy]), [[0, 0, true]]);
 });
 
@@ -77,7 +79,7 @@ test('fatigue grows per job and slows the next job', async () => {
   assert.equal(w.fat(P), 5); // 10 per job minute x 30 s
   const t0 = w.now();
   const r = w.H.start(P, 'build', 'kolam-c', 1);
-  assert.equal(r.ends_at - t0, Math.ceil(45 * 1.05) * 1000); // 48 s
+  assert.equal(r.ends_at - t0, Math.ceil(45 * 1.05 / 1.05) * 1000); // 5% tired, motivation factor 1.05
   w.adv(49_000);
   assert.equal(w.H.view(P).built.length, 1);
   const f = w.fat(P);

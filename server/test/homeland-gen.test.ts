@@ -94,3 +94,18 @@ test('built buildings appear on their lot', () => {
   const b = L.buildings.find((x: any) => x.kind === 'kolam');
   assert.ok(b && b.x === lot.x && b.y === lot.y && b.dx === lot.door.x && b.dy === lot.door.y);
 });
+
+test('generator v2 has a rumah lot per chunk and a rumahsakit lot, all reachable', () => {
+  const ids = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
+  assert.equal(GH.VERSION, 2);
+  for (let s = 1; s <= 30; s++) {
+    const L0 = GH.generate(s, base);
+    assert.deepEqual(ids.map((id) => `rumah-${id}`).filter((id) => !L0.lots.some((l: any) => l.id === id)), [], `seed ${s} rumah lots`);
+    assert.ok(L0.lots.some((l: any) => l.id === 'rumahsakit-c' && l.kind === 'rumahsakit'));
+    // every lot built and every chunk open: nothing may block the way to a door
+    const L = GH.generate(s, { open: ids.filter((i) => i !== 'c'), th: 5, built: L0.lots.map((l: any) => ({ kind: l.kind, lot: l.id })) });
+    const r = reach(L, L.spawn.x, L.spawn.y);
+    for (const l of L0.lots) assert.ok(r.has((l.door.y + 1) * L.w + l.door.x), `seed ${s} lot ${l.id} reachable`);
+    assert.deepEqual(L.lots, L0.lots); // lots never move with progress
+  }
+});

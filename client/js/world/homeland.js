@@ -18,12 +18,12 @@
 (function (root) {
   'use strict';
 
-  var VERSION = 1, CH = 16, N = 3, W = CH * N, H = CH * N;
+  var VERSION = 2, CH = 16, N = 3, W = CH * N, H = CH * N;
   var CHUNKS = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
   var ORTHO = ['n', 'w', 'e', 's'];
   var SOLID = { tree: 1, fence: 1, sign: 1, mailbox: 1, rock: 1, water: 1, bush: 1, barrel: 1, crate: 1, stall: 1, lamp: 1 };
   var NAMES = { forest: 'Hutan', rock: 'Bukit Batu', pond: 'Kolam', sea: 'Pantai', meadow: 'Padang' };
-  var KIND_NAMES = { kolam: 'Kolam Ikan', tambang: 'Tambang', restoran: 'Restoran' };
+  var KIND_NAMES = { kolam: 'Kolam Ikan', tambang: 'Tambang', restoran: 'Restoran', rumah: 'Rumah Pekerja', rumahsakit: 'Rumah Sakit' };
   var MAX_PLOTS = 6;
   var FIELD = [3, 2]; // plots across x down: the fence always encloses the biggest field (6 plots)
 
@@ -106,8 +106,12 @@
     }
     var cOx = CH, cOy = CH; // centre chunk origin
     addLot('kolam', 'c', 11, 2);
-    addLot('restoran', 'c', 11, 9);
+    addLot('restoran', 'c', 11, 6);
+    addLot('rumahsakit', 'c', 11, 10);
+    addLot('rumah', 'c', 1, 2);
     if (rockId) addLot('tambang', rockId, 2, 2);
+    // one Rumah Pekerja per outer chunk, beside the chunk's cross path (lot x 10..12, door row 12)
+    CHUNKS.forEach(function (cid) { if (cid !== 'c') addLot('rumah', cid, rockId === cid ? 10 : 10, 9); });
 
     // the Town Hall: 4 x 4, door on the bottom row (third tile), spawn one tile below the door
     var tx = cOx + 6, ty = cOy + 1, tdx = cOx + 8, tdy = cOy + 4;
@@ -140,6 +144,17 @@
           if (tiles[k] === 'sand' && !cross && h < 0.06) tiles[k] = 'rock';
         }
       }
+    });
+
+    // outer-chunk lots: dry ground under the lot, and a path from the way in west to the chunk's cross path
+    lots.forEach(function (l) {
+      if (l.chunk === 'c') return;
+      for (var yy = l.y; yy <= l.y + 3; yy++) for (var xx = l.x; xx < l.x + 3; xx++) {
+        if (yy === l.y + 3 && xx !== l.door.x) continue;
+        var kk = I(xx, yy); if (SOLID[tiles[kk]] || tiles[kk] === 'water') tiles[kk] = biomes[l.chunk] === 'sea' ? 'sand' : 'grass';
+      }
+      var cOx2 = (CHUNKS.indexOf(l.chunk) % N) * CH;
+      for (var xx2 = cOx2 + 8; xx2 <= l.door.x; xx2++) { var k3 = I(xx2, l.door.y + 1); if (SOLID[tiles[k3]] || tiles[k3] === 'water') tiles[k3] = 'path'; }
     });
 
     // centre chunk: Town Hall ground, paths, farm, then trees and rocks to gather by hand
@@ -198,6 +213,13 @@
       if (!ok(fx0 + 2 + (i % FIELD[0]), fy0 + 2 + Math.floor(i / FIELD[0]))) return null;
     }
     for (i = 0; i < lots.length; i++) if (lots[i].chunk === 'c' && !ok(lots[i].door.x, lots[i].door.y)) return null;
+    // with every chunk open, every lot door is reachable from the spawn (outer lots through the cross paths)
+    var walkAll = new Uint8Array(W * H);
+    for (i = 0; i < W * H; i++) walkAll[i] = SOLID[tiles[i]] ? 0 : 1;
+    for (y = ty; y < ty + 4; y++) for (x = tx; x < tx + 4; x++) walkAll[I(x, y)] = 0;
+    lots.forEach(function (l) { for (var yy = l.y; yy < l.y + 3; yy++) for (var xx = l.x; xx < l.x + 3; xx++) walkAll[I(xx, yy)] = 0; });
+    var seenAll = bfs(walkAll, spawn.x, spawn.y);
+    for (i = 0; i < lots.length; i++) if (!seenAll[I(lots[i].door.x, lots[i].door.y + 1)]) return null;
     var spots = { tree: 0, rock: 0 };
     for (y = cOy; y < cOy + CH; y++) for (x = cOx; x < cOx + CH; x++) {
       var t = tiles[I(x, y)];

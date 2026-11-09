@@ -25,7 +25,9 @@
     townhall: { roof: '#2f5fa8', roofD: '#1c3c70', roofL: '#5c8ed8', wall: '#f2e8cc', wallD: '#d8c89c', sign: '#fff6d8' },
     kolam:    { roof: '#2a7ab0', roofD: '#1a4e78', roofL: '#5cb0e0', wall: '#e4f0ec', wallD: '#bcd4cc', sign: '#f2fbff' },
     tambang:  { roof: '#5c5868', roofD: '#3a3644', roofL: '#8a8698', wall: '#a8a2a0', wallD: '#847e80', sign: '#ece8e0' },
-    restoran: { roof: '#b8422e', roofD: '#7a2a1e', roofL: '#e0705a', wall: '#f6e4c8', wallD: '#dcc09a', sign: '#fff4dc' }
+    restoran: { roof: '#b8422e', roofD: '#7a2a1e', roofL: '#e0705a', wall: '#f6e4c8', wallD: '#dcc09a', sign: '#fff4dc' },
+    rumah:      { roof: '#8a4a2c', roofD: '#5a2e1a', roofL: '#b87048', wall: '#e8d4a8', wallD: '#c8b080', sign: '#fff2d4' },
+    rumahsakit: { roof: '#c84a4a', roofD: '#8a2c2c', roofL: '#e88080', wall: '#f8f6f2', wallD: '#dcd8d4', sign: '#ffffff' }
   };
 
   function roof(g, w, top, rows, st) {
@@ -67,6 +69,8 @@
     townhall: function (g, cx, y) { R(g, cx - 5, y + 1, 10, 5, '#f8f4e4'); R(g, cx - 5, y + 1, 10, 1, '#c8a030'); R(g, cx - 1, y + 2, 2, 4, '#2f5fa8'); R(g, cx - 3, y + 2, 1, 4, '#c8a030'); R(g, cx + 2, y + 2, 1, 4, '#c8a030'); },
     kolam: function (g, cx, y) { R(g, cx - 4, y + 2, 7, 3, '#3d7fc2'); R(g, cx + 3, y + 1, 2, 5, '#3d7fc2'); R(g, cx - 3, y + 3, 1, 1, '#ffffff'); R(g, cx - 1, y + 2, 1, 1, '#9ad8ff'); },
     tambang: function (g, cx, y) { R(g, cx - 4, y + 1, 8, 1, '#6a6678'); R(g, cx - 4, y + 1, 2, 2, '#6a6678'); R(g, cx + 2, y + 1, 2, 2, '#6a6678'); R(g, cx - 1, y + 2, 2, 4, '#8a5a30'); },
+    rumah: function (g, cx, y) { R(g, cx - 4, y + 3, 8, 3, '#f8f0d8'); R(g, cx - 5, y + 2, 10, 1, '#8a4a2c'); R(g, cx - 3, y + 1, 6, 1, '#8a4a2c'); R(g, cx - 1, y + 4, 2, 2, '#6a4020'); R(g, cx + 2, y + 4, 1, 1, '#7cc8f0'); },
+    rumahsakit: function (g, cx, y) { R(g, cx - 1, y, 2, 6, '#d83c3c'); R(g, cx - 3, y + 2, 6, 2, '#d83c3c'); },
     restoran: function (g, cx, y) { R(g, cx - 4, y + 3, 8, 2, '#f8f8f8'); R(g, cx - 3, y + 2, 6, 1, '#d0d0d0'); R(g, cx + 3, y + 1, 1, 5, '#c8c8c8'); R(g, cx - 4, y + 1, 1, 3, '#c8c8c8'); },
     warung: function (g, cx, y) { R(g, cx - 3, y + 2, 5, 4, '#f8f8f8'); R(g, cx - 3, y + 2, 5, 1, '#6a4020'); R(g, cx + 2, y + 3, 2, 2, '#f8f8f8'); R(g, cx - 2, y + 1, 1, 1, '#c8c8c8'); R(g, cx, y, 1, 1, '#c8c8c8'); }
   };
@@ -105,7 +109,7 @@
       R(g, 4, wallTop + 7, 9, 12, OL); R(g, 5, wallTop + 8, 7, 11, '#14101c'); R(g, 4, wallTop + 6, 9, 1, '#6a4020'); R(g, 3, wallTop + 7, 1, 12, '#6a4020'); R(g, 13, wallTop + 7, 1, 12, '#6a4020');
       R(g, w - 12, wallTop + 14, 8, 4, OL); R(g, w - 11, wallTop + 11, 6, 4, '#b07840'); R(g, w - 11, wallTop + 11, 6, 1, '#d49c5c'); R(g, w - 11, wallTop + 17, 2, 2, '#d0d0d0'); R(g, w - 7, wallTop + 17, 2, 2, '#d0d0d0');
     } else {
-      var glass = kind === 'clinic' ? '#c8f0ec' : kind === 'kolam' ? '#7cc8f0' : null;
+      var glass = kind === 'clinic' ? '#c8f0ec' : kind === 'rumahsakit' ? '#c8e8f8' : kind === 'kolam' || kind === 'rumah' ? '#7cc8f0' : null;
       windowAt(g, 5, wallTop + 6, glass);
       windowAt(g, w - 13, wallTop + 6, glass);
       if (wt >= 5) { windowAt(g, cx - 18, wallTop + 6); windowAt(g, cx + 10, wallTop + 6); }
@@ -117,7 +121,7 @@
     }
     if (kind === 'kolam') { R(g, 2, h - 6, w - 4, 2, '#3d7fc2'); R(g, 2, h - 6, w - 4, 1, '#9ad8ff'); }
     sign(g, cx, h - 24, st, ICON[kind]);
-    door(g, cx, h - 1, kind === 'clinic' ? '#5cb8b0' : kind === 'post' ? '#c86028' : null);
+    door(g, cx, h - 1, kind === 'clinic' || kind === 'rumahsakit' ? '#5cb8b0' : kind === 'rumah' ? '#6a4020' : kind === 'post' ? '#c86028' : null);
     return cv;
   }
 

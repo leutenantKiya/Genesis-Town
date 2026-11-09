@@ -11,7 +11,7 @@ export interface MarketRow { merchant: string; token: string; mid: number; bough
 
 export interface HomelandRow { account: string; id: number; seed: number; gen: number; th: number; open: string[]; created_at: number }
 export interface HomelandBuildingRow { account: string; lot: string; kind: string; last_collect: number }
-export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build'; ends_at: number; worker: number; base_secs: number; started_at: number }
+export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade'; ends_at: number; worker: number; base_secs: number; started_at: number }
 export interface WorkerRow { account: string; slot: number; fatigue: number; updated_at: number; sick_until: number }
 
 export class GameStore {
@@ -44,6 +44,7 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS homeland_jobs (account TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL, ends_at INTEGER NOT NULL, worker INTEGER NOT NULL DEFAULT 0, base_secs INTEGER NOT NULL DEFAULT 0, started_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, target));
       CREATE TABLE IF NOT EXISTS homeland_bots (account TEXT NOT NULL, id INTEGER NOT NULL, job TEXT NOT NULL, hired_at INTEGER NOT NULL, PRIMARY KEY (account, id));
       CREATE TABLE IF NOT EXISTS homeland_workers (account TEXT NOT NULL, slot INTEGER NOT NULL, fatigue REAL NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, sick_until INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, slot));
+      CREATE TABLE IF NOT EXISTS homeland_furniture (account TEXT NOT NULL, key TEXT NOT NULL, level INTEGER NOT NULL, PRIMARY KEY (account, key));
       CREATE TABLE IF NOT EXISTS homeland_pantry (account TEXT PRIMARY KEY, pantry INTEGER NOT NULL DEFAULT 0, tick_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS homeland_forage (account TEXT PRIMARY KEY, last INTEGER NOT NULL, carry REAL NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS trade_offers (id INTEGER PRIMARY KEY AUTOINCREMENT, from_acct TEXT NOT NULL, to_acct TEXT NOT NULL,
@@ -53,6 +54,8 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS homeland_invites (id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));
     `);
     const jc = (this.db.prepare('PRAGMA table_info(homeland_jobs)').all() as Array<{ name: string }>).map((c) => c.name);
+    const bc = (this.db.prepare('PRAGMA table_info(homeland_bots)').all() as Array<{ name: string }>).map((c) => c.name);
+    if (!bc.includes('house')) this.db.exec("ALTER TABLE homeland_bots ADD COLUMN house TEXT NOT NULL DEFAULT ''");
     for (const c of ['worker', 'base_secs', 'started_at']) if (!jc.includes(c)) this.db.exec(`ALTER TABLE homeland_jobs ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
   }
 
@@ -288,13 +291,19 @@ export class GameStore {
   deleteHomelandJob(account: string, target: string): boolean {
     return Number(this.db.prepare('DELETE FROM homeland_jobs WHERE account = ? AND target = ?').run(account, target).changes) === 1;
   }
-  homelandBots(account: string): Array<{ account: string; id: number; job: string; hired_at: number }> {
-    return this.db.prepare('SELECT * FROM homeland_bots WHERE account = ? ORDER BY id').all(account) as unknown as Array<{ account: string; id: number; job: string; hired_at: number }>;
+  homelandBots(account: string): Array<{ account: string; id: number; job: string; hired_at: number; house: string }> {
+    return this.db.prepare('SELECT * FROM homeland_bots WHERE account = ? ORDER BY id').all(account) as unknown as Array<{ account: string; id: number; job: string; hired_at: number; house: string }>;
   }
-  addHomelandBot(account: string, job: string, hiredAt: number): number {
+  addHomelandBot(account: string, job: string, hiredAt: number, house = ''): number {
     const id = ((this.db.prepare('SELECT COALESCE(MAX(id), 0) AS m FROM homeland_bots WHERE account = ?').get(account) as { m: number }).m) + 1;
-    this.db.prepare('INSERT INTO homeland_bots (account, id, job, hired_at) VALUES (?, ?, ?, ?)').run(account, id, job, hiredAt);
+    this.db.prepare('INSERT INTO homeland_bots (account, id, job, hired_at, house) VALUES (?, ?, ?, ?, ?)').run(account, id, job, hiredAt, house);
     return id;
+  }
+  furnitureLevel(account: string, key: string): number {
+    return (this.db.prepare('SELECT level FROM homeland_furniture WHERE account = ? AND key = ?').get(account, key) as { level: number } | undefined)?.level ?? 0;
+  }
+  setFurnitureLevel(account: string, key: string, level: number) {
+    this.db.prepare('INSERT INTO homeland_furniture (account, key, level) VALUES (?, ?, ?) ON CONFLICT(account, key) DO UPDATE SET level = excluded.level').run(account, key, level);
   }
   forageOf(account: string): { last: number; carry: number } | undefined {
     return this.db.prepare('SELECT last, carry FROM homeland_forage WHERE account = ?').get(account) as { last: number; carry: number } | undefined;

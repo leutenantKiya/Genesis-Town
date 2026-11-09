@@ -233,7 +233,7 @@ export class Game {
       if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Berdiri di sebelah petak kebunmu.');
       if ((a === 'craft' || a === 'ship') && !w.map.atOwnHouse(pos)) far(a === 'craft' ? 'Meja Kerja ada di Balai Kota-mu.' : 'Kotak Kirim ada di rumahmu.');
       if (a === 'build' && w.map instanceof HomelandMap) {
-        if (s('kind') === 'build') { if (!w.map.nearLot(pos, s('target'))) far('Berdiri di dekat lahan itu.'); }
+        if (s('kind') === 'build' || s('kind') === 'furniture' || s('kind') === 'upgrade') { if (!w.map.nearLot(pos, s('target').split(':')[0])) far('Berdiri di dekat lahan itu.'); }
         else if (!w.map.atOwnHouse(pos)) far('Berdiri di depan Balai Kota.');
       }
       if (a === 'cook' || a === 'stock') {
@@ -264,7 +264,7 @@ export class Game {
       case 'eat': res = this.world.eat(account, s('token')); break;
       case 'farm': res = this.world.farm(account, s('op'), n('plot', -1), w.row ? { plotAccount: `${account}@${wid}`, count: this.farmCount(w.row), growDays: Math.max(1, Math.ceil(this.econ.farm.growDays / this.homelands.effects(account).farmGrowFactor - 1e-9)), yieldBonus: 0 } : undefined); break;
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
-      case 'build': res = this.homelands.start(account, s('kind') as 'th' | 'chunk' | 'build', s('target'), this.clock.time().settleDay); break;
+      case 'build': res = this.homelands.start(account, s('kind') as 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay); break;
       case 'hire': res = this.homelands.hire(account, s('job'), this.clock.time().settleDay); break;
       case 'forage': res = this.homelands.forage(account, this.clock.time().settleDay, (acc, t, q) => this.world.checkGain(acc, t, q)); break;
       case 'cook': res = this.homelands.cook(account, body.qty, this.clock.time().settleDay); break;

@@ -24,8 +24,11 @@ export interface HomelandView {
   builders: { total: number; busy: number };
   next: { th: TownhallStep | null; chunk: ChunkStep | null; buildings: Record<string, BuildingOption> };
   guests: Array<{ account: string; name: string; tag: string }>;
-  bots: Array<{ id: number; job: string; name: string }>;
-  workers: Array<{ slot: number; name: string; fatigue: number; busy: boolean; sick_until: number }>;
+  bots: Array<{ id: number; job: string; name: string; house: string | null }>;
+  workers: Array<{ slot: number; name: string; fatigue: number; busy: boolean; sick_until: number; motivation: number }>;
+  houses: Array<{ lot: string; beds: number; used: number; kasur: number; kasurMax: number; hiburan: number; hiburanMax: number; hiburanName: string | null; motivation: number; nextKasur: { cost: Cost; secs: number } | null; nextHiburan: { cost: Cost; secs: number; name: string | null } | null }>;
+  beds: { total: number; used: number };
+  hospital: { lot: string; level: number; maxLevel: number; healGameHours: number; next: { cost: Cost; secs: number } | null } | null;
   restoran: { pantry: number; pantryMax: number; nextServeAt: number } | null;
   forage: { stored: Record<string, number>; capacity: number } | null;
   cook: { recipe: { inputs: Record<string, number>; output: string }; can: boolean; why: string | null } | null;
@@ -97,11 +100,13 @@ export class Homelands {
         if (!row) continue;
         if (j.kind === 'th') gs.setHomelandTh(account, row.th + 1);
         else if (j.kind === 'chunk') { if (!row.open.includes(j.target)) gs.setHomelandOpen(account, [...row.open, j.target]); }
+        else if (j.kind === 'furniture') gs.setFurnitureLevel(account, j.target, gs.furnitureLevel(account, j.target) + 1);
+        else if (j.kind === 'upgrade') { const lot = j.target.split(':')[0]; gs.setFurnitureLevel(account, lot, Math.max(1, gs.furnitureLevel(account, lot)) + 1); }
         else gs.addHomelandBuilding(account, j.target, j.target.split('-')[0], j.ends_at);
         const w = workers.get(j.worker);
         if (w) {
           w.fatigue = Math.min(100, w.fatigue + fc.perJobMinute * (j.base_secs / 60));
-          if (w.fatigue >= fc.collapseAt && !w.sick_until) w.sick_until = j.ends_at + fc.sickGameHours * hourMs; // C2 shortens this with a hospital
+          if (w.fatigue >= fc.collapseAt && !w.sick_until) w.sick_until = j.ends_at + this.sickHours(account) * hourMs;
           dirty.add(w.slot);
         }
       }
@@ -131,8 +136,50 @@ export class Homelands {
   private workerOf(account: string, slot: number): WorkerRow {
     return this.d.gs.workerRows(account).find((w) => w.slot === slot) ?? { account, slot, fatigue: 0, updated_at: this.now(), sick_until: 0 };
   }
-  /** The motivation hook for C2 (beds and entertainment). */
-  private motivationFactor(_account: string, _slot: number): number { return 1.0; }
+  /* ------------------------------------------------------------ houses, motivation, hospital */
+
+  /** Built houses (buildings whose config has furniture) with their lot ids, in lot order. */
+  private houseLots(account: string): string[] {
+    return this.d.gs.homelandBuildings(account).filter((b) => Object.hasOwn(this.cfg.buildings, b.kind) && this.cfg.buildings[b.kind].furniture).map((b) => b.lot);
+  }
+  private houseDef() { return Object.values(this.cfg.buildings).find((d) => d.furniture)!; }
+  private furnLevel(account: string, lot: string, item: string) { return this.d.gs.furnitureLevel(account, `${lot}:${item}`); }
+  private bedsOf(account: string, lot: string) { return 1 + this.furnLevel(account, lot, 'kasur'); }
+  private bedInfo(account: string): { total: number; used: number } {
+    let total = 0;
+    for (const lot of this.houseLots(account)) total += this.bedsOf(account, lot);
+    return { total, used: this.d.gs.homelandBots(account).length };
+  }
+  private houseMotivation(account: string, lot: string): number {
+    const m = this.cfg.motivation;
+    return lot ? Math.min(100, m.base + m.perHiburan * this.furnLevel(account, lot, 'hiburan')) : m.base;
+  }
+  /** Motivation of a contractor slot or bot id: the default Tukang (slot 0) is fixed, a bot takes its house's. */
+  private motivationOf(account: string, slot: number): number {
+    if (slot === 0) return this.cfg.motivation.tukang;
+    const b = this.d.gs.homelandBots(account).find((x) => x.id === slot);
+    return b ? this.houseMotivation(account, b.house) : this.cfg.motivation.base;
+  }
+  private factorOf(motivation: number) { return this.cfg.motivation.factorBase + this.cfg.motivation.factorSpan * motivation / 100; }
+  private motivationFactor(account: string, slot: number): number { return this.factorOf(this.motivationOf(account, slot)); }
+  /** The house a new bot moves into: a free bed, the best entertainment first. '' when none (legacy bots). */
+  private pickHouse(account: string): string {
+    const bots = this.d.gs.homelandBots(account);
+    const free = this.houseLots(account).filter((lot) => this.bedsOf(account, lot) - bots.filter((b) => b.house === lot).length > 0);
+    free.sort((a, b) => this.furnLevel(account, b, 'hiburan') - this.furnLevel(account, a, 'hiburan') || (a < b ? -1 : 1));
+    return free[0] ?? '';
+  }
+  private hospital(account: string): { lot: string; level: number; def: BuildingDef } | null {
+    const b = this.d.gs.homelandBuildings(account).find((x) => Object.hasOwn(this.cfg.buildings, x.kind) && this.cfg.buildings[x.kind].healGameHours);
+    if (!b) return null;
+    const def = this.cfg.buildings[b.kind];
+    return { lot: b.lot, level: Math.min(def.maxLevel ?? 1, Math.max(1, this.d.gs.furnitureLevel(account, b.lot))), def };
+  }
+  /** Game hours a collapsed contractor stays sick: the hospital level decides, no hospital is the long way. */
+  private sickHours(account: string): number {
+    const h = this.hospital(account);
+    return h ? h.def.healGameHours![h.level - 1] : this.cfg.fatigue.sickGameHoursWithoutHospital;
+  }
 
   private progress(row: HomelandRow): HomelandProgress {
     return { open: row.open, th: row.th, built: this.d.gs.homelandBuildings(row.account).map((b) => ({ kind: b.kind, lot: b.lot })) };
@@ -276,8 +323,8 @@ export class Homelands {
     return Object.hasOwn(all, job) ? all[job] : undefined;
   }
 
-  bots(account: string): Array<{ id: number; job: string; name: string }> {
-    return this.d.gs.homelandBots(account).filter((b) => this.botDef(b.job)).map((b) => ({ id: b.id, job: b.job, name: this.botDef(b.job)!.name }));
+  bots(account: string): Array<{ id: number; job: string; name: string; house: string | null }> {
+    return this.d.gs.homelandBots(account).filter((b) => this.botDef(b.job)).map((b) => ({ id: b.id, job: b.job, name: this.botDef(b.job)!.name, house: b.house || null }));
   }
 
   /** What the owner's bots add up to. Factors multiply per bot, bonuses add. */
@@ -286,12 +333,13 @@ export class Homelands {
     for (const b of this.d.gs.homelandBots(account)) {
       const x = this.botDef(b.job)?.effect;
       if (!x) continue;
+      const mf = this.motivationFactor(account, b.id); // motivated bots work harder, bored ones slower
       e.builders += x.builders ?? 0;
       e.woodBonus += x.woodBonus ?? 0;
-      if (x.farmGrowFactor) e.farmGrowFactor *= x.farmGrowFactor;
-      if (x.fishRate) e.fishRate *= x.fishRate;
+      if (x.farmGrowFactor) e.farmGrowFactor *= 1 + (x.farmGrowFactor - 1) * mf;
+      if (x.fishRate) e.fishRate *= 1 + (x.fishRate - 1) * mf;
       if (x.chef) e.chef = true;
-      if (x.forage) e.forage = x.forage;
+      if (x.forage) e.forage = { ...x.forage, perGameHour: x.forage.perGameHour * mf };
     }
     return e;
   }
@@ -305,6 +353,8 @@ export class Homelands {
     if (have >= def.max) return `Pekerja ${def.name} sudah penuh (maks ${def.max}).`;
     const need = def.th ?? (job === 'builder' ? 1 : 2);
     if (th < need) return `Balai Kota perlu level ${need}.`;
+    const beds = this.bedInfo(account);
+    if (beds.used >= beds.total) return 'Tidak ada kasur kosong. Bangun Rumah Pekerja atau tambah kasur.';
     const coin = this.d.gs.balance(account, 'coin');
     if (coin < def.price) return `Koin kurang (punya ${coin}, perlu ${def.price}).`;
     return null;
@@ -321,7 +371,7 @@ export class Homelands {
     const ref = `${homeWorld(row.id)}:hire:${job}`;
     gs.add(day, account, 'coin', -def.price, 'hire', ref);
     gs.add(day, this.d.town, 'coin', def.price, 'hire', ref);
-    gs.addHomelandBot(account, job, this.now());
+    gs.addHomelandBot(account, job, this.now(), this.pickHouse(account));
     if (def.effect.forage) gs.setForage(account, this.now(), 0);
     return { toast: `${def.name} dipekerjakan (-${def.price} koin).`, tags: ['coin'] };
   }
@@ -353,16 +403,26 @@ export class Homelands {
   }
 
   /** Checks a build request and returns what it costs; throws the 409 the player sees. Pure: charges nothing. */
-  private plan(row: HomelandRow, kind: string, target: string): { cost: Cost; secs: number; label: string } {
+  /** 'rumah-c:kasur' -> its parts; the item must be an own key of some furniture config (400 otherwise, 'constructor' included). */
+  private furnParts(target: string): { lot: string; item: string } {
+    const parts = String(target).split(':');
+    const items = Object.values(this.cfg.buildings).flatMap((d) => Object.keys(d.furniture ?? {}));
+    if (parts.length !== 2 || !items.includes(parts[1])) throw new HttpError(400, 'Perabot tidak dikenal.');
+    return { lot: parts[0], item: parts[1] };
+  }
+
+  private plan(row: HomelandRow, kind: string, target: string): { cost: Cost; secs: number; label: string; job: string } {
     const gs = this.d.gs, account = row.account;
+    const furn = kind === 'furniture' ? this.furnParts(target) : null; // names are checked before anything else
     const jobs = gs.homelandJobs(account);
     if (jobs.length >= this.builderSlots(account)) throw new HttpError(409, 'Builder sedang bekerja.');
     if (!this.pickWorker(account)) throw new HttpError(409, 'Semua tukang sedang sakit. Tunggu sampai sembuh.');
-    let plan: { cost: Cost; secs: number; label: string };
+    let plan: { cost: Cost; secs: number; label: string; job: string };
+    const same = (job: string) => { if (jobs.some((j) => j.target === job)) throw new HttpError(409, 'Sedang dibangun.'); return job; };
     if (kind === 'th') {
       const step = this.thStep(row);
       if (!step) throw new HttpError(409, 'Balai Kota sudah level tertinggi.');
-      plan = { cost: step.cost, secs: step.secs, label: `Balai Kota level ${step.level}` };
+      plan = { cost: step.cost, secs: step.secs, label: `Balai Kota level ${step.level}`, job: same(target) };
     } else if (kind === 'chunk') {
       const step = this.chunkStep(row);
       if (!(target in NEIGHBOURS)) throw new HttpError(409, 'Chunk itu tidak bersebelahan dengan wilayahmu.');
@@ -370,7 +430,7 @@ export class Homelands {
       const mine = new Set(['c', ...row.open]);
       if (!NEIGHBOURS[target].some((n) => mine.has(n))) throw new HttpError(409, 'Chunk itu tidak bersebelahan dengan wilayahmu.');
       if (row.th < step.th) throw new HttpError(409, `Balai Kota perlu level ${step.th}.`);
-      plan = { cost: step.cost, secs: step.secs, label: 'Wilayah baru' };
+      plan = { cost: step.cost, secs: step.secs, label: 'Wilayah baru', job: same(target) };
     } else if (kind === 'build') {
       const lot = this.map(row).layout.lots.find((l) => l.id === target);
       const def = lot && this.cfg.buildings[lot.kind];
@@ -378,7 +438,22 @@ export class Homelands {
       if (gs.homelandBuildings(account).some((b) => b.lot === target)) throw new HttpError(409, 'Sudah dibangun.');
       if (row.th < def.th) throw new HttpError(409, `Balai Kota perlu level ${def.th}.`);
       if (def.needsChunk && !row.open.includes(lot.chunk) && lot.chunk !== 'c') throw new HttpError(409, 'Wilayah itu belum dibuka.');
-      plan = { cost: def.cost, secs: def.secs, label: def.name };
+      plan = { cost: def.cost, secs: def.secs, label: def.name, job: same(target) };
+    } else if (furn) {
+      const b = gs.homelandBuildings(account).find((x) => x.lot === furn.lot);
+      const hdef = b && Object.hasOwn(this.cfg.buildings, b.kind) ? this.cfg.buildings[b.kind] : undefined;
+      if (!b || !hdef?.furniture) throw new HttpError(409, 'Bangun Rumah Pekerja dulu.');
+      if (!Object.hasOwn(hdef.furniture, furn.item)) throw new HttpError(400, 'Perabot tidak dikenal.');
+      const fd = hdef.furniture[furn.item], lvl = gs.furnitureLevel(account, target);
+      if (lvl >= fd.max || !fd.levels[lvl]) throw new HttpError(409, `${fd.name} sudah level tertinggi.`);
+      const label = fd.names ? fd.names[lvl] ?? fd.name : `${fd.name} ke-${lvl + 2}`;
+      plan = { cost: fd.levels[lvl].cost, secs: fd.levels[lvl].secs, label, job: same(target) };
+    } else if (kind === 'upgrade') {
+      const h = this.hospital(account);
+      if (!h || h.lot !== String(target)) throw new HttpError(409, 'Bangun Rumah Sakit dulu.');
+      const step = h.def.upgrade?.[h.level - 1];
+      if (h.level >= (h.def.maxLevel ?? 1) || !step) throw new HttpError(409, 'Rumah Sakit sudah level tertinggi.');
+      plan = { cost: step.cost, secs: step.secs, label: `Rumah Sakit level ${h.level + 1}`, job: same(`${h.lot}:up`) };
     } else throw new HttpError(400, 'Jenis bangunan tidak dikenal.');
     for (const [t, n] of Object.entries(plan.cost)) {
       const have = gs.balance(account, t);
@@ -395,7 +470,7 @@ export class Homelands {
     return free[0] ?? null;
   }
 
-  start(account: string, kind: 'th' | 'chunk' | 'build', target: string, day: number): { toast: string; tags: string[]; ends_at: number } {
+  start(account: string, kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', target: string, day: number): { toast: string; tags: string[]; ends_at: number } {
     this.settle(account);
     const row = this.ensure(account);
     const plan = this.plan(row, kind, String(target));
@@ -408,11 +483,22 @@ export class Homelands {
     const w = this.pickWorker(account)!;
     const secs = Math.ceil(plan.secs * (1 + this.cfg.fatigue.slowdownAt100 * w.fatigue / 100) / this.motivationFactor(account, w.slot) - 1e-9);
     const ends_at = this.now() + secs * 1000;
-    gs.addHomelandJob(account, String(target), kind, ends_at, w.slot, plan.secs, this.now());
+    gs.addHomelandJob(account, plan.job, kind, ends_at, w.slot, plan.secs, this.now());
     return { toast: `${plan.label}: pembangun mulai bekerja.`, tags: Object.keys(plan.cost), ends_at };
   }
 
   /* ------------------------------------------------------------ view */
+
+  private houseView(account: string, lot: string): HomelandView['houses'][number] {
+    const fd = this.houseDef().furniture!, kasur = this.furnLevel(account, lot, 'kasur'), hib = this.furnLevel(account, lot, 'hiburan');
+    return {
+      lot, beds: 1 + kasur, used: this.d.gs.homelandBots(account).filter((b) => b.house === lot).length,
+      kasur, kasurMax: fd.kasur.max, hiburan: hib, hiburanMax: fd.hiburan.max, hiburanName: hib > 0 ? fd.hiburan.names?.[hib - 1] ?? null : null,
+      motivation: this.houseMotivation(account, lot),
+      nextKasur: kasur < fd.kasur.max && fd.kasur.levels[kasur] ? fd.kasur.levels[kasur] : null,
+      nextHiburan: hib < fd.hiburan.max && fd.hiburan.levels[hib] ? { ...fd.hiburan.levels[hib], name: fd.hiburan.names?.[hib] ?? null } : null,
+    };
+  }
 
   view(account: string): HomelandView {
     this.settle(account);
@@ -441,8 +527,11 @@ export class Homelands {
       bots: this.bots(account),
       workers: this.contractorSlots(account).map((slot) => {
         const w = this.workerOf(account, slot), busy = jobs.some((j) => j.worker === slot);
-        return { slot, name: slot === 0 ? 'Tukang Balai Kota' : `Tukang ${slot}`, fatigue: Math.round(w.fatigue * 10) / 10, busy, sick_until: w.sick_until };
+        return { slot, name: slot === 0 ? 'Tukang Balai Kota' : `Tukang ${slot}`, fatigue: Math.round(w.fatigue * 10) / 10, busy, sick_until: w.sick_until, motivation: this.motivationOf(account, slot) };
       }),
+      houses: this.houseLots(account).map((lot) => this.houseView(account, lot)),
+      beds: this.bedInfo(account),
+      hospital: (() => { const h = this.hospital(account); if (!h) return null; const st = h.def.upgrade?.[h.level - 1]; return { lot: h.lot, level: h.level, maxLevel: h.def.maxLevel ?? 1, healGameHours: h.def.healGameHours![h.level - 1], next: h.level < (h.def.maxLevel ?? 1) && st ? { cost: st.cost, secs: st.secs } : null }; })(),
       restoran: this.restoranLot(account) ? { pantry: this.pantryOf(account), pantryMax: this.cfg.restoran.pantryMax, nextServeAt: (gs.pantryOf(account)?.tick_at ?? this.now()) + Math.round(this.msPerHour() * Math.min(1, this.cfg.restoran.serveEveryGameHours / (this.effects(account).chef ? this.cfg.restoran.chefServeFactor : 1))) } : null,
       forage: (() => { const f = this.forageStored(account); return f ? { stored: f.stored, capacity: f.capacity } : null; })(),
       cook: (() => { const r = this.cookRecipe(account); if (!r) return null; const why = this.cookWhy(account, r, 1); return { recipe: r, can: why === null, why }; })(),

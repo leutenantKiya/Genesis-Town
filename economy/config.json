@@ -135,7 +135,8 @@
   "homeland": {
     "builders": 1,
     "publicTradeOnly": true,
-    "fatigue": { "perJobMinute": 10, "idleRecoverPerGameHour": 5, "collapseAt": 100, "slowdownAt100": 1.0, "sickGameHours": 24 },
+    "fatigue": { "perJobMinute": 10, "idleRecoverPerGameHour": 5, "collapseAt": 100, "slowdownAt100": 1.0, "sickGameHoursWithoutHospital": 24 },
+    "motivation": { "tukang": 60, "base": 40, "perHiburan": 20, "factorBase": 0.75, "factorSpan": 0.5 },
     "restoran": { "pantryMax": 20, "serveEveryGameHours": 1, "serveRelief": 30, "serveMinFatigue": 20, "chefServeFactor": 2 },
     "townhall": [
       { "level": 2, "cost": { "wood": 30, "ore": 5, "coin": 50 }, "secs": 120 },
@@ -164,7 +165,14 @@
     "buildings": {
       "kolam":   { "name": "Kolam Ikan", "th": 1, "cost": { "wood": 5 },  "secs": 45,  "produces": "fish", "perGameHour": 2, "capacity": 6 },
       "tambang":  { "name": "Tambang",    "th": 2, "cost": { "wood": 20, "coin": 30 }, "secs": 120, "produces": "ore", "perGameHour": 2, "capacity": 8, "needsChunk": true },
-      "restoran": { "name": "Restoran",   "th": 3, "cost": { "wood": 40, "ore": 10, "coin": 60 }, "secs": 240, "cooks": "meal" }
+      "restoran": { "name": "Restoran",   "th": 3, "cost": { "wood": 40, "ore": 10, "coin": 60 }, "secs": 240, "cooks": "meal" },
+      "rumah": { "name": "Rumah Pekerja", "th": 1, "cost": { "wood": 15 }, "secs": 60, "needsChunk": true,
+        "furniture": {
+          "kasur":   { "name": "Kasur",   "max": 4, "levels": [ { "cost": { "wood": 10 }, "secs": 30 }, { "cost": { "wood": 20, "coin": 20 }, "secs": 60 }, { "cost": { "wood": 30, "coin": 40 }, "secs": 90 }, { "cost": { "wood": 40, "coin": 80 }, "secs": 120 } ] },
+          "hiburan": { "name": "Hiburan", "max": 3, "names": ["Radio", "TV", "Gamelan"], "levels": [ { "cost": { "wood": 10, "coin": 30 }, "secs": 60 }, { "cost": { "wood": 20, "ore": 10, "coin": 80 }, "secs": 120 }, { "cost": { "wood": 30, "ore": 20, "coin": 150 }, "secs": 240 } ] }
+        } },
+      "rumahsakit": { "name": "Rumah Sakit", "th": 2, "cost": { "wood": 30, "ore": 10, "coin": 60 }, "secs": 180, "maxLevel": 3, "healGameHours": [3, 2, 1],
+        "upgrade": [ { "cost": { "wood": 30, "ore": 15, "coin": 100 }, "secs": 240 }, { "cost": { "wood": 50, "ore": 30, "coin": 200 }, "secs": 480 } ] }
     }
   },
   "monsters": {

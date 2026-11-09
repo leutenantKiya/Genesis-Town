@@ -27,8 +27,8 @@
     nw: ['n', 'w'], n: ['nw', 'c', 'ne'], ne: ['n', 'e'], w: ['nw', 'c', 'sw'], c: ['n', 'w', 'e', 's'],
     e: ['ne', 'c', 'se'], sw: ['w', 's'], s: ['sw', 'c', 'se'], se: ['s', 'e']
   };
-  var HOME_KINDS = { townhall: 1, kolam: 1, tambang: 1, restoran: 1 };
-  var KIND_NAME = { kolam: 'Kolam Ikan', tambang: 'Tambang', restoran: 'Restoran' };
+  var HOME_KINDS = { townhall: 1, kolam: 1, tambang: 1, restoran: 1, rumah: 1, rumahsakit: 1 };
+  var KIND_NAME = { kolam: 'Kolam Ikan', tambang: 'Tambang', restoran: 'Restoran', rumah: 'Rumah Pekerja', rumahsakit: 'Rumah Sakit' };
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function btn(label, onClick, cls, disabled) {
@@ -207,7 +207,7 @@
 
   function jobLine(j) {
     var left = endMs(j) - Date.now();
-    var what = j.kind === 'th' ? 'Balai Kota naik level' : j.kind === 'chunk' ? 'Membuka wilayah ' + chunkName(j.target) : 'Membangun ' + ((lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target);
+    var what = j.kind === 'th' ? 'Balai Kota naik level' : j.kind === 'chunk' ? 'Membuka wilayah ' + chunkName(j.target) : j.kind === 'furniture' ? 'Memasang ' + (/:kasur$/.test(j.target) ? 'kasur' : 'hiburan') : j.kind === 'upgrade' ? 'Menaikkan Rumah Sakit' : 'Membangun ' + ((lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target);
     return what + ' · sisa ' + clock(left);
   }
 
@@ -232,7 +232,7 @@
       var line = $('div', 'gt-fat'), sick = w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now();
       line.appendChild($('span', null, w.name + (sick ? ' · sakit' : w.busy ? ' · bekerja' : ' · menganggur') + ' · lelah '));
       var bar = $('span', null, fatBar(w.fatigue)); bar.style.fontFamily = 'monospace'; bar.style.color = w.fatigue >= 70 ? '#c83838' : w.fatigue >= 40 ? '#d8a030' : '#4a9a4a';
-      line.appendChild(bar); line.appendChild($('span', 'chain-dim', ' ' + Math.round(w.fatigue) + '%'));
+      line.appendChild(bar); line.appendChild($('span', 'chain-dim', ' ' + Math.round(w.fatigue) + '% · semangat ' + Math.round(w.motivation == null ? 60 : w.motivation) + '%'));
       bt.appendChild(line);
     });
     if (H.workers && H.workers.some(function (w) { return w.fatigue >= 40; })) bt.appendChild($('div', 'chain-dim', 'Tukang yang lelah bekerja lebih lambat. Restoran memberi mereka makan dari lemarinya.'));
@@ -284,6 +284,8 @@
     var pk = $('div', 'gt-detail'), pt = $('div', 'grow');
     pt.appendChild($('div', 'gt-detail-name', 'Pekerja'));
     pt.appendChild($('div', 'chain-dim', 'Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Pemburu mencari ikan dan kayu; Koki mempercepat Restoran memberi makan Tukang; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.'));
+    var bd = H.beds || { total: 0, used: 0 };
+    pt.appendChild($('div', bd.used >= bd.total ? 'gt-detail-name' : 'chain-dim', 'Kasur terpakai ' + bd.used + ' dari ' + bd.total + (bd.used >= bd.total ? '. Bangun Rumah Pekerja atau tambah kasur.' : '.')));
     var hireMap = H.hire || {};
     Object.keys(hireMap).forEach(function (job) {
       var d = hireMap[job], row = $('div', 'gt-detail-acts');
@@ -330,6 +332,8 @@
     var job = null;
     H.jobs.forEach(function (j) { if (j.kind === 'build' && j.target === lotId) job = j; });
     if (b && def && def.cooks) { wrap.appendChild(restoranBody(lotId)); return wrap; }
+    if (b && def && def.furniture) { wrap.appendChild(houseBody(lotId)); return wrap; }
+    if (b && def && def.healGameHours) { wrap.appendChild(hospitalBody(lotId)); return wrap; }
     if (b) {
       var box = $('div', 'gt-detail'), txt = $('div', 'grow'), prod = def && def.produces ? itemName(def.produces) : 'hasil';
       txt.appendChild($('div', 'gt-detail-name', name + ' · menghasilkan ' + prod));
@@ -348,10 +352,49 @@
     if (!why && busyJob()) why = 'Pembangun sedang bekerja.';
     if (!why && short.length) why = 'Kurang ' + short.map(itemName).join(', ') + '.';
     var can = !why && (!sameLot || def.can);
-    var blurb = def.cooks ? 'Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level ' + def.th + '.' : 'Menghasilkan ' + itemName(def.produces) + ' terus-menerus, simpan sampai ' + def.capacity + '. Perlu Balai Kota level ' + def.th + '.';
+    var blurb = def.furniture ? 'Satu kasur untuk satu pekerja. Tambah kasur supaya lebih banyak pekerja muat, tambah hiburan supaya mereka semangat. Perlu Balai Kota level ' + def.th + '.' : def.healGameHours ? 'Merawat Tukang yang tumbang karena kelelahan, makin tinggi levelnya makin cepat sembuh. Perlu Balai Kota level ' + def.th + '.' : def.cooks ? 'Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level ' + def.th + '.' : 'Menghasilkan ' + itemName(def.produces) + ' terus-menerus, simpan sampai ' + def.capacity + '. Perlu Balai Kota level ' + def.th + '.';
     wrap.appendChild(stepBlock('Bangun ' + (def.name || name), blurb,
       def, can, why, 'Bangun · ' + secsLine(def.secs), function () { run({ action: 'build', kind: 'build', target: lotId }); }));
     return wrap;
+  }
+  /* ---- Rumah Pekerja: beds and entertainment ---- */
+  function houseView(lotId) { var r = null; (H.houses || []).forEach(function (h) { if (h.lot === lotId) r = h; }); return r; }
+  function furnRow(title, text, step, label, target) {
+    var row = $('div', 'gt-detail'), t = $('div', 'grow'), acts = $('div', 'gt-detail-acts');
+    t.appendChild($('div', 'gt-detail-name', title)); t.appendChild($('div', 'chain-dim', text));
+    if (step) {
+      t.appendChild($('div', null, 'Biaya ' + costLine(step.cost) + ' · ' + secsLine(step.secs)));
+      var short = shortOf(step.cost), why = busyJob() ? 'Pembangun sedang bekerja.' : short.length ? 'Kurang ' + short.map(itemName).join(', ') + '.' : null;
+      if (why) t.appendChild($('div', 'chain-dim', why));
+      acts.appendChild(btn(label + ' · ' + secsLine(step.secs), function () { run({ action: 'build', kind: 'furniture', target: target }); }, 'primary', !!why || !!(win && win.busy)));
+    } else t.appendChild($('div', 'chain-dim', 'Sudah level tertinggi.'));
+    row.appendChild(t); row.appendChild(acts); return row;
+  }
+  function houseBody(lotId) {
+    var box = $('div', 'gt-isl'), h = houseView(lotId);
+    if (!h) { box.appendChild($('p', null, 'Memuat…')); return box; }
+    var live = $('div', 'gt-detail'), lt = $('div', 'grow');
+    lt.appendChild($('div', 'gt-detail-name', 'Rumah Pekerja · ' + h.used + ' dari ' + h.beds + ' kasur terisi'));
+    lt.appendChild($('div', null, 'Semangat penghuni ' + h.motivation + '%' + (h.hiburanName ? ' · ' + h.hiburanName : ' · belum ada hiburan')));
+    lt.appendChild($('div', 'chain-dim', 'Semangat tinggi membuat pekerja lebih cepat. Pekerja baru tinggal di rumah yang punya kasur kosong dan hiburan terbaik.'));
+    live.appendChild(lt); box.appendChild(live);
+    box.appendChild(furnRow('Kasur ' + h.kasur + ' dari ' + h.kasurMax, 'Tiap kasur menambah satu tempat tinggal pekerja.', h.nextKasur, 'Tambah Kasur', lotId + ':kasur'));
+    box.appendChild(furnRow('Hiburan ' + h.hiburan + ' dari ' + h.hiburanMax, 'Radio, TV, Gamelan: tiap tingkat menambah semangat 20%.', h.nextHiburan, 'Pasang ' + (h.nextHiburan && h.nextHiburan.name || 'Hiburan'), lotId + ':hiburan'));
+    return box;
+  }
+  /* ---- Rumah Sakit ---- */
+  function hospitalBody(lotId) {
+    var box = $('div', 'gt-detail'), t = $('div', 'grow'), acts = $('div', 'gt-detail-acts'), hp = H.hospital;
+    if (!hp) { t.appendChild($('div', null, 'Memuat…')); box.appendChild(t); return box; }
+    t.appendChild($('div', 'gt-detail-name', 'Rumah Sakit · level ' + hp.level + ' dari ' + hp.maxLevel));
+    t.appendChild($('div', null, 'Tukang yang tumbang sembuh dalam ' + hp.healGameHours + ' jam permainan (tanpa rumah sakit 24 jam).'));
+    if (hp.next) {
+      t.appendChild($('div', null, 'Naik level: ' + costLine(hp.next.cost) + ' · ' + secsLine(hp.next.secs)));
+      var short = shortOf(hp.next.cost), why = busyJob() ? 'Pembangun sedang bekerja.' : short.length ? 'Kurang ' + short.map(itemName).join(', ') + '.' : null;
+      if (why) t.appendChild($('div', 'chain-dim', why));
+      acts.appendChild(btn('Naikkan Rumah Sakit · ' + secsLine(hp.next.secs), function () { run({ action: 'build', kind: 'upgrade', target: lotId }); }, 'primary', !!why || !!(win && win.busy)));
+    } else t.appendChild($('div', 'chain-dim', 'Sudah level tertinggi.'));
+    box.appendChild(t); box.appendChild(acts); return box;
   }
   /* ---- Restoran: cook into the pantry, put food in, see the pantry ---- */
   function restoranBody(lotId) {
@@ -456,7 +499,7 @@
     return th ? { x: th.dx + 3, y: th.dy + 2 } : null;
   }
   function placeBots() {
-    var L = layoutOf(), sig = !inOwnHome() || !L || !H ? '' : wid() + '|' + layoutSig + '|' + (H.bots || []).map(function (b) { return b.id + b.job; }).join('.');
+    var L = layoutOf(), sig = !inOwnHome() || !L || !H ? '' : wid() + '|' + layoutSig + '|' + (H.bots || []).map(function (b) { return b.id + b.job + (b.house || ''); }).join('.');
     if (sig === botSig && botNpcs.every(function (n) { try { return GT.findNpc(n.key) === n.npc; } catch (e) { return false; } })) return;
     botSig = sig;
     botNpcs.forEach(function (n) { try { GT.removeNpc(n.npc); } catch (e) { /* gone with the world */ } });
@@ -464,13 +507,13 @@
     if (!sig || !GT.getScene) return;
     var taken = {};
     (H.bots || []).forEach(function (b) {
-      var w = workplace(b.job, L); if (!w) return;
+      var hl = b.house && lotById(b.house), w = hl ? { x: hl.door.x, y: hl.door.y + 1 } : workplace(b.job, L); if (!w) return; // bots live at their house
       var spot = spotNear(w.x, w.y, taken); if (!spot) return;
       taken[spot.x + ',' + spot.y] = 1;
       var key = 'homeland:bot:' + b.id, dx = w.x - spot.x, dy = w.y - spot.y;
       var dir = dx === 0 && dy === 0 ? 'down' : Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
       var npc = GT.addNpc('out', { name: b.name, pal: 2 + (b.id % 4), x: spot.x, y: spot.y, key: key, dir: dir, lines: [['Siap bekerja, Juragan!'], ['Aku ' + b.name + '. Gajiku sudah lunas.']] });
-      if (npc) { npc.working = b.job !== 'builder'; botNpcs.push({ key: key, npc: npc }); }
+      if (npc) { npc.working = b.job !== 'builder' && !hl; botNpcs.push({ key: key, npc: npc }); }
     });
   }
 
@@ -558,6 +601,22 @@
         ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y - 5), Math.round(w + 2), 11);
         ctx.fillStyle = b.stored >= b.capacity ? '#ffcf5a' : '#f6ead0'; ctx.fillRect(Math.round(x - w / 2), Math.round(y - 4), Math.round(w), 9);
         ctx.fillStyle = '#2a2430'; ctx.fillText(txt, Math.round(x), Math.round(y + 0.5));
+      });
+      // a collapsed contractor lies down under a blanket with a red cross over the head
+      (H.workers || []).forEach(function (wk) {
+        if (!(wk.sick_until && endMs({ ends_at: wk.sick_until }) > now)) return;
+        var n = wk.slot === 0 ? builder : null;
+        if (wk.slot !== 0) botNpcs.forEach(function (q) { if (q.key === 'homeland:bot:' + wk.slot) n = q.npc; });
+        if (!n) return;
+        n.working = false;
+        var sx = n.x * T - camX, sy = n.y * T - camY;
+        ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(sx - 1), Math.round(sy + 4), T + 2, 8);
+        ctx.fillStyle = '#e8e4d8'; ctx.fillRect(Math.round(sx), Math.round(sy + 5), T, 6);
+        ctx.fillStyle = '#7aa0d8'; ctx.fillRect(Math.round(sx + 5), Math.round(sy + 5), T - 5, 6);
+        ctx.fillStyle = '#e8c8a0'; ctx.fillRect(Math.round(sx + 1), Math.round(sy + 6), 4, 4);
+        var cy2 = Math.round(sy - 6 + Math.sin(tt * 2 + n.x) * 1);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(sx + T / 2 - 4), cy2 - 1, 8, 8);
+        ctx.fillStyle = '#d83c3c'; ctx.fillRect(Math.round(sx + T / 2 - 1), cy2, 2, 6); ctx.fillRect(Math.round(sx + T / 2 - 3), cy2 + 2, 6, 2);
       });
       // builder at work: hammer swing, sparks and the countdown over the target
       var f = jobFocus();

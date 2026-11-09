@@ -24,7 +24,9 @@ async function world() {
   const hl = (a: string) => game.homelands.map(game.homelands.ensure(a));
   /** Standing at the Town Hall door of the owner's Homeland. */
   const hall = (a: string): Pos => { const h = hl(a).layout.buildings.find((b) => b.kind === 'townhall')!; return { x: h.dx, y: h.dy + 1 }; };
-  const hire = (a: string, job: string, pos: Pos = hall(a), world = wid(a)) => { adv(60_000); return game.act(a, { action: 'hire', job, world, pos }) as any; };
+  /** C2: hiring needs a bed, so every test hirer lives in a house with five beds and a radio (motivation 60). */
+  const ensureHouse = (a: string) => { game.homelands.ensure(a); if (!game.gs.homelandBuildings(a).some((b) => b.kind === 'rumah')) { game.gs.addHomelandBuilding(a, 'rumah-c', 'rumah', 0); game.gs.setFurnitureLevel(a, 'rumah-c:kasur', 4); game.gs.setFurnitureLevel(a, 'rumah-c:hiburan', 1); } };
+  const hire = (a: string, job: string, pos: Pos = hall(a), world = wid(a)) => { ensureHouse(a); adv(60_000); return game.act(a, { action: 'hire', job, world, pos }) as any; };
   const give = (a: string, t: string, n: number) => game.gs.add(1, a, t, n, 'test');
   return { game, econ, adv, hl, hall, hire, give, wid, gs: game.gs };
 }
@@ -120,7 +122,7 @@ test('petani makes homeland crops grow faster', async () => {
   gs.setHomelandTh(P, 2);
   w.give(P, 'coin', 200);
   w.hire(P, 'petani');
-  assert.equal(game.homelands.effects(P).farmGrowFactor, 1.5);
+  assert.equal(game.homelands.effects(P).farmGrowFactor, 1.525); // 1 + 0.5 x 1.05 (motivation 60: a house with a radio)
   assert.equal(grow(1), 'ready'); // ceil(3 / 1.5) = 2 days
 });
 
@@ -135,7 +137,7 @@ test('nelayan raises kolam output', async () => {
   const built = t0 + 120_000; // two hires moved the test clock by 2 minutes
   w.gs.addHomelandBuilding(P, 'kolam-c', 'kolam', built);
   w.gs.addHomelandBuilding(Q, 'kolam-c', 'kolam', built);
-  assert.equal(H.effects(P).fishRate, 2.25);
+  assert.equal(H.effects(P).fishRate, 1.525 * 1.525);
   w.adv(1 * w.econ.time.realMsPerGameHour);
   const stored = (a: string) => H.view(a).built.find((b) => b.kind === 'kolam')!.stored;
   assert.equal(stored(Q), 2); // 2 fish per game hour
