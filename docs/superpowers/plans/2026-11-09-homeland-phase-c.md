@@ -81,6 +81,6 @@
 
 ### Task C4: Docs, smoke, push
 
-- [ ] README status, `docs/world.md` (contractors, fatigue, Restoran, houses, furniture, motivation, hospital, cosmetics), `docs/economy.md` (sinks), `docs/threat-model.md`, plan checkboxes.
+- [x] README status, `docs/world.md` (contractors, fatigue, Restoran, houses, furniture, motivation, hospital, cosmetics), `docs/economy.md` (sinks), `docs/threat-model.md`, plan checkboxes.
 - [ ] Browser smoke on a mock server with dev grants.
 - [ ] Push `homeland` and fast-forward `main` when the owner says so.

@@ -96,6 +96,8 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 | Tool wear | `tool` | 1 tool burned every 20 uses |
 | Crafting inputs | raw items | burned on every craft |
 | Worker bots | player `coin` | 120-150 coin per hire, paid to the town treasury (a transfer to the town, not a burn) |
+| Rare bots, furniture, hospital, cosmetics | player `coin` and raw items | Pemburu 400 and Koki 350 coin; Kasur, Hiburan, Rumah Pekerja and Rumah Sakit builds and upgrades cost wood, ore and coin; cosmetics 80-300 coin. Coin goes to the town treasury, items are burned |
+| Restoran | `fish`, `wood` (cook), `bread`, `meal` (stock) | the pantry consumes them to feed contractors; no new item tokens, the Restoran makes no meals by itself |
 | Consignment fee | seller `coin` | 5% of each Titip Jual sale, to the town treasury |
 
 ### The faucet throttle (why money supply stays bounded)

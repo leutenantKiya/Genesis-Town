@@ -33,6 +33,7 @@ Everything a player does alone, many times a minute, stays off chain until the d
 | Direct trade between two players in the public area (items and `coin`, accept within 120 s) | **off-chain**, atomic ledger rows both ways (`trade`, ref `p2p:`), re-checked at accept | at the next daily settlement |
 | Titip Jual consignment (deposit, hourly sales, withdraw) | **off-chain**, rows `consign_in`, `consign_sale`, `consign_fee`, `consign_out`; sales pay coin inside the daily faucet | at the next daily settlement |
 | Papan Juara leaderboard | **off-chain**, read from the ledger, never stored on chain | n/a |
+| Homeland phase C: contractor fatigue, Restoran pantry (`cook`, `stock`), `forage`, Rumah Pekerja furniture and motivation, Rumah Sakit healing, `dress` cosmetics | **off-chain**, ledger rows for costs and gains plus SQLite rows (`homeland_workers`, bot cosmetic); state is replayed lazily from timestamps; no new token | coin and items at the next daily settlement |
 | Homeland invites (by name#tag), portal travel, live positions, chat, look | **off-chain**, SQLite or server memory, never on chain. Homelands are not NFTs and cannot be sold | n/a |
 
 One game day lasts 24 real minutes, so a player sees a settlement about every 24 minutes. Judges get a

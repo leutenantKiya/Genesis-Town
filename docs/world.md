@@ -72,7 +72,7 @@ are mostly taken, and true chunk streaming for a world without fixed edges.
 
 ## Homeland
 
-Status: phases A and B built on branch `homeland` (A 2026-11-08, B 2026-11-09). Code:
+Status: phases A, B and C built on branch `homeland` (A 2026-11-08, B and C 2026-11-09). Code:
 [`client/js/world/homeland.js`](../client/js/world/homeland.js) (generator),
 [`server/src/game/homeland.ts`](../server/src/game/homeland.ts) (state, timers, production),
 [`client/js/mods/homeland.js`](../client/js/mods/homeland.js) (UI) and `client/js/mods/charscreen.js` (character screen).
@@ -93,7 +93,7 @@ Islands; Homelands are off-chain, not NFTs, and cannot be sold.
 `homeland.js` makes one 3 x 3 chunk map (16 x 16 tiles each, 48 x 48 in all) from the player's seed (stored with the
 Homeland row, with a `gen` version so later generator changes do not move existing worlds). The Town Hall stands in the
 middle chunk with a farm plot, a few trees and rocks, and the portal. Each of the eight outer chunks gets a biome
-(forest, rock, pond or shore); every seed has a forest and water next to the centre. Building lots are fixed per chunk.
+(forest, rock, pond or shore); every seed has a forest and water next to the centre. Building lots are fixed per chunk. Generator version 2 (`GTHomeland.VERSION`) adds one `rumah` lot in every chunk (including the centre) and a `rumahsakit` lot in the centre; existing rows keep working.
 The browser and the server run the same file, so the server checks positions and gather tiles (`HomelandMap` in
 `worldmap.ts`). Locked chunks are drawn under fog.
 
@@ -111,10 +111,11 @@ All numbers are in `economy/config.json` -> `homeland`.
 | --- | --- | --- |
 | Kolam Ikan | 1 | fish, 2 per game hour, stores 6 |
 | Tambang | 2, on a rock chunk | ore, 2 per game hour, stores 8 |
-| Restoran | 3 | meal, 1 per game hour, stores 4 |
+| Restoran | 3 | nothing by itself: it keeps a pantry and feeds contractors (see below) |
+| Rumah Pekerja | 1 | beds and entertainment for worker bots (see below) |
+| Rumah Sakit | 2 | heals collapsed contractors (see below) |
 
-Buildings go on fixed lots. There is one **Builder** (`builders: 1`): it takes one job at a time (Town Hall, chunk or
-building) and is shown at the construction with a hammer while busy. The server stores `ends_at` for the job and
+Buildings go on fixed lots. There is one default **Builder** (`builders: 1`, the Tukang who lives in the Town Hall); each hired Tukang adds one more. A contractor takes one job at a time (Town Hall, chunk, building, furniture or upgrade) and is shown at the construction with a hammer while busy. The server stores `ends_at` for the job and
 finishes it when the clock passes it; the client only draws it. Production is lazy: when you collect, the server works
 out what accrued since the last collection, capped by the building's capacity, writes ledger rows like a gather and
 counts it against `caps.dailyGainPerItem`. What does not fit under the daily cap stays stored.
@@ -135,6 +136,53 @@ Bots only exist in their owner's Homeland: they walk near their workplace with t
 coin, and no API lets them trade. Hiring past the maximum, below the Town Hall level, without the coin or outside your own
 Homeland answers 409. Effects are applied by the server when it computes timers and gains, so they stay under
 `caps.dailyGainPerItem`.
+
+### Contractors and the Restoran
+
+Contractors are the default Tukang (slot 0) and every hired Tukang. Each has **fatigue** 0-100 (`homeland.fatigue`):
+- a job picks the free, healthy contractor with the lowest fatigue; its duration is `secs x (1 + slowdownAt100 x fatigue/100) / motivationFactor`
+  (`slowdownAt100` 1.0, so a 100% tired contractor takes twice as long);
+- when a job ends, fatigue grows by `perJobMinute` (10) per job minute, capped at 100; idle contractors recover
+  `idleRecoverPerGameHour` (5) per game hour;
+- at `collapseAt` (100) the contractor collapses: the job in progress finishes, then it is sick (no new jobs) until healed.
+
+The **Restoran** (Town Hall 3; 40 wood, 10 ore, 60 coin, 240 s) holds a **pantry** of up to `pantryMax` 20 portions
+(`homeland.restoran`). `cook` turns the `meal` recipe's inputs into pantry meals (not the Tas); `stock` moves bread or meal
+from the Tas into the pantry; nothing is ever taken from the Tas except by those two acts. Every `serveEveryGameHours` (1) the
+Restoran serves one portion to the most tired contractor at or above `serveMinFatigue` (20): pantry -1, fatigue -`serveRelief`
+(30). An empty pantry serves nothing. The **Koki** (rare, 350 coin, max 1, Town Hall 3) divides the serving interval by
+`chefServeFactor` (2). The **Pemburu** (rare, 400 coin, max 1, Town Hall 3) forages fish and wood alternately, 1 per game
+hour, capacity 6, doubled in `dingin`; the `forage` act collects at the Balai Kota. All of this is computed lazily from
+timestamps (replay of at most 72 game hours), so a server restart changes nothing.
+
+### Bot houses and motivation
+
+Every hired bot needs a free bed (the default Tukang does not). A **Rumah Pekerja** (Town Hall 1; 15 wood, 60 s) starts with
+1 bed; **Kasur** has 4 levels (+1 bed each, so at most 5 bots per house): 10 wood / 30 s, then 20 wood + 20 coin, 30 wood +
+40 coin, 40 wood + 80 coin. **Hiburan** has 3 levels, Radio, TV, Gamelan (10 wood + 30 coin; 20 wood, 10 ore, 80 coin; 30 wood,
+20 ore, 150 coin). Furniture upgrades are ordinary builder jobs (`build` kind `furniture`, target `<lot>:kasur|hiburan`), so
+they cost resources and tire the contractor. Hiring with no free bed answers 409 `Tidak ada kasur kosong` and charges nothing.
+Each bot lives in the house with a free bed and the best entertainment. Motivation = `min(100, 40 + 20 x hiburanLevel)`
+(default Tukang 60); `motivationFactor = 0.75 + 0.5 x motivation/100` speeds contractors and strengthens producer bots
+(Nelayan, Petani, Pemburu).
+
+### Rumah Sakit
+
+Town Hall 2; 30 wood, 10 ore, 60 coin, 180 s; 3 levels (upgrades 30 wood, 15 ore, 100 coin, 240 s and 50 wood, 30 ore,
+200 coin, 480 s). A collapsed contractor is healed after `healGameHours` 3 / 2 / 1 by level, or after
+`sickGameHoursWithoutHospital` (24) without one; fatigue then resets to 0. Another free contractor can take jobs meanwhile.
+
+### Cosmetics
+
+At the Balai Kota the `dress` act buys a cosmetic for a bot you own (the default Tukang too); the coin goes to the town and
+the cosmetic is drawn on the bot. With boost `b`: a contractor's fatigue gain x `(1 - b)`; producer bots' effect and Pemburu rate x
+`(1 + b)`; Koki serving speed x `(1 + b)`.
+
+| Cosmetic | Price | Boost |
+| --- | --- | --- |
+| Caping | 80 | 0.2 |
+| Syal | 150 | 0.35 |
+| Mahkota | 300 | 0.5 |
 
 ### Portal and travel
 

@@ -1,6 +1,6 @@
 # Genesis Town
 
-> **Status (2026-11-08): M3 done, M4 (hardening) in progress; Homeland phases A and B built on branch `homeland`.** Done and tested:
+> **Status (2026-11-08): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built on branch `homeland`.** Done and tested:
 > - M2 (Checkpoint 3): off-chain play (gathering, energy, crafting, farm plot, shipping, trading with four merchants
 >   priced by `economy/pricing.ts`), a daily settlement on NEAR testnet with the ledger's Merkle root, and shop
 >   bankruptcy and restoration with shares, all in an end-to-end testnet run;
@@ -93,8 +93,18 @@
 >   **Papan Juara** shows the top sellers of the day and of all time. Numbers: `economy/config.json` -> `homeland.bots`,
 >   `trade`, `consign`; plan: [phase B](docs/superpowers/plans/2026-11-09-homeland-phase-b.md).
 >
+> - **Homeland, phase C** (branch `homeland`): everything feeds building speed. **Contractors** (the default Tukang and hired
+>   Tukang) get **tired** and build slower; the **Restoran** no longer makes meals on its own but keeps a **pantry** (cook meals
+>   into it, or stock bread/meal from the Tas) and serves the most tired contractor, faster with a **Koki**. A **Pemburu**
+>   forages fish and wood (double in winter). Hired bots need a bed: build a **Rumah Pekerja**, add **Kasur** (more bots per
+>   house) and **Hiburan** (Radio, TV, Gamelan: more motivation, which speeds builders and boosts producer bots). A contractor
+>   who hits 100% fatigue collapses and is healed by the **Rumah Sakit** (or slowly without one). **Cosmetics** (caping,
+>   syal, mahkota) cut a contractor's fatigue and boost other bots. All off-chain, no new tokens; generator version 2 adds a
+>   house lot per chunk and a hospital lot. Numbers: `economy/config.json` -> `homeland`; details: [docs/world.md](docs/world.md);
+>   plan: [phase C](docs/superpowers/plans/2026-11-09-homeland-phase-c.md).
+>
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
-> and M5 (demo video, submission). Also *(planned)*: Homeland phase C (cosmetics, Hunter and Chef bonuses) and agent wallets. Anything marked *(planned)* does not exist yet.
+> and M5 (demo video, submission). Also *(planned)*: agent wallets. Anything marked *(planned)* does not exist yet.
 >
 > **M4.5 Online** *(planned, target 2026-11-07)*: a public HTTPS URL anyone can play on testnet.
 > - Host: one long-running Node 24 process (the game loop ticks every 2 s, one game hour is one real minute,

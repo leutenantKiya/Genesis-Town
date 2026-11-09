@@ -227,6 +227,18 @@ charged once and credited to the town, and a per-job maximum and Town Hall level
 or coin and no API lets them act outside their owner's Homeland. Their effects change only timers and amounts, and gains
 still pass `checkGain`.
 
+## Fatigue, houses and cosmetics
+
+- **Bounded replay.** Fatigue, recovery, Restoran serving, sickness and foraging are computed lazily from stored timestamps,
+  replaying at most 72 game hours, so a long-idle Homeland cannot make a request expensive and a restart resumes exactly once.
+- **Own-key lookups.** Furniture, cosmetic and job names from a request are checked with `Object.hasOwn` against config, so
+  `constructor` or `__proto__` answer 400 and charge nothing.
+- **Ownership checks.** `dress` only works on a bot of the caller's own Homeland; dressing another player's bot answers 409
+  with no coin charged. Cosmetic boosts come from config, never from the request.
+- **No duplicate job target.** A second job on the same lot or furniture while one is running answers 409.
+- **No free healing or beds.** Hiring without a free bed answers 409 and charges nothing; sick contractors take no job; the
+  pantry never goes negative and serving takes food only from the Restoran stock, never from the player's Tas.
+
 ## Direct trade and consignment
 
 - **Trade atomicity.** `accept` runs in one SQLite transaction that re-checks both balances (409 `<Item> kurang.`), that both
