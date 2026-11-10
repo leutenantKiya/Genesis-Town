@@ -1,7 +1,7 @@
 /*
  * r3d/props.js - everything that stands on the ground except buildings, as real low-poly 3D: trees (oak, fruit, pine),
  * rocks, bushes, barrels, crates, fences, signs, mailboxes, street lamps, market stall counters and awnings, the portal
- * arch and the empty building lots of a Homeland. Flowers, tall grass, paths and the like stay in the ground texture.
+ * arch and the empty building lots of a Homeland. Flowers and tall grass are blades of grass scattered by ground.js.
  * Built once per map into a few merged meshes (see geo.js); tiles in areas that are not open yet are darkened.
  */
 (function () {
