@@ -115,7 +115,8 @@
 >   buildings, trees, rocks and props, characters as sprite cards facing the camera, a sun that crosses the sky with
 >   shadows, glowing windows and lamps at night, the four seasons, and buildings and tree crowns that fade when they
 >   hide the player. Code in `client/js/three/`; `npm run build:client` bundles three.js to `client/vendor/three.js`.
->   Drawing the game itself with it is *(planned)*.
+>   Drawing the game itself with it, and walking into buildings with no scene cut, are *(planned)*: see
+>   [docs/superpowers/plans/2026-11-10-walk-in-3d.md](docs/superpowers/plans/2026-11-10-walk-in-3d.md).
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
 > and M5 (demo video, submission). Also *(planned)*: agent wallets. Anything marked *(planned)* does not exist yet.
 >
