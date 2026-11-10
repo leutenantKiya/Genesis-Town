@@ -88,6 +88,7 @@
       cloudMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, opacity: 0.92 });
       clouds = []; islets = [];
     },
+    setInterior: function (C, on) { if (group) group.visible = !on; C.scene.background = on ? new THREE.Color('#0b0c14') : tex; },
     onWorld: function (C, map) {
       var i, r = rng((map.seed | 0) ^ 0xc10d);
       cx = map.w / 2; cz = map.h / 2; span = Math.max(map.w, map.h) * 1.1 + 70;

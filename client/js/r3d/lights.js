@@ -63,6 +63,7 @@
       lamps = []; lastKey = '';
     },
     onWorld: function () { lastKey = ''; },
+    setInterior: function (C, on) { if (on) lights.forEach(function (l) { l.intensity = 0; }); },
     onQuality: function (C) { setCount(C, (R3D.Q && R3D.Q.lamps) || 0); },
     update: function (C, info) {
       var n = info.lamps ? info.lamps.length : 0;

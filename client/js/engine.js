@@ -2015,9 +2015,9 @@ function setView(v){
 }
 function render(){
   if (!altRenderer) return render2d();
-  var out = scene.kind === 'out';
-  document.documentElement.classList.toggle('gt-3d-in', !out); // indoors the 2D renderer draws (the 3D canvas is hidden)
-  if (!out) return render2d();
+  var out = scene.kind === 'out', room3d = !out && altRenderer.interior;
+  document.documentElement.classList.toggle('gt-3d-in', !out && !room3d); // a renderer without rooms: the 2D renderer draws indoors (the 3D canvas is hidden)
+  if (!out && !room3d) return render2d();
   ctx.clearRect(0, 0, VW, VH);
   try {
     var info = frameInfo();

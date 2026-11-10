@@ -86,6 +86,7 @@
   R3D.weather = {
     init: function (C) { obj = mat = null; kind = null; },
     onWorld: function () {},
+    setInterior: function (C, on) { if (obj) obj.visible = !on; },
     onQuality: function (C) { if (kind) build(C, kind); },
     update: function (C, info) {
       var k = weatherKind();

@@ -19,7 +19,7 @@
   var ZOOM_ROWS = 1.25;                // visible world rows per 2D view row (the tilt shows more ground)
   var ZMIN = 0.6, ZMAX = 1.7;
   var HEMI = 2.5, SUN = 1.7;          // light intensities (three.js uses physical units: ~pi for a fully lit white surface)
-  var MODS = ['regions', 'sky', 'island', 'ground', 'water', 'props', 'buildings', 'actors', 'lights', 'weather', 'fx', 'compat'];
+  var MODS = ['regions', 'sky', 'island', 'ground', 'water', 'props', 'buildings', 'actors', 'lights', 'weather', 'fx', 'compat', 'interior'];
   var QUALITY = {
     rendah: { pr: 1, shadow: 0, lamps: 0, rain: 160, snow: 120 },
     sedang: { pr: 1.5, shadow: 1024, lamps: 4, rain: 420, snow: 320 },
@@ -33,12 +33,14 @@
   var T = 12, host = null, canvas = null, C = null, size = { w: 0, h: 0 }, zoom = 1, wheelFn = null, qFn = null;
   var tmpV = new THREE.Vector3(), tmpN = new THREE.Vector2(), up = new THREE.Vector3();
   var ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  var hemi = null, sun = null, moon = null, map = null, shadowHalf = 0;
+  var hemi = null, sun = null, moon = null, map = null, shadowHalf = 0, interior = false, imap = null;
+  var IN_UPDATE = { actors: 1, fx: 1, interior: 1 }; // what still runs while a room is shown
   var cDaySky = new THREE.Color(0xffffff), cNightSky = new THREE.Color(0x6676b8), cDayGround = new THREE.Color(0x8a90a8), cNightGround = new THREE.Color(0x222842);
   var cWarm = new THREE.Color(0xffb27a), cWhite = new THREE.Color(0xfff6ea), cMoon = new THREE.Color(0x9fb4ff);
   var sunDir = new THREE.Vector3(), moonDir = new THREE.Vector3(), target = new THREE.Vector3();
 
   function each(fn) { MODS.forEach(function (n) { if (R3D[n]) fn(R3D[n], n); }); }
+  function outdoors(fn) { each(function (m, n) { if (n !== 'interior') fn(m, n); }); }
 
   function applyQuality() {
     var name = qualityName(), Q = (R3D.Q = QUALITY[name]);
@@ -76,7 +78,7 @@
     var root = new THREE.Group(); scene.add(root);
     C = { renderer: renderer, scene: scene, cam: cam, root: root, THREE: THREE };
     R3D.ctx = C; // debugging handle (scene, camera, renderer)
-    size.w = size.h = 0; zoom = 1; map = null; shadowHalf = 0;
+    size.w = size.h = 0; zoom = 1; map = null; imap = null; interior = false; shadowHalf = 0;
     each(function (m) { m.init(C); });
     wheelFn = function (e) {
       if (!e.ctrlKey) return;
@@ -97,14 +99,29 @@
     each(function (m) { m.dispose(C); });
     C.renderer.dispose();
     if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-    C = canvas = hemi = sun = moon = map = null;
+    C = canvas = hemi = sun = moon = map = imap = null; interior = false;
   }
 
   R3D.rebuild = function () { map = null; }; // regions.js asks for a rebuild once a docking island has arrived
 
+  function setInterior(on, m) {
+    interior = on; imap = on ? m : null;
+    C.root.visible = !on;
+    each(function (mod) { if (mod.setInterior) mod.setInterior(C, on); });
+    size.w = size.h = 0;
+  }
   function onWorld(m) {
+    var k = GT.scene && GT.scene.kind;
+    if (m.kind === 'interior' || (k && k !== 'out')) { // a room: the outdoor world is hidden, not rebuilt
+      if (!interior) setInterior(true, m);
+      imap = m; R3D.interior.show(C, m, k);
+      size.w = size.h = 0;
+      return;
+    }
+    if (interior) { R3D.interior.hide(C); setInterior(false); }
+    if (m === map) return; // back outside: the world built earlier is still there
     map = m;
-    each(function (mod) { mod.onWorld(C, m); });
+    outdoors(function (mod) { mod.onWorld(C, m); });
   }
 
   function resize(info) {
@@ -115,6 +132,10 @@
     C.renderer.setSize(w, hh, false);
     canvas.style.width = w + 'px'; canvas.style.height = hh + 'px';
     var rows = info.VH / info.T * ZOOM_ROWS / zoom, cols = rows * (w / hh);
+    if (interior && imap) { // fit the whole room: its width, or its depth plus the wall height, whichever needs more
+      var asp = w / hh, need = Math.max(imap.w + 2.6, (imap.h * Math.sin(ELEV) + 1.9 * Math.cos(ELEV) + 1.8) * asp);
+      cols = need; rows = cols / asp;
+    }
     var cam = C.cam;
     cam.left = -cols / 2; cam.right = cols / 2; cam.top = rows / 2; cam.bottom = -rows / 2;
     cam.updateProjectionMatrix();
@@ -128,6 +149,15 @@
 
   // sun, moon and sky light from the game clock, weather and quality
   function lighting(info, px, pz) {
+    if (interior) { // a lit room: warm light from the front-left, no day or night
+      hemi.color.set(0xfff4e0); hemi.groundColor.set(0xb0a090); hemi.intensity = HEMI * 0.95;
+      sunDir.set(-0.35, 0.85, 0.5).normalize(); sun.color.set(0xfff0d8); sun.intensity = SUN * 0.8; moon.intensity = 0;
+      target.set(px, 0, pz); sun.target.position.copy(target); sun.position.copy(target).addScaledVector(sunDir, 60);
+      sun.target.updateMatrixWorld();
+      if (sun.castShadow) { var sc0 = sun.shadow.camera, hh0 = imap ? Math.max(imap.w, imap.h) * 0.75 + 2 : 12; if (Math.abs(hh0 - shadowHalf) > 0.4) { shadowHalf = hh0; sc0.left = -hh0; sc0.right = hh0; sc0.top = hh0; sc0.bottom = -hh0; sc0.updateProjectionMatrix(); } }
+      info.shadowsOn = !!sun.castShadow;
+      return;
+    }
     var h = (info.gameMin % 1440) / 60, d = Math.min(1, info.dark), day = 1 - d, oc = info.weather.overcast;
     var tS = (h - 6) / 12, aS = Math.PI * Math.min(1, Math.max(0, tS)), pow = Math.sin(aS);
     sunDir.set(Math.cos(aS), 0.22 + 0.78 * pow, 0.5).normalize();
@@ -154,14 +184,16 @@
 
   function render(info) {
     resize(info);
-    if (info.map !== map) onWorld(info.map);
+    var inside = info.kind !== 'out';
+    if (info.map !== (inside ? imap : map)) onWorld(info.map);
     var cam = C.cam, pos = info.player.pos;
     var px = (pos.px + 6) / T, pz = (pos.py + 12) / T;
+    if (interior && imap) { px = imap.w / 2; pz = imap.h / 2 + 0.7; }
     cam.position.set(px, DIST * Math.sin(ELEV), pz + DIST * Math.cos(ELEV));
     cam.updateMatrixWorld(true);
     info.weather = weatherOf(); info.quality = R3D.Q;
     lighting(info, px, pz);
-    each(function (m) { m.update(C, info); });
+    each(function (m, n) { if (!interior || IN_UPDATE[n]) m.update(C, info); });
     C.renderer.render(C.scene, cam);
     if (R3D.compat) R3D.compat.overlay(C, info);
   }
@@ -196,5 +228,5 @@
   }
 
   R3D.mapToScreen = mapToScreen;
-  GT.registerRenderer('3d', { init: init, dispose: dispose, render: render, onWorld: onWorld, screenToTile: screenToTile, tileToScreen: tileToScreen, mapToScreen: mapToScreen });
+  GT.registerRenderer('3d', { interior: true, init: init, dispose: dispose, render: render, onWorld: onWorld, screenToTile: screenToTile, tileToScreen: tileToScreen, mapToScreen: mapToScreen });
 })();

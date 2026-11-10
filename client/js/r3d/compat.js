@@ -33,6 +33,7 @@
       C.scene.add(mesh);
     },
     onWorld: function () {},
+    setInterior: function (C, on) { if (mesh) mesh.visible = !on; },
     update: function (C, info) {
       // 1) ground decals around the player
       var ptx = info.player.pos.px / T, pty = info.player.pos.py / T;
