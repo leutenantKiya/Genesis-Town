@@ -132,6 +132,7 @@
         if (cur === v.world) return;
         opts.push({ label: 'Dunia ' + (v.owner_name || v.world), onPick: function () { travel(v.world); } });
       });
+      if (opts.length === 1) { opts[0].onPick(); return; } // only one place to go: no need to ask
       GT.menu('Portal · mau ke mana?', opts);
     });
   }
