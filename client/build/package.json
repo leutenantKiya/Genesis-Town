@@ -8,6 +8,7 @@
     "buffer": "6.0.3",
     "esbuild": "0.28.2",
     "near-api-js": "7.4.0",
+    "three": "0.187.0",
     "util": "0.12.5"
   },
   "scripts": {

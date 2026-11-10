@@ -1902,7 +1902,7 @@ function charStep(o){
   if (!o.moving) return 0;
   return o.flip ? 1 : 2;
 }
-function render(){
+function render2d(){
   var m = scene.map, mw = m.w * T, mh = m.h * T;
   ctx.fillStyle = '#0b0c14'; ctx.fillRect(0, 0, VW, VH);
   var pp = lerpPos(P);
@@ -1968,6 +1968,47 @@ function render(){
     ctx.fillRect(0, 0, VW, VH);
   }
   renderFx(ents);
+}
+
+/* ---------- optional renderer (3D view, js/r3d/) ----------
+   The 2D path above is untouched. A second renderer registers with GT.registerRenderer(name, impl); while it is active
+   render() hands it frameInfo() instead of calling render2d(), and the 2D canvas is cleared so it can host overlays.
+   impl = {init(host), dispose(), render(info), screenToTile(cx, cy)->{x,y}|null, tileToScreen(x, y, h)->{x,y}|null, onWorld(map)}. */
+var renderers = {}, altRenderer = null, viewWanted = readView(), altMap = null;
+function readView(){
+  var v = null;
+  try { v = (new URLSearchParams(location.search)).get('view'); } catch(e){}
+  if (v !== '2d' && v !== '3d'){ try { v = localStorage.getItem('gt-view'); } catch(e){ v = null; } }
+  return v === '3d' ? '3d' : '2d';
+}
+function frameInfo(){
+  var m = scene.map;
+  return { scene:scene, map:m, npcs:scene.npcs, world:world, worldId:worldId, kind:scene.kind,
+    player:{ x:P.x, y:P.y, fx:P.fx, fy:P.fy, t:P.t, moving:P.moving, dir:P.dir, step:charStep(P), pos:lerpPos(P) },
+    gameMin:gameMin, dark:scene.kind === 'out' ? currentDark() : 0, lamps:(world && world.lamps) || [], timeAcc:timeAcc, tr:tr,
+    VW:VW, VH:VH, S:S, T:T, reduce:REDUCE };
+}
+function applyView(){
+  if (!elScreen) return; // before boot; boot calls applyView() again
+  var want = viewWanted, next = (want === '3d' && renderers['3d']) ? renderers['3d'] : null;
+  if (next === altRenderer){ if (!next && want === '3d') emit('view', {view:'3d', need:true}); return; }
+  if (altRenderer){ try { altRenderer.dispose(); } catch(e){} altRenderer = null; document.documentElement.classList.remove('gt-3d'); }
+  if (next){
+    try { next.init(elScreen); altRenderer = next; document.documentElement.classList.add('gt-3d'); if (world && next.onWorld) next.onWorld(scene.map); }
+    catch(err){ try { console.error(err); } catch(e){} altRenderer = null; viewWanted = '2d'; toast('Tampilan 3D tidak bisa dijalankan di perangkat ini. Kembali ke 2D.'); }
+  }
+  emit('view', {view:altRenderer ? '3d' : '2d'});
+}
+function setView(v){
+  v = v === '3d' ? '3d' : '2d';
+  try { localStorage.setItem('gt-view', v); } catch(e){}
+  viewWanted = v; applyView();
+}
+function render(){
+  if (!altRenderer) return render2d();
+  ctx.clearRect(0, 0, VW, VH);
+  try { if (altMap !== scene.map){ altMap = scene.map; if (altRenderer.onWorld) altRenderer.onWorld(altMap); } altRenderer.render(frameInfo()); }
+  catch(err){ try { console.error(err); } catch(e){} viewWanted = '2d'; applyView(); toast('Tampilan 3D berhenti. Kembali ke 2D.'); }
 }
 
 /* ---------- night lighting ----------
@@ -2344,6 +2385,16 @@ var GT = {
     if (window.SPRITES && SPRITES.setSnow && SPRITES.setSnow(on) && world) buildWorldCache(world);
   },
   version: 2,
+  get view(){ return altRenderer ? '3d' : '2d'; },
+  get viewWanted(){ return viewWanted; },
+  setView: setView,
+  registerRenderer: function(name, impl){ renderers[name] = impl; if (name === viewWanted) applyView(); },
+  frameInfo: frameInfo,
+  tileToScreen: function(x, y, h){
+    if (altRenderer && altRenderer.tileToScreen) return altRenderer.tileToScreen(x, y, h || 0);
+    var r = elCv.getBoundingClientRect(); if (!r.width) return null;
+    return { x:r.left + ((x + 0.5) * T - camX) * (r.width / VW), y:r.top + ((y + 0.5) * T - camY - (h || 0)) * (r.height / VH) };
+  },
   state: state,
   ITEMS: ITEMS,
   register: register,
@@ -2376,6 +2427,7 @@ var GT = {
   interact: function(mode){ return interact(mode || 'talk'); },
   // A point on the screen (e.g. a mouse click) to the map tile under it, in the current scene
   screenToTile: function(clientX, clientY){
+    if (altRenderer && altRenderer.screenToTile) return altRenderer.screenToTile(clientX, clientY);
     var r = elCv.getBoundingClientRect(); if (!r.width) return null;
     var wx = (clientX - r.left) * (VW / r.width) + camX, wy = (clientY - r.top) * (VH / r.height) + camY;
     return { x: Math.floor(wx / T), y: Math.floor(wy / T) };
@@ -2494,6 +2546,7 @@ function boot(){
   elHud = document.getElementById('hud'); elActs = document.getElementById('acts'); elMroot = document.getElementById('mroot'); elToasts = document.getElementById('toasts'); elApp = document.getElementById('app');
   loadSaved();
   booted = true;
+  applyView();
   // mods may register more mods from init, so index loop
   for (var mi = 0; mi < mods.length; mi++) callOne(mods[mi], 'init', [GT]);
   layout();

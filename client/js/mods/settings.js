@@ -212,6 +212,15 @@
     wrap.appendChild(ts);
 
 
+    wrap.appendChild($('h3', null, 'Tampilan dunia'));
+    var vseg = $('div', 'mseg');
+    [['2d', '2D (klasik)'], ['3d', '3D pulau melayang']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-view'; inp.value = o[0]; inp.checked = (GT.viewWanted || '2d') === o[0];
+      inp.addEventListener('change', function () { GT.setView(o[0]); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); vseg.appendChild(lab);
+    });
+    wrap.appendChild(vseg);
+
     wrap.appendChild($('h3', null, 'Layar'));
     var seg = $('div', 'mseg');
     [['auto', 'Otomatis'], ['full', 'Penuh jendela'], ['boxed', 'Kotak (klasik)']].forEach(function (o) {
