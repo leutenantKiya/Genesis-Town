@@ -1,4 +1,10 @@
 import { build } from 'esbuild';
+import { writeFileSync } from 'node:fs';
+// Where the API lives. Empty: same origin (the Node server serves this client). A client hosted apart from the server
+// (Vercel) is built with GT_API_BASE=https://<server host>; that server must list this origin in CORS_ORIGINS.
+const apiBase = (process.env.GT_API_BASE ?? '').trim().replace(/\/+$/, '');
+writeFileSync('../vendor/env.js', `window.GT_API=${JSON.stringify(apiBase)};
+`);
 await build({
   entryPoints: ['near-entry.js'],
   outfile: '../vendor/near.js',

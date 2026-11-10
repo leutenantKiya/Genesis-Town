@@ -20,7 +20,7 @@ ENV NODE_ENV=production \
     PORT=3000 \
     DB_PATH=/data/genesis-town.db \
     TRUST_PROXY=1
-VOLUME ["/data"]
+# no VOLUME line: Railway refuses it; the host mounts its own persistent volume at /data
 EXPOSE 3000
 USER node
 

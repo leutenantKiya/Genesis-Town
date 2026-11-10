@@ -64,6 +64,7 @@ world's map (`Game.worldFor`). Add tests in
 
 - `npm run setup`: install server + client build deps, build `client/vendor/near.js`.
 - `npm run dev:mock`: mock chain in memory, `DEV_LOGIN=1` (token `dev:<name>`), fresh DB each start. Port 3000.
+- `npm run dev:split`: the Vercel/Railway split on one machine: mock API on :3100, static client on :5173 (cross-origin).
 - `npm run dev`: real testnet, needs `.env`.
 - `npm test`: economy tests + server tests (`node --test`) + `tsc` typecheck.
 - Contract: `cd contracts/game && cargo test` (build with `cargo-near`).

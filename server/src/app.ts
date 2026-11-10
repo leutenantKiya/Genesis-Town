@@ -149,6 +149,23 @@ export function createApp(deps: AppDeps) {
     return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
   }
 
+  /** A client hosted elsewhere (CORS_ORIGINS, e.g. the Vercel page) calls the API straight from the browser, so the
+   *  hosting proxy still appends the player's own address. Returns true when it answered a preflight. */
+  function cors(req: IncomingMessage, res: ServerResponse) {
+    const origin = req.headers.origin;
+    if (!origin || !deps.cfg.corsOrigins.includes(origin)) return false;
+    res.setHeader('access-control-allow-origin', origin);
+    res.setHeader('vary', 'origin');
+    if (req.method !== 'OPTIONS') return false;
+    res.writeHead(204, {
+      'access-control-allow-methods': 'GET, POST',
+      'access-control-allow-headers': 'content-type, x-account-id, x-gt-key, x-gt-ts, x-gt-sig',
+      'access-control-max-age': '86400',
+    });
+    res.end();
+    return true;
+  }
+
   /** The visitor's address for per-address limits. Behind a hosting proxy every request comes from the proxy, so with
    *  TRUST_PROXY=1 the address the proxy appended (the last X-Forwarded-For entry, which a client cannot forge) is used. */
   function clientIp(req: IncomingMessage) {
@@ -227,6 +244,7 @@ export function createApp(deps: AppDeps) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const p = url.pathname;
     if (p.startsWith('/api/')) {
+      if (cors(req, res)) return;
       if (await homelandApi(req, res, url, p)) return;
       if (await tradeApi(req, res, url, p)) return;
       if (req.method === 'GET' && p === '/api/config') {

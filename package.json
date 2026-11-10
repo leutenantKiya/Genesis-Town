@@ -10,6 +10,7 @@
     "build:client": "npm --prefix client/build run build",
     "dev": "npm run build:client && node server/src/main.ts",
     "dev:mock": "npm run build:client && CHAIN_MODE=mock DEV_LOGIN=1 DB_PATH=data/mock.db GAME_CONTRACT_ID=game.genesistown.mock PLAYERS_PARENT_ACCOUNT_ID=players.genesistown.mock node server/src/main.ts",
-    "test": "node --test economy/*.test.ts && npm --prefix server test && npm --prefix server run typecheck"
+    "dev:split": "npm run build:client && node scripts/dev-split.mjs",
+    "test":"node --test economy/*.test.ts && npm --prefix server test && npm --prefix server run typecheck"
   }
 }

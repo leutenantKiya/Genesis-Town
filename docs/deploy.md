@@ -47,6 +47,7 @@ private keys are typed by you into the host, never committed and never put in a 
 | `TRUST_PROXY` | `1` (the Dockerfile sets it) |
 | `PORT` | usually set by the host; the Dockerfile defaults to 3000 |
 | `DB_PATH` | `/data/genesis-town.db` (the Dockerfile sets it) |
+| `CORS_ORIGINS` | empty, or the client's origin when it is hosted apart (see the split setup below) |
 
 Dev tools stay closed on a host even if `DEV_TOOLS=1` is left on: they only answer direct requests from the same
 machine with no proxy headers.
@@ -63,6 +64,36 @@ machine with no proxy headers.
    - `GET /api/health` returns `{"ok":true,"chain":"testnet",...}` and `settledThrough` catches up within minutes;
    - `GET /api/config` shows `"devTools":false`;
    - the page loads, and Masuk opens NEAR Auth (see Login below).
+
+## Split setup: client on Vercel, server on Railway
+
+The client is plain static files, so it can live on a CDN while the Node server (API, game loop, SQLite) stays on a
+host with a persistent process. The browser calls the server **directly** (cross-origin), not through a Vercel
+rewrite: behind a rewrite every request would reach the server from Vercel's address, and the per-address limits
+(account creation, chat) would treat all players as one visitor.
+
+**Server on Railway** (`railway.json` + `Dockerfile` in the repo):
+
+1. New project, Deploy from GitHub repo; Railway reads `railway.json` (Dockerfile build, health check `/api/health`).
+2. Add a Volume to the service, mount path `/data`. Set `RAILWAY_RUN_UID=0`: the image runs as user `node`, and
+   Railway volumes are owned by root.
+3. Set the environment variables from the table above, plus `CORS_ORIGINS=https://<your-app>.vercel.app` (add
+   custom domains too, comma separated). Keep one replica, and pick the region closest to the players (Singapore).
+4. Settings → Networking → Generate Domain. This URL is `GT_API_BASE` below.
+
+**Client on Vercel** (`vercel.json` in the repo):
+
+1. Import the same GitHub repo, root directory = repo root. `vercel.json` sets install, build and output (`client/`).
+2. Environment variable `GT_API_BASE=https://<service>.up.railway.app` (no trailing slash), then deploy. The build
+   writes it into `client/vendor/env.js`; changing it needs a redeploy.
+3. Open the Vercel URL: the mode banner should say testnet (or mock), not offline. If it says offline, check the
+   browser console for a CORS error and compare `CORS_ORIGINS` with the exact page origin.
+
+To try the split on one machine first: `npm run dev:split` (mock server on :3100 with `CORS_ORIGINS`, the static
+client on :5173 whose `vendor/env.js` points at it; `API_PORT` / `WEB_PORT` change the ports).
+
+The Railway URL still serves the whole game on its own, so it keeps working as a fallback. NEAR Auth must accept the
+Vercel domain as a callback (next section).
 
 ## Login on the public domain
 
