@@ -24,7 +24,7 @@
     { hair: '#26346e', shirt: '#2e4488', skin: '#f0c8a0', pants: '#1a2250', police: true }
   ];
   var DIRY = { down: 0, up: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 };
-  var cache = {}, mats = null, smats = null, axeGeo = null;
+  var cache = {}, mats = null, smats = null, axeGeo = null, rodGeo = null;
 
   function partsFor(look) {
     var idx = ((Math.floor(look) || 0) % 9 + 9) % 9;
@@ -75,6 +75,8 @@
     B.box(-0.03, 0.34, -0.17, 0.03, 0.5, 0.0, '#d9dde6', '#ffffff');
     B.box(-0.035, 0.36, -0.02, 0.035, 0.48, 0.03, '#7d8290');
     axeGeo = B.geometry();
+    var RB = new Builder(); RB.box(-0.016, -0.016, 0, 0.016, 0.016, 1.3, '#6a3f22', '#8a5a30'); RB.box(-0.03, -0.03, 0, 0.03, 0.03, 0.22, '#3a2414');
+    rodGeo = RB.geometry();
   }
 
   function create(look, opts) {
@@ -91,7 +93,10 @@
     var head = part(P.head, 0, 0.66), armL = part(P.arm, -0.28, 0.63), armR = part(P.arm, 0.28, 0.63);
     var axe = new THREE.Mesh(axeGeo, mats.lit); axe.rotation.x = Math.PI / 2; axe.position.set(0, -0.3, 0.02); axe.visible = false; axe.frustumCulled = false;
     armR.add(axe);
-    rig = { root: root, body: body, look: look, meshes: meshes, legL: legL, legR: legR, torso: torso, head: head, armL: armL, armR: armR, axe: axe, matKey: 'lit', hatKey: null, hat: null, stencil: !!(opts && opts.ghost) };
+    var rod = new THREE.Group(); rod.position.set(0.28, 0.5, 0.2); rod.rotation.x = -0.6; rod.visible = false;
+    var rodM = new THREE.Mesh(rodGeo, mats.lit); rodM.frustumCulled = false; rod.add(rodM);
+    var rodTip = new THREE.Object3D(); rodTip.position.z = 1.3; rod.add(rodTip); body.add(rod);
+    rig = { root: root, body: body, look: look, meshes: meshes, legL: legL, legR: legR, torso: torso, head: head, armL: armL, armR: armR, axe: axe, rod: rod, rodTip: rodTip, matKey: 'lit', hatKey: null, hat: null, stencil: !!(opts && opts.ghost) };
     return rig;
   }
 
@@ -140,6 +145,7 @@
       rig.armR.rotation.x = -1.25; rig.armL.rotation.x = -0.55; rig.body.rotation.x = -0.05;
     }
     rig.axe.visible = axe;
+    rig.rod.visible = !!st.fish && !st.ko;
     if (st.ko) {
       rig.body.rotation.z = (st.side || 1) * Math.PI / 2; rig.body.position.y = 0.2;
       rig.legL.rotation.x = rig.legR.rotation.x = 0; rig.armL.rotation.x = rig.armR.rotation.x = 0; rig.axe.visible = false;
@@ -159,6 +165,7 @@
       Object.keys(cache).forEach(function (k) { var c = cache[k]; c.head.dispose(); c.torso.dispose(); c.arm.dispose(); c.leg.dispose(); });
       cache = {};
       if (axeGeo) axeGeo.dispose(); axeGeo = null;
+      if (rodGeo) rodGeo.dispose(); rodGeo = null;
       if (mats) Object.keys(mats).forEach(function (k) { mats[k].dispose(); }); mats = null;
       if (smats) Object.keys(smats).forEach(function (k) { smats[k].dispose(); }); smats = null;
     }

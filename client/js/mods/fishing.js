@@ -63,7 +63,7 @@
   }
 
   function onDraw(ctx, camX, camY, T) {
-    if (!F) return;
+    if (!F || GT.view === '3d') return; // rod, line and float are real 3D there (r3d/fx.js)
     var tip = rodTip(T, camX, camY), t = performance.now() / 1000;
     var bx = F.tile.x * T - camX + T / 2, by = F.tile.y * T - camY + T / 2;
     if (F.phase === 'cast') { // the float flies in an arc

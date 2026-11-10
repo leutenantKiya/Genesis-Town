@@ -411,7 +411,9 @@
   }
 
   /* ---- Night monsters (the server decides; this draws them and runs the fight window) ---- */
+  var monBuf = [];
   function drawMonster(ctx, kind, px, py, t) {
+    if (GT.view === '3d' && GT.fx3d) { monBuf.push({ id: 'mon' + monBuf.length, kind: kind, x: px / 12, y: py / 12 }); return; } // positions already include the wander and the lunge
     var bob = Math.round(Math.sin(t * 6) * 1);
     function R(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(px + x, py + y + bob, w, h); }
     if (kind === 'bat') {
@@ -436,6 +438,7 @@
     var sc = GT.scene;
     if (!sc || sc.kind !== 'out') return;
     var t = performance.now() / 1000, e = S.st && S.st.encounter;
+    monBuf = [];
     roamers().forEach(function (m) {
       if (e && e.id === m.id) return;
       var w = wander(m, t);
@@ -446,6 +449,7 @@
       if (lk >= 0 && lk < 1) { var reach = Math.sin(lk * Math.PI) * 6, dxp = GT.player.x - e.x, dyp = GT.player.y - e.y, dl = Math.max(1, Math.abs(dxp) + Math.abs(dyp)); lx = dxp / dl * reach; ly = dyp / dl * reach; }
       drawMonster(ctx, e.kind, Math.round(e.x * T - camX + lx), Math.round(e.y * T - camY + ly), t);
     }
+    if (GT.view === '3d' && GT.fx3d) GT.fx3d.monsters(monBuf);
     drawWeather(ctx, T, t);
   }
 

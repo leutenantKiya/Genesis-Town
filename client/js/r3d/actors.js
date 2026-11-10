@@ -24,6 +24,7 @@
       scratch = document.createElement('canvas'); scratch.width = scratch.height = 64; sg = scratch.getContext('2d');
     },
     onWorld: function () {},
+    playerRig: function () { var e = pool && pool.get('P'); return e ? e.rig : null; },
     update: function (C, info) {
       var frame = ++this.frame, ents = info.ents, i, t = info.timeAcc;
       var fx = window.GT_FX, fish = window.GT_FISH;

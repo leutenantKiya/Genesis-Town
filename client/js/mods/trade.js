@@ -211,6 +211,12 @@
   }
   function onDraw(ctx, camX, camY, T) {
     var m = marks(); if (!m) return;
+    if (GT.view === '3d' && GT.fx3d) { // 3D view: real counter and board, text as HTML
+      GT.fx3d.stall3d(m);
+      GT.fx3d.label('titip', m.consign.x * T + T / 2, (m.consign.y + 1) * T + 2, 2, 'Titip Jual', {});
+      GT.fx3d.label('papan', m.board.x * T + T / 2, (m.board.y + 1) * T + 2, 2, 'Papan Juara', {});
+      return;
+    }
     ctx.save();
     // Titip Jual: striped awning over a counter, a crate of goods on it
     var x = m.consign.x * T - camX, y = m.consign.y * T - camY;
