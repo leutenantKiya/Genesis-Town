@@ -19,7 +19,11 @@
 >   `lab3d.html` (solid buildings and trees, sun and shadows, seasons, night glow, see-through walls). Default on a
 >   computer, 2D on a phone; indoors and without WebGL the 2D view draws. The lab's camera and keys: **Q / E** turn the
 >   view by 45 degrees (the bag stays on I and the Tas button), **+ / -** zoom, and the arrows walk the way they point on
->   screen. Signs and name tags follow each head at any turn, drawn small so they do not cover the world. Same rules and positions as 2D: the engine
+>   screen. Signs and name tags follow each head at any turn, drawn small so they do not cover the world.
+>   The lab's controls are in the game too: its trays (top right) hold **Desa / Homeland** (walks to the portal, then
+>   travels), zoom and turn; a **drag** on the world walks with the lab's ring, the **mouse wheel** over the world zooms
+>   (over the hotbar it still picks the item), and the lab's key hint sits bottom left on wide screens. Season and hour
+>   follow the server, so the lab's season buttons and hour slider are not in the game. Same rules and positions as 2D: the engine
 >   still owns them (`client/js/mods/view3d.js`). Walking into a building without a scene cut is still *(planned)*.
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).

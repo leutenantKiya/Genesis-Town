@@ -53,6 +53,7 @@
 
   function onClick(e) {
     if (e.button !== 0 || GT.isUiOpen() || (window.GT_FISH && GT_FISH.active()) || document.documentElement.classList.contains('gt-fighting')) return;
+    if (window.GT_VIEW3D && GT_VIEW3D.tookClick && GT_VIEW3D.tookClick()) return; // the end of a drag-to-walk in 2.5D, not a click
     var sc = GT.scene, t = GT.screenToTile && GT.screenToTile(e.clientX, e.clientY);
     if (!sc || !t) return;
     var p = GT.player, m = sc.map;
@@ -111,5 +112,15 @@
     window.addEventListener('keydown', function (e) { if (walk && e.isTrusted) cancel(); }, true);
   }
 
+  // walk next to a tile (or onto it when it is walkable), then run `then`: the 2.5D Desa / Homeland buttons walk to the portal
+  window.GT_MOUSE = {
+    goNear: function (t, then) {
+      var sc = GT.scene, p = GT.player;
+      if (!sc || !t) return false;
+      if (walkable(sc, t.x, t.y) && !npcAt(sc, t.x, t.y)) { var path = GT.findPath(sc, p, t); if (!path) return false; go(path, then); return true; }
+      var a = approach(sc, t); if (!a) return false;
+      go(a.path, then); return true;
+    }
+  };
   GT.register({ id: 'mouse', init: init, onFrame: onFrame, onKey: onKey });
 })();

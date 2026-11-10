@@ -5,8 +5,11 @@
  *
  * three.js and the kit load the first time the view is on. The choice is kept in localStorage 'gt.view' ('2d' | '3d');
  * the default is 2.5D on a computer and 2D on a phone (the forest is heavy on a small GPU).
- * The camera is the lab's (GT3.Rig defaults: pitch 52, fov 28) and so are its keys: Q / E turn it by 45 degrees,
- * + / - zoom. The arrows and WASD then walk the way they point on screen (worldDir), and sprites face the same way.
+ * The camera is the lab's (GT3.Rig defaults: pitch 52, fov 28) and so are its keys and controls: Q / E turn it by 45
+ * degrees, + / - and the mouse wheel over the world zoom, a drag on the world walks (the lab's ring), and the lab's
+ * trays (top right of the view) hold Desa / Homeland, zoom and turn, with the lab's key hint. Desa / Homeland walk to
+ * the portal first: the server only lets a player travel from there. The season and the hour follow the server.
+ * The arrows and WASD walk the way they point on screen (worldDir), and sprites face the same way.
  * The mods' overlays (signs, monsters, hats, effects, name tags) are placed with GT.at, which follows each tile's feet
  * on screen at any turn (engine.js render3d).
  *
@@ -23,6 +26,8 @@
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
   var actors = new Map(), gctx = null, gtex = null, gAt = 0, last = 0, sw = 0, sh = 0, VW = 1, VH = 1;
   var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null, yawWant = 0, zoom = 1;
+  var KEY = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+  var ui = null, drag = null, took = 0, shownWorld = '';
 
   function saved() { try { var v = localStorage.getItem(LS); return v === '2d' || v === '3d' ? v : null; } catch (e) { return null; } }
   function phone() { try { return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900; } catch (e) { return false; } }
@@ -63,7 +68,85 @@
     tmp = new THREE.Vector3(); ray = new THREE.Raycaster(); ndc = new THREE.Vector2();
     plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); hit = new THREE.Vector3();
     ok = true;
+    buildUi();
     if (mode === '3d') GT.setView3d(api);
+  }
+
+  /* ---------------------------------------------------------------- the lab's controls, in the game */
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function button(text, label, fn) {
+    var b = el('button', null, text); b.type = 'button'; if (label) b.setAttribute('aria-label', label);
+    b.addEventListener('click', function (e) { e.currentTarget.blur(); fn(); });
+    return b;
+  }
+  function buildUi() {
+    var scr = document.getElementById('screen'), c2 = document.getElementById('cv');
+    if (!scr || !c2) return;
+    ui = { bar: el('div', 'gt3d-bar'), hint: el('div', 'gt3d-hint'), stick: el('div', 'gt3d-stick') };
+    var t1 = el('div', 'gt3d-tray'); t1.setAttribute('role', 'group'); t1.setAttribute('aria-label', 'Dunia');
+    ui.desa = button('Desa', null, function () { goWorld('public'); });
+    ui.home = button('Homeland', null, function () { goWorld('home'); });
+    t1.appendChild(ui.desa); t1.appendChild(ui.home);
+    var t2 = el('div', 'gt3d-tray'); t2.setAttribute('role', 'group'); t2.setAttribute('aria-label', 'Kamera');
+    t2.appendChild(button('+', 'Perbesar', function () { zoom = rig.zoom(zoom * 1.2); }));
+    t2.appendChild(button('-', 'Perkecil', function () { zoom = rig.zoom(zoom / 1.2); }));
+    t2.appendChild(button('↺', 'Putar kamera ke kiri', function () { turn(-1); }));
+    t2.appendChild(button('↻', 'Putar kamera ke kanan', function () { turn(1); }));
+    ui.bar.appendChild(t1); ui.bar.appendChild(t2);
+    ui.hint.innerHTML = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> atau seret jalan · <kbd>Q</kbd><kbd>E</kbd> putar kamera · scroll zoom';
+    ui.stick.setAttribute('aria-hidden', 'true'); ui.stick.appendChild(el('i'));
+    scr.appendChild(ui.bar); scr.appendChild(ui.hint); document.body.appendChild(ui.stick);
+    // a drag on the world walks: past a small dead zone it holds the arrow it points at on screen, the way mouse.js walks
+    c2.addEventListener('pointerdown', function (e) {
+      if (!GT.view3dOn() || e.button !== 0 || GT.isUiOpen()) return;
+      drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, dir: null };
+    });
+    c2.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0, d = Math.hypot(dx, dy);
+      if (!drag.on) {
+        if (d <= 12) return;
+        drag.on = true;
+        try { c2.setPointerCapture(e.pointerId); } catch (_) { /* old browsers */ }
+        ui.stick.style.left = drag.x0 + 'px'; ui.stick.style.top = drag.y0 + 'px'; ui.stick.style.display = 'block';
+      }
+      var k = d > 26 ? 26 / d : 1;
+      ui.stick.firstChild.style.transform = 'translate(' + dx * k + 'px,' + dy * k + 'px)';
+      var dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+      if (dir !== drag.dir) { if (drag.dir) key('keyup', drag.dir); key('keydown', dir); drag.dir = dir; }
+    });
+    function end(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (drag.on) { if (drag.dir) key('keyup', drag.dir); ui.stick.style.display = 'none'; took = performance.now(); }
+      drag = null;
+    }
+    c2.addEventListener('pointerup', end); c2.addEventListener('pointercancel', end);
+    // the wheel over the world zooms (over the hotbar it still picks the item in hand)
+    c2.addEventListener('wheel', function (e) {
+      if (!GT.view3dOn()) return;
+      e.preventDefault(); e.stopPropagation();
+      zoom = rig.zoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+    }, { passive: false });
+  }
+  function key(type, d) { window.dispatchEvent(new KeyboardEvent(type, { code: KEY[d], key: KEY[d], bubbles: true, cancelable: true })); }
+  function syncUi() {
+    var w = GT.worldId ? GT.worldId() : 'public';
+    if (!ui || w === shownWorld) return;
+    shownWorld = w;
+    ui.desa.setAttribute('aria-pressed', String(w === 'public'));
+    ui.home.setAttribute('aria-pressed', String(w !== 'public'));
+  }
+  // Desa / Homeland travel from the portal, walking there first when the player is further than the server allows
+  function goWorld(kind) {
+    var H = window.GT_HOME && GT_HOME.state ? GT_HOME.state() : null;
+    var to = kind === 'public' ? 'public' : H && H.world;
+    if (!to) { GT.toast('Masuk dulu untuk ke Homeland.'); return; }
+    if (GT.worldId() === to || GT.isUiOpen()) return;
+    var p = GT.world && GT.world.portal, me = GT.player;
+    if (!p) return;
+    if (Math.abs(me.x - p.x) + Math.abs(me.y - p.y) <= 2) { GT_HOME.travel(to); return; }
+    if (!(window.GT_MOUSE && GT_MOUSE.goNear(p, function () { GT_HOME.travel(to); }))) { GT.toast('Tidak ada jalan ke portal.'); return; }
+    GT.toast('Berjalan ke portal…');
   }
 
   /* ---------------------------------------------------------------- the world of the current outdoor map */
@@ -120,7 +203,7 @@
     },
     draw: function (o) {
       ensureWorld(o.map);
-      document.documentElement.classList.add('gt-3d'); cv.style.display = 'block';
+      document.documentElement.classList.add('gt-3d'); cv.style.display = 'block'; syncUi();
       size(o);
       var now = performance.now(), dt = last ? Math.min(0.1, (now - last) / 1000) : 0.016; last = now;
       var season = GT.season(), snowy = !!(window.SPRITES && SPRITES.snow), sk = season + (snowy ? '*' : '');
@@ -148,6 +231,7 @@
     },
     toScreen: toScreen,
     worldDir: worldDir,
+    tookClick: function () { return performance.now() - took < 400; },
     // device px per art px at the player's depth: one tile up the card is 12 art px
     artScale: function (S) { var a = toScreen(pt.x, pt.y, 0), b = toScreen(pt.x, pt.y, 1); return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y) * S / T); },
     pick: function (clientX, clientY) {
@@ -171,6 +255,7 @@
     toScreen: function (x, z, l) { return toScreen(x, z, l); },
     playerTile: function () { return api.playerTile(); },
     turn: turn,
+    tookClick: function () { return api.tookClick(); },
     // the lab's keys while the 2.5D view shows (settings.js asks first): Q / E turn, + / - zoom
     onKey: function (e) {
       if (!GT.view3dOn || !GT.view3dOn()) return false;

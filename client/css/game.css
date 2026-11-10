@@ -75,7 +75,25 @@ button:disabled{cursor:not-allowed}
 #screen{position:relative;margin-inline:auto;line-height:0;background:var(--outline);box-shadow:0 0 0 var(--line) var(--outline);overflow:hidden;--fs:10px}
 /* 2.5D view (mods/view3d.js): the WebGL world under the 2D canvas, which then only carries the overlays */
 .gt3d{position:absolute;left:0;top:0}
-html.gt-3d #cv{position:relative}
+html.gt-3d #cv{position:relative;touch-action:none}
+/* the lab's trays, key hint and drag ring (lab3d.html), shown while the 2.5D view draws */
+.gt3d-bar{position:absolute;top:16px;right:16px;z-index:5;display:none;flex-wrap:wrap;justify-content:flex-end;gap:8px;line-height:normal;pointer-events:none;max-width:calc(100% - 32px)}
+html.gt-3d .gt3d-bar{display:flex}
+.gt3d-tray{pointer-events:auto;display:flex;gap:6px;align-items:center;padding:6px;background:var(--hud);border:var(--line) solid var(--outline);border-radius:var(--r-win);box-shadow:inset 0 calc(-1 * var(--edge)) 0 var(--season)}
+.gt3d-tray button{font:600 15px var(--font);height:36px;min-width:36px;padding:0 12px;color:var(--hud-ink);background:var(--hud-2);cursor:pointer;border:var(--line) solid var(--outline);border-radius:var(--r-ctl);
+  box-shadow:inset 0 calc(-1 * var(--edge)) 0 var(--shade),inset 0 1px 0 var(--hud-hi);transition:transform var(--t-press) var(--ease)}
+.gt3d-tray button:hover{background:var(--hud-3)}
+.gt3d-tray button:active{transform:translateY(2px);box-shadow:none}
+.gt3d-tray button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.gt3d-tray button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.gt3d-hint{position:absolute;left:16px;bottom:16px;z-index:5;display:none;padding:8px 12px;background:var(--chip,rgba(20,21,42,.85));border-radius:var(--r-ctl);font:14px var(--font);line-height:normal;color:var(--hud-dim);white-space:nowrap;pointer-events:none}
+html.gt-3d .gt3d-hint{display:block}
+.gt3d-hint kbd{font:600 13px var(--font);color:var(--hud-ink);background:var(--hud-3);border:var(--line) solid var(--outline);border-radius:var(--r-ctl);padding:0 5px}
+.gt3d-stick{position:fixed;z-index:1000;width:88px;height:88px;margin:-44px 0 0 -44px;border-radius:50%;pointer-events:none;display:none;border:var(--line) solid var(--outline);background:color-mix(in srgb,var(--hud) 45%,transparent)}
+.gt3d-stick i{position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;background:var(--accent)}
+@media (max-width:1300px){html.gt-3d .gt3d-hint{display:none}} /* narrower, it would meet the hotbar */
+html.gt-phone .gt3d-bar{top:8px;right:8px;max-width:calc(100% - 16px)}
+html.gt-phone .gt3d-tray button{height:44px;min-width:44px;padding:0 8px}
 #cv{display:block;image-rendering:pixelated;image-rendering:crisp-edges;image-rendering:pixelated;touch-action:none}
 
 /* floating labels / speech bubbles over the canvas */
