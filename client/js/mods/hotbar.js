@@ -24,7 +24,12 @@
   };
   function icon(id, size) {
     var c = document.createElement('canvas'), d = ICONS[id], px = size / 8;
-    c.width = c.height = size; c.setAttribute('aria-hidden', 'true');
+    c.setAttribute('aria-hidden', 'true');
+    if (GT.view === '3d' && window.R3D && R3D.icons && R3D.icons.has(id)) { // the 3D view shows soft 3D icons instead of pixel art
+      c.width = c.height = Math.round(size * 2); c.style.width = c.style.height = size + 'px';
+      if (R3D.icons.draw(c, id)) return c;
+    }
+    c.style.width = c.style.height = ''; c.width = c.height = size;
     var g = c.getContext('2d');
     if (d) for (var y = 0; y < 8; y++) for (var x = 0; x < 8; x++) {
       var ch = d.rows[y].charAt(x);
@@ -162,8 +167,18 @@
     return false;
   }
 
+  // switching between the 2D and the 3D view swaps the pixel icons and the soft 3D icons
+  function refreshIcons() {
+    if (!bar) return;
+    [].forEach.call(bar.querySelectorAll('.gt-slot'), function (b) {
+      var old = b.querySelector('canvas'), id = b.dataset.item; if (!old || !id) return;
+      var nu = icon(id, 24); old.parentNode.replaceChild(nu, old);
+    });
+  }
+
   function init() {
     build();
+    if (GT.on) GT.on('view', function () { setTimeout(refreshIcons, 0); });
     // the round E button on phones opens the bag (the NPC message lives in Lainnya and on T)
     var pad = document.getElementById('pad'), be = document.getElementById('btnE');
     if (be) be.setAttribute('aria-label', 'Tombol E, buka tas');
@@ -181,7 +196,7 @@
       useHeld(GT.screenToTile ? GT.screenToTile(e.clientX, e.clientY) : null);
     });
     if (screen) screen.addEventListener('wheel', function (e) {
-      if (!bar || bar.style.display === 'none' || GT.isUiOpen()) return;
+      if (!bar || bar.style.display === 'none' || GT.isUiOpen() || GT.view === '3d') return; // in 3D the wheel zooms
       e.preventDefault();
       setHeld(held + (e.deltaY > 0 ? 1 : -1));
     }, { passive: false });

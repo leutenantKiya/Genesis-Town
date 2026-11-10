@@ -41,12 +41,14 @@
 
   /* ---------------------------------------------------------------- drawing helpers */
   // A character is 12x14 pixels drawn at a 16x16 tile; paint it on a tiny canvas and let CSS scale it up crisply.
+  function threeD() { return GT.view === '3d' && window.R3D && R3D.rig && R3D.rig.portrait; }
   function paint(cv, look, dir, step) {
+    if (threeD() && cv.width > 32 && R3D.rig.portrait(cv, look, dir || 'down', step)) return; // the 3D view shows the real 3D character
     var g = cv.getContext('2d');
     g.clearRect(0, 0, cv.width, cv.height);
     GT.drawChar(g, 0, 2, look, dir || 'down', step || 0);
   }
-  function pixelCanvas() { var cv = document.createElement('canvas'); cv.width = 16; cv.height = 20; return cv; }
+  function pixelCanvas() { var cv = document.createElement('canvas'), d3 = threeD(); cv.width = d3 ? 160 : 16; cv.height = d3 ? 200 : 20; return cv; }
 
   /* ---------------------------------------------------------------- the screen */
   function open() {
@@ -150,7 +152,7 @@
     host.appendChild(cv);
     var W = host.clientWidth || 640, H = host.clientHeight || 480, dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-    var g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+    var g = cv.getContext('2d'); g.imageSmoothingEnabled = threeD() ? true : false;
     var spr = pixelCanvas(); paint(spr, look, 'down', 1);
     var S = Math.max(4, Math.round(Math.min(W, H) / 70)) * dpr;   // pixels per sprite pixel
     var cx = cv.width / 2, landY = cv.height / 2, startY = cv.height + 16 * S, topY = cv.height * 0.12;
@@ -176,7 +178,7 @@
     for (var i = 0; i < 7; i++) {
       var a = (i / 7) * Math.PI * 2 + 0.3, r = S * (2 + p * 9), dx = Math.cos(a) * r * 1.6, dy = Math.sin(a) * r * 0.45;
       g.fillStyle = i % 2 ? '#d9d2bd' : '#bdb59c';
-      var s = S * (3 - p * 1.6); g.fillRect(Math.round(x + dx - s / 2), Math.round(y + dy - s / 2), s, s);
+      var s = S * (3 - p * 1.6); if (threeD()) { g.beginPath(); g.arc(x + dx, y + dy, s * 0.7, 0, 6.2832); g.fill(); } else g.fillRect(Math.round(x + dx - s / 2), Math.round(y + dy - s / 2), s, s);
     }
     g.restore();
   }

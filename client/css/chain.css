@@ -49,12 +49,19 @@
 .gt-goals-x{border:0;background:transparent;color:var(--paper-edge);font-size:calc(14px*var(--ts));padding:4px 2px;min-height:24px}
 
 /* Weather mood on the game view (outdoors only; set by chain.js from the day's shared weather) */
-#cv{transition:filter .8s}
+#cv,#cv3d{transition:filter .8s}
 html.gt-w-terik #cv{filter:saturate(1.38) contrast(1.06) brightness(1.05)}
+html.gt-w-terik{--gt-wx:saturate(1.38) contrast(1.06) brightness(1.05)}
 html.gt-w-cerah #cv{filter:saturate(1.12)}
+html.gt-w-cerah{--gt-wx:saturate(1.12)}
 html.gt-w-berawan #cv{filter:saturate(.86) brightness(.95)}
+html.gt-w-berawan{--gt-wx:saturate(.86) brightness(.95)}
 html.gt-w-hujan #cv{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
-html.gt-reduced-motion #cv{transition:none}
+html.gt-w-hujan{--gt-wx:saturate(.78) brightness(.9) hue-rotate(-6deg)}
+/* the 3D canvas: weather mood and the soft colour style share one filter */
+#cv3d{filter:var(--gt-wx,) var(--gt-soft,)}
+html.gt-soft3d{--gt-soft:saturate(.84) contrast(.95) brightness(1.06)}
+html.gt-reduced-motion #cv,html.gt-reduced-motion #cv3d{transition:none}
 
 /* Hotbar: item slots along the bottom of the game view (js/mods/hotbar.js) */
 .gt-hotbar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:3;display:flex;gap:4px;padding:4px;background:rgba(14,15,30,.82);border-radius:6px;box-shadow:0 0 0 2px #000;line-height:1}

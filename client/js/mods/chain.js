@@ -122,7 +122,7 @@
     titleEl.textContent = '';
     var card = $('div', 'gt-title-card');
     var h = $('h1', null, 'Genesis Town'); h.id = 'gt-title-h'; card.appendChild(h);
-    card.appendChild($('p', 'gt-title-lead', 'Kota pasar piksel. Kumpulkan, olah, dan jual ke pedagang yang harganya bergerak karena pemain.'));
+    card.appendChild($('p', 'gt-title-lead', (GT.view === '3d' ? 'Kota pasar mungil. ' : 'Kota pasar piksel. ') + 'Kumpulkan, olah, dan jual ke pedagang yang harganya bergerak karena pemain.'));
     var live = liveLine();
     if (live) card.appendChild($('p', 'gt-title-live', live));
     var acts = $('div', 'gt-title-acts');
@@ -411,7 +411,9 @@
   }
 
   /* ---- Night monsters (the server decides; this draws them and runs the fight window) ---- */
+  var monBuf = [];
   function drawMonster(ctx, kind, px, py, t) {
+    if (GT.view === '3d' && GT.fx3d) { monBuf.push({ id: 'mon' + monBuf.length, kind: kind, x: px / 12, y: py / 12 }); return; } // positions already include the wander and the lunge
     var bob = Math.round(Math.sin(t * 6) * 1);
     function R(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(px + x, py + y + bob, w, h); }
     if (kind === 'bat') {
@@ -436,6 +438,7 @@
     var sc = GT.scene;
     if (!sc || sc.kind !== 'out') return;
     var t = performance.now() / 1000, e = S.st && S.st.encounter;
+    monBuf = [];
     roamers().forEach(function (m) {
       if (e && e.id === m.id) return;
       var w = wander(m, t);
@@ -446,6 +449,7 @@
       if (lk >= 0 && lk < 1) { var reach = Math.sin(lk * Math.PI) * 6, dxp = GT.player.x - e.x, dyp = GT.player.y - e.y, dl = Math.max(1, Math.abs(dxp) + Math.abs(dyp)); lx = dxp / dl * reach; ly = dyp / dl * reach; }
       drawMonster(ctx, e.kind, Math.round(e.x * T - camX + lx), Math.round(e.y * T - camY + ly), t);
     }
+    if (GT.view === '3d' && GT.fx3d) GT.fx3d.monsters(monBuf);
     drawWeather(ctx, T, t);
   }
 
@@ -466,6 +470,7 @@
     ['cerah', 'berawan', 'hujan', 'terik', 'salju'].forEach(function (x) { root.classList.toggle('gt-w-' + x, k === x && (!GT.scene || GT.scene.kind === 'out')); });
   }
   function drawWeather(ctx, T, t) {
+    if (GT.view === '3d') return; // the 3D view has its own rain, snow and light
     var k = weatherKind();
     if (k !== 'hujan' && k !== 'salju') return;
     var sx = ctx.getTransform().a || 1, W = ctx.canvas.width / sx, H = ctx.canvas.height / sx;
@@ -777,6 +782,11 @@
 
   // Crops are drawn in the ground pass (onDrawGround), so characters walk in front of them.
   function onDrawGround(ctx, camX, camY, T) {
+    if (GT.view === '3d' && GT.fx3d) { // real 3D soil and plants (r3d/fx.js)
+      var out3 = GT.scene && GT.scene.kind === 'out' && S.st && S.plots.length;
+      GT.fx3d.crops(out3 ? S.plots.map(function (pp, i) { var q = S.st.plots[i] || {}; return { x: pp.x, y: pp.y, state: q.state || 'empty', grown: q.grown || 0, wet: !!q.wateredToday }; }) : []);
+      return;
+    }
     if (!GT.scene || GT.scene.kind !== 'out' || !S.plots.length || !S.st) return;
     var vw = ctx.canvas.width, vh = ctx.canvas.height;
     S.plots.forEach(function (pp, i) {

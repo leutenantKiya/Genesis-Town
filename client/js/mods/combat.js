@@ -689,6 +689,19 @@ function charDraw(g, n, x, y, pal, dir, step){
   return true;
 }
 
+/* the same visual state as charDraw, as plain data for the 3D view: {ox, oy (px offsets), tint:'white'|'red'|null, ko, side} or null */
+function charState(n){
+  var c = n || 'player', v = isP(c) ? pv : (n && n._v);
+  if (!v) return null;
+  var ko = isP(c) ? pv.ko : (n._ko > 0 || v.ko);
+  if (!(v.flash > 0 || v.kick || v.lunge || ko)) return null;
+  var ox = 0, oy = 0;
+  if (v.kick){ var k = 1 - Math.min(1, v.kick.t / v.kick.dur); k = k * k; ox += v.kick.dx * k; oy += v.kick.dy * k; }
+  if (v.lunge){ var l = v.lunge, lp = l.t / l.dur; lp = lp < 0.5 ? lp * 2 : (1 - lp) * 2; ox += l.dx * lp; oy += l.dy * lp; }
+  var tint = null;
+  if (v.flash > 0){ var f = v.flash / (v.flashDur || 0.12); tint = f > 0.5 ? 'white' : 'red'; }
+  return { ox:ox, oy:oy, tint:tint, ko:!!ko, side:v.koSide || 1 };
+}
 function hpColor(f){ return f > 0.5 ? '#58d468' : f > 0.25 ? '#f2c94c' : '#e8504a'; }
 function drawBar(g, x, y, f){
   // 14 x 4 dengan bingkai hitam
@@ -912,6 +925,7 @@ GT.register({
   init:function(){
     load(); injectCss(); buildHud(); buildPad(); patchHelp(); hookFood();
     GT.charDraw = charDraw;
+    GT.charState = charState;
     window.addEventListener('pagehide', persistNow);
     window.addEventListener('beforeunload', persistNow);
     updateHud();

@@ -34,10 +34,15 @@
   /* ---------------------------------------------------------------- drawing */
   function onDrawGround(ctx, camX, camY, T) {
     var sc = GT.scene, m = sc && sc.map;
-    if (!m || sc.kind !== 'out') return;
+    if (!m || sc.kind !== 'out') { if (GT.view === '3d' && GT.fx3d) GT.fx3d.spots([]); return; }
     var vw = ctx.canvas.width, vh = ctx.canvas.height, t = performance.now() / 1000;
     var x0 = Math.max(0, Math.floor(camX / T)), y0 = Math.max(0, Math.floor(camY / T));
     var x1 = Math.min(m.w - 1, Math.ceil((camX + vw) / T)), y1 = Math.min(m.h - 1, Math.ceil((camY + vh) / T));
+    if (GT.view === '3d' && GT.fx3d) { // rings on the water are real 3D there
+      var sl = [];
+      for (var yy = y0; yy <= y1; yy++) for (var xx = x0; xx <= x1; xx++) if (isSpot(xx, yy)) sl.push({ x: xx, y: yy, h: hash(xx, yy, 7) });
+      GT.fx3d.spots(sl); return;
+    }
     ctx.save();
     ctx.lineWidth = 1;
     for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++) {
@@ -63,7 +68,7 @@
   }
 
   function onDraw(ctx, camX, camY, T) {
-    if (!F) return;
+    if (!F || GT.view === '3d') return; // rod, line and float are real 3D there (r3d/fx.js)
     var tip = rodTip(T, camX, camY), t = performance.now() / 1000;
     var bx = F.tile.x * T - camX + T / 2, by = F.tile.y * T - camY + T / 2;
     if (F.phase === 'cast') { // the float flies in an arc

@@ -31,16 +31,19 @@
   }
   function chop(tile) { swing('chop', tile, true); }
   function strike(tile, hit) { swing('strike', tile, hit); }
-  function float(tile, text, col) { texts.push({ tile: { x: tile.x, y: tile.y }, text: String(text), col: col || '#ffffff', t: 0 }); }
-  function flash(tile, col) { flashes.push({ tile: { x: tile.x, y: tile.y }, col: col || 'rgba(255,255,255,0.85)', t: 0 }); }
+  function float(tile, text, col) {
+    if (GT.view === '3d' && GT.fx3d) { GT.fx3d.text(tile.x, tile.y, text, col); return; } texts.push({ tile: { x: tile.x, y: tile.y }, text: String(text), col: col || '#ffffff', t: 0 }); }
+  function flash(tile, col) {
+    if (GT.view === '3d' && GT.fx3d) { GT.fx3d.flash(tile.x, tile.y, col); return; } flashes.push({ tile: { x: tile.x, y: tile.y }, col: col || 'rgba(255,255,255,0.85)', t: 0 }); }
   function poof(tile) {
+    if (GT.view === '3d' && GT.fx3d) { GT.fx3d.burst(tile.x, tile.y, 'poof'); return; }
     var parts = [];
     for (var i = 0; i < 10; i++) { var a = Math.random() * Math.PI * 2, v = 10 + Math.random() * 18; parts.push({ x: 0, y: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 8, r: 1 + Math.random() * 2 }); }
     puffs.push({ tile: { x: tile.x, y: tile.y }, t: 0, parts: parts });
   }
   function shake(px) {
     if (reduced()) return;
-    var cv = document.getElementById('cv');
+    var cv = document.getElementById(GT.view === '3d' ? 'cv3d' : 'cv');
     if (!cv || !cv.animate) return;
     var d = px || 2;
     cv.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(' + d + 'px,-' + d + 'px)' }, { transform: 'translate(-' + d + 'px,' + d + 'px)' }, { transform: 'translate(' + (d / 2) + 'px,0)' }, { transform: 'translate(0,0)' }], { duration: 220, easing: 'steps(5)' });
@@ -71,7 +74,10 @@
     for (var i = fx.length - 1; i >= 0; i--) {
       var e = fx[i];
       e.t += dt;
-      if (e.t >= HIT && !e.parts) e.parts = spawnParts(e);
+      if (e.t >= HIT && !e.parts) {
+        if (GT.view === '3d' && GT.fx3d) { GT.fx3d.burst(e.tile.x, e.tile.y, e.kind === 'strike' ? 'spark' : 'chop', e.dir, e.hit); e.parts = []; } // real 3D chips and sparks
+        else e.parts = spawnParts(e);
+      }
       if (e.parts) e.parts.forEach(function (q) { q.life -= dt; q.vy += q.g * dt; q.x += q.vx * dt + (q.leaf ? Math.sin((e.t + q.sway) * 8) * 0.25 : 0); q.y += q.vy * dt; });
       var alive = e.t < DUR || (e.parts && e.parts.some(function (q) { return q.life > 0; }));
       if (!alive) fx.splice(i, 1);
@@ -96,7 +102,7 @@
   }
 
   function onDraw(ctx, camX, camY, T) {
-    if (!GT.scene || GT.scene.kind !== 'out') return;
+    if (!GT.scene || GT.scene.kind !== 'out' || GT.view === '3d') return; // the 3D view draws these itself (r3d/fx.js)
     if (!fx.length && !texts.length && !flashes.length && !puffs.length) return;
     ctx.save();
     flashes.forEach(function (f) {
@@ -122,7 +128,7 @@
           ctx.arc(hx, hy, reach + w * 1.8, Math.min(trailFrom, ang), Math.max(trailFrom, ang), false);
           ctx.stroke();
         }
-        if (e.t < DUR * 0.8) drawAxe(ctx, hx, hy, ang);
+        if (e.t < DUR * 0.8 && GT.view !== '3d') drawAxe(ctx, hx, hy, ang); // the 3D character swings its own axe
       }
       // impact flash on the target
       if (e.hit && e.t >= HIT && e.t < HIT + 0.08) {
@@ -156,6 +162,6 @@
     ctx.restore();
   }
 
-  window.GT_FX = { chop: chop, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; } };
+  window.GT_FX = { swinging: function () { for (var i = 0; i < fx.length; i++) if (fx[i].t < DUR) return { kind: fx[i].kind, dir: fx[i].dir, p: fx[i].t / DUR }; return null; }, chop: chop, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; } };
   GT.register({ id: 'actfx', onFrame: onFrame, onDraw: onDraw });
 })();

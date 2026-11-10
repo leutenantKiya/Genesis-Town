@@ -212,6 +212,43 @@
     wrap.appendChild(ts);
 
 
+    wrap.appendChild($('h3', null, 'Tampilan dunia'));
+    var vseg = $('div', 'mseg');
+    [['2d', '2D (klasik)'], ['3d', '3D pulau melayang']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-view'; inp.value = o[0]; inp.checked = (GT.viewWanted || '2d') === o[0];
+      inp.addEventListener('change', function () { GT.setView(o[0]); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); vseg.appendChild(lab);
+    });
+    wrap.appendChild(vseg);
+    wrap.appendChild($('h3', null, 'Kualitas 3D'));
+    var qseg = $('div', 'mseg'), qcur = 'sedang';
+    try { qcur = localStorage.getItem('gt-q3d') || 'sedang'; } catch (e) { /* ignore */ }
+    [['rendah', 'Rendah'], ['sedang', 'Sedang'], ['tinggi', 'Tinggi']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-q3d'; inp.value = o[0]; inp.checked = qcur === o[0];
+      inp.addEventListener('change', function () { try { localStorage.setItem('gt-q3d', o[0]); } catch (e) { /* ignore */ } window.dispatchEvent(new Event('gt3dquality')); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); qseg.appendChild(lab);
+    });
+    wrap.appendChild(qseg);
+    wrap.appendChild($('h3', null, 'Gaya warna 3D'));
+    var sseg = $('div', 'mseg'), scur = 'lembut';
+    try { scur = localStorage.getItem('gt-soft3d') === 'asli' ? 'asli' : 'lembut'; } catch (e) { /* ignore */ }
+    [['lembut', 'Lembut (pastel)'], ['asli', 'Asli (warna penuh)']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-soft3d'; inp.value = o[0]; inp.checked = scur === o[0];
+      inp.addEventListener('change', function () { try { localStorage.setItem('gt-soft3d', o[0]); } catch (e) { /* ignore */ } window.dispatchEvent(new Event('gt3dsoft')); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); sseg.appendChild(lab);
+    });
+    wrap.appendChild(sseg);
+    wrap.appendChild($('h3', null, 'Kamera 3D'));
+    var cseg = $('div', 'mseg'), ccur = 'perspektif';
+    try { ccur = localStorage.getItem('gt-cam3d') === 'datar' ? 'datar' : 'perspektif'; } catch (e) { /* ignore */ }
+    [['perspektif', 'Perspektif (benda jauh mengecil)'], ['datar', 'Datar (isometrik)']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-cam3d'; inp.value = o[0]; inp.checked = ccur === o[0];
+      inp.addEventListener('change', function () { try { localStorage.setItem('gt-cam3d', o[0]); } catch (e) { /* ignore */ } window.dispatchEvent(new Event('gt3dcam')); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); cseg.appendChild(lab);
+    });
+    wrap.appendChild(cseg);
+    wrap.appendChild($('p', 'mnote', 'Rendah: tanpa bayangan dan lampu nyata (paling ringan). Tinggi: bayangan halus dan lebih banyak lampu.'));
+
     wrap.appendChild($('h3', null, 'Layar'));
     var seg = $('div', 'mseg');
     [['auto', 'Otomatis'], ['full', 'Penuh jendela'], ['boxed', 'Kotak (klasik)']].forEach(function (o) {

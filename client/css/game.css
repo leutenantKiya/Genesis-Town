@@ -66,6 +66,22 @@ button{font-family:var(--font);cursor:pointer;-webkit-tap-highlight-color:transp
 #screen{position:relative;margin-inline:auto;line-height:0;background:#000;box-shadow:0 0 0 3px #05060a,0 0 0 5px #2a2c44;overflow:hidden;--fs:10px}
 #cv{display:block;image-rendering:pixelated;image-rendering:crisp-edges;image-rendering:pixelated;touch-action:none}
 /* floating labels / speech bubbles over the canvas */
+html.gt-3d-in #cv3d{display:none}
+html.gt-3d-in #cv{background:transparent}
+#cv3d{position:absolute;left:0;top:0;display:block;image-rendering:auto;touch-action:none}
+html.gt-3d #cv{position:relative;z-index:1;background:transparent}
+.gt-camctl{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:5px;z-index:6;opacity:.82}
+.gt-camctl:hover,.gt-camctl:focus-within{opacity:1}
+.gt-camctl button{width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.35);background:rgba(18,20,38,.62);color:#fff;font:700 18px/1 'Pixelify Sans',sans-serif;cursor:pointer;backdrop-filter:blur(2px);padding:0}
+.gt-camctl button:hover{background:rgba(60,66,110,.8)}
+html.gt-phone .gt-camctl{top:6px;right:6px;gap:4px}
+html.gt-phone .gt-camctl button{width:32px;height:32px;font-size:16px;border-radius:7px}
+html:not(.gt-3d) .gt-camctl{display:none}
+.gt-fxl{position:absolute;left:0;top:0;white-space:nowrap;font:700 calc(11px*var(--ts,1))/1.1 'Pixelify Sans',sans-serif;padding:2px 5px;background:rgba(10,12,24,.78);color:#f6ead0;border-radius:2px;pointer-events:none;will-change:transform}
+.gt-fxl.plain{background:none;padding:0;text-shadow:0 1px 0 #2a2430,1px 0 0 #2a2430,-1px 0 0 #2a2430,0 -1px 0 #2a2430}
+.gt-fxl.light{background:#f4f1dc;color:#1c1c2c}
+.gt-fxl.big{font-size:calc(34px*var(--ts,1));line-height:1}
+.gt-fxl.float{font-size:calc(15px*var(--ts,1))}
 #fx{position:absolute;inset:0;overflow:hidden;pointer-events:none;line-height:1.35;font-size:calc(14px*var(--ts))}
 .bub,.ntag{position:absolute;left:0;top:0;white-space:normal;text-align:center;will-change:transform}
 .bub{max-width:min(150px,72%);width:max-content;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:4px;padding:3px 5px;overflow-wrap:anywhere}
@@ -247,6 +263,7 @@ html.gt-guest .hud .coinc{display:none}
 .gt-cs-go{margin-top:auto;font:inherit;font-size:calc(26px*var(--ts,1));font-weight:700;padding:14px;border:3px solid var(--paper-ink,#1c1c2c);border-radius:6px;background:#3fa65a;color:#fff;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.4)}
 .gt-cs-go:disabled{opacity:.6;cursor:default}
 .gt-cs.gt-cs-throw{background:rgba(14,15,30,0);padding:0;pointer-events:none}
+html.gt-3d .gt-cs-prev,html.gt-3d .gt-cs-sw canvas,html.gt-3d .gt-cs-anim{image-rendering:auto}
 .gt-cs-anim{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
 .gt-cs.gt-cs-fade{background:rgba(14,15,30,0);transition:background .35s}
 .gt-cs.gt-cs-fade .gt-cs-card{opacity:0;transition:opacity .3s}

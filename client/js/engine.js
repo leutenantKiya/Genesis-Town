@@ -269,7 +269,11 @@ function valueNoise(seed, x, y){
   var a = h(x0, y0), b = h(x0 + 1, y0), c = h(x0, y0 + 1), d = h(x0 + 1, y0 + 1);
   return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
 }
-function buildWorldCache(m){
+// o.flat (3D view): the same bake without sprites that become real 3D meshes (tree trunks, props, buildings, lots, portal);
+// shadows and the fog stay, canopies are not recomputed, and the canvas is returned instead of stored.
+var PROP3D = {tree:1, rock:1, bush:1, barrel:1, crate:1, fence:1, sign:1, mailbox:1, lamp:1, stall:1};
+function buildWorldCache(m, o){
+  var flat = !!(o && o.flat);
   var Sp = SPRITES, c = document.createElement('canvas');
   c.width = m.w * T; c.height = m.h * T;
   var g = c.getContext('2d'); g.imageSmoothingEnabled = false;
@@ -292,27 +296,28 @@ function buildWorldCache(m){
     else if (gt !== 'grass') Sp.drawEdges(g, gt, x*T, y*T, {n:gAt(x, y-1) === 'grass', s:gAt(x, y+1) === 'grass', w:gAt(x-1, y) === 'grass', e:gAt(x+1, y) === 'grass'});
   }
   m.buildings.forEach(function(b){ Sp.buildingShadow(g, b.x*T, b.y*T, (b.w || 3)*T, (b.h || 3)*T); });
-  m.canopies = [];
+  var canopyList = flat ? [] : (m.canopies = []);
   for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
     t = m.tiles[y*m.w + x];
     if (Sp.GROUND_TYPES[t]) continue;
     if (t === 'tree'){
-      Sp.drawTrunk(g, x*T, y*T);
-      m.canopies.push({x:x, y:y, kind:Sp.treeKind(x, y, x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1), fog:!!(m.locked && m.locked[y*m.w + x])});
+      if (flat) Sp.shadowEllipse(g, x*T + 7, y*T + 10, 7, 2); else Sp.drawTrunk(g, x*T, y*T);
+      if (!flat) canopyList.push({x:x, y:y, kind:Sp.treeKind(x, y, x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1), fog:!!(m.locked && m.locked[y*m.w + x])});
       continue;
     }
     if (t === 'rock' || t === 'bush' || t === 'barrel' || t === 'crate') Sp.shadowEllipse(g, x*T + 6, y*T + 10, 5, 2);
+    if (flat && PROP3D[t]) continue;
     if (t === 'lamp' && !tileSupported('lamp')){ fbLamp(g, x*T, y*T); continue; }
     Sp.drawOverlay(g, t, x*T, y*T, 0);
   }
-  m.buildings.forEach(function(b){
+  if (!flat) m.buildings.forEach(function(b){
     if (b.kind === 'mart') Sp.drawMart(g, b.x*T, b.y*T);
     else if (b.kind === 'casino'){ if (Sp.drawCasino) Sp.drawCasino(g, b.x*T, b.y*T); else Sp.drawHouse(g, b.x*T, b.y*T, 2, false); }
     else if (PUBLIC_KINDS[b.kind] && Sp.drawPublic) Sp.drawPublic(g, b.kind, b.x*T, b.y*T, b.w, b.h);
     else Sp.drawHouse(g, b.x*T, b.y*T, b.style, !b.invited);
   });
-  if (m.layout && m.layout.lots) drawLots(g, m);
-  if (m.portal) drawPortal(g, m);
+  if (!flat && m.layout && m.layout.lots) drawLots(g, m);
+  if (!flat && m.portal) drawPortal(g, m);
   if (m.locked){
     // fog over areas that are not open yet, a little lighter along the edge so the border reads as mist
     for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
@@ -322,6 +327,7 @@ function buildWorldCache(m){
       g.fillRect(x*T, y*T, T, T);
     }
   }
+  if (flat) return c;
   m.layered = true;
   m.cache = c;
 }
@@ -1902,7 +1908,7 @@ function charStep(o){
   if (!o.moving) return 0;
   return o.flip ? 1 : 2;
 }
-function render(){
+function render2d(){
   var m = scene.map, mw = m.w * T, mh = m.h * T;
   ctx.fillStyle = '#0b0c14'; ctx.fillRect(0, 0, VW, VH);
   var pp = lerpPos(P);
@@ -1970,6 +1976,69 @@ function render(){
   renderFx(ents);
 }
 
+/* ---------- optional renderer (3D view, js/r3d/) ----------
+   The 2D path above is untouched. A second renderer registers with GT.registerRenderer(name, impl); while it is active
+   render() hands it frameInfo() instead of calling render2d(), and the 2D canvas is cleared so it can host overlays.
+   impl = {init(host), dispose(), render(info), screenToTile(cx, cy)->{x,y}|null, tileToScreen(x, y, h)->{x,y}|null, onWorld(map)}. */
+var renderers = {}, altRenderer = null, viewWanted = readView(), altMap = null;
+function readView(){
+  var v = null;
+  try { v = (new URLSearchParams(location.search)).get('view'); } catch(e){}
+  if (v !== '2d' && v !== '3d'){ try { v = localStorage.getItem('gt-view'); } catch(e){ v = null; } }
+  return v === '3d' ? '3d' : '2d';
+}
+function frameInfo(){
+  var m = scene.map, pp = lerpPos(P), ents = [];
+  scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n, step:charStep(n)}); });
+  ents.push({py:pp.py, px:pp.px, n:null, dir:P.dir, step:charStep(P)});
+  callMods('onEntities', [ents, ctx, 0, 0, T]); // mods add {py, draw, char:{id,x,y,look,dir,step}}; the 3D view reads `char`
+  return { ents:ents, ctx:ctx, call:callMods, scene:scene, map:m, npcs:scene.npcs, world:world, worldId:worldId, kind:scene.kind,
+    player:{ x:P.x, y:P.y, fx:P.fx, fy:P.fy, t:P.t, moving:P.moving, dir:P.dir, step:charStep(P), pos:lerpPos(P) },
+    gameMin:gameMin, dark:scene.kind === 'out' ? currentDark() : 0, lamps:(world && world.lamps) || [], timeAcc:timeAcc, tr:tr,
+    VW:VW, VH:VH, S:S, T:T, reduce:REDUCE };
+}
+function applyView(){
+  if (!elScreen) return; // before boot; boot calls applyView() again
+  var want = viewWanted, next = (want === '3d' && renderers['3d']) ? renderers['3d'] : null;
+  if (next === altRenderer){ if (!next && want === '3d') emit('view', {view:'3d', need:true}); return; }
+  if (altRenderer){ try { altRenderer.dispose(); } catch(e){} altRenderer = null; document.documentElement.classList.remove('gt-3d'); }
+  if (next){
+    try { next.init(elScreen); altRenderer = next; document.documentElement.classList.add('gt-3d'); if (world && next.onWorld) next.onWorld(scene.map); }
+    catch(err){ try { console.error(err); } catch(e){} altRenderer = null; viewWanted = '2d'; toast('Tampilan 3D tidak bisa dijalankan di perangkat ini. Kembali ke 2D.'); }
+  }
+  emit('view', {view:altRenderer ? '3d' : '2d'});
+}
+function setView(v){
+  v = v === '3d' ? '3d' : '2d';
+  try { localStorage.setItem('gt-view', v); } catch(e){}
+  viewWanted = v; applyView();
+}
+function render(){
+  if (!altRenderer) return render2d();
+  var out = scene.kind === 'out', room3d = !out && altRenderer.interior;
+  document.documentElement.classList.toggle('gt-3d-in', !out && !room3d); // a renderer without rooms: the 2D renderer draws indoors (the 3D canvas is hidden)
+  if (!out && !room3d) return render2d();
+  ctx.clearRect(0, 0, VW, VH);
+  try {
+    var info = frameInfo();
+    if (altMap !== scene.map){ altMap = scene.map; if (altRenderer.onWorld) altRenderer.onWorld(altMap); }
+    altRenderer.render(info);
+    if (tr){
+      var a = tr.ph === 0 ? tr.t : 1 - tr.t;
+      ctx.fillStyle = 'rgba(0,0,0,' + Math.max(0, Math.min(1, a)).toFixed(3) + ')';
+      ctx.fillRect(0, 0, VW, VH);
+    }
+    renderFx(info.ents, altRenderer.mapToScreen ? fx3dProj : null);
+  }
+  catch(err){ try { console.error(err); } catch(e){} viewWanted = '2d'; applyView(); toast('Tampilan 3D berhenti. Kembali ke 2D.'); }
+}
+// label / bubble anchor for the 3D view: a point above the character's head, relative to the #fx layer
+function fx3dProj(en){
+  var q = altRenderer.mapToScreen(en.px + 6, en.py + 6, 15); if (!q) return null;
+  var r = elFx.getBoundingClientRect();
+  return { x:q.x - r.left, y:q.y - r.top };
+}
+
 /* ---------- night lighting ----------
    Darkness is rendered into an offscreen canvas at logical resolution (deep-blue fill), each visible lamp punches a radial hole
    (destination-out), then it is composited over the world + characters; a faint warm glow is added around lamps. Outdoor only. */
@@ -2020,14 +2089,17 @@ function fxSync(map, npc, want, cls, text){
   if (rec.text !== text){ rec.e.textContent = text; rec.text = text; rec.w = 0; }
   return rec;
 }
-function renderFx(ents){
+function renderFx(ents, proj){
   if (!elFx) return;
   var sw = VW * S, sh = VH * S;
   var live = new Set();
   ents.forEach(function(en){
     var n = en.n || (playerFx.bubble ? playerFx : null); if (!n) return;
+    if (proj && en.px == null) return;
     live.add(n);
-    var cx = (en.px - camX + T / 2) * S, top = (en.py - camY) * S;
+    var cx, top;
+    if (proj){ var q = proj(en); if (q){ cx = q.x; top = q.y; } else { cx = top = -9999; } }
+    else { cx = (en.px - camX + T / 2) * S; top = (en.py - camY) * S; }
     var visible = cx > -20 && cx < sw + 20 && top > -20 && top < sh + 20;
     var tag = fxSync(fxTag, n, !!n.label && visible, 'ntag', n.label);
     var tagH = 0;
@@ -2197,6 +2269,13 @@ function layout(){
 
 /* ---------- input ---------- */
 var KEYDIR = { ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down', ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right' };
+// in the 3D view the camera can be turned: "up" on the keys means "away from the camera", whatever that is in the world
+function turnDir(d){
+  var t = altRenderer && altRenderer.turns ? altRenderer.turns() : 0;
+  if (!t) return d;
+  var cw = ['up', 'right', 'down', 'left'];
+  return cw[(cw.indexOf(d) + t) % 4];
+}
 function pressDir(d, id){
   id = id || d; releaseDir(id);
   held.push({id:id, d:d});
@@ -2211,7 +2290,7 @@ function setupInput(){
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (callModsBool('onKey', [e])){ e.preventDefault(); return; }
     var d = KEYDIR[e.code];
-    if (d){ e.preventDefault(); if (!e.repeat) pressDir(d, e.code); return; }
+    if (d){ e.preventDefault(); if (!e.repeat) pressDir(e.isTrusted ? turnDir(d) : d, e.code); return; } // synthetic keys (click-to-walk) already speak in world directions
     if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyZ'){
       if (onButton(e)) return;
       e.preventDefault();
@@ -2240,7 +2319,7 @@ function setupInput(){
   // touch pad
   Array.prototype.forEach.call(document.querySelectorAll('.dp'), function(btn){
     var dir = btn.getAttribute('data-dir');
-    function down(e){ e.preventDefault(); try { btn.setPointerCapture(e.pointerId); } catch(_){} btn.classList.add('down'); pressDir(dir, 'pad:' + dir); }
+    function down(e){ e.preventDefault(); try { btn.setPointerCapture(e.pointerId); } catch(_){} btn.classList.add('down'); pressDir(turnDir(dir), 'pad:' + dir); }
     function up(e){ btn.classList.remove('down'); releaseDir('pad:' + dir); }
     btn.addEventListener('pointerdown', down);
     btn.addEventListener('pointerup', up);
@@ -2344,6 +2423,17 @@ var GT = {
     if (window.SPRITES && SPRITES.setSnow && SPRITES.setSnow(on) && world) buildWorldCache(world);
   },
   version: 2,
+  get view(){ return altRenderer ? '3d' : '2d'; },
+  get viewWanted(){ return viewWanted; },
+  setView: setView,
+  registerRenderer: function(name, impl){ renderers[name] = impl; if (name === viewWanted) applyView(); },
+  frameInfo: frameInfo,
+  bakeFlat: function(m){ return (m && m.kind === 'world' && SPRITES.drawGround) ? buildWorldCache(m, {flat:true}) : (m && m.cache) || null; },
+  tileToScreen: function(x, y, h){
+    if (altRenderer && altRenderer.tileToScreen) return altRenderer.tileToScreen(x, y, h || 0);
+    var r = elCv.getBoundingClientRect(); if (!r.width) return null;
+    return { x:r.left + ((x + 0.5) * T - camX) * (r.width / VW), y:r.top + ((y + 0.5) * T - camY - (h || 0)) * (r.height / VH) };
+  },
   state: state,
   ITEMS: ITEMS,
   register: register,
@@ -2376,6 +2466,7 @@ var GT = {
   interact: function(mode){ return interact(mode || 'talk'); },
   // A point on the screen (e.g. a mouse click) to the map tile under it, in the current scene
   screenToTile: function(clientX, clientY){
+    if (altRenderer && altRenderer.screenToTile) return altRenderer.screenToTile(clientX, clientY);
     var r = elCv.getBoundingClientRect(); if (!r.width) return null;
     var wx = (clientX - r.left) * (VW / r.width) + camX, wy = (clientY - r.top) * (VH / r.height) + camY;
     return { x: Math.floor(wx / T), y: Math.floor(wy / T) };
@@ -2494,6 +2585,7 @@ function boot(){
   elHud = document.getElementById('hud'); elActs = document.getElementById('acts'); elMroot = document.getElementById('mroot'); elToasts = document.getElementById('toasts'); elApp = document.getElementById('app');
   loadSaved();
   booted = true;
+  applyView();
   // mods may register more mods from init, so index loop
   for (var mi = 0; mi < mods.length; mi++) callOne(mods[mi], 'init', [GT]);
   layout();

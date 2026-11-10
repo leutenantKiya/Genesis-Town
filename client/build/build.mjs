@@ -13,3 +13,15 @@ await build({
   define: { 'process.env.NODE_ENV': '"production"', global: 'globalThis' },
   logLevel: 'info',
 });
+// three.js for the optional 3D view: no NEAR shims, loaded only on demand.
+await build({
+  entryPoints: ['three-entry.js'],
+  outfile: '../vendor/three.js',
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: ['es2022'],
+  minify: true,
+  legalComments: 'linked',
+  logLevel: 'info',
+});

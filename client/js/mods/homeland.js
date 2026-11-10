@@ -132,6 +132,7 @@
         if (cur === v.world) return;
         opts.push({ label: 'Dunia ' + (v.owner_name || v.world), onPick: function () { travel(v.world); } });
       });
+      if (opts.length === 1) { opts[0].onPick(); return; } // only one place to go: no need to ask
       GT.menu('Portal · mau ke mana?', opts);
     });
   }
@@ -492,7 +493,10 @@
     return !!(w && w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now());
   }
   function drawHat(ctx, n, name, camX, camY, T, sick) {
-    var d = name && H.cosmetics && H.cosmetics[name]; if (!d || !n) return;
+    var d = name && H.cosmetics && H.cosmetics[name];
+    if (n) { n.cosmetic = d ? name : null; n.cosmeticColor = d ? d.color : null; } // the 3D view builds the hat itself
+    if (GT.view === '3d' && !sick) return;
+    if (!d || !n) return;
     var sx = Math.round(n.x * T - camX), sy = Math.round(n.y * T - camY);
     if (sick) { if (name === 'syal') return; sx -= 2; sy += 5; } // a collapsed worker lies down: the hat goes on the lying head
     ctx.fillStyle = '#2a2430';
@@ -598,12 +602,22 @@
       var due = H.jobs.some(function (j) { return endMs(j) <= now; });
       if (due) { jobPing = now; load(true); }
     }
+    var pp = portalPos(), me = GT.player;
+    if (pp && GT.scene && GT.scene.kind === 'out') {
+      if (me.x !== pp.x || me.y !== pp.y) { portalArmed = true; portalDwell = 0; } // you have left it: it can take you again
+      else {
+        portalDwell += dt; // touching the portal is enough, even while walking through it
+        if (portalArmed && portalDwell > 0.04 && !travelling && !GT.isUiOpen() && S() && S().account) { portalArmed = false; openPortal(); }
+      }
+    }
     hintT -= dt; if (hintT > 0) return; hintT = 0.5;
     var n = nearPortal();
-    if (n && !nearHint && !hintShown && S() && S().account && !GT.isUiOpen()) { hintShown = true; GT.toast('Portal: hadap portal lalu tekan ' + (document.documentElement.classList.contains('gt-phone') ? 'A' : 'F') + ' (atau tombol B) untuk bepergian.'); }
+    if (n && !nearHint && !hintShown && S() && S().account && !GT.isUiOpen()) { hintShown = true; GT.toast('Portal: melangkahlah ke dalamnya untuk bepergian (atau hadap lalu tekan ' + (document.documentElement.classList.contains('gt-phone') ? 'A' : 'F') + ' / B).'); }
     nearHint = n;
   }
+  var portalArmed = false, portalDwell = 0;
   function onWorld() {
+    portalArmed = false; // arriving puts you on the portal: step off it first
     nearHint = nearPortal(); pops.length = 0; builder = null; builderSig = ''; botNpcs = []; botSig = '';
     if (isHL(wid())) { placeBuilder(); placeBots(); }
   }
@@ -613,7 +627,7 @@
     if (!GT.scene || GT.scene.kind !== 'out') return;
     var now = Date.now(), tt = now / 1000, p = portalPos(), L = layoutOf();
     ctx.save();
-    if (p) { // portal shimmer
+    if (p && GT.view !== '3d') { // portal shimmer (the 3D portal swirls by itself)
       var px = p.x * T - camX, py = p.y * T - camY;
       for (var k = 0; k < 3; k++) {
         var a = tt * 2.2 + k * 2.1, yy = py - 4 + ((tt * 6 + k * 4) % 12) * 0.7;
@@ -628,6 +642,7 @@
         var lot = lotById(b.lot); if (!lot) return;
         var x = (lot.x + lot.w / 2) * T - camX, y = lot.y * T - camY - 3 + Math.sin(tt * 3 + lot.x) * 1.5;
         var txt = '+' + b.stored;
+        if (GT.view === '3d' && GT.fx3d) { GT.fx3d.label('hl+' + b.lot, (lot.x + lot.w / 2) * T, (lot.y + lot.h / 2) * T, 40, txt, { color: b.stored >= b.capacity ? '#ffcf5a' : '#f6ead0' }); return; }
         ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         var w = ctx.measureText(txt).width + 6;
         ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y - 5), Math.round(w + 2), 11);
@@ -662,6 +677,7 @@
         var bx = builder.x * T - camX + T / 2, by = builder.y * T - camY + T / 2;
         var side = builder.dir === 'left' ? -1 : 1, ang = Math.sin(tt * 9) * 0.9 - 0.5;
         if (builder.dir === 'up' || builder.dir === 'down') side = 1;
+        if (GT.view !== '3d') { // the 3D builder swings his own hammer
         ctx.save();
         ctx.translate(bx + side * 4, by - 1); ctx.scale(side, 1); ctx.rotate(ang);
         ctx.fillStyle = '#6a4020'; ctx.fillRect(0, -5, 1, 6);
@@ -669,15 +685,19 @@
         ctx.fillStyle = '#d8d4e4'; ctx.fillRect(-2, -7, 5, 1);
         ctx.restore();
         if (Math.sin(tt * 9) > 0.8) { ctx.fillStyle = '#ffe066'; ctx.fillRect(Math.round(bx + side * 7), Math.round(by - 4), 1, 1); ctx.fillRect(Math.round(bx + side * 8), Math.round(by - 6), 1, 1); }
+        }
         var left = endMs(f.job) - now, lx = f.fx * T - camX, ly = f.fy * T - camY - (f.job.kind === 'th' ? 28 : 20);
         var label = clock(left);
+        if (GT.view === '3d' && GT.fx3d) GT.fx3d.label('hl-job', f.fx * T + T / 2, f.fy * T + T / 2, f.job.kind === 'th' ? 46 : 36, label, {}); else {
         ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         var lw = ctx.measureText(label).width + 8;
         ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(lx - lw / 2 - 1), Math.round(ly - 5), Math.round(lw + 2), 11);
         ctx.fillStyle = '#f6ead0'; ctx.fillRect(Math.round(lx - lw / 2), Math.round(ly - 4), Math.round(lw), 9);
         ctx.fillStyle = '#2a2430'; ctx.fillText(label, Math.round(lx + 0.5), Math.round(ly + 0.5));
+        }
       }
       pops.forEach(function (q) {
+        if (GT.view === '3d' && GT.fx3d) { q.id = q.id || ('p' + Math.random()); GT.fx3d.label('pop' + q.id, q.x * T, q.y * T + T / 2, 14 + q.t * 14, q.text, { plain: true, color: '#ffe066', alpha: Math.max(0, 1 - q.t / 1.4) }); return; }
         ctx.globalAlpha = Math.max(0, 1 - q.t / 1.4);
         ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         var x = q.x * T - camX, y = q.y * T - camY - 8 - q.t * 14;

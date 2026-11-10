@@ -70,12 +70,27 @@
       if (o.npc) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
       var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
       var moving = ease(o, now) < 1, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
-      ents.push({ py: py, draw: function () { GT.drawChar(ctx, px - camX, py - camY, (o.look != null ? o.look : pal(o.nick || a)), o.dir, step); } });
+      ents.push({ py: py, char: { id: a, x: px, y: py, look: (o.look != null ? o.look : pal(o.nick || a)), dir: o.dir, step: step }, draw: function () { GT.drawChar(ctx, px - camX, py - camY, (o.look != null ? o.look : pal(o.nick || a)), o.dir, step); } });
     });
+  }
+  function bubbleText(k, now) {
+    var b = bubbles[k];
+    if (!b || now - b.t > 6000) return null;
+    return b.text.length > 34 ? b.text.slice(0, 33) + '\u2026' : b.text;
   }
   function onDraw(ctx, camX, camY, T) {
     if (!GT.scene || GT.scene.kind !== 'out') return;
     var now = performance.now();
+    if (GT.view === '3d' && GT.fx3d) { // 3D view: crisp HTML tags and bubbles over each character
+      if (me) { var mt = bubbleText(key(me, meTag), now); if (mt) { var pp = GT.player; GT.fx3d.label('pb-me', pp.x * T + T / 2, pp.y * T + T / 2, 30, mt, { light: true }); } }
+      Object.keys(others).forEach(function (a) {
+        var o = others[a], X = curX(o, now) * T + T / 2, Y = curY(o, now) * T + T / 2;
+        var tag = o.nick + (!o.npc && o.title && o.title !== 'Pedagang baru' ? ' \u00b7 ' + o.title : '');
+        GT.fx3d.label('pn-' + a, X, Y, 18, tag, { plain: true });
+        var bt = bubbleText(key(o.nick, o.tag), now); if (bt) GT.fx3d.label('pb-' + a, X, Y, 32, bt, { light: true });
+      });
+      return;
+    }
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     // my own last line first, so other players' names stay on top of it
