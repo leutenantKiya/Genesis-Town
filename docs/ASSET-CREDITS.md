@@ -10,11 +10,12 @@ The game's own pixel art, sprites, procedural 3D buildings, characters and effec
 | `client/assets/textures/cliff_detail.png`, `cliff_normal.png` | [Poly Haven, "Cliff Side"](https://polyhaven.com/a/cliff_side) | CC0 | Layered sandstone. The colour map is reduced to a grey detail map (our own cliff colours stay in charge) and the normal map gives the strata relief on the floating islands' undersides (3D view). 1K, resized to 512. |
 | `client/assets/textures/wood_floor.png` | [ambientCG, "Wood 095"](https://ambientcg.com/view?id=Wood095) | CC0 | Warm wood grain for the floors of rooms (3D view). 1K, resized to 512 x 256, slightly desaturated. |
 | `client/assets/textures/terrain_grass.png`, `terrain_path.png`, `terrain_sand.png`, `terrain_plaza.png`, `terrain_soil.png` | Poly Haven: [Grass Ground](https://polyhaven.com/a/grass_ground), [Dirt Floor](https://polyhaven.com/a/dirt_floor), [Sand 01](https://polyhaven.com/a/sand_01), [Cobblestone Floor 01](https://polyhaven.com/a/cobblestone_floor_01), [Park Dirt](https://polyhaven.com/a/park_dirt) | CC0 | The ground of the islands (3D view). Each photo is turned into a soft, painterly pastel texture (grey detail recoloured to the game's palette, lower contrast, 512 px) and blended per tile by `r3d/ground.js`. |
+| `client/assets/models/nature_pack/*` (glTF models and textures) | [Quaternius](https://quaternius.com) nature pack (maple, birch and dead trees, bushes, grass, flowers) | CC0 | Real 3D trees, bushes, grass tufts and flower clumps in the 3D view (`r3d/models.js`). Loaded only in 3D; the oak/birch leaf textures were recoloured from autumn red/yellow to green, the huge normal maps were left out and the bark textures resized to 1K. Pines, fences, houses and stalls stay drawn in code. |
 
 ## Looked at and not used
 
 - **Poly Haven "Aerial Mud 1"**: dark tyre tracks, wrong mood. **Poly Haven models and HDRIs**: photoreal scans and skies; they clash with the low-poly pastel look.
-- **Kenney** (kenney.nl), **Quaternius** (quaternius.com), **itch.io** packs: no direct download (Kenney blocks scripted downloads;
+- **Kenney** (kenney.nl), more **Quaternius** packs, **itch.io** packs: no direct download (Kenney blocks scripted downloads;
   Quaternius and itch.io hand out packs through Google Drive and download pages). They are CC0 and a good match for the
   style. To use them, download a pack and put the `.glb` files in `client/assets/models/`.
 

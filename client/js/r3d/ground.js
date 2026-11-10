@@ -136,6 +136,9 @@
   function buildScatter(map, sn) {
     var RG = R3D.regions, n = parts.length, BS = [], r, x, y, i;
     for (r = 0; r < n; r++) { BS.push(new Builder()); BS[r].snow = sn ? 0.9 : 0; }
+    var MD = R3D.models, models = !!(MD && MD.has('Grass_Small') && R3D.Q && R3D.Q.cover), cover = (R3D.Q && R3D.Q.cover) || 0, inst = parts.map(function () { return {}; });
+    if (MD) MD.setSnow(sn);
+    function put(rr, nm, px, pz, sc, ry) { if (MD.has(nm)) (inst[rr][nm] || (inst[rr][nm] = [])).push({ x: px, y: 0, z: pz, s: sc, ry: ry }); }
     var covered = new Uint8Array(map.w * map.h);
     (map.buildings || []).forEach(function (b) {
       for (var yy = b.y - 1; yy < b.y + (b.h || 3) + 1; yy++) for (var xx = b.x - 1; xx < b.x + (b.w || 3) + 1; xx++) if (xx >= 0 && yy >= 0 && xx < map.w && yy < map.h) covered[yy * map.w + xx] = 1;
@@ -145,6 +148,16 @@
       if (t !== 'grass' && t !== 'tallgrass' && t !== 'flower') continue;
       if (covered[i] || (map.locked && map.locked[i])) continue;
       var B = BS[RG.of(x, y)], h0 = hash(x, y, 77), k, tu, nTu;
+      if (models) { // real grass and flower models instead of drawn blades
+        var rr0 = RG.of(x, y), px0 = x + 0.15 + 0.7 * hash(x, y, 11), pz0 = y + 0.15 + 0.7 * hash(x, y, 12);
+        if (t === 'grass') { if (hash(x, y, 13) < 0.5 * cover) put(rr0, hash(x, y, 14) < 0.35 ? 'Grass_Large' : 'Grass_Small', px0, pz0, 0.75 + 0.45 * hash(x, y, 15), hash(x, y, 16) * 6.283); }
+        else if (t === 'tallgrass') { for (tu = 0; tu < Math.ceil(3 * cover); tu++) put(rr0, 'Grass_Large', x + 0.15 + 0.7 * hash(x, y, 20 + tu), y + 0.15 + 0.7 * hash(x, y, 30 + tu), 1.0 + 0.5 * hash(x, y, 40 + tu), hash(x, y, 50 + tu) * 6.283); }
+        else {
+          put(rr0, 'Grass_Small', px0, pz0, 0.9, hash(x, y, 16) * 6.283);
+          if (!sn) for (tu = 0; tu < 2 + (cover > 0.6 ? 1 : 0); tu++) put(rr0, 'Flower_' + (1 + ((hash(x, y, 60 + tu) * 5) | 0)) + '_Clump', x + 0.18 + 0.64 * hash(x, y, 70 + tu), y + 0.18 + 0.64 * hash(x, y, 80 + tu), 0.8 + 0.4 * hash(x, y, 90 + tu), hash(x, y, 95 + tu) * 6.283);
+        }
+        continue;
+      }
       if (t === 'tallgrass') nTu = 6; else if (t === 'flower') nTu = 2; else nTu = h0 < 0.3 ? 1 : h0 < 0.75 ? 2 : 3;
       for (tu = 0; tu < nTu; tu++) {
         var cx = x + 0.1 + 0.8 * hash(x, y, 100 + tu), cz = y + 0.1 + 0.8 * hash(x, y, 200 + tu);
@@ -164,9 +177,10 @@
         }
       }
     }
+    if (models) inst.forEach(function (byName, rg) { Object.keys(byName).forEach(function (nm) { MD.instance(nm, byName[nm], parts[rg], { cast: false }).forEach(function (im) { im.userData.cover = true; meshes.push(im); }); }); });
     for (r = 0; r < n; r++) {
       if (BS[r].empty()) continue;
-      var mesh = BS[r].mesh(scatterMat, false); mesh.receiveShadow = true; mesh.userData.nopick = true;
+      var mesh = BS[r].mesh(scatterMat, false); mesh.userData.cover = true; mesh.receiveShadow = true; mesh.userData.nopick = true;
       parts[r].add(mesh); meshes.push(mesh);
     }
   }
@@ -239,8 +253,8 @@
       if (curMap.cache !== lastCache || sn !== lastSnow) {
         lastCache = curMap.cache || null; lastSnow = sn;
         refreshSplat(curMap);
-        meshes.forEach(function (m) { if (m.material === scatterMat) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); } });
-        meshes = meshes.filter(function (m) { return m.material !== scatterMat; });
+        meshes.forEach(function (m) { if (m.userData.cover) { if (m.parent) m.parent.remove(m); if (!m.isInstancedMesh) m.geometry.dispose(); else m.dispose(); } });
+        meshes = meshes.filter(function (m) { return !m.userData.cover; });
         buildScatter(curMap, sn);
       }
     },
@@ -249,6 +263,7 @@
       this.sync();
       U.uSnow.value += ((lastSnow ? 1 : 0) - U.uSnow.value) * 0.5;
       if (scatterU) scatterU.uTime.value = info.timeAcc || 0;
+      if (R3D.models) R3D.models.tick(info.timeAcc || 0);
     },
     dispose: function (C) {
       clear();

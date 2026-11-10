@@ -55,8 +55,28 @@
 
       // trees: positions and kinds come from the 2D bake's canopy list so both views agree
       var trees = m.canopies || [];
+      var MD = R3D.models, budget = (R3D.Q && R3D.Q.trees) || 0, birchLeft = 70, mt = [], inst = group.map(function () { return {}; });
+      if (MD) MD.setSnow(curSnow);
+      // the trees nearest the middle of the map are the ones in play: they are real models, the far forest stays cheap low-poly
+      var order = trees.map(function (tt, ii) { return ii; });
+      if (MD && budget) order.sort(function (a, b) { var A = trees[a], Bq = trees[b]; return Math.hypot(A.x - m.w / 2, A.y - m.h / 2) - Math.hypot(Bq.x - m.w / 2, Bq.y - m.h / 2); });
+      var useModel = {};
+      if (MD && budget) order.forEach(function (ii) {
+        var t0 = trees[ii];
+        if (budget <= 0 || t0.fog || t0.kind === 'pine' || t0.x === 0 || t0.y === 0 || t0.x === m.w - 1 || t0.y === m.h - 1) return;
+        var nm = (t0.kind === 'fruit' && birchLeft > 0) ? 'BirchTree_4' : (t0.kind === 'fruit' ? null : 'MapleTree_4');
+        if (!nm || !MD.has(nm)) return;
+        if (nm === 'BirchTree_4') birchLeft--;
+        useModel[ii] = nm; budget--;
+      });
       for (i = 0; i < trees.length; i++) {
         var tr = trees[i]; x = tr.x; y = tr.y; k = tr.fog ? 0.5 : 1; B = BS[RG.of(x, y)];
+        if (useModel[i]) {
+          var nmz = useModel[i], sz = MD.size(nmz), hh0 = hash(x, y, 31), rr = RG.of(x, y), tl = inst[rr][nmz] || (inst[rr][nmz] = []);
+          var tgt = (nmz === 'BirchTree_4' ? 2.3 : 2.5) * (0.88 + hh0 * 0.3);
+          tl.push({ x: x + 0.5, y: 0, z: y + 0.55, s: tgt / sz.h, ry: hh0 * 6.283 });
+          continue;
+        }
         h = hash(x, y, 31); cx = x + 0.5; cz = y + 0.58;
         var sc = 0.88 + h * 0.3;
         B.cyl(cx, 0, cz, 0.11 * sc, 0.85 * sc, 5, '#6a4a2a', k);
@@ -89,6 +109,10 @@
           B.box(x, 0, y, x + 0.09, 0.62, y + 0.09, rw, rl, k); B.box(x, 0, y + 0.91, x + 0.09, 0.62, y + 1, rw, rl, k);
         } else if (t === 'rock') {
           B.blob(cx, 0.24, cz, 0.44 + h * 0.08, 0.3, 0.38, '#8c8c99', k, x + y * 9, '#adadbb');
+        } else if (t === 'bush' && R3D.models && R3D.models.has('Bush') && (R3D.Q && R3D.Q.trees)) {
+          var bn = ['Bush', 'Bush_Large', 'Bush_Small', 'Bush_Flowers', 'Bush_Large_Flowers', 'Bush_Small_Flowers'][(h * 6) | 0], bsz = R3D.models.size(bn), brr = RG.of(x, y);
+          if (bsz) (inst[brr][bn] || (inst[brr][bn] = [])).push({ x: cx, y: 0, z: cz, s: (0.78 + 0.3 * hash(x, y, 8)) / bsz.w, ry: h * 6.283 });
+          else B.blob(cx, 0.3, cz, 0.42, 0.32, 0.4, '#3f9a4a', k, x * 3 + y, '#62bd5c');
         } else if (t === 'bush') {
           B.blob(cx, 0.3, cz, 0.42, 0.32, 0.4, '#3f9a4a', k, x * 3 + y, '#62bd5c');
           B.blob(cx + 0.14, 0.38, cz + 0.2, 0.06, 0.06, 0.06, '#d84a5a', k, 3);
@@ -170,6 +194,7 @@
       }
 
       BS.forEach(function (b, r) { if (!b.empty()) group[r].add(b.mesh(litMat, true)); });
+      if (MD) inst.forEach(function (byName, r) { Object.keys(byName).forEach(function (nm) { MD.instance(nm, byName[nm], group[r], { cast: true, pick: true }); }); });
       GS.forEach(function (g, r) { if (!g.empty()) group[r].add(g.mesh(glowMat)); });
     },
     update: function (C, info) {

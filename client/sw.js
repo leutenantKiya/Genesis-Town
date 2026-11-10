@@ -1,13 +1,13 @@
 /* Service worker: makes the game installable and keeps the app shell available offline.
  * Network-first for everything, so game code is never stale while online. /api/* is never touched. */
-var CACHE = 'gt-shell-v25';
+var CACHE = 'gt-shell-v26';
 var SHELL = [
   '/', '/manifest.json',
   '/css/game.css', '/css/chain.css', '/css/settings.css', '/css/sim.css', '/css/phone.css',
   '/js/pwa.js', '/js/flags.js', '/js/sprites.js', '/js/art.js', '/js/buildings.js', '/js/world/village.js', '/js/world/homeland.js', '/js/engine.js',
   '/js/mods/casino.js', '/js/mods/thief.js', '/js/mods/police.js', '/js/mods/combat.js', '/js/mods/curfew.js',
   '/js/mods/gossip.js', '/js/mods/agent.js', '/js/mods/soul.js', '/js/mods/social.js', '/js/mods/settings.js',
-  '/vendor/near.js', '/js/mods/chain.js', '/js/mods/homeland.js', '/js/mods/fishing.js', '/js/mods/actfx.js', '/js/mods/players.js', '/js/mods/trade.js', '/js/mods/hotbar.js', '/js/mods/mouse.js', '/js/mods/sim.js', '/js/r3d/boot.js', '/js/r3d/core.js', '/js/r3d/sky.js', '/js/r3d/island.js', '/js/r3d/ground.js', '/js/r3d/water.js', '/js/r3d/geo.js', '/js/r3d/assets.js', '/js/r3d/regions.js', '/js/r3d/props.js', '/js/r3d/buildings.js', '/js/r3d/rig.js', '/js/r3d/actors.js', '/js/r3d/lights.js', '/js/r3d/weather.js', '/js/r3d/fx.js', '/js/r3d/interior.js', '/js/r3d/compat.js', '/vendor/three.js',
+  '/vendor/near.js', '/js/mods/chain.js', '/js/mods/homeland.js', '/js/mods/fishing.js', '/js/mods/actfx.js', '/js/mods/players.js', '/js/mods/trade.js', '/js/mods/hotbar.js', '/js/mods/mouse.js', '/js/mods/sim.js', '/js/r3d/boot.js', '/js/r3d/core.js', '/js/r3d/sky.js', '/js/r3d/island.js', '/js/r3d/ground.js', '/js/r3d/water.js', '/js/r3d/geo.js', '/js/r3d/assets.js', '/js/r3d/models.js', '/js/r3d/regions.js', '/js/r3d/props.js', '/js/r3d/buildings.js', '/js/r3d/rig.js', '/js/r3d/actors.js', '/js/r3d/lights.js', '/js/r3d/weather.js', '/js/r3d/fx.js', '/js/r3d/interior.js', '/js/r3d/compat.js', '/vendor/three.js',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'
 ];
 

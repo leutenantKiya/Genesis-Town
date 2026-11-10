@@ -30,3 +30,6 @@ client/vendor/
 
 # design audit screenshots (taste-skill)
 .taste-skill/
+
+# raw model downloads (the trimmed pack is client/assets/models/nature_pack/)
+client/assets/models/*.zip
