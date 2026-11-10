@@ -7,9 +7,10 @@
 (function () {
   'use strict';
   var NAMES = { fish: 'Ikan', ore: 'Bijih', wood: 'Kayu', wheat: 'Gandum', bread: 'Roti', meal: 'Ikan Bakar', tool: 'Alat' };
-  var MER = [{ id: 'sari', name: 'Sari', c: '#2a78d6' }, { id: 'budi', name: 'Budi', c: '#eb6834' }, { id: 'wati', name: 'Wati', c: '#1baf7a' }, { id: 'joko', name: 'Joko', c: '#eda100' }];
-  var INK = '#0b0b0b', INK2 = '#52514e', GRID = '#e4e2dc', SURF = '#fcfcfb', SHADE = 'rgba(208,59,59,0.10)';
-  var FONT = '10px system-ui, -apple-system, Segoe UI, sans-serif';
+  // series colours are theme tokens (resolved at draw time, so they follow the season); the swatch class in mods.css uses the same token
+  var MER = [{ id: 'sari', name: 'Sari', c: 'link' }, { id: 'budi', name: 'Budi', c: 'warn-ink' }, { id: 'wati', name: 'Wati', c: 'good' }, { id: 'joko', name: 'Joko', c: 'paper-dim' }];
+  function T(n) { return window.GT_THEME ? GT_THEME.get(n) : ''; }
+  var FONT = '12px "Pixelify Sans", sans-serif';
   var st = { res: null, upto: 0, playing: false, speed: 1, timer: 0, modal: null, players: 25, hover: {} };
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -29,24 +30,24 @@
     var ymin = opts.yMin, ymax = opts.yMax;
     function X(i) { return L + (i / Math.max(1, n - 1)) * pw; }
     function Y(v) { return Tp + ph - ((v - ymin) / Math.max(1e-9, ymax - ymin)) * ph; }
-    g.fillStyle = SURF; g.fillRect(0, 0, W, H);
+    g.fillStyle = T('paper-2'); g.fillRect(0, 0, W, H);
     // shaded periods (shop closed)
-    (opts.shade || []).forEach(function (s) { if (s.from >= upto) return; g.fillStyle = SHADE; g.fillRect(X(s.from), Tp, X(Math.min(s.to, upto - 1)) - X(s.from) + 1, ph); });
+    (opts.shade || []).forEach(function (s) { if (s.from >= upto) return; g.globalAlpha = 0.16; g.fillStyle = T('bad'); g.fillRect(X(s.from), Tp, X(Math.min(s.to, upto - 1)) - X(s.from) + 1, ph); g.globalAlpha = 1; });
     // recessive grid: 3 horizontal lines, day ticks
     g.font = FONT; g.textBaseline = 'middle';
     for (var k = 0; k <= 2; k++) {
       var v = ymin + (ymax - ymin) * k / 2, y = Y(v);
-      g.fillStyle = GRID; g.fillRect(L, Math.round(y), pw, 1);
-      g.fillStyle = INK2; g.textAlign = 'right'; g.fillText(fmt(v), L - 4, y);
+      g.fillStyle = T('paper-3'); g.fillRect(L, Math.round(y), pw, 1);
+      g.fillStyle = T('paper-dim'); g.textAlign = 'right'; g.fillText(fmt(v), L - 4, y);
     }
     g.textAlign = 'center'; g.textBaseline = 'top';
     var days = Math.ceil(n / 24);
-    for (var d = 0; d <= days; d++) { var xi = Math.min(n - 1, d * 24); g.fillStyle = INK2; if (days <= 10 || d % 5 === 0) g.fillText('h' + d, X(xi), Tp + ph + 3); }
-    if (opts.ref) { g.strokeStyle = INK2; g.setLineDash([3, 3]); g.lineWidth = 1; g.beginPath(); g.moveTo(L, Y(opts.ref.y)); g.lineTo(L + pw, Y(opts.ref.y)); g.stroke(); g.setLineDash([]);
-      if (opts.ref.label) { g.fillStyle = INK2; g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillText(opts.ref.label, L + 3, Y(opts.ref.y) - 1); } }
+    for (var d = 0; d <= days; d++) { var xi = Math.min(n - 1, d * 24); g.fillStyle = T('paper-dim'); if (days <= 10 || d % 5 === 0) g.fillText('h' + d, X(xi), Tp + ph + 3); }
+    if (opts.ref) { g.strokeStyle = T('paper-dim'); g.setLineDash([3, 3]); g.lineWidth = 1; g.beginPath(); g.moveTo(L, Y(opts.ref.y)); g.lineTo(L + pw, Y(opts.ref.y)); g.stroke(); g.setLineDash([]);
+      if (opts.ref.label) { g.fillStyle = T('paper-dim'); g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillText(opts.ref.label, L + 3, Y(opts.ref.y) - 1); } }
     // lines: 2px, round joins
     series.forEach(function (s) {
-      g.strokeStyle = s.color; g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round'; g.beginPath();
+      g.strokeStyle = T(s.color); g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round'; g.beginPath();
       for (var i = 0; i < upto; i++) { var vv = s.values[i]; if (vv == null) continue; if (i === 0) g.moveTo(X(i), Y(vv)); else g.lineTo(X(i), Y(vv)); }
       g.stroke();
     });
@@ -56,9 +57,9 @@
       for (var j = 1; j < ends.length; j++) if (ends[j].y - ends[j - 1].y < 11) ends[j].y = ends[j - 1].y + 11;
       ends.forEach(function (e) {
         var x = X(upto - 1);
-        g.fillStyle = e.s.color; g.beginPath(); g.arc(x, Y(e.s.values[upto - 1]), 3, 0, 7); g.fill();
-        g.strokeStyle = SURF; g.lineWidth = 2; g.stroke();
-        g.fillStyle = INK; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(e.s.name, L + pw + 6, e.y);
+        g.fillStyle = T(e.s.color); g.beginPath(); g.arc(x, Y(e.s.values[upto - 1]), 3, 0, 7); g.fill();
+        g.strokeStyle = T('paper-2'); g.lineWidth = 2; g.stroke();
+        g.fillStyle = T('paper-ink'); g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(e.s.name, L + pw + 6, e.y);
       });
     }
     cv._geom = { L: L, pw: pw, n: n, X: X, Y: Y, series: series, unit: opts.unit || '' };
@@ -76,7 +77,7 @@
       tip.textContent = '';
       tip.appendChild($('div', 'sim-tip-h', 'Hari ' + f.day + ', ' + ('0' + f.hourOfDay).slice(-2) + ':00 · ' + f.season));
       g.series.forEach(function (s) {
-        var r = $('div'); var sw = $('i'); sw.style.background = s.color; r.appendChild(sw);
+        var r = $('div'); r.appendChild($('i', 'sw-' + s.color));
         r.appendChild(document.createTextNode(s.name + ': ' + fmt(s.values[i]) + g.unit)); tip.appendChild(r);
       });
       tip.style.left = Math.min(rect.width - 150, Math.max(0, x + 10)) + 'px'; tip.style.top = '4px'; tip.classList.add('on');
@@ -87,8 +88,8 @@
   function drawCross(cv) {
     var g = cv._geom, ctx = cv.getContext('2d'); if (cv._cross == null || !g) return;
     var x = Math.round(g.X(cv._cross)) + 0.5;
-    ctx.strokeStyle = INK2; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, 8); ctx.lineTo(x, cv.clientHeight - 16); ctx.stroke();
-    g.series.forEach(function (s) { var v = s.values[cv._cross]; if (v == null) return; ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(x, g.Y(v), 4, 0, 7); ctx.fill(); ctx.strokeStyle = SURF; ctx.lineWidth = 2; ctx.stroke(); });
+    ctx.strokeStyle = T('paper-dim'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, 8); ctx.lineTo(x, cv.clientHeight - 16); ctx.stroke();
+    g.series.forEach(function (s) { var v = s.values[cv._cross]; if (v == null) return; ctx.fillStyle = T(s.color); ctx.beginPath(); ctx.arc(x, g.Y(v), 4, 0, 7); ctx.fill(); ctx.strokeStyle = T('paper-2'); ctx.lineWidth = 2; ctx.stroke(); });
   }
 
   /* ------------------------------------------------------------ panel */
@@ -113,7 +114,7 @@
     root.appendChild($('h3', null, 'Kas pedagang (area merah = toko TUTUP)'));
     var cw = $('div', 'sim-chart'); els.cash = $('canvas'); cw.appendChild(els.cash); root.appendChild(cw); attachHover(els.cash, cw);
     var legend = $('div', 'sim-legend');
-    MER.forEach(function (m) { var s = $('span'); var i = $('i'); i.style.background = m.c; s.appendChild(i); s.appendChild(document.createTextNode(m.name)); legend.appendChild(s); });
+    MER.forEach(function (m) { var s = $('span'); s.appendChild($('i', 'sw-' + m.c)); s.appendChild(document.createTextNode(m.name)); legend.appendChild(s); });
     root.appendChild(legend);
     root.appendChild($('h3', null, 'Jumlah uang beredar (garis putus = batas)'));
     var mw = $('div', 'sim-chart'); els.money = $('canvas'); mw.appendChild(els.money); root.appendChild(mw); attachHover(els.money, mw);
@@ -138,7 +139,7 @@
     [].forEach.call(els.minis.children, function (box) {
       var t = box._t, vals = F.map(function (f) { return f.prices[t]; }), base = r.summary.priceRange[t].base;
       var lo = Math.min(base, r.summary.priceRange[t].min), hi = Math.max(base, r.summary.priceRange[t].max);
-      lineChart(box._c, [{ name: NAMES[t], color: '#2a78d6', values: vals }], { w: mw, h: 92, yMin: Math.floor(lo * 0.9), yMax: Math.ceil(hi * 1.05), ref: { y: base }, unit: ' koin' });
+      lineChart(box._c, [{ name: NAMES[t], color: 'link', values: vals }], { w: mw, h: 92, yMin: Math.floor(lo * 0.9), yMax: Math.ceil(hi * 1.05), ref: { y: base }, unit: ' koin' });
     });
     // merchant cash with closed periods shaded (per merchant, merged)
     var shade = [];
@@ -147,7 +148,7 @@
     var cmax = Math.max.apply(null, cashS.map(function (s) { return Math.max.apply(null, s.values); }));
     lineChart(els.cash, cashS, { w: W, h: 190, yMin: 0, yMax: Math.ceil(cmax * 1.05), labels: true, shade: shade, unit: ' koin' });
     var cap = r.summary.moneyCap, mmax = Math.max(r.summary.moneyMax, cap * 0.3);
-    lineChart(els.money, [{ name: 'Uang beredar', color: '#6250d6', values: F.map(function (f) { return f.moneySupply; }) }], { w: W, h: 130, yMin: 0, yMax: Math.ceil(Math.min(cap * 1.05, mmax * 1.15)), ref: cap <= mmax * 1.15 ? { y: cap, label: 'batas ' + fmt(cap) } : null, unit: ' koin' });
+    lineChart(els.money, [{ name: 'Uang beredar', color: 'link', values: F.map(function (f) { return f.moneySupply; }) }], { w: W, h: 130, yMin: 0, yMax: Math.ceil(Math.min(cap * 1.05, mmax * 1.15)), ref: cap <= mmax * 1.15 ? { y: cap, label: 'batas ' + fmt(cap) } : null, unit: ' koin' });
     // events so far
     els.events.textContent = '';
     var ev = r.events.filter(function (e) { return e.kind !== 'settled' && e.hour < upto; });

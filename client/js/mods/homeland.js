@@ -187,65 +187,83 @@
       .then(done, done);
   }
 
-  function stepBlock(title, desc, step, canDo, why, label, onClick) {
-    var box = $('div', 'gt-detail'), txt = $('div', 'grow');
-    txt.appendChild($('div', 'gt-detail-name', title));
-    if (desc) txt.appendChild($('div', null, desc));
-    if (step) {
-      var short = shortOf(step.cost);
-      txt.appendChild($('div', 'chain-dim', 'Biaya: ' + costLine(step.cost) + ' · waktu ' + secsLine(step.secs) + (short.length ? ' · kurang ' + short.map(itemName).join(', ') : '')));
-    }
-    if (why) txt.appendChild($('div', 'chain-dim', why));
-    box.appendChild(txt);
-    if (label) {
-      var acts = $('div', 'gt-detail-acts');
-      acts.appendChild(btn(label, onClick, 'primary', !canDo || !!(win && win.busy)));
-      box.appendChild(acts);
-    }
+  function isBusy() { return !!(win && win.busy); }
+
+  /* A tray cell: title left, metadata right (tabular figures), body below, actions right-aligned at the foot. */
+  function cell(title, meta, cls) {
+    var c = $('div', 'hl-cell' + (cls ? ' ' + cls : '')), h = $('div', 'hl-cell-h');
+    h.appendChild($('span', 'hl-cell-t', title));
+    if (meta != null && meta !== '') h.appendChild($('span', 'hl-meta', meta));
+    c.appendChild(h); return c;
+  }
+  function acts(parent) { var a = $('div', 'hl-acts'); parent.appendChild(a); return a; }
+  function bar(v, max, tone) {
+    var p = $('progress', 'hl-bar' + (tone ? ' ' + tone : '')); p.max = Math.max(1, max); p.value = Math.max(0, Math.min(max, v)); return p;
+  }
+  /* cost line: item chips (the missing ones are marked and named), then the time */
+  function costRow(cost, secs) {
+    var r = $('div', 'hl-cost'), keys = Object.keys(cost || {}), short = shortOf(cost);
+    r.appendChild($('span', 'hl-k', 'Biaya'));
+    if (!keys.length) r.appendChild($('span', 'hl-chip', 'gratis'));
+    keys.forEach(function (t) {
+      var c = $('span', 'hl-chip' + (have(t) < cost[t] ? ' short' : '')); c.appendChild($('b', 'hl-n', String(cost[t]))); c.appendChild(document.createTextNode(' ' + itemName(t))); r.appendChild(c);
+    });
+    if (secs != null) { r.appendChild($('span', 'hl-k', 'Waktu')); r.appendChild($('b', 'hl-n', secsLine(secs))); }
+    if (short.length) r.appendChild($('span', 'hl-lack', 'kurang ' + short.map(itemName).join(', ')));
+    return r;
+  }
+
+  function stepBlock(title, desc, step, canDo, why, label, onClick, primary, meta) {
+    var box = cell(title, meta);
+    if (desc) box.appendChild($('p', 'hl-p', desc));
+    if (step) box.appendChild(costRow(step.cost, step.secs));
+    if (why) box.appendChild($('p', 'hl-why', why));
+    if (label) acts(box).appendChild(btn(label, onClick, primary === false ? '' : 'primary', !canDo || isBusy()));
     return box;
   }
 
-  function jobLine(j) {
-    var left = endMs(j) - Date.now();
-    var what = j.kind === 'th' ? 'Balai Kota naik level' : j.kind === 'chunk' ? 'Membuka wilayah ' + chunkName(j.target) : j.kind === 'furniture' ? 'Memasang ' + (/:kasur$/.test(j.target) ? 'kasur' : 'hiburan') : j.kind === 'upgrade' ? 'Menaikkan Rumah Sakit' : 'Membangun ' + ((lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target);
-    return what + ' · sisa ' + clock(left);
+  function jobWhat(j) {
+    return j.kind === 'th' ? 'Balai Kota naik level' : j.kind === 'chunk' ? 'Membuka wilayah ' + chunkName(j.target) : j.kind === 'furniture' ? 'Memasang ' + (/:kasur$/.test(j.target) ? 'kasur' : 'hiburan') : j.kind === 'upgrade' ? 'Menaikkan Rumah Sakit' : 'Membangun ' + ((lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target);
   }
-
-  function fatBar(f) { var n = Math.max(0, Math.min(10, Math.round(f / 10))); return '[' + '#'.repeat(n) + '-'.repeat(10 - n) + ']'; }
+  function jobLine(j) { return jobWhat(j) + ' · sisa ' + clock(endMs(j) - Date.now()); }
 
   /* ---- Balai Kota ---- */
   function hallBody() {
-    var wrap = $('div', 'gt-isl');
+    var wrap = $('div', 'gt-isl hl');
     if (!H) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
     var owner = inOwnHome();
-    var head = $('div', 'gt-shop-head');
-    head.appendChild($('span', null, 'Balai Kota · level ' + H.th));
-    head.appendChild($('span', 'chain-dim', 'Wilayah terbuka: ' + (H.open.length + 1) + ' dari 9'));
-    wrap.appendChild(head);
-    if (!owner) { wrap.appendChild($('p', null, 'Ini Balai Kota milik pemilik dunia ini. Hanya pemiliknya yang bisa membangun.')); return wrap; }
+    var stats = $('div', 'hl-stats');
+    function stat(k, v) { var s = $('div', 'hl-stat'); s.appendChild($('span', 'hl-k', k)); s.appendChild($('b', 'hl-n', v)); stats.appendChild(s); }
+    stat('Balai Kota', 'level ' + H.th);
+    stat('Wilayah terbuka', (H.open.length + 1) + ' dari 9');
+    wrap.appendChild(stats);
+    if (!owner) { wrap.appendChild($('p', 'hl-p', 'Ini Balai Kota milik pemilik dunia ini. Hanya pemiliknya yang bisa membangun.')); return wrap; }
 
-    var bs = $('div', 'gt-detail'), bt = $('div', 'grow');
-    bt.appendChild($('div', 'gt-detail-name', 'Pembangun · ' + H.builders.busy + ' dari ' + H.builders.total + ' sibuk'));
-    if (H.jobs.length) H.jobs.forEach(function (j) { bt.appendChild($('div', null, jobLine(j))); });
-    else bt.appendChild($('div', 'chain-dim', 'Pembangun menganggur. Beri dia pekerjaan.'));
-    (H.workers || []).forEach(function (w) {
-      var line = $('div', 'gt-fat'), sick = w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now();
-      line.appendChild($('span', null, w.name + (sick ? ' · sakit' : w.busy ? ' · bekerja' : ' · menganggur') + ' · lelah '));
-      var bar = $('span', null, fatBar(w.fatigue)); bar.style.fontFamily = 'monospace'; bar.style.color = w.fatigue >= 70 ? '#c83838' : w.fatigue >= 40 ? '#d8a030' : '#4a9a4a';
-      line.appendChild(bar); line.appendChild($('span', 'chain-dim', ' ' + Math.round(w.fatigue) + '% · semangat ' + Math.round(w.motivation == null ? 60 : w.motivation) + '%'));
-      bt.appendChild(line);
+    var bs = cell('Pembangun', H.builders.busy + ' dari ' + H.builders.total + ' sibuk');
+    if (H.jobs.length) H.jobs.forEach(function (j) {
+      var r = $('div', 'hl-row'); r.appendChild($('span', 'hl-grow', jobWhat(j))); r.appendChild($('span', 'hl-k', 'sisa')); r.appendChild($('b', 'hl-n hl-time', clock(endMs(j) - Date.now()))); bs.appendChild(r);
     });
-    if (H.workers && H.workers.some(function (w) { return w.fatigue >= 40; })) bt.appendChild($('div', 'chain-dim', 'Tukang yang lelah bekerja lebih lambat. Restoran memberi mereka makan dari lemarinya.'));
-    bs.appendChild(bt); wrap.appendChild(bs);
+    else bs.appendChild($('p', 'chain-dim', 'Pembangun menganggur. Beri dia pekerjaan.'));
+    (H.workers || []).forEach(function (w) {
+      var sick = w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now(), r = $('div', 'hl-row hl-worker');
+      var who = $('span', 'hl-grow'); who.appendChild(document.createTextNode(w.name + ' '));
+      who.appendChild($('span', 'hl-state' + (sick ? ' bad' : ''), sick ? 'sakit' : w.busy ? 'bekerja' : 'menganggur'));
+      r.appendChild(who);
+      var f = Math.round(w.fatigue), pb = bar(f, 100, f >= 70 ? 'bad' : f >= 40 ? 'mid' : 'ok'); pb.setAttribute('aria-label', 'lelah');
+      r.appendChild(pb);
+      r.appendChild($('span', 'hl-n hl-sm', 'lelah ' + f + '% · semangat ' + Math.round(w.motivation == null ? 60 : w.motivation) + '%'));
+      bs.appendChild(r);
+    });
+    if (H.workers && H.workers.some(function (w) { return w.fatigue >= 40; })) bs.appendChild($('p', 'chain-dim', 'Tukang yang lelah bekerja lebih lambat. Restoran memberi mereka makan dari lemarinya.'));
+    wrap.appendChild(bs);
 
     if (H.forage) {
-      var fb = $('div', 'gt-detail'), ft = $('div', 'grow'), fs = H.forage.stored || {}, tot = 0;
+      var fs = H.forage.stored || {}, tot = 0;
       var parts = Object.keys(fs).map(function (t) { tot += fs[t]; return fs[t] + ' ' + itemName(t); });
-      ft.appendChild($('div', 'gt-detail-name', 'Pemburu membawa: ' + parts.join(', ') + ' (maks ' + H.forage.capacity + ')'));
-      ft.appendChild($('div', 'chain-dim', 'Mencari ikan dan kayu sendiri. Musim dingin hasilnya dua kali lipat.'));
-      var fa = $('div', 'gt-detail-acts');
-      fa.appendChild(btn('Ambil', function () { run({ action: 'forage' }); }, 'primary', tot <= 0 || !!(win && win.busy)));
-      ft.appendChild(fa); fb.appendChild(ft); wrap.appendChild(fb);
+      var fb = cell('Pemburu membawa: ' + parts.join(', ') + ' (maks ' + H.forage.capacity + ')');
+      fb.appendChild($('p', 'chain-dim', 'Mencari ikan dan kayu sendiri. Musim dingin hasilnya dua kali lipat.'));
+      acts(fb).appendChild(btn('Ambil', function () { run({ action: 'forage' }); }, '', tot <= 0 || isBusy()));
+      wrap.appendChild(fb);
     }
 
     var busy = busyJob(), why = busy ? 'Pembangun sedang bekerja.' : null;
@@ -253,7 +271,7 @@
     if (!th) wrap.appendChild(stepBlock('Naikkan Balai Kota', 'Sudah di level tertinggi.', null, false, null, null));
     else {
       var short = shortOf(th.cost), can = !busy && !short.length;
-      wrap.appendChild(stepBlock('Naikkan ke level ' + th.level, 'Level lebih tinggi membuka bangunan baru, petak kebun, dan wilayah.', th, can, why, 'Naikkan ke level ' + th.level, function () { run({ action: 'build', kind: 'th', target: 'th' }); }));
+      wrap.appendChild(stepBlock('Naikkan ke level ' + th.level, 'Level lebih tinggi membuka bangunan baru, petak kebun, dan wilayah.', th, can, why, 'Naikkan ke level ' + th.level, function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
     }
 
     // neighbouring locked chunks
@@ -264,64 +282,66 @@
       if (mine[id]) return;
       if (NEIGH[id].some(function (n) { return mine[n]; })) adj.push(id);
     });
-    var ob = $('div', 'gt-detail'), ot = $('div', 'grow');
-    ot.appendChild($('div', 'gt-detail-name', 'Buka wilayah'));
-    if (!ch) ot.appendChild($('div', 'chain-dim', adj.length ? 'Semua wilayah yang bisa dibuka sudah terbuka.' : 'Semua wilayah sudah terbuka.'));
+    var ob = cell('Buka wilayah', ch ? 'ke-' + ch.n : null);
+    if (!ch) ob.appendChild($('p', 'chain-dim', adj.length ? 'Semua wilayah yang bisa dibuka sudah terbuka.' : 'Semua wilayah sudah terbuka.'));
     else {
-      var sh2 = shortOf(ch.cost);
-      ot.appendChild($('div', 'chain-dim', 'Wilayah ke-' + ch.n + ': ' + costLine(ch.cost) + ' · waktu ' + secsLine(ch.secs) + (H.th < ch.th ? ' · perlu Balai Kota level ' + ch.th : '') + (sh2.length ? ' · kurang ' + sh2.map(itemName).join(', ') : '')));
-    }
-    ob.appendChild(ot);
-    if (ch) {
-      var okChunk = !busy && H.th >= ch.th && !shortOf(ch.cost).length;
-      var acts = $('div', 'gt-detail-acts');
-      adj.forEach(function (id) { acts.appendChild(btn('Buka ' + chunkName(id), function () { run({ action: 'build', kind: 'chunk', target: id }); }, 'primary', !okChunk || !!(win && win.busy))); });
-      ob.appendChild(acts);
+      ob.appendChild(costRow(ch.cost, ch.secs));
+      if (H.th < ch.th) ob.appendChild($('p', 'hl-why', 'Terkunci: perlu Balai Kota level ' + ch.th + '.'));
+      var okChunk = !busy && H.th >= ch.th && !shortOf(ch.cost).length, ca = acts(ob);
+      adj.forEach(function (id) { ca.appendChild(btn('Buka ' + chunkName(id), function () { run({ action: 'build', kind: 'chunk', target: id }); }, '', !okChunk || isBusy())); });
     }
     wrap.appendChild(ob);
 
     // Pekerja: worker bots
-    var pk = $('div', 'gt-detail'), pt = $('div', 'grow');
-    pt.appendChild($('div', 'gt-detail-name', 'Pekerja'));
-    pt.appendChild($('div', 'chain-dim', 'Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Pemburu mencari ikan dan kayu; Koki mempercepat Restoran memberi makan Tukang; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.'));
-    var bd = H.beds || { total: 0, used: 0 };
-    pt.appendChild($('div', bd.used >= bd.total ? 'gt-detail-name' : 'chain-dim', 'Kasur terpakai ' + bd.used + ' dari ' + bd.total + (bd.used >= bd.total ? '. Bangun Rumah Pekerja atau tambah kasur.' : '.')));
+    var bd = H.beds || { total: 0, used: 0 }, full = bd.used >= bd.total;
+    var pk = cell('Pekerja', 'Kasur ' + bd.used + ' dari ' + bd.total);
+    pk.appendChild($('p', 'chain-dim', 'Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Pemburu mencari ikan dan kayu; Koki mempercepat Restoran memberi makan Tukang; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.'));
+    pk.appendChild($('p', full ? 'hl-warn' : 'chain-dim', 'Kasur terpakai ' + bd.used + ' dari ' + bd.total + (full ? '. Bangun Rumah Pekerja atau tambah kasur.' : '.')));
+    var hireMap = H.hire || {};
+    Object.keys(hireMap).forEach(function (job) {
+      var d = hireMap[job], row = $('div', 'hl-row hl-hire'), tx = $('div', 'hl-grow');
+      var nm = $('div', 'hl-name'); nm.appendChild(document.createTextNode(d.name + ' '));
+      if (d.rarity === 'rare') nm.appendChild($('span', 'hl-rare', 'Langka'));
+      tx.appendChild(nm);
+      tx.appendChild($('div', 'hl-n hl-sm', d.have + '/' + d.max + ' · ' + d.price + ' ' + itemName('coin')));
+      if (!d.can && d.why) tx.appendChild($('div', 'hl-why', d.why));
+      row.appendChild(tx);
+      row.appendChild(btn('Pekerjakan ' + d.name + ' (' + d.price + ')', function () { run({ action: 'hire', job: job }); }, '', !d.can || isBusy()));
+      pk.appendChild(row);
+    });
+    wrap.appendChild(pk);
+
     // cosmetics: a hat for the Tukang or a bot; better output, or less fatigue for a Tukang
     var cat = H.cosmetics || {}, crew = [{ id: 0, name: 'Tukang Balai Kota', cosmetic: (H.workers && H.workers[0] && H.workers[0].cosmetic) || null }];
     (H.bots || []).forEach(function (b) { crew.push({ id: b.id, name: b.name + ' ' + b.id, cosmetic: b.cosmetic || null }); });
     if (Object.keys(cat).length) {
-      pt.appendChild($('div', 'gt-detail-name', 'Perlengkapan'));
-      pt.appendChild($('div', 'chain-dim', 'Topi dan syal: Tukang jadi kurang lelah, pekerja lain lebih rajin. Pakai yang baru menggantikan yang lama, tanpa uang kembali.'));
+      var pc = cell('Perlengkapan');
+      pc.appendChild($('p', 'chain-dim', 'Topi dan syal: Tukang jadi kurang lelah, pekerja lain lebih rajin. Pakai yang baru menggantikan yang lama, tanpa uang kembali.'));
       crew.forEach(function (c) {
-        var cr = $('div', 'gt-detail-acts');
-        cr.appendChild($('span', null, c.name + ' · ' + (c.cosmetic && cat[c.cosmetic] ? cat[c.cosmetic].name : 'polos') + ' '));
+        var cr = $('div', 'hl-crew'), who = $('div', 'hl-name');
+        who.appendChild(document.createTextNode(c.name + ' · '));
+        who.appendChild($('span', 'hl-state', c.cosmetic && cat[c.cosmetic] ? cat[c.cosmetic].name : 'polos'));
+        cr.appendChild(who);
+        var ca = acts(cr);
         Object.keys(cat).forEach(function (k) {
           var d = cat[k];
-          cr.appendChild(btn(d.name + ' (' + d.price + ', +' + Math.round(d.boost * 100) + '%)', function () { run({ action: 'dress', bot: c.id, cosmetic: k }); }, 'primary', c.cosmetic === k || have('coin') < d.price || !!(win && win.busy)));
+          ca.appendChild(btn(d.name + ' (' + d.price + ', +' + Math.round(d.boost * 100) + '%)', function () { run({ action: 'dress', bot: c.id, cosmetic: k }); }, '', c.cosmetic === k || have('coin') < d.price || isBusy()));
         });
-        pt.appendChild(cr);
+        pc.appendChild(cr);
       });
+      wrap.appendChild(pc);
     }
-    var hireMap = H.hire || {};
-    Object.keys(hireMap).forEach(function (job) {
-      var d = hireMap[job], row = $('div', 'gt-detail-acts');
-      pt.appendChild($('div', null, d.name + ' · ' + d.have + '/' + d.max + ' · ' + d.price + ' ' + itemName('coin') + (d.can || !d.why ? '' : ' · ' + d.why)));
-      if (d.rarity === 'rare') { var badge = $('span', 'chain-dim', 'Langka'); badge.style.color = '#e0a020'; badge.style.fontWeight = 'bold'; pt.appendChild(badge); }      row.appendChild(btn('Pekerjakan ' + d.name + ' (' + d.price + ')', function () { run({ action: 'hire', job: job }); }, 'primary', !d.can || !!(win && win.busy)));
-      pt.appendChild(row);
-    });
-    pk.appendChild(pt); wrap.appendChild(pk);
 
     // invites
-    var iv = $('div', 'gt-detail');
-    iv.appendChild($('div', 'gt-detail-name', 'Undang teman'));
-    iv.appendChild($('div', 'chain-dim', 'Hanya kamu dan tamu undangan yang boleh datang lewat portal. Tulis nama pemain (seperti di permainan), pisahkan dengan koma. Tamu melihat duniamu di menu portal.'));
+    var iv = cell('Undang teman');
+    iv.appendChild($('p', 'chain-dim', 'Hanya kamu dan tamu undangan yang boleh datang lewat portal. Tulis nama pemain (seperti di permainan), pisahkan dengan koma. Tamu melihat duniamu di menu portal.'));
     var input = $('input'); input.type = 'text'; input.maxLength = 400; input.placeholder = 'Ayu, Budi'; var known = {};
+    input.setAttribute('aria-label', 'Nama tamu');
     (H.guests || []).forEach(function (g) { var nm = typeof g === 'string' ? g : g.name; known[nm] = typeof g === 'string' ? g : g.account; });
     input.value = Object.keys(known).join(', ');
-    input.style.width = '100%'; input.autocomplete = 'off';
+    input.autocomplete = 'off';
     iv.appendChild(input);
-    var iAct = $('div', 'gt-detail-acts');
-    iAct.appendChild(btn('Simpan undangan', function () {
+    acts(iv).appendChild(btn('Simpan undangan', function () {
       var list = String(input.value || '').split(/[,;]+/).map(function (x) { return x.trim(); }).filter(Boolean)
         .map(function (x) { return Object.prototype.hasOwnProperty.call(known, x) ? known[x] : x; });
       C.api('/homeland/invite', { method: 'POST', body: { accounts: list } })
@@ -330,38 +350,38 @@
           input.value = names.join(', '); GT.toast('Undangan tersimpan (' + names.length + ' tamu).'); return load(true);
         }, function (e) { GT.toast('Gagal: ' + e.message); });
     }));
-    iv.appendChild(iAct);
     wrap.appendChild(iv);
     return wrap;
   }
 
   /* ---- a lot: build or collect ---- */
   function lotBody(lotId) {
-    var wrap = $('div', 'gt-isl'), lot = lotById(lotId);
+    var wrap = $('div', 'gt-isl hl'), lot = lotById(lotId);
     if (!H || !lot) { wrap.appendChild($('p', null, H ? 'Lahan ini tidak ada.' : 'Memuat…')); return wrap; }
     var owner = inOwnHome(), b = builtOf(lotId), name = KIND_NAME[lot.kind] || lot.kind;
     var def = H.next && H.next.buildings && H.next.buildings[lot.kind];
-    var head = $('div', 'gt-shop-head');
-    head.appendChild($('span', null, name + ' · ' + chunkName(lot.chunk)));
-    wrap.appendChild(head);
-    if (!owner) { wrap.appendChild($('p', null, b ? 'Bangunan milik pemilik dunia ini.' : 'Lahan kosong milik pemilik dunia ini.')); return wrap; }
+    var stats = $('div', 'hl-stats'), st1 = $('div', 'hl-stat');
+    st1.appendChild($('span', 'hl-k', name)); st1.appendChild($('b', 'hl-n', chunkName(lot.chunk))); stats.appendChild(st1);
+    wrap.appendChild(stats);
+    if (!owner) { wrap.appendChild($('p', 'hl-p', b ? 'Bangunan milik pemilik dunia ini.' : 'Lahan kosong milik pemilik dunia ini.')); return wrap; }
     var job = null;
     H.jobs.forEach(function (j) { if (j.kind === 'build' && j.target === lotId) job = j; });
     if (b && def && def.cooks) { wrap.appendChild(restoranBody(lotId)); return wrap; }
     if (b && def && def.furniture) { wrap.appendChild(houseBody(lotId)); return wrap; }
     if (b && def && def.healGameHours) { wrap.appendChild(hospitalBody(lotId)); return wrap; }
     if (b) {
-      var box = $('div', 'gt-detail'), txt = $('div', 'grow'), prod = def && def.produces ? itemName(def.produces) : 'hasil';
-      txt.appendChild($('div', 'gt-detail-name', name + ' · menghasilkan ' + prod));
-      txt.appendChild($('div', null, 'Tersimpan ' + b.stored + ' dari ' + b.capacity + '. Kalau penuh, hasil berhenti bertambah.'));
-      box.appendChild(txt);
-      var acts = $('div', 'gt-detail-acts');
-      acts.appendChild(btn('Ambil hasil (' + b.stored + ')', function () { collect(lotId); }, 'primary', b.stored <= 0 || !!win.busy));
-      box.appendChild(acts);
+      var prod = def && def.produces ? itemName(def.produces) : 'hasil';
+      var box = cell(name + ' · menghasilkan ' + prod, b.stored + ' / ' + b.capacity);
+      box.appendChild(bar(b.stored, b.capacity, b.stored >= b.capacity ? 'full' : ''));
+      box.appendChild($('p', 'hl-p', 'Tersimpan ' + b.stored + ' dari ' + b.capacity + '. Kalau penuh, hasil berhenti bertambah.'));
+      acts(box).appendChild(btn('Ambil hasil (' + b.stored + ')', function () { collect(lotId); }, 'primary', b.stored <= 0 || isBusy()));
       wrap.appendChild(box);
       return wrap;
     }
-    if (job) { wrap.appendChild($('p', null, jobLine(job))); return wrap; }
+    if (job) {
+      var jc = cell(jobWhat(job)); var jr = $('div', 'hl-row'); jr.appendChild($('span', 'hl-grow hl-k', 'sisa')); jr.appendChild($('b', 'hl-n hl-time', clock(endMs(job) - Date.now()))); jc.appendChild(jr);
+      wrap.appendChild(jc); return wrap;
+    }
     if (!def) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
     // `can`/`why` in the view describe the first lot of this kind; for another lot the server decides when we press the button.
     var sameLot = def.lot === lotId, short = shortOf(def.cost), why = sameLot ? def.why : null;
@@ -370,67 +390,68 @@
     var can = !why && (!sameLot || def.can);
     var blurb = def.furniture ? 'Satu kasur untuk satu pekerja. Tambah kasur supaya lebih banyak pekerja muat, tambah hiburan supaya mereka semangat. Perlu Balai Kota level ' + def.th + '.' : def.healGameHours ? 'Merawat Tukang yang tumbang karena kelelahan, makin tinggi levelnya makin cepat sembuh. Perlu Balai Kota level ' + def.th + '.' : def.cooks ? 'Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level ' + def.th + '.' : 'Menghasilkan ' + itemName(def.produces) + ' terus-menerus, simpan sampai ' + def.capacity + '. Perlu Balai Kota level ' + def.th + '.';
     wrap.appendChild(stepBlock('Bangun ' + (def.name || name), blurb,
-      def, can, why, 'Bangun · ' + secsLine(def.secs), function () { run({ action: 'build', kind: 'build', target: lotId }); }));
+      def, can, why, 'Bangun · ' + secsLine(def.secs), function () { run({ action: 'build', kind: 'build', target: lotId }); }, true));
     return wrap;
   }
   /* ---- Rumah Pekerja: beds and entertainment ---- */
   function houseView(lotId) { var r = null; (H.houses || []).forEach(function (h) { if (h.lot === lotId) r = h; }); return r; }
-  function furnRow(title, text, step, label, target) {
-    var row = $('div', 'gt-detail'), t = $('div', 'grow'), acts = $('div', 'gt-detail-acts');
-    t.appendChild($('div', 'gt-detail-name', title)); t.appendChild($('div', 'chain-dim', text));
+  function furnRow(title, text, step, label, target, primary) {
+    var row = cell(title);
+    row.appendChild($('p', 'chain-dim', text));
     if (step) {
-      t.appendChild($('div', null, 'Biaya ' + costLine(step.cost) + ' · ' + secsLine(step.secs)));
+      row.appendChild(costRow(step.cost, step.secs));
       var short = shortOf(step.cost), why = busyJob() ? 'Pembangun sedang bekerja.' : short.length ? 'Kurang ' + short.map(itemName).join(', ') + '.' : null;
-      if (why) t.appendChild($('div', 'chain-dim', why));
-      acts.appendChild(btn(label + ' · ' + secsLine(step.secs), function () { run({ action: 'build', kind: 'furniture', target: target }); }, 'primary', !!why || !!(win && win.busy)));
-    } else t.appendChild($('div', 'chain-dim', 'Sudah level tertinggi.'));
-    row.appendChild(t); row.appendChild(acts); return row;
+      if (why) row.appendChild($('p', 'hl-why', why));
+      acts(row).appendChild(btn(label + ' · ' + secsLine(step.secs), function () { run({ action: 'build', kind: 'furniture', target: target }); }, primary ? 'primary' : '', !!why || isBusy()));
+    } else row.appendChild($('p', 'chain-dim', 'Sudah level tertinggi.'));
+    return row;
   }
   function houseBody(lotId) {
-    var box = $('div', 'gt-isl'), h = houseView(lotId);
+    var box = $('div', 'hl'), h = houseView(lotId);
     if (!h) { box.appendChild($('p', null, 'Memuat…')); return box; }
-    var live = $('div', 'gt-detail'), lt = $('div', 'grow');
-    lt.appendChild($('div', 'gt-detail-name', 'Rumah Pekerja · ' + h.used + ' dari ' + h.beds + ' kasur terisi'));
-    lt.appendChild($('div', null, 'Semangat penghuni ' + h.motivation + '%' + (h.hiburanName ? ' · ' + h.hiburanName : ' · belum ada hiburan')));
-    lt.appendChild($('div', 'chain-dim', 'Semangat tinggi membuat pekerja lebih cepat. Pekerja baru tinggal di rumah yang punya kasur kosong dan hiburan terbaik.'));
-    live.appendChild(lt); box.appendChild(live);
-    box.appendChild(furnRow('Kasur ' + h.kasur + ' dari ' + h.kasurMax, 'Tiap kasur menambah satu tempat tinggal pekerja.', h.nextKasur, 'Tambah Kasur', lotId + ':kasur'));
-    box.appendChild(furnRow('Hiburan ' + h.hiburan + ' dari ' + h.hiburanMax, 'Radio, TV, Gamelan: tiap tingkat menambah semangat 20%.', h.nextHiburan, 'Pasang ' + (h.nextHiburan && h.nextHiburan.name || 'Hiburan'), lotId + ':hiburan'));
+    var live = cell('Rumah Pekerja', h.used + ' dari ' + h.beds + ' kasur terisi');
+    var mo = $('div', 'hl-row'); mo.appendChild($('span', 'hl-grow', 'Semangat penghuni')); mo.appendChild($('b', 'hl-n', h.motivation + '%')); live.appendChild(mo);
+    live.appendChild(bar(h.motivation, 100, 'ok'));
+    live.appendChild($('p', 'hl-p', (h.hiburanName ? h.hiburanName : 'Belum ada hiburan')));
+    live.appendChild($('p', 'chain-dim', 'Semangat tinggi membuat pekerja lebih cepat. Pekerja baru tinggal di rumah yang punya kasur kosong dan hiburan terbaik.'));
+    box.appendChild(live);
+    box.appendChild(furnRow('Kasur ' + h.kasur + ' dari ' + h.kasurMax, 'Tiap kasur menambah satu tempat tinggal pekerja.', h.nextKasur, 'Tambah Kasur', lotId + ':kasur', true));
+    box.appendChild(furnRow('Hiburan ' + h.hiburan + ' dari ' + h.hiburanMax, 'Radio, TV, Gamelan: tiap tingkat menambah semangat 20%.', h.nextHiburan, 'Pasang ' + (h.nextHiburan && h.nextHiburan.name || 'Hiburan'), lotId + ':hiburan', false));
     return box;
   }
   /* ---- Rumah Sakit ---- */
   function hospitalBody(lotId) {
-    var box = $('div', 'gt-detail'), t = $('div', 'grow'), acts = $('div', 'gt-detail-acts'), hp = H.hospital;
-    if (!hp) { t.appendChild($('div', null, 'Memuat…')); box.appendChild(t); return box; }
-    t.appendChild($('div', 'gt-detail-name', 'Rumah Sakit · level ' + hp.level + ' dari ' + hp.maxLevel));
-    t.appendChild($('div', null, 'Tukang yang tumbang sembuh dalam ' + hp.healGameHours + ' jam permainan (tanpa rumah sakit 24 jam).'));
+    var hp = H.hospital;
+    if (!hp) { var l = cell('Rumah Sakit'); l.appendChild($('p', null, 'Memuat…')); return l; }
+    var box = cell('Rumah Sakit', 'level ' + hp.level + ' dari ' + hp.maxLevel);
+    box.appendChild($('p', 'hl-p', 'Tukang yang tumbang sembuh dalam ' + hp.healGameHours + ' jam permainan (tanpa rumah sakit 24 jam).'));
     if (hp.next) {
-      t.appendChild($('div', null, 'Naik level: ' + costLine(hp.next.cost) + ' · ' + secsLine(hp.next.secs)));
+      var cr = costRow(hp.next.cost, hp.next.secs); box.appendChild($('p', 'hl-k', 'Naik level')); box.appendChild(cr);
       var short = shortOf(hp.next.cost), why = busyJob() ? 'Pembangun sedang bekerja.' : short.length ? 'Kurang ' + short.map(itemName).join(', ') + '.' : null;
-      if (why) t.appendChild($('div', 'chain-dim', why));
-      acts.appendChild(btn('Naikkan Rumah Sakit · ' + secsLine(hp.next.secs), function () { run({ action: 'build', kind: 'upgrade', target: lotId }); }, 'primary', !!why || !!(win && win.busy)));
-    } else t.appendChild($('div', 'chain-dim', 'Sudah level tertinggi.'));
-    box.appendChild(t); box.appendChild(acts); return box;
+      if (why) box.appendChild($('p', 'hl-why', why));
+      acts(box).appendChild(btn('Naikkan Rumah Sakit · ' + secsLine(hp.next.secs), function () { run({ action: 'build', kind: 'upgrade', target: lotId }); }, 'primary', !!why || isBusy()));
+    } else box.appendChild($('p', 'chain-dim', 'Sudah level tertinggi.'));
+    return box;
   }
   /* ---- Restoran: cook into the pantry, put food in, see the pantry ---- */
   function restoranBody(lotId) {
-    var box = $('div', 'gt-detail'), txt = $('div', 'grow'), R = H.restoran || { pantry: 0, pantryMax: 0 }, ck = H.cook;
-    txt.appendChild($('div', 'gt-detail-name', 'Restoran · lemari makanan ' + R.pantry + ' dari ' + R.pantryMax));
-    txt.appendChild($('div', 'chain-dim', 'Makanan di lemari diberikan otomatis ke Tukang yang lelah' + (H.bots && H.bots.some(function (b) { return b.job === 'chef'; }) ? ' (Koki: dua kali lebih cepat)' : '') + '. Makanan di Tasmu tidak dipakai kecuali kamu menaruhnya.'));
-    if (ck) txt.appendChild($('div', null, 'Resep: ' + Object.keys(ck.recipe.inputs).map(function (t) { return ck.recipe.inputs[t] + ' ' + itemName(t); }).join(' + ') + ' → 1 ' + itemName(ck.recipe.output) + (ck.can ? '' : ' · ' + ck.why)));
-    var busy = !!(win && win.busy);
-    var cookRow = $('div', 'gt-detail-acts');
-    cookRow.appendChild($('span', 'chain-dim', 'Masak: '));
-    [1, 5, 10].forEach(function (q) { cookRow.appendChild(btn('x' + q, function () { run({ action: 'cook', qty: q }); }, 'primary', busy || !ck || R.pantry + q > R.pantryMax)); });
-    txt.appendChild(cookRow);
-    var putRow = $('div', 'gt-detail-acts');
-    putRow.appendChild($('span', 'chain-dim', 'Taruh makanan dari Tas: '));
+    var R = H.restoran || { pantry: 0, pantryMax: 0 }, ck = H.cook;
+    var box = cell('Restoran', 'lemari ' + R.pantry + ' dari ' + R.pantryMax);
+    box.appendChild(bar(R.pantry, R.pantryMax, ''));
+    box.appendChild($('p', 'chain-dim', 'Makanan di lemari diberikan otomatis ke Tukang yang lelah' + (H.bots && H.bots.some(function (b) { return b.job === 'chef'; }) ? ' (Koki: dua kali lebih cepat)' : '') + '. Makanan di Tasmu tidak dipakai kecuali kamu menaruhnya.'));
+    if (ck) box.appendChild($('p', 'hl-p', 'Resep: ' + Object.keys(ck.recipe.inputs).map(function (t) { return ck.recipe.inputs[t] + ' ' + itemName(t); }).join(' + ') + ' → 1 ' + itemName(ck.recipe.output) + (ck.can ? '' : ' · ' + ck.why)));
+    var busy = isBusy();
+    var cookRow = $('div', 'hl-acts hl-lead');
+    cookRow.appendChild($('span', 'hl-k', 'Masak'));
+    [1, 5, 10].forEach(function (q) { cookRow.appendChild(btn('x' + q, function () { run({ action: 'cook', qty: q }); }, q === 1 ? 'primary' : '', busy || !ck || R.pantry + q > R.pantryMax)); });
+    box.appendChild(cookRow);
+    var putRow = $('div', 'hl-acts hl-lead');
+    putRow.appendChild($('span', 'hl-k', 'Taruh makanan dari Tas'));
     ['bread', 'meal'].forEach(function (t) {
       var n = have(t), q = Math.min(n, Math.max(0, R.pantryMax - R.pantry));
-      putRow.appendChild(btn(itemName(t) + ' (' + n + ')', function () { run({ action: 'stock', token: t, qty: q }); }, 'primary', busy || q <= 0));
+      putRow.appendChild(btn(itemName(t) + ' (' + n + ')', function () { run({ action: 'stock', token: t, qty: q }); }, '', busy || q <= 0));
     });
-    txt.appendChild(putRow);
-    box.appendChild(txt);
+    box.appendChild(putRow);
     return box;
   }
   function collect(lotId) {
@@ -627,12 +648,7 @@
         if (!(b.stored > 0)) return;
         var lot = lotById(b.lot); if (!lot) return;
         var x = (lot.x + lot.w / 2) * T - camX, y = lot.y * T - camY - 3 + Math.sin(tt * 3 + lot.x) * 1.5;
-        var txt = '+' + b.stored;
-        ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        var w = ctx.measureText(txt).width + 6;
-        ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y - 5), Math.round(w + 2), 11);
-        ctx.fillStyle = b.stored >= b.capacity ? '#ffcf5a' : '#f6ead0'; ctx.fillRect(Math.round(x - w / 2), Math.round(y - 4), Math.round(w), 9);
-        ctx.fillStyle = '#2a2430'; ctx.fillText(txt, Math.round(x), Math.round(y + 0.5));
+        GT_THEME.label(ctx, '+' + b.stored, x, y + 5, { tone: b.stored >= b.capacity ? 'accent' : 'paper', size: 7, bold: true });
       });
       // hats (a sick worker's hat is drawn on the lying figure below)
       if (builder && !isSick(0)) drawHat(ctx, builder, H.workers && H.workers[0] && H.workers[0].cosmetic, camX, camY, T);
@@ -670,19 +686,12 @@
         ctx.restore();
         if (Math.sin(tt * 9) > 0.8) { ctx.fillStyle = '#ffe066'; ctx.fillRect(Math.round(bx + side * 7), Math.round(by - 4), 1, 1); ctx.fillRect(Math.round(bx + side * 8), Math.round(by - 6), 1, 1); }
         var left = endMs(f.job) - now, lx = f.fx * T - camX, ly = f.fy * T - camY - (f.job.kind === 'th' ? 28 : 20);
-        var label = clock(left);
-        ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        var lw = ctx.measureText(label).width + 8;
-        ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(lx - lw / 2 - 1), Math.round(ly - 5), Math.round(lw + 2), 11);
-        ctx.fillStyle = '#f6ead0'; ctx.fillRect(Math.round(lx - lw / 2), Math.round(ly - 4), Math.round(lw), 9);
-        ctx.fillStyle = '#2a2430'; ctx.fillText(label, Math.round(lx + 0.5), Math.round(ly + 0.5));
+        GT_THEME.label(ctx, clock(left), lx, ly + 5, { tone: 'paper', size: 7, bold: true });
       }
       pops.forEach(function (q) {
         ctx.globalAlpha = Math.max(0, 1 - q.t / 1.4);
-        ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        var x = q.x * T - camX, y = q.y * T - camY - 8 - q.t * 14;
-        ctx.fillStyle = '#2a2430'; ctx.fillText(q.text, Math.round(x + 1), Math.round(y + 1));
-        ctx.fillStyle = '#ffe066'; ctx.fillText(q.text, Math.round(x), Math.round(y));
+        GT_THEME.text(ctx, q.text, q.x * T - camX, q.y * T - camY - 8 - q.t * 14, GT_THEME.get('gold'), 8);
+        ctx.globalAlpha = 1;
       });
     }
     ctx.restore();

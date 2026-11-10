@@ -105,6 +105,11 @@
 >   house lot per chunk and a hospital lot. Numbers: `economy/config.json` -> `homeland`; details: [docs/world.md](docs/world.md);
 >   plan: [phase C](docs/superpowers/plans/2026-11-09-homeland-phase-c.md).
 >
+> - **The season is the look** ([DESIGN.md](DESIGN.md)): a dark HUD tray with a band in the season's colour, cream
+>   paper windows with a thick ink outline and a header in the season's tone, one accent colour per season on the next
+>   thing to do (blossom pink, sea teal, pumpkin, ice blue), and the world's grass, trees, water and light to match.
+>   Every window, the hotbar, chat, toasts, name tags, bubbles and floating numbers read from the same tokens
+>   (`client/css/theme.css`, `client/js/theme.js`). Glass stays only on the phone's D-pad, A/E and tab bar.
 > - **3D world kit** *(lab page only, not in the game yet)*: [client/lab3d.html](client/lab3d.html) draws the real
 >   village or a Homeland with three.js 0.187.0 in an HD-2D style: the game's own pixel art on solid low-poly
 >   buildings, trees, rocks and props, characters as sprite cards facing the camera, a sun that crosses the sky with

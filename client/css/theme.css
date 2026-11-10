@@ -75,3 +75,23 @@ html.gt-s-semi{ --accent:#f28fb0; --season:#24382a; }     /* blossom on moss */
 html.gt-s-panas{ --accent:#34c3c9; --season:#163a44; }    /* sea teal on deep teal */
 html.gt-s-gugur{ --accent:#f0903a; --season:#3a2616; }    /* pumpkin on bark */
 html.gt-s-dingin{ --accent:#8fc8f2; --season:#1e3046; }   /* ice on slate */
+
+/* added by package B */
+:root{
+  --scrim:rgba(5,6,12,.74);          /* flat scrim behind a window (no blur, no soft shadow) */
+  --scrim-lite:rgba(10,11,20,.55);   /* lighter scrim behind the title card */
+  --chip:rgba(20,21,42,.85);         /* dark chips over the game: chat, toasts, key hint, hotbar tray (--hud at 85%) */
+  --chip-strong:rgba(13,14,26,.94);  /* map overlay and character screen ground */
+  --accent-hi:color-mix(in srgb,var(--accent) 80%,white);   /* hover step of an accent fill: pure white mix, season-aware */
+  --field:#fffdf2;                   /* input ground on paper */
+  --glass:rgba(255,255,255,.14);     /* phone D-pad, A/E and tab bar only (owner override) */
+  --glass-line:rgba(255,255,255,.28);
+  --glass-hi:rgba(255,255,255,.35);
+  --glass-ink:#fff;
+  --glass-shade:rgba(0,0,0,.35);
+  --stage:#8fc07a;                   /* character preview ground */
+  --water:#17507e;                   /* fishing track */
+  --dusk:#f29a4c;                    /* clock dot at dusk */
+  --moon:#cfd8ff;                    /* clock dot at night */
+  --coin-edge:#c9962a;               /* coin icon shade */
+}

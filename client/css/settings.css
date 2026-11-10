@@ -1,32 +1,31 @@
 /* settings.css - full-window layout (html.gt-full), settings dialog, context hint, reduced motion */
 html.gt-full body{padding:0}
 html.gt-full #app{max-width:none;height:100vh;display:flex;flex-direction:column}
-html.gt-full .shell{flex:1;display:flex;flex-direction:column;border-radius:0;padding:6px 10px 8px;min-height:0}
+html.gt-full .shell{flex:1;display:flex;flex-direction:column;border-radius:0;border-width:0;padding:6px 10px 8px;min-height:0;background:var(--hud);box-shadow:none}
 html.gt-full .brand,html.gt-full .help{display:none}
-html.gt-full .chain-banner{margin-bottom:4px;padding:3px 8px}
-html.gt-full .hud{margin-bottom:6px;gap:4px 12px}
-html.gt-full .bezel{flex:1;display:flex;align-items:center;justify-content:center;padding:6px;border-radius:6px;min-height:0}
+html.gt-full .chain-banner{margin-bottom:4px;padding:2px 8px}
+html.gt-full .hud{margin-bottom:6px;gap:4px 8px}
+html.gt-full .bezel{flex:1;display:flex;align-items:center;justify-content:center;padding:0;border-radius:var(--r-win);min-height:0;background:var(--bezel);box-shadow:none}
 html.gt-full #fit{height:100%;align-items:center}
 html.gt-full .pad{display:none}
-html:fullscreen .shell{box-shadow:none}
-.gt-settings h3{margin:10px 0 6px;font-size:calc(15px*var(--ts));font-weight:400;color:#4a4d75}
-.gt-settings h3:first-child{margin-top:0}
-.gt-key{min-width:64px;font-size:calc(14px*var(--ts))}
-.gt-key.gt-capturing{background:#9c2f55;color:#fff}
-#gt-hint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:rgba(10,12,24,.82);color:#fff;font-size:calc(14px*var(--ts));line-height:1.4;padding:3px 7px;border-radius:3px;box-shadow:0 0 0 1px #000;pointer-events:none;white-space:nowrap;display:none;z-index:2}
-#gt-hint.on{display:block}
-#gt-hint b{color:#f2c94c;font-weight:400}
-html.gt-reduced-motion *{animation:none!important;transition:none!important}
-/* art pass 1: quieter chrome so the scene leads */
-#regen,.hud .seedc{display:none!important}
-.hud .cell:has(#role){display:none}
-html.gt-full .shell{background:#14152a;box-shadow:none}
-html.gt-full .bezel{background:#0b0c14;box-shadow:none;padding:0}
-.chain-banner{display:inline-block;margin:0 0 6px 2px;padding:2px 7px;border-radius:9px;font-size:calc(12px*var(--ts));box-shadow:none}
-.chain-banner::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:0;background:currentColor}
-.chain-energy i{background:#b8d94a}
 /* full-window must beat the prototype's short-landscape grid layout */
 html.gt-full .shell{display:flex!important;flex-direction:column!important;grid-template-columns:none!important}
 html.gt-full .bezel{width:100%;grid-column:auto!important;grid-row:auto!important}
 html.gt-full #fit{width:100%}
 html.gt-full .hud{grid-column:auto!important}
+
+.gt-settings h3{margin:12px 0 6px;font-size:calc(16px*var(--ts));font-weight:600;color:var(--paper-ink)}
+.gt-settings h3:first-child{margin-top:0}
+.gt-key{min-width:64px;font-size:calc(14px*var(--ts))}
+.gt-key.gt-capturing{background:var(--accent);color:var(--accent-ink)}
+
+/* context hint over the game view: a dark chip with a key cap and a short verb */
+#gt-hint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:var(--chip);color:var(--hud-ink);font-size:calc(14px*var(--ts));line-height:1.4;padding:3px 8px 3px 4px;border-radius:var(--r-ctl);pointer-events:none;white-space:nowrap;display:none;z-index:2}
+#gt-hint.on{display:block}
+#gt-hint b{display:inline-block;min-width:22px;margin-right:4px;padding:0 5px;text-align:center;font-weight:400;color:var(--hud-ink);background:var(--hud-3);border:var(--line) solid var(--outline);border-radius:var(--r-ctl);box-shadow:inset 0 -2px 0 var(--shade)}
+html.gt-phone #gt-hint{display:none!important}
+
+html.gt-reduced-motion *{animation:none!important;transition:none!important}
+/* chrome kept quiet so the scene leads */
+#regen,.hud .seedc{display:none!important}
+.hud .cell:has(#role){display:none}

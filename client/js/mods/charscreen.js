@@ -175,7 +175,7 @@
     g.save(); g.globalAlpha = 1 - p;
     for (var i = 0; i < 7; i++) {
       var a = (i / 7) * Math.PI * 2 + 0.3, r = S * (2 + p * 9), dx = Math.cos(a) * r * 1.6, dy = Math.sin(a) * r * 0.45;
-      g.fillStyle = i % 2 ? '#d9d2bd' : '#bdb59c';
+      g.fillStyle = GT_THEME.get(i % 2 ? 'paper-2' : 'paper-3');
       var s = S * (3 - p * 1.6); g.fillRect(Math.round(x + dx - s / 2), Math.round(y + dy - s / 2), s, s);
     }
     g.restore();

@@ -1,2 +1,153 @@
 /* mods.css - styles that belong to one feature mod (Homeland, trade, Titip Jual, Papan Juara, Jiwa, Simulasi).
- * Built from the tokens in theme.css; shared components (windows, buttons, cards) live in game.css and chain.css. */
+ * Built from the tokens in theme.css; shared components (windows, buttons, cards) live in game.css and chain.css.
+ * Rules: tray cells (paper-2, top highlight, 6px apart), tabular figures for numbers, no hex, no shadows with blur. */
+
+/* ---------------------------------------------------------------- shared cell pattern (Homeland, trade) */
+.hl-cell,.tr-cell,.tr-quote{background:var(--paper-2);box-shadow:inset 0 var(--line) 0 var(--paper-hi);border-radius:var(--r-win);padding:10px 12px;margin:0 0 6px;
+  font-size:calc(14px*var(--ts));line-height:1.5;color:var(--paper-ink)}
+.hl-cell-h,.tr-cell-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.hl-cell-t,.tr-cell-t{font-size:calc(16px*var(--ts));font-weight:600;overflow-wrap:anywhere}
+.hl-meta,.tr-meta{color:var(--paper-dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+.hl-n,.tr-qty,.tr-num-line,.tr-rk,.tr-sc,.hl-time{font-variant-numeric:tabular-nums}
+.hl-cell p,.tr-cell p{margin:0 0 6px}
+.hl-p{color:var(--paper-ink)}
+.hl-k{color:var(--paper-dim);font-size:calc(13px*var(--ts))}
+.hl-sm{color:var(--paper-dim);font-size:calc(13px*var(--ts))}
+.hl-why{color:var(--warn-ink)}
+.hl-warn{background:var(--warn-bg);color:var(--warn-ink);border-radius:var(--r-ctl);padding:6px 8px}
+.hl-acts{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center;margin-top:8px}
+.hl-acts.hl-lead{justify-content:flex-start}
+.hl-row{display:flex;align-items:center;gap:8px;padding:3px 0}
+.hl-grow{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+
+/* ---------------------------------------------------------------- Homeland: Balai Kota, lots, bots */
+.hl-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 6px}
+.hl-stat{display:flex;justify-content:space-between;align-items:baseline;gap:8px;background:var(--paper-2);box-shadow:inset 0 var(--line) 0 var(--paper-hi);
+  border-radius:var(--r-ctl);padding:8px 10px;font-size:calc(15px*var(--ts))}
+.hl-time{font-size:calc(16px*var(--ts))}
+.hl-cost{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:0 0 6px}
+.hl-chip{display:inline-block;padding:1px 6px;border-radius:var(--r-ctl);background:var(--paper-3);color:var(--paper-ink);font-size:calc(13px*var(--ts))}
+.hl-chip.short{box-shadow:inset 0 0 0 var(--line) var(--bad)}
+.hl-lack{color:var(--bad);font-weight:600}
+.hl-state{display:inline-block;padding:0 6px;border-radius:var(--r-ctl);background:var(--paper-3);color:var(--paper-ink);font-size:calc(13px*var(--ts))}
+.hl-state.bad{background:var(--bad);color:var(--paper)}
+.hl-rare{display:inline-block;padding:0 6px;border-radius:var(--r-ctl);background:var(--gold);color:var(--paper-ink);font-size:calc(13px*var(--ts));font-weight:600;
+  box-shadow:inset 0 0 0 var(--line) var(--paper-ink)}
+.hl-name{font-size:calc(15px*var(--ts))}
+.hl-worker .hl-bar{flex:0 0 84px}
+.hl-hire,.hl-crew{background:var(--paper);border-radius:var(--r-ctl);padding:6px 8px;margin-top:4px;display:flex;align-items:center;gap:8px}
+.hl-crew{flex-direction:column;align-items:stretch;gap:0}
+.hl-crew .hl-acts{margin-top:6px;justify-content:flex-start}
+.hl-bar{display:block;width:100%;height:12px;margin:2px 0 6px;appearance:none;-webkit-appearance:none;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);
+  background:var(--paper);overflow:hidden}
+.hl-row .hl-bar{margin:0}
+.hl-bar::-webkit-progress-bar{background:var(--paper)}
+.hl-bar::-webkit-progress-value{background:var(--paper-dim)}
+.hl-bar::-moz-progress-bar{background:var(--paper-dim)}
+.hl-bar.ok::-webkit-progress-value{background:var(--good)}
+.hl-bar.ok::-moz-progress-bar{background:var(--good)}
+.hl-bar.mid::-webkit-progress-value{background:var(--gold)}
+.hl-bar.mid::-moz-progress-bar{background:var(--gold)}
+.hl-bar.bad::-webkit-progress-value{background:var(--bad)}
+.hl-bar.bad::-moz-progress-bar{background:var(--bad)}
+.hl-bar.full::-webkit-progress-value{background:var(--accent)}
+.hl-bar.full::-moz-progress-bar{background:var(--accent)}
+
+/* ---------------------------------------------------------------- trade, Titip Jual, Papan Juara */
+.tr-quote{margin-bottom:8px}
+.tr-editor{display:flex;flex-direction:column;gap:6px}
+.tr-line{display:flex;align-items:center;gap:6px}
+.tr-sel,.tr-num{box-sizing:border-box;min-height:36px;padding:5px 8px;font:inherit;font-size:calc(16px*var(--ts));color:var(--paper-ink);background:var(--paper);
+  border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl)}
+.tr-sel{flex:1 1 auto;min-width:0;cursor:pointer}
+.tr-num{width:84px;font-variant-numeric:tabular-nums;text-align:right}
+.tr-sel:focus-visible,.tr-num:focus-visible{outline:3px solid var(--paper-ink);outline-offset:2px}
+.tr-del{min-width:36px;padding:0}
+.tr-add{align-self:flex-start}
+.tr-lines{display:flex;flex-direction:column;gap:2px}
+.tr-line-r{display:flex;gap:8px}
+.tr-qty{min-width:3ch;text-align:right;font-weight:600}
+.tr-lot{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--paper);border-radius:var(--r-ctl);padding:6px 8px;margin-top:4px}
+.tr-lot-n{font-size:calc(15px*var(--ts))}
+.tr-num-line{color:var(--paper-dim);font-size:calc(13px*var(--ts))}
+.tr-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.tr-f{display:flex;flex-direction:column;gap:2px}
+.tr-f span{color:var(--paper-dim);font-size:calc(13px*var(--ts))}
+.tr-rank{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:baseline;padding:4px 8px;border-radius:var(--r-ctl)}
+.tr-rank:nth-child(even){background:var(--paper)}
+.tr-rank.me{background:var(--paper-3);box-shadow:inset 0 0 0 var(--line) var(--paper-ink)}
+.tr-rk{min-width:3ch;text-align:right;font-weight:600}
+.tr-nm{overflow-wrap:anywhere}
+.tr-sc{text-align:right;color:var(--paper-dim);white-space:nowrap}
+.tr-me{margin-top:6px;font-variant-numeric:tabular-nums}
+
+/* ---------------------------------------------------------------- Jiwa (soul.js): NPC chat and brain settings */
+.sl-head{margin:0 0 6px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.sl-tag{padding:1px 6px;border-radius:var(--r-ctl);background:var(--paper-ink);color:var(--paper)}
+.sl-log{max-height:36vh;min-height:96px;overflow:auto;overscroll-behavior:contain;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);background:var(--paper);padding:6px;margin-bottom:6px}
+.sl-m{margin:0 0 6px;padding:4px 8px;border-radius:var(--r-ctl);line-height:1.6;overflow-wrap:anywhere}
+.sl-m.me{background:var(--paper-3);margin-left:14%}
+.sl-m.npc{background:var(--paper-2);margin-right:14%}
+.sl-m.sys{color:var(--paper-dim);border-left:3px solid var(--paper-dim);border-radius:0;padding-left:6px}
+.sl-st{min-height:16px;margin-bottom:6px;color:var(--paper-dim)}
+.sl-f{display:block;margin:0 0 10px}
+.sl-f>span{display:block;margin-bottom:4px}
+.sl-f input[type=password],.sl-f input[type=text],.sl-in{width:100%;font:inherit;font-size:calc(16px*var(--ts));padding:8px;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);background:var(--paper);color:var(--paper-ink);box-sizing:border-box}
+.sl-in:focus-visible,.sl-f input:focus-visible{outline:3px solid var(--paper-ink);outline-offset:2px}
+.sl-err{min-height:14px;color:var(--bad);margin:0 0 6px}
+.sl-chk{display:flex;gap:8px;align-items:flex-start;margin:0 0 8px;cursor:pointer}
+.sl-chk input{margin-top:3px;flex:none}
+.sl-sub{display:block;color:var(--paper-dim);margin-top:2px}
+.sl-dev{display:inline-block;margin-right:6px;padding:0 5px;border-radius:var(--r-ctl);background:var(--bad);color:var(--paper);font-size:calc(12px*var(--ts));line-height:1.5;vertical-align:middle}
+.sl-ok{color:var(--good)}
+.sl-wal{margin:0 0 6px;color:var(--paper-dim);overflow-wrap:anywhere}
+.sl-plan{margin-bottom:6px}
+.sl-plan-t{margin-bottom:2px}
+.sl-step{display:flex;gap:6px;line-height:1.6;overflow-wrap:anywhere}
+.sl-g{flex:none;width:1.2em;text-align:center}
+.sl-step[data-state=ok] .sl-g{color:var(--good)}
+.sl-step[data-state=fail] .sl-g{color:var(--bad)}
+.sl-step[data-state=run]{font-weight:600}
+.sl-note{color:var(--paper-dim);font-weight:400}
+.sl-r2{padding-top:0;border-top:0;flex-wrap:wrap;gap:6px}
+.sl-rel{margin:0 0 8px;overflow-wrap:anywhere}
+.sl-info{margin-top:8px}
+.sl-forget{margin-bottom:8px}
+
+/* ---------------------------------------------------------------- Simulasi (sim.js): overrides sim.css with tokens */
+.sim-panel{font-family:var(--font);font-size:calc(14px*var(--ts));line-height:1.5;color:var(--paper-ink)}
+.sim-panel h3{font:600 calc(16px*var(--ts))/1.3 var(--font);color:var(--paper-ink);margin:14px 0 6px}
+.sim-label{color:var(--paper-dim);margin:0 0 8px}
+.sim-ctrl .mbtn{font-family:inherit;font-size:calc(14px*var(--ts))}
+.sim-clock{color:var(--paper-dim);font-variant-numeric:tabular-nums}
+.sim-players select{font:inherit;margin-left:4px;padding:4px 6px;color:var(--paper-ink);background:var(--paper);border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);min-height:36px}
+.sim-mini,.sim-chart{background:var(--paper-2);box-shadow:inset 0 var(--line) 0 var(--paper-hi);border-radius:var(--r-win)}
+.sim-mini-t{color:var(--paper-dim);font-size:calc(13px*var(--ts))}
+.sim-legend{color:var(--paper-ink)}
+.sim-legend i,.sim-tip i{border-radius:2px;width:12px;height:12px;box-shadow:inset 0 0 0 1px var(--paper-ink)}
+.sim-tip{background:var(--paper);color:var(--paper-ink);border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);box-shadow:inset 0 calc(-1*var(--edge)) 0 var(--shade);font-size:calc(13px*var(--ts));font-variant-numeric:tabular-nums}
+.sim-tip-h{color:var(--paper-dim)}
+.sw-link{background:var(--link)}
+.sw-warn-ink{background:var(--warn-ink)}
+.sw-good{background:var(--good)}
+.sw-paper-dim{background:var(--paper-dim)}
+.sim-ev.closed::before{color:var(--bad)}
+.sim-ev.reopened::before{color:var(--good)}
+.sim-table th,.sim-table td{border-bottom:1px solid var(--paper-3)}
+.sim-table td:not(:first-child),.sim-table th:not(:first-child){text-align:right}
+
+/* ---------------------------------------------------------------- phone: 44px targets, stacked rows */
+html.gt-phone .hl .mbtn,html.gt-phone .tr-cell .mbtn,html.gt-phone .sim-ctrl .mbtn,html.gt-phone .sl-forget{min-height:44px}
+html.gt-phone .tr-sel,html.gt-phone .tr-num,html.gt-phone .sim-players select{min-height:44px}
+html.gt-phone .tr-del{min-width:44px}
+html.gt-phone .hl-hire{flex-wrap:wrap}
+html.gt-phone .hl-hire .mbtn{margin-left:auto}
+html.gt-phone .hl-worker{flex-wrap:wrap}
+html.gt-phone .hl-worker .hl-bar{flex:1 1 100px}
+html.gt-phone .hl-acts .mbtn{flex:1 1 auto}
+html.gt-phone .tr-form{display:grid;grid-template-columns:1fr 1fr}
+html.gt-phone .tr-form .tr-f:first-child{grid-column:1 / -1}
+html.gt-phone .tr-form .tr-num{width:100%}
+html.gt-phone .tr-line .tr-num{width:84px;flex:none}
+html.gt-phone .tr-lot{flex-wrap:wrap}
+.hl-stats>.hl-stat:only-child{grid-column:1 / -1}

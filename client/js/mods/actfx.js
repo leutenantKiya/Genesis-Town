@@ -31,7 +31,15 @@
   }
   function chop(tile) { swing('chop', tile, true); }
   function strike(tile, hit) { swing('strike', tile, hit); }
-  function float(tile, text, col) { texts.push({ tile: { x: tile.x, y: tile.y }, text: String(text), col: col || '#ffffff', t: 0 }); }
+  // callers pass hex colours; the three they use map to tokens (gold, dim, warning), anything else passes through
+  var TOKEN_OF = { '#ffd84a': 'gold', '#cfd8ff': 'hud-dim', '#ff8a7a': 'warn' };
+  function themed(col) {
+    var n = TOKEN_OF[String(col || '').toLowerCase()], T = window.GT_THEME;
+    if (!n || !T) return col;
+    if (n === 'warn') return T.get('warn-bg') || col; // the pale warning tone: --bad is too dark to read on grass
+    return T.get(n) || col;
+  }
+  function float(tile, text, col) { texts.push({ tile: { x: tile.x, y: tile.y }, text: String(text), col: themed(col || '#ffffff'), t: 0 }); }
   function flash(tile, col) { flashes.push({ tile: { x: tile.x, y: tile.y }, col: col || 'rgba(255,255,255,0.85)', t: 0 }); }
   function poof(tile) {
     var parts = [];
@@ -143,19 +151,15 @@
       p.parts.forEach(function (q) { ctx.fillStyle = 'rgba(230,230,236,' + (a * 0.9).toFixed(3) + ')'; var r = q.r * (1 + p.t * 2); ctx.fillRect(Math.round(cx + q.x - r / 2), Math.round(cy + q.y - r / 2), Math.ceil(r), Math.ceil(r)); });
     });
     // rising words and numbers, outlined so they read on any ground
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.font = '8px "Press Start 2P", monospace';
     texts.forEach(function (s) {
       var k = s.t / 1.1, x = Math.round(s.tile.x * T - camX + T / 2), y = Math.round(s.tile.y * T - camY - 2 - k * 10);
       ctx.globalAlpha = k < 0.7 ? 1 : Math.max(0, 1 - (k - 0.7) / 0.3);
-      ctx.fillStyle = '#000';
-      [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(function (o) { ctx.fillText(s.text, x + o[0], y + o[1]); });
-      ctx.fillStyle = s.col; ctx.fillText(s.text, x, y);
+      if (window.GT_THEME) GT_THEME.text(ctx, s.text, x, y, s.col, 8);
       ctx.globalAlpha = 1;
     });
     ctx.restore();
   }
 
   window.GT_FX = { chop: chop, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; } };
-  GT.register({ id: 'actfx', onFrame: onFrame, onDraw: onDraw });
+  GT.register({ id: 'actfx', onFrame: onFrame, init: function (g) { g.register({ id: 'actfx-draw', onDraw: onDraw }); } }); // drawn last, over signs and tags
 })();

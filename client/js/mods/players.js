@@ -73,34 +73,57 @@
       ents.push({ py: py, draw: function () { GT.drawChar(ctx, px - camX, py - camY, (o.look != null ? o.look : pal(o.nick || a)), o.dir, step); } });
     });
   }
+  // Name tags and bubbles are collected first, then placed so none sits on another: tags that share a row within a
+  // few pixels step up, and every bubble goes above its tag, the player's own on top.
+  function tone() { return window.GT_THEME ? GT_THEME : null; }
+  function fitBubble(ctx, k, now) {
+    var b = bubbles[k];
+    if (!b || now - b.t > 6000) return null;
+    ctx.font = '7px "Pixelify Sans", sans-serif';
+    var text = b.text;
+    if (ctx.measureText(text).width > 96) { while (text.length > 1 && ctx.measureText(text + '…').width > 96) text = text.slice(0, -1); text += '…'; }
+    return text;
+  }
+  function overlaps(a, b) { return Math.abs(a.x - b.x) < (a.w + b.w) / 2 + 1 && Math.abs(a.y - b.y) < 9; }
   function onDraw(ctx, camX, camY, T) {
-    if (!GT.scene || GT.scene.kind !== 'out') return;
-    var now = performance.now();
+    var TH = tone();
+    if (!TH || !GT.scene || GT.scene.kind !== 'out') return;
+    var now = performance.now(), W = ctx.canvas.width / (ctx.getTransform().a || 1);
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    // my own last line first, so other players' names stay on top of it
-    if (me) { var p = GT.player; bubble(ctx, key(me, meTag), Math.round(p.x * T - camX + T / 2), Math.round(p.y * T - camY - 4), now); }
+    var tags = [], bubs = [], placed = [];
     Object.keys(others).forEach(function (a) {
-      var o = others[a], x = Math.round(curX(o, now) * T - camX + T / 2), y = Math.round(curY(o, now) * T - camY - 3 - (o.npc && Math.round(curX(o, now)) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
-      ctx.font = '6px "Pixelify Sans", sans-serif';
-      var tag = o.nick + (!o.npc && o.title && o.title !== 'Pedagang baru' ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
-      var w = ctx.measureText(tag).width;
-      ctx.fillStyle = 'rgba(10,12,24,0.7)'; ctx.fillRect(Math.round(x - w / 2 - 2), y - 7, Math.ceil(w + 4), 8);
-      ctx.fillStyle = '#e8f0ff'; ctx.fillText(tag, x, y);
-      bubble(ctx, key(o.nick, o.tag), x, y - 9, now);
+      var o = others[a], cx = curX(o, now);
+      var x = Math.round(cx * T - camX + T / 2), y = Math.round(curY(o, now) * T - camY - 3 - (o.npc && Math.round(cx) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
+      ctx.font = '7px "Pixelify Sans", sans-serif';
+      var text = o.nick + (!o.npc && o.title && o.title !== 'Pedagang baru' ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
+      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.npc ? 'accent' : 'dark', k: key(o.nick, o.tag) });
+    });
+    tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
+    tags.forEach(function (t) {
+      for (var n = 0; n < 4; n++) { var hit = placed.some(function (p) { return overlaps(p, t); }); if (!hit) break; t.y -= 9; }
+      placed.push(t);
+      TH.label(ctx, t.text, t.x, t.y, { tone: t.tone });
+      var bt = fitBubble(ctx, t.k, now);
+      if (bt) bubs.push({ x: t.x, y: t.y - 10, text: bt, tag: t });
+    });
+    if (me) { var p = GT.player, mt = fitBubble(ctx, key(me, meTag), now); if (mt) bubs.push({ x: Math.round(p.x * T - camX + T / 2), y: Math.round(p.y * T - camY - 4), text: mt, mine: true }); }
+    bubs.sort(function (p, q) { return (p.mine ? 1 : 0) - (q.mine ? 1 : 0) || q.y - p.y; }); // my own bubble is drawn last, on top
+    var bp = placed.slice(); // bubbles also keep clear of every name tag
+    bubs.forEach(function (b) {
+      ctx.font = '7px "Pixelify Sans", sans-serif';
+      var w = Math.ceil(ctx.measureText(b.text).width) + 6;
+      b.w = w;
+      for (var n = 0; n < 6; n++) { if (!bp.some(function (q) { return q !== b.tag && Math.abs(q.x - b.x) < (q.w + w) / 2 + 1 && Math.abs(q.y - b.y) < 12; })) break; b.y -= 11; }
+      bp.push(b);
+      bubble(ctx, TH, b, W);
     });
     ctx.restore();
   }
-  function bubble(ctx, k, x, y, now) {
-    var b = bubbles[k];
-    if (!b || now - b.t > 6000) return;
-    var text = b.text.length > 34 ? b.text.slice(0, 33) + '…' : b.text;
-    ctx.font = '7px "Pixelify Sans", sans-serif';
-    var w = ctx.measureText(text).width;
-    var bx = Math.round(x - w / 2 - 3), by = y - 10;
-    ctx.fillStyle = '#f4f1dc'; ctx.fillRect(bx, by, Math.ceil(w + 6), 10);
-    ctx.fillRect(x - 1, by + 10, 2, 2);
-    ctx.fillStyle = '#1c1c2c'; ctx.fillText(text, x, by + 9);
+  function bubble(ctx, TH, b, W) {
+    var x = Math.max(Math.ceil(b.w / 2) + 1, Math.min(W - Math.ceil(b.w / 2) - 1, b.x)); // keep it on screen
+    TH.label(ctx, b.text, x, b.y, { tone: 'paper', size: 7 });
+    ctx.fillStyle = TH.get('paper-ink'); ctx.fillRect(Math.round(Math.max(x - 1, Math.min(b.x, x + 1))), b.y + 1, 2, 2); // the tail points at the speaker
   }
 
   /* ---------------------------------------------------------------- chat box */
@@ -256,5 +279,5 @@
 
   function refresh() { others = {}; curWorld = null; backoff = 0; tick(); } // after sailing: forget the old world's players at once
   window.GT_PLAYERS = { addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
-  GT.register({ id: 'players', init: init, onEntities: onEntities, onDraw: onDraw, onKey: onKey });
+  GT.register({ id: 'players', init: function (g) { init(g); g.register({ id: 'players-labels', onDraw: onDraw }); }, onEntities: onEntities, onKey: onKey }); // tags and bubbles register last from init, so they draw over every other mod's signs
 })();

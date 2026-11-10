@@ -717,44 +717,6 @@ async function replyToNpc(tn, fromName, msg, signal){
 }
 
 
-/* ------------------------------------------------------------------ UI: CSS */
-function injectCss(){
-  if (document.getElementById('soul-css')) return;
-  var st = document.createElement('style'); st.id = 'soul-css';
-  st.textContent = [
-    '.sl-head{margin:0 0 6px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}',
-    '.sl-tag{padding:1px 6px;border-radius:3px;background:var(--paper-ink);color:var(--paper)}',
-    '.sl-log{max-height:36vh;min-height:96px;overflow:auto;overscroll-behavior:contain;border:2px solid var(--paper-ink);border-radius:4px;background:#fff;padding:6px;margin-bottom:6px}',
-    '.sl-m{margin:0 0 6px;padding:4px 6px;border-radius:4px;line-height:1.6;overflow-wrap:anywhere}',
-    '.sl-m.me{background:#dfe8c2;margin-left:14%}',
-    '.sl-m.npc{background:#e3e9f7;margin-right:14%}',
-    '.sl-m.sys{color:#4a4d75;border-left:3px solid var(--paper-edge);border-radius:0;padding-left:6px}',
-    '.sl-st{min-height:16px;margin-bottom:6px;color:#4a4d75}',
-    '.sl-f{display:block;margin:0 0 10px}',
-    '.sl-f>span{display:block;margin-bottom:4px}',
-    '.sl-f input[type=password],.sl-f input[type=text],.sl-in{width:100%;font:inherit;font-size:10px;padding:8px;border:2px solid var(--paper-ink);border-radius:4px;background:#fff;color:var(--paper-ink);box-sizing:border-box}',
-    '.sl-in:focus-visible,.sl-f input:focus-visible{outline:3px solid #2d7ad6;outline-offset:2px}',
-    '.sl-err{min-height:14px;color:var(--bad);margin:0 0 6px}',
-    '.sl-chk{display:flex;gap:8px;align-items:flex-start;margin:0 0 8px;cursor:pointer}',
-    '.sl-chk input{margin-top:3px;flex:none}',
-    '.sl-sub{display:block;color:#4a4d75;margin-top:2px}',
-    '.sl-dev{display:inline-block;margin-right:6px;padding:0 5px;border-radius:3px;background:#b3261e;color:#fff;font-size:8px;line-height:1.5;vertical-align:middle}',
-    '.sl-ok{color:var(--good)}',
-    '.sl-wal{margin:0 0 6px;color:#4a4d75;overflow-wrap:anywhere}',
-    '.sl-plan{margin-bottom:6px}',
-    '.sl-plan-t{margin-bottom:2px}',
-    '.sl-step{display:flex;gap:6px;line-height:1.6;overflow-wrap:anywhere}',
-    '.sl-g{flex:none;width:1.2em;text-align:center}',
-    '.sl-step[data-state=ok] .sl-g{color:var(--good)}',
-    '.sl-step[data-state=fail] .sl-g{color:var(--bad)}',
-    '.sl-step[data-state=run]{font-weight:bold}',
-    '.sl-note{color:#4a4d75;font-weight:normal}',
-    '.sl-r2{padding-top:0;border-top:0;flex-wrap:wrap;gap:6px}',
-    '.sl-rel{margin:0 0 8px;overflow-wrap:anywhere}'
-  ].join('\n');
-  document.head.appendChild(st);
-}
-
 /* ------------------------------------------------------------------ UI: chat */
 var GLYPH = { wait:'○', run:'…', ok:'✓', fail:'✗', cancel:'–' };
 function bagText(npc){
@@ -765,7 +727,6 @@ function openChat(npc){
   if (!npc) return null;
   var soul = ensureSoul(npc), key = soul.key;
   if (chats[key] && chats[key].isOpen()) return chats[key];
-  injectCss();
   var wrap = el('div'), head = el('div', 'sl-head'), tagH = el('span'), tagP = el('span', 'sl-tag');
   head.appendChild(tagH); head.appendChild(tagP);
   var wal = el('div', 'sl-wal'); wal.setAttribute('data-wallet', '1');
@@ -800,7 +761,7 @@ function openChat(npc){
       var row = el('div', 'sl-step'), g = el('span', 'sl-g', GLYPH[(states && states[i] && states[i].state) || 'wait']), t = el('span', null, lb);
       row.setAttribute('data-state', (states && states[i] && states[i].state) || 'wait');
       row.appendChild(g); row.appendChild(t);
-      if (states && states[i] && states[i].note){ row.appendChild(el('span', 'sl-note', ' — ' + states[i].note)); }
+      if (states && states[i] && states[i].note){ row.appendChild(el('span', 'sl-note', ': ' + states[i].note)); }
       planBox.appendChild(row); return row;
     });
     log.appendChild(planBox); log.scrollTop = log.scrollHeight;
@@ -810,7 +771,7 @@ function openChat(npc){
     row.setAttribute('data-state', state);
     row.firstChild.textContent = GLYPH[state] || '○';
     var old = row.querySelector('.sl-note'); if (old) old.remove();
-    if (note) row.appendChild(el('span', 'sl-note', ' — ' + note));
+    if (note) row.appendChild(el('span', 'sl-note', ': ' + note));
     log.scrollTop = log.scrollHeight;
   }
   function onEvt(ev){
@@ -896,7 +857,6 @@ function openChat(npc){
 /* ------------------------------------------------------------------ UI: pengaturan otak per NPC */
 function claudePresent(){ try { return !!(window.claude && typeof window.claude.use === 'function'); } catch(e){ return false; } }
 function openConfig(key, name, onDone){
-  injectCss();
   var cur = souls[key] ? souls[key].provider : 'local';
   var body = el('div');
   body.appendChild(el('p', null, 'Pilih otak untuk ' + name + ':'));
@@ -908,9 +868,9 @@ function openConfig(key, name, onDone){
     lab.appendChild(r); lab.appendChild(el('span', null, p[1])); seg.appendChild(lab); radios[p[0]] = r;
   });
   body.appendChild(seg);
-  var info = el('p', 'mnote'); info.style.marginTop = '8px'; body.appendChild(info);
+  var info = el('p', 'mnote sl-info'); body.appendChild(info);
 
-  var cbox = el('div'); cbox.style.display = 'none';
+  var cbox = el('div'); cbox.hidden = true;
   function field(label, type, val, ph){
     var l = el('label', 'sl-f'), s = el('span', null, label), i = el('input'); i.type = type; i.value = val || ''; if (ph) i.placeholder = ph;
     i.autocomplete = type === 'password' ? 'new-password' : 'off'; i.spellcheck = false; i.setAttribute('autocapitalize', 'off');
@@ -924,7 +884,7 @@ function openConfig(key, name, onDone){
   cbox.appendChild(chkL);
   cbox.appendChild(el('p', 'mnote', 'Kunci hanya dikirim ke endpoint di atas. Tanpa centang, kunci hilang saat halaman ditutup.'));
   cbox.appendChild(el('p', 'mnote', 'Di dalam claude.ai, koneksi ke situs lain diblokir; mode ini jalan saat file dibuka di luar claude.ai.'));
-  var forget = el('button', 'mbtn', 'Lupakan kunci'); forget.type = 'button'; forget.style.marginBottom = '8px';
+  var forget = el('button', 'mbtn', 'Lupakan kunci'); forget.type = 'button'; forget.classList.add('sl-forget');
   forget.addEventListener('click', function(){ custom.key = ''; fKey.value = ''; fKey.placeholder = 'sk-...'; persist(); errEl.textContent = ''; GT.toast('Kunci dilupakan.'); });
   cbox.appendChild(forget);
   body.appendChild(cbox);
@@ -934,7 +894,7 @@ function openConfig(key, name, onDone){
     var v = cur;
     PROVIDERS.forEach(function(p){ if (radios[p].checked) v = p; });
     cur = v;
-    cbox.style.display = v === 'custom' ? '' : 'none';
+    cbox.hidden = v !== 'custom';
     if (v === 'local') info.textContent = 'Parser kata kunci Indonesia, bisa beberapa langkah: "ke mart lalu beli roti dan susu terus kasih ke aku", ikut aku, berhenti, main dadu, tunggu 30 menit, ajari X: ..., lakukan X. Selalu tersedia. Awali pesan dengan # untuk perintah paksa (mode developer).';
     else if (v === 'claude') info.textContent = claudePresent() ? 'Memakai Claude bawaan artifact. Izin diminta saat kamu menekan Kirim pertama kali.' : 'Tidak tersedia di tampilan ini. Pesan akan dijawab otak lokal.';
     else info.textContent = 'Endpoint OpenAI-compatible (Chat Completions). Bila gagal, giliran itu dijawab otak lokal.';
@@ -998,7 +958,6 @@ function openGiveCoins(k, nm, after){
 }
 function openPanel(){
   if (GT.isUiOpen()) return null;
-  injectCss();
   var body = el('div'), list = el('div'), skillBox = el('div');
   body.appendChild(el('p', 'mnote', 'Beri jiwa ke NPC, lalu hadapi dan tekan E untuk kirim pesan. Daftar: Ibu dan NPC yang pernah kamu ajak bicara.'));
   body.appendChild(list); body.appendChild(skillBox);
@@ -1176,7 +1135,6 @@ GT.register({
   id:'soul',
   init:function(){
     loadStore();
-    injectCss();
     GT.addHudButton({ id:'btnJiwa', label:'Jiwa', key:'J', onClick:openPanel });
     setInterval(postTick, DELAY.postTick);
     GT.agent.on(onAgentEvent);

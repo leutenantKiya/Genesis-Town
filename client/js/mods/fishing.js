@@ -89,8 +89,9 @@
     }
     if (F.phase === 'bite') { // "!" over the player
       var px = GT.player.x * T - camX + T / 2, py = GT.player.y * T - camY - 7 + Math.round(Math.sin(t * 20));
-      ctx.fillStyle = '#000'; ctx.fillRect(px - 2, py - 1, 4, 9);
-      ctx.fillStyle = '#ffd84a'; ctx.fillRect(px - 1, py, 2, 5); ctx.fillRect(px - 1, py + 6, 2, 1);
+      var TH = window.GT_THEME;
+      ctx.fillStyle = (TH && TH.get('outline')) || '#0b0c16'; ctx.fillRect(px - 2, py - 1, 4, 9);
+      ctx.fillStyle = (TH && TH.get('gold')) || '#f2c94c'; ctx.fillRect(px - 1, py, 2, 5); ctx.fillRect(px - 1, py + 6, 2, 1);
     }
     ctx.restore();
   }

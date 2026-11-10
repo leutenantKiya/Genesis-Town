@@ -1,52 +1,64 @@
-/* chain.css - banner and Riwayat styles for the NEAR layer (chain.js) */
-.chain-banner{margin:0 2px 8px;padding:5px 8px;border-radius:3px;font-size:calc(14px*var(--ts));line-height:1.5;overflow-wrap:anywhere;box-shadow:0 0 0 2px #000}
-.chain-banner.net{background:#1f4d36;color:#d9ffe6}
-.chain-banner.mock{background:#5a4a14;color:#fff3c4}
-.chain-banner.off{background:#5a1f2a;color:#ffe0e6}
-.chain-dim{color:#6b6e8f;font-size:calc(14px*var(--ts))}
-.chain-link{color:#2d5fb3;font-size:calc(14px*var(--ts));white-space:nowrap}
-.chain-link:focus-visible{outline:3px solid #2d7ad6;outline-offset:2px}
-.chain-st{font-size:calc(14px*var(--ts));white-space:nowrap;padding:1px 4px;border-radius:3px;background:#e4e6ee}
-.chain-st.ok{background:#cdeccf}
-.chain-st.failed{background:#f6c9cf}
-.chain-st.pending{background:#f6ecc0}
-@media (prefers-reduced-motion:reduce){.chain-banner{transition:none}}
-.chain-hud .val{display:flex;align-items:center;gap:6px}
-.chain-energy{display:inline-block;width:46px;height:7px;background:#15162a;box-shadow:0 0 0 1px #000;border-radius:2px;overflow:hidden}
-.chain-energy i{display:block;height:100%;background:linear-gradient(90deg,#f2c94c,#b8d94a)}
-.chain-reason{font-size:calc(14px*var(--ts));color:#4a4d75;line-height:1.5;margin-top:2px}
-.chain-item .mbtn{min-width:56px}
-.chain-today{color:#9c6a14}
-.chain-closed{color:#8a2f3a}
-.chain-st.offchain{background:#e9e2f6}
+/* chain.css - banner, Riwayat, item cards, hotbar, goals, fishing, title card, fight bar and chat. Built from theme.css tokens. */
 
-.chain-h{margin:10px 0 4px;font-size:calc(16px*var(--ts));color:#b4572e}
+/* server banner: a status chip with a square dot, above the HUD */
+.chain-banner{margin:0 2px 8px;padding:3px 8px;border-radius:var(--r-ctl);font-size:calc(14px*var(--ts));line-height:1.5;overflow-wrap:anywhere;border:var(--line) solid var(--outline)}
+.chain-banner.net{background:var(--good);color:var(--paper)}
+.chain-banner.mock{background:var(--gold);color:var(--paper-ink)}
+.chain-banner.off{background:var(--bad);color:var(--paper)}
+.chain-banner[hidden]{display:none!important}
+.chain-dim{color:var(--paper-dim);font-size:calc(14px*var(--ts))}
+.chain-link{color:var(--link);font-size:calc(14px*var(--ts));white-space:nowrap;text-decoration:underline}
+.chain-link:focus-visible{outline:3px solid var(--paper-ink);outline-offset:2px}
+
+/* status chip on paper: a 6px square dot plus words, never colour alone */
+.chain-st{display:inline-flex;align-items:center;gap:5px;font-size:calc(12px*var(--ts));line-height:1.5;white-space:nowrap;padding:0 6px;border-radius:var(--r-ctl);background:var(--paper-3);color:var(--paper-ink)}
+.chain-st::before{content:"";flex:none;width:6px;height:6px;background:var(--paper-dim)}
+.chain-st.ok::before{background:var(--good)}
+.chain-st.failed::before{background:var(--bad)}
+.chain-st.pending::before{background:var(--gold);box-shadow:0 0 0 1px var(--paper-ink)}
+.chain-st.offchain::before{background:var(--paper-dim)}
+
+/* energy in the HUD: a flat fill, no gradient */
+.chain-hud .val{display:flex;align-items:center;gap:6px}
+.chain-energy{display:inline-block;width:46px;height:8px;background:var(--hud);box-shadow:0 0 0 1px var(--outline);border-radius:var(--r-ctl);overflow:hidden;flex:none}
+.chain-energy i{display:block;height:100%;background:var(--energy)}
+.chain-reason{font-size:calc(14px*var(--ts));color:var(--paper-dim);line-height:1.5;margin-top:2px}
+.chain-item .mbtn{min-width:56px}
+.chain-today{color:var(--warn-ink)}
+.chain-closed{color:var(--bad)}
+.chain-done{color:var(--good)}
+.chain-h{margin:10px 0 4px;font-size:calc(16px*var(--ts));font-weight:600;color:var(--paper-ink)}
 .chain-field{display:flex;align-items:center;gap:8px;margin:6px 0}
 .chain-field input{width:110px}
+.chain-field input[type=checkbox]{flex:none;width:18px;height:18px;min-height:0;margin:0;accent-color:var(--paper-ink)}
 .chain-talk{max-height:220px;overflow-y:auto;margin-bottom:8px}
 .chain-talk p{margin:4px 0}
-.chain-talk p.me{color:#6b6e8f}
+.chain-talk p.me{color:var(--paper-dim)}
 .chain-talk input,.mbody input[type=text]{width:100%;box-sizing:border-box}
 
-/* Phones (mobile pass, M4): price lines inside an item wrap instead of running under the buttons, and buttons in game
-   windows are big enough to tap. */
+/* Phones: price lines wrap instead of running under the buttons, and every control is a 44px target */
 .mrow .grow .num{white-space:normal}
 @media (pointer:coarse), (max-width:600px){
-  .mbody .mbtn, .mfoot .mbtn, .dsec .dbtns .mbtn{min-height:40px;padding:8px 10px}
-  .mx{min-width:40px;min-height:40px}
+  .mbody .mbtn, .mfoot .mbtn, .dsec .dbtns .mbtn, .mrow .mbtn{min-height:44px;padding:8px 12px}
+  .mx{width:44px;height:44px}
+  .mhead{padding-right:0}
   .chain-item{flex-wrap:wrap}
   .chain-item .grow{flex-basis:100%}
   .chain-item .grow + .mbtn{margin-left:auto}
-  .chain-field input{min-height:36px;font-size:16px}
-  .chain-talk input, .mbody input[type=text]{min-height:40px;font-size:16px}
+  .chain-field input{min-height:44px;font-size:16px}
+  .chain-talk input, .mbody input[type=text]{min-height:44px;font-size:16px}
+  .mseg span{min-height:44px;display:flex;align-items:center;justify-content:center}
 }
 
-/* Langkah pertama: the newcomer's next step, top-left of the game view, on paper like the dialogs */
-.gt-goals{position:absolute;left:8px;top:8px;max-width:min(300px,calc(100% - 16px));z-index:3;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:5px;padding:7px 9px;font-size:calc(14px*var(--ts));line-height:1.6;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+/* Langkah pertama: the newcomer's next step, top-left of the game view, a paper tray */
+.gt-goals{position:absolute;left:8px;top:8px;max-width:min(300px,calc(100% - 16px));z-index:3;background:var(--paper);color:var(--paper-ink);border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);padding:7px 10px 9px;font-size:calc(14px*var(--ts));line-height:1.6;
+  border-top:8px solid var(--season);box-shadow:inset 0 calc(-1*var(--edge)) 0 var(--shade)}
 .gt-goals p{margin:4px 0 0}
 .gt-goals-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.gt-goals-head b{font-weight:400;color:#2f6b3a}
-.gt-goals-x{border:0;background:transparent;color:var(--paper-edge);font-size:calc(14px*var(--ts));padding:4px 2px;min-height:24px}
+.gt-goals-head b{font-weight:600;color:var(--paper-ink)}
+.gt-goals-x{border:0;background:transparent;color:var(--paper-dim);font-size:calc(14px*var(--ts));padding:4px 6px;min-height:28px;border-radius:var(--r-ctl)}
+.gt-goals-x:hover{background:var(--paper-3);color:var(--paper-ink)}
+.gt-goals-x:focus-visible{outline:3px solid var(--paper-ink);outline-offset:1px}
 
 /* Weather mood on the game view (outdoors only; set by chain.js from the day's shared weather) */
 #cv{transition:filter .8s}
@@ -56,157 +68,168 @@ html.gt-w-berawan #cv{filter:saturate(.86) brightness(.95)}
 html.gt-w-hujan #cv{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
 html.gt-reduced-motion #cv{transition:none}
 
-/* Hotbar: item slots along the bottom of the game view (js/mods/hotbar.js) */
-.gt-hotbar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:3;display:flex;gap:4px;padding:4px;background:rgba(14,15,30,.82);border-radius:6px;box-shadow:0 0 0 2px #000;line-height:1}
+/* Hotbar: item slots along the bottom of the game view (js/mods/hotbar.js). Slots are HUD cells; the held one is lifted and outlined in the accent. */
+.gt-hotbar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:3;display:flex;gap:4px;padding:4px;background:var(--chip);border:var(--line) solid var(--outline);border-radius:var(--r-win);line-height:1}
 #dlg.on ~ .gt-hotbar,#map.on ~ .gt-hotbar,#dlg.on ~ .gt-slotpop,#map.on ~ .gt-slotpop{display:none!important}
-.gt-slot{position:relative;width:40px;height:40px;padding:0;border:0;border-radius:4px;background:#2a2c48;box-shadow:inset 0 -3px 0 rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:var(--ink);font-family:var(--font)}
+.gt-slot{position:relative;width:40px;height:40px;padding:0;border:var(--line) solid var(--outline);border-radius:var(--r-ctl);background:var(--hud-2);
+  box-shadow:inset 0 1px 0 var(--hud-hi),inset 0 calc(-1*var(--edge)) 0 var(--shade);display:flex;align-items:center;justify-content:center;color:var(--hud-ink);font-family:var(--font);
+  transition:background-color var(--t-press) var(--ease),transform var(--t-press) var(--ease)}
 .gt-slot canvas{image-rendering:pixelated;width:24px;height:24px}
-.gt-slot:hover{background:#3a3d66}
-.gt-slot.sel{box-shadow:0 0 0 2px var(--gold),inset 0 -3px 0 rgba(0,0,0,.35);background:#3a3d66}
-.gt-slot.menu{outline:2px dashed var(--paper);outline-offset:1px}
+.gt-slot:hover{background:var(--hud-3)}
+.gt-slot:active{transform:translateY(2px)}
+.gt-slot:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.gt-slot.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),inset 0 1px 0 var(--hud-hi),inset 0 calc(-1*var(--edge)) 0 var(--shade);background:var(--hud-3);transform:translateY(-2px)}
+.gt-slot.menu{outline:3px solid var(--hud-ink);outline-offset:1px}
 .gt-slot.empty canvas{opacity:.35}
-.gt-slot-n{position:absolute;right:3px;bottom:3px;font-size:calc(14px*var(--ts));color:#fff;text-shadow:1px 1px 0 #000}
-.gt-slot.empty .gt-slot-n{color:var(--dim)}
-.gt-slot-k{position:absolute;left:3px;top:3px;font-size:calc(11px*var(--ts));color:var(--dim)}
-.gt-slot.today::after{content:"";position:absolute;right:3px;top:3px;width:4px;height:4px;border-radius:50%;background:var(--gold)}
-.gt-slot-bag{width:auto;padding:0 9px;font-size:calc(14px*var(--ts));background:var(--btn);color:#fff}
-.gt-slot-bag:hover{background:var(--btn-hi)}
-.gt-slotpop{position:absolute;bottom:62px;z-index:4;width:224px;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);border-radius:5px;padding:8px 10px;font-size:calc(14px*var(--ts));line-height:1.6;box-shadow:0 2px 0 rgba(0,0,0,.35)}
-.gt-slotpop b{font-weight:400}
+.gt-slot-n{position:absolute;right:2px;bottom:2px;padding:0 3px;border-radius:2px;background:var(--hud);font-size:calc(12px*var(--ts));line-height:1.3;color:var(--hud-ink);font-variant-numeric:tabular-nums}
+.gt-slot.empty .gt-slot-n{color:var(--hud-dim)}
+.gt-slot-k{position:absolute;left:3px;top:2px;font-size:12px;line-height:1.2;color:var(--hud-dim)}
+.gt-slot.today::after{content:"";position:absolute;right:3px;top:3px;width:5px;height:5px;background:var(--gold)}
+.gt-slot-bag{width:auto;padding:0 10px;font-size:calc(14px*var(--ts));background:var(--accent);color:var(--accent-ink)}
+.gt-slot-bag:hover{background:var(--accent-hi)}
+.gt-slotpop{position:absolute;bottom:62px;z-index:4;width:224px;background:var(--paper);color:var(--paper-ink);border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);padding:8px 10px;font-size:calc(14px*var(--ts));line-height:1.6;
+  box-shadow:inset 0 calc(-1*var(--edge)) 0 var(--shade)}
+.gt-slotpop b{font-weight:600}
 .gt-slotpop p{margin:4px 0 6px}
 .gt-slotpop-acts{display:flex;flex-wrap:wrap;gap:6px}
 .gt-slotpop-acts .mbtn{min-height:32px;font-size:calc(14px*var(--ts))}
 html.gt-has-hotbar #gt-hint{bottom:60px}
-html.gt-phone .gt-slot{width:36px;height:40px}
+html.gt-phone .gt-slot{width:36px;height:44px}
 html.gt-phone .gt-slot-k{display:none}
 @media (max-width:360px){html.gt-phone .gt-slot{width:32px}html.gt-phone .gt-hotbar{gap:3px;padding:3px}}
 
-.chain-done{color:#2f6b3a}
-
 .gt-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.gt-black-row{background:#24202e;color:#e8e2f4;border-radius:4px;padding-inline:8px;border-bottom-color:#3a3448}
-.gt-black-row .chain-dim{color:#a99fbf}
+/* Pasar Gelap rows: a dark cell, the black market's own tone */
+.gt-black-row{background:var(--hud-2);color:var(--hud-ink);box-shadow:inset 0 1px 0 var(--hud-hi)}
+.gt-black-row .chain-dim{color:var(--hud-dim)}
 
 /* what is in your hand, above the hotbar */
-.gt-held{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);z-index:3;background:rgba(14,15,30,.78);color:var(--ink);font-size:calc(12px*var(--ts));line-height:1.4;padding:3px 8px;border-radius:3px;white-space:nowrap;pointer-events:none}
+.gt-held{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);z-index:3;background:var(--chip);color:var(--hud-ink);font-size:calc(12px*var(--ts));line-height:1.4;padding:3px 8px;border-radius:var(--r-ctl);white-space:nowrap;pointer-events:none}
 #dlg.on ~ .gt-held,#map.on ~ .gt-held{display:none!important}
 html.gt-has-hotbar #gt-hint{bottom:78px}
 .gt-slotpop{bottom:78px}
 
-/* item cards and grids: shop, bag, market (icons shared with the hotbar) */
+/* item cards and grids: shop, bag, market (icons shared with the hotbar). A card is a cell with the outline and a bottom edge. */
 .gt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin:4px 0 8px}
-.gt-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 7px;border:0;border-radius:5px;background:#ebe6cc;color:var(--paper-ink);font-family:var(--font);font-size:calc(12px*var(--ts));line-height:1.35;cursor:pointer;box-shadow:inset 0 -3px 0 rgba(0,0,0,.12);min-height:72px}
-.gt-card:hover{background:#e0d9b8}
-.gt-card:active{transform:translateY(1px)}
-.gt-card:focus-visible{outline:2px solid var(--paper-ink);outline-offset:1px}
+.gt-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 8px;border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);background:var(--paper-2);color:var(--paper-ink);font-family:var(--font);font-size:calc(12px*var(--ts));line-height:1.35;cursor:pointer;
+  box-shadow:inset 0 1px 0 var(--paper-hi),inset 0 calc(-1*var(--edge)) 0 var(--shade);min-height:72px;
+  transition:background-color var(--t-press) var(--ease),transform var(--t-press) var(--ease),box-shadow var(--t-press) var(--ease)}
+.gt-card:hover{background:var(--paper-3)}
+.gt-card:active{transform:translateY(2px);box-shadow:inset 0 1px 0 var(--paper-hi)}
 .gt-card canvas{width:32px;height:32px;image-rendering:pixelated}
 .gt-card-name{font-size:calc(14px*var(--ts))}
-.gt-card-l1{color:#2f6b3a}
-.gt-card-l2{color:var(--paper-edge)}
-.gt-card-n{position:absolute;right:5px;top:4px;font-size:calc(14px*var(--ts));color:var(--paper-ink)}
-.gt-card.accent{background:#dfe9c6}
-.gt-card.sel{box-shadow:0 0 0 2px var(--paper-ink)}
+.gt-card-l1{color:var(--good);font-variant-numeric:tabular-nums}
+.gt-card-l2{color:var(--paper-dim);font-variant-numeric:tabular-nums}
+.gt-card-n{position:absolute;right:5px;top:4px;font-size:calc(14px*var(--ts));color:var(--paper-ink);font-variant-numeric:tabular-nums}
+.gt-card.accent{box-shadow:inset 0 5px 0 var(--accent),inset 0 calc(-1*var(--edge)) 0 var(--shade)}
+.gt-card.sel{background:var(--paper-3);box-shadow:0 0 0 1px var(--paper-ink),inset 0 1px 0 var(--paper-hi),inset 0 calc(-1*var(--edge)) 0 var(--shade)}
 .gt-card.off{opacity:.45}
-.gt-card.off .gt-card-l1{color:var(--paper-edge)}
-.gt-card-coin{display:inline-block;width:24px;height:24px;margin:4px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px #000}
-.gt-shop-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;font-size:calc(14px*var(--ts))}
-.gt-shop-why{min-height:2.6em;margin:4px 0 8px;padding:6px 8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:#ebe6cc;border-radius:4px;font-size:calc(14px*var(--ts));line-height:1.5}
+.gt-card.off .gt-card-l1{color:var(--paper-dim)}
+.gt-card-coin{display:inline-block;width:24px;height:24px;margin:4px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px var(--outline),inset -3px -3px 0 var(--coin-edge)}
+.gt-shop-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;font-size:calc(14px*var(--ts));font-variant-numeric:tabular-nums}
+.gt-shop-why{min-height:2.6em;margin:4px 0 8px;padding:6px 8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:var(--paper-2);border-radius:var(--r-ctl);box-shadow:inset 0 1px 0 var(--paper-hi);font-size:calc(14px*var(--ts));line-height:1.5}
+.gt-shop-why p{margin:0}
 html.gt-phone .gt-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-.gt-detail{margin:2px 0 8px;padding:8px;background:#ebe6cc;border-radius:5px;font-size:calc(14px*var(--ts));line-height:1.6}
+.gt-detail{margin:2px 0 8px;padding:8px;background:var(--paper-2);border-radius:var(--r-win);box-shadow:inset 0 1px 0 var(--paper-hi);font-size:calc(14px*var(--ts));line-height:1.6}
 .gt-detail-top{display:flex;gap:10px;align-items:flex-start}
 .gt-detail-top canvas{width:40px;height:40px;image-rendering:pixelated;flex:none}
-.gt-detail-name{font-size:calc(16px*var(--ts));margin-bottom:2px}
+.gt-detail-name{font-size:calc(16px*var(--ts));font-weight:600;margin-bottom:2px}
 .gt-detail-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.gt-group{display:flex;gap:8px;align-items:center;margin:10px 0 2px;padding:6px 8px;background:#ebe6cc;border-radius:5px;font-size:calc(14px*var(--ts));line-height:1.5}
+.gt-group{display:flex;gap:8px;align-items:center;margin:10px 0 2px;padding:6px 8px;background:var(--paper-2);border-radius:var(--r-ctl);box-shadow:inset 0 1px 0 var(--paper-hi);font-size:calc(14px*var(--ts));line-height:1.5}
 .gt-group canvas{width:24px;height:24px;image-rendering:pixelated;flex:none}
-.gt-warn{margin:4px 0;padding:6px 8px;background:#f3d6c8;color:#7a2a14;border-radius:4px;font-size:calc(14px*var(--ts));line-height:1.5}
-.gt-shop-why p{margin:0}
-.chain-banner[hidden]{display:none!important}
-.gt-details{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:calc(14px*var(--ts));cursor:pointer}
-.gt-hist-day{margin:10px 0 4px;font-size:calc(14px*var(--ts));color:var(--paper-edge)}
-.gt-hist-row{display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#ebe6cc;border-radius:5px;font-size:calc(14px*var(--ts));line-height:1.5}
-.gt-hist-row.bad{background:#f3d6c8}
+.gt-warn{margin:4px 0;padding:6px 8px;background:var(--warn-bg);color:var(--warn-ink);border-radius:var(--r-ctl);font-size:calc(14px*var(--ts));line-height:1.5}
+.gt-notice{margin:4px 0 8px;padding:7px 9px;background:var(--paper-2);color:var(--paper-ink);border:var(--line) solid var(--good);border-radius:var(--r-ctl);font-size:calc(14px*var(--ts));line-height:1.6}
+.gt-details{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin-top:8px;margin-bottom:6px;font-size:calc(14px*var(--ts));cursor:pointer}
+.gt-hist-day{margin:10px 0 4px;font-size:calc(14px*var(--ts));color:var(--paper-dim)}
+.gt-hist-row{display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:6px;background:var(--paper-2);border-radius:var(--r-ctl);box-shadow:inset 0 1px 0 var(--paper-hi);font-size:calc(14px*var(--ts));line-height:1.5}
+.gt-hist-row.bad{background:var(--warn-bg);color:var(--warn-ink)}
 .gt-hist-ic{flex:none;width:24px;display:flex;justify-content:center}
 .gt-hist-ic canvas{width:20px;height:20px;image-rendering:pixelated}
-.gt-hist-ic .gt-card-coin{width:14px;height:14px;margin:3px}
+.gt-hist-ic .gt-card-coin{width:14px;height:14px;margin:3px;box-shadow:0 0 0 1px var(--outline),inset -2px -2px 0 var(--coin-edge)}
 .gt-hist-t{font-size:calc(15px*var(--ts))}
-.gt-hist-s{color:var(--paper-edge)}
+.gt-hist-s{color:var(--paper-dim);font-variant-numeric:tabular-nums}
+.gt-pcard-title{margin:0 0 6px;font-size:calc(16px*var(--ts));font-weight:600;color:var(--paper-ink)}
 
-/* Fishing (js/mods/fishing.js): while the line is out the screen is clean, only the reel bar and one button */
+/* Fishing (js/mods/fishing.js): while the line is out the screen is clean, only the reel bar and one button.
+   Opaque HUD tray and an opaque button (the only glass in the game is on the phone controls). */
 html.gt-fishing #hud, html.gt-fishing .chain-banner, html.gt-fishing .gt-hotbar, html.gt-fishing .gt-held,
 html.gt-fishing .gt-goals, html.gt-fishing #gt-hint, html.gt-fishing .gt-slotpop, html.gt-fishing .gt-tabbar,
 html.gt-fishing #pad, html.gt-fishing #acts, html.gt-fishing #dlg{visibility:hidden !important}
 .gt-fish{position:absolute;inset:0;pointer-events:none;z-index:6;line-height:1.2}
 .gt-fish[hidden]{display:none}
-.gt-fish-meter{position:absolute;right:6%;top:12%;bottom:22%;width:46px;display:flex;gap:6px;padding:6px;border-radius:10px;
-  background:rgba(20,22,42,.55);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.gt-fish-meter{position:absolute;right:6%;top:12%;bottom:22%;width:46px;display:flex;gap:6px;padding:6px;border-radius:var(--r-win);background:var(--hud);border:var(--line) solid var(--outline);box-shadow:inset 0 calc(-1*var(--edge)) 0 var(--shade)}
 .gt-fish-meter[hidden]{display:none}
-.gt-fish-track{position:relative;flex:1;border-radius:6px;background:linear-gradient(#2a6fa8,#17507e);overflow:hidden}
-.gt-fish-zone{position:absolute;left:0;right:0;border-radius:4px;background:rgba(124,194,62,.55);box-shadow:inset 0 0 0 2px #a8d84a}
-.gt-fish-zone.on{background:rgba(168,216,74,.8)}
-.gt-fish-fish{position:absolute;left:50%;width:14px;height:12px;margin-left:-7px;border-radius:50% 40% 40% 50%;background:#f0a040;box-shadow:0 0 0 2px #3a2414}
-.gt-fish-fish::after{content:"";position:absolute;right:-5px;top:3px;border:3px solid transparent;border-left:5px solid #f0a040}
-.gt-fish-prog{position:relative;width:8px;border-radius:4px;background:rgba(0,0,0,.45);overflow:hidden}
-.gt-fish-fill{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#ffd84a,#e8a13c)}
+.gt-fish-track{position:relative;flex:1;border-radius:var(--r-ctl);background:var(--water);overflow:hidden}
+.gt-fish-zone{position:absolute;left:0;right:0;border-radius:var(--r-ctl);background:var(--energy);opacity:.6;box-shadow:inset 0 0 0 2px var(--energy)}
+.gt-fish-zone.on{opacity:1}
+.gt-fish-fish{position:absolute;left:50%;width:14px;height:12px;margin-left:-7px;border-radius:50% 40% 40% 50%;background:var(--gold);box-shadow:0 0 0 2px var(--outline)}
+.gt-fish-fish::after{content:"";position:absolute;right:-5px;top:3px;border:3px solid transparent;border-left:5px solid var(--gold)}
+.gt-fish-prog{position:relative;width:8px;border-radius:var(--r-ctl);background:var(--hud-2);overflow:hidden}
+.gt-fish-fill{position:absolute;left:0;right:0;bottom:0;background:var(--gold)}
 .gt-fish-btn{pointer-events:auto;position:absolute;left:50%;bottom:6%;transform:translateX(-50%);min-width:132px;min-height:52px;padding:10px 18px;
-  border:0;border-radius:26px;font-family:var(--font);font-size:calc(18px*var(--ts));color:#fff;text-shadow:0 1px 0 #000;cursor:pointer;touch-action:none;
-  -webkit-user-select:none;user-select:none;background:rgba(255,255,255,.16);-webkit-backdrop-filter:blur(14px) saturate(1.5);backdrop-filter:blur(14px) saturate(1.5);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 0 0 1px rgba(255,255,255,.3),0 4px 16px rgba(0,0,0,.35)}
-.gt-fish-btn.hot{background:rgba(232,80,60,.75);animation:gt-fish-pulse .35s ease-in-out infinite alternate}
-.gt-fish-btn.down{background:rgba(124,194,62,.6)}
-@keyframes gt-fish-pulse{to{transform:translateX(-50%) scale(1.08)}}
-@media (prefers-reduced-motion:reduce){.gt-fish-btn.hot{animation:none}}
-html.gt-phone .gt-fish-btn{min-width:160px;min-height:64px;font-size:13px}
-.gt-details{justify-content:flex-start;margin-top:8px}
-.gt-notice{margin:4px 0 8px;padding:7px 9px;background:#dff0d4;color:#1f4d2a;border:2px solid #2f6b3a;border-radius:5px;font-size:8px;line-height:1.6}
+  border:var(--line) solid var(--outline);border-radius:var(--r-ctl);font-family:var(--font);font-size:calc(18px*var(--ts));cursor:pointer;touch-action:none;
+  -webkit-user-select:none;user-select:none;background:var(--hud-2);color:var(--hud-ink);
+  box-shadow:inset 0 1px 0 var(--hud-hi),inset 0 calc(-1*var(--edge)) 0 var(--shade);
+  transition:background-color var(--t-press) var(--ease),translate var(--t-press) var(--ease)}
+.gt-fish-btn:hover{background:var(--hud-3)}
+.gt-fish-btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.gt-fish-btn.hot{background:var(--accent);color:var(--accent-ink)}
+.gt-fish-btn.down{background:var(--good);color:var(--paper);translate:0 2px;box-shadow:inset 0 1px 0 var(--hud-hi)}
+html.gt-phone .gt-fish-btn{min-width:160px;min-height:64px;font-size:16px}
 
-/* Title card (signed out): the game stays visible behind a dim veil; one card says what it is and how to start */
-.gt-title{position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(10,11,20,.55);line-height:1.4}
+/* Title card (signed out): the game stays visible behind a veil; a paper tray whose title is the season header */
+.gt-title{position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--scrim-lite);line-height:1.4}
 .gt-title[hidden]{display:none}
-.gt-title-card{width:min(100%,520px);padding:22px 24px 18px;background:var(--paper);color:var(--paper-ink);border-radius:6px;box-shadow:0 0 0 3px var(--paper-ink)}
-.gt-title h1{margin:0 0 12px;font-family:var(--font-display);font-weight:400;font-size:calc(24px*var(--ts));line-height:1.2;color:var(--paper-ink)}
+.gt-title-card{width:min(100%,520px);padding:0 24px 18px;overflow:hidden;background:var(--paper);color:var(--paper-ink);border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);box-shadow:inset 0 calc(-1*var(--edge)) 0 var(--shade)}
+.gt-title h1{margin:0 -24px 16px;padding:14px 24px;background:var(--season);color:var(--season-ink);font-family:var(--font-display);font-weight:400;font-size:24px;line-height:1.2;transition:background-color 600ms var(--ease)}
 .gt-title-lead{margin:0 0 10px;font-size:calc(18px*var(--ts))}
-.gt-title-live{margin:0 0 16px;padding:8px 10px;background:#e8e2c4;border-radius:4px;font-size:calc(15px*var(--ts))}
+.gt-title-live{margin:0 0 16px;padding:8px 10px;background:var(--paper-2);border-radius:var(--r-ctl);box-shadow:inset 0 1px 0 var(--paper-hi);font-size:calc(15px*var(--ts))}
 .gt-title-acts{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
 .gt-title-acts .mbtn{min-height:44px;padding:10px 16px;font-size:calc(16px*var(--ts))}
-.gt-title-note{margin:0;font-size:calc(14px*var(--ts));color:var(--paper-edge)}
+.gt-title-note{margin:0;font-size:calc(14px*var(--ts));color:var(--paper-dim)}
 html.gt-titlecard .gt-goals{display:none}
-html.gt-phone .gt-title h1{font-size:calc(16px*var(--ts))}
-html.gt-phone .gt-title-card{padding:18px 16px 14px}
+html.gt-phone .gt-title h1{font-size:16px}
+html.gt-phone .gt-title-card{padding:0 16px 14px}
+html.gt-phone .gt-title h1{margin-inline:-16px;padding-inline:16px}
 html.gt-phone .gt-title-lead{font-size:calc(16px*var(--ts))}
 
-/* Fight (night monsters): a slim battle bar at the bottom of the game view; the fight itself plays out in the world */
+/* Fight (night monsters): a paper tray at the bottom of the game view; the foe and your energy sit in the season header */
 html.gt-fighting .gt-hotbar, html.gt-fighting .gt-held, html.gt-fighting #gt-hint, html.gt-fighting .gt-goals,
 html.gt-fighting .gt-slotpop, html.gt-fighting #pad{visibility:hidden !important}
-.gt-fight{position:absolute;left:8px;right:8px;bottom:8px;z-index:6;margin:0 auto;max-width:560px;padding:10px 12px 12px;
-  background:var(--paper);color:var(--paper-ink);border-radius:6px;box-shadow:0 0 0 3px var(--paper-ink);line-height:1.35}
+.gt-fight{position:absolute;left:8px;right:8px;bottom:8px;z-index:6;margin:0 auto;max-width:560px;padding:0 12px 12px;overflow:hidden;
+  background:var(--paper);color:var(--paper-ink);border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);box-shadow:inset 0 calc(-1*var(--edge)) 0 var(--shade);line-height:1.35}
 .gt-fight[hidden]{display:none}
-.gt-fight-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.gt-fight-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 -12px;padding:8px 12px;min-height:44px;background:var(--season);color:var(--season-ink)}
 .gt-fight-foe{display:flex;align-items:baseline;gap:8px;font-size:calc(16px*var(--ts))}
 .gt-fight-foe b{font-weight:700}
-.gt-fight-hp{color:#b3261e;letter-spacing:2px}
-.gt-fight-me{display:flex;align-items:center;gap:8px;font-size:calc(14px*var(--ts))}
-.gt-fight-note{margin:6px 0 8px;font-size:calc(15px*var(--ts))}
+.gt-fight-hp{color:var(--gold);letter-spacing:2px}
+.gt-fight-me{display:flex;align-items:center;gap:8px;font-size:calc(14px*var(--ts));font-variant-numeric:tabular-nums}
+.gt-fight-note{margin:10px 0 8px;font-size:calc(15px*var(--ts))}
 .gt-fight-acts{display:flex;gap:8px;flex-wrap:wrap}
 .gt-fight-acts .mbtn{min-height:44px;flex:1 1 auto;font-size:calc(15px*var(--ts))}
 html.gt-phone .gt-fight{left:6px;right:6px;bottom:6px}
 
-/* Global chat (js/mods/players.js): lines fade after a while; press C or tap Chat to type */
+/* Global chat (js/mods/players.js): dark chips, no blur; lines fade after a while; press C or tap Chat to type */
 .gt-chat{position:absolute;left:8px;bottom:64px;z-index:5;width:min(52%,420px);pointer-events:none;line-height:1.3}
-.gt-chat-head{display:none;margin-bottom:4px;padding:3px 8px;border-radius:4px;background:rgba(10,12,24,.75);color:#cfd8ff;font-size:calc(12px*var(--ts))}
+.gt-chat-head{display:none;margin-bottom:4px;padding:3px 8px;border-radius:var(--r-ctl);background:var(--chip);color:var(--hud-dim);font-size:calc(12px*var(--ts))}
 .gt-chat-list{max-height:160px;overflow:hidden;display:flex;flex-direction:column;gap:2px}
-.gt-chat-line{align-self:flex-start;max-width:100%;padding:2px 8px;border-radius:4px;background:rgba(10,12,24,.62);color:#f2f4ff;font-size:calc(13px*var(--ts));overflow-wrap:anywhere;transition:opacity .6s}
-.gt-chat-line b{font-weight:600;color:#ffd84a}
-.gt-chat-line.private{background:rgba(70,30,90,.78)}
-.gt-chat-line.private b{color:#f0b8ff}
-.gt-chat-line.note{color:#cfd8ff;font-style:italic}
+.gt-chat-line{align-self:flex-start;max-width:100%;padding:2px 8px;border-radius:var(--r-ctl);background:var(--chip);color:var(--hud-ink);font-size:calc(14px*var(--ts));overflow-wrap:anywhere;transition:opacity .6s}
+.gt-chat-line b{font-weight:600;color:var(--gold)}
+.gt-chat-line.private{border-left:3px solid var(--accent)}
+.gt-chat-line.private b{color:var(--hud-ink)}
+.gt-chat-line.note{color:var(--hud-dim);font-style:italic}
 .gt-chat-line.old{opacity:0}
 .gt-chat-form{display:none;margin-top:4px}
-.gt-chat-input{width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:4px;background:var(--paper);color:var(--paper-ink);font:inherit;font-size:calc(15px*var(--ts));box-shadow:0 0 0 2px var(--paper-ink)}
+.gt-chat-input{width:100%;min-height:40px;padding:8px 10px;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);background:var(--field);color:var(--paper-ink);font:inherit;font-size:calc(15px*var(--ts))}
+.gt-chat-input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .gt-chat.open{pointer-events:auto}
 .gt-chat.open .gt-chat-head,.gt-chat.open .gt-chat-form{display:block}
 .gt-chat.open .gt-chat-list{max-height:220px;overflow-y:auto}
 html.gt-fishing .gt-chat,html.gt-fighting .gt-chat,html.gt-titlecard .gt-chat{display:none}
 html.gt-phone .gt-chat{left:6px;right:6px;width:auto;bottom:6px}
 html.gt-phone .gt-chat.open{bottom:6px}
-.gt-pcard-title{margin:0 0 6px;font-size:calc(16px*var(--ts));color:#2f6b3a}
+html.gt-phone .gt-chat-input{min-height:44px;font-size:16px}
+
+@media (prefers-reduced-motion:reduce){
+  .gt-slot,.gt-card,.gt-fish-btn,.gt-title h1{transition:none}
+}

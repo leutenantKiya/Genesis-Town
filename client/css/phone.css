@@ -12,19 +12,18 @@
 html.gt-phone,html.gt-phone body{height:100%}
 html.gt-phone body{padding:0;overflow:hidden}
 html.gt-phone #app{max-width:none;height:100vh;height:100dvh;display:flex;flex-direction:column}
-html.gt-phone .shell{flex:1;min-height:0;display:flex!important;flex-direction:column!important;border-radius:0;padding:env(safe-area-inset-top,0px) 0 0;background:radial-gradient(120% 70% at 50% 100%,#2a2c52 0%,#14152a 70%);box-shadow:none}
+html.gt-phone .shell{flex:1;min-height:0;display:flex!important;flex-direction:column!important;border-radius:0;border-width:0;padding:env(safe-area-inset-top,0px) 0 0;background:var(--hud);box-shadow:none}
 html.gt-phone .brand,html.gt-phone .help,html.gt-phone #acts,html.gt-phone #padmap{display:none!important}
 
 /* status bar: one line for where and when, one for energy and season */
-html.gt-phone .chain-banner{display:block;margin:0;border-radius:0;padding:6px 16px 0;font-size:calc(12px*var(--ts));line-height:1.4;background:transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-html.gt-phone .hud{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;column-gap:12px;row-gap:4px;margin:0;padding:6px 16px 8px;font-size:calc(15px*var(--ts))}
-html.gt-phone .hud .lbl{display:none}
-html.gt-phone .hud .loc .val{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+html.gt-phone .chain-banner{display:block;margin:0;border-width:0;border-radius:0;padding:3px 16px;font-size:calc(12px*var(--ts));line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.gt-phone .hud{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;column-gap:12px;row-gap:4px;margin:0;padding:8px 16px 8px;font-size:calc(15px*var(--ts))}
+html.gt-phone .hud .loc .val{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent)}
 html.gt-phone .hud .chain-hud{grid-column:1 / -1;grid-row:2}
 html.gt-phone .chain-energy{width:72px}
 
 /* the game view takes all the height that is left; the canvas is centred in it */
-html.gt-phone .bezel{flex:1 1 0;min-height:0;position:relative;padding:0;border-radius:0;background:#0b0c14;box-shadow:none}
+html.gt-phone .bezel{flex:1 1 0;min-height:0;position:relative;padding:0;border-radius:0;background:var(--bezel);box-shadow:none}
 html.gt-phone #fit{position:absolute;inset:0;width:auto;height:auto;display:flex;align-items:center;justify-content:center}
 html.gt-phone #screen{box-shadow:none}
 
@@ -34,38 +33,43 @@ html.gt-phone .ab{gap:0}
 html.gt-phone .abrow{gap:14px;align-items:flex-end}
 html.gt-phone #btnE{margin-bottom:calc(var(--bA)*.55)}
 
-/* glass controls */
-html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnA,html.gt-phone #btnE,html.gt-phone .gt-tabbar{
-  background:rgba(255,255,255,.14);
+/* glass controls: the one place translucency and blur are allowed (owner, 2026-11-04). D-pad, A/E and the tab bar only.
+   White glyphs keep a faint text-shadow: over a bright map tile the glass alone does not hold 4.5:1. */
+html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnE,html.gt-phone .gt-tabbar{
+  background:var(--glass);
   -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);
-  border:1px solid rgba(255,255,255,.28);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 16px rgba(0,0,0,.35);
-  color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
-html.gt-phone #btnA{background:rgba(156,47,85,.55);background:color-mix(in srgb,var(--btn) 55%,transparent)}
-html.gt-phone #btnE{background:rgba(61,95,156,.55);background:color-mix(in srgb,#3d5f9c 55%,transparent)}
+  border:1px solid var(--glass-line);
+  box-shadow:inset 0 1px 0 var(--glass-hi);
+  color:var(--glass-ink);text-shadow:0 1px 2px var(--glass-shade)}
+/* A is the accent: tinted glass, ink label (never white on an accent fill) */
+html.gt-phone #btnA{background:color-mix(in srgb,var(--accent) 88%,transparent);color:var(--accent-ink);text-shadow:none;
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);border:1px solid var(--glass-line);box-shadow:inset 0 1px 0 var(--glass-hi)}
 html.gt-phone .dp::after{filter:none}
-html.gt-phone .dp.up::after{border-bottom-color:rgba(255,255,255,.9)}
-html.gt-phone .dp.dn::after{border-top-color:rgba(255,255,255,.9)}
-html.gt-phone .dp.left::after{border-right-color:rgba(255,255,255,.9)}
-html.gt-phone .dp.right::after{border-left-color:rgba(255,255,255,.9)}
-html.gt-phone .dp:active,html.gt-phone .dp.down,html.gt-phone #btnA:active,html.gt-phone #btnA.down,html.gt-phone #btnE:active,html.gt-phone #btnE.down{background:rgba(255,255,255,.28)}
+html.gt-phone .dp.up::after{border-bottom-color:var(--glass-ink)}
+html.gt-phone .dp.dn::after{border-top-color:var(--glass-ink)}
+html.gt-phone .dp.left::after{border-right-color:var(--glass-ink)}
+html.gt-phone .dp.right::after{border-left-color:var(--glass-ink)}
+html.gt-phone .dp:active,html.gt-phone .dp.down,html.gt-phone #btnE:active,html.gt-phone #btnE.down{background:var(--glass-line)}
+html.gt-phone #btnA:active,html.gt-phone #btnA.down{background:var(--accent-hi)}
 html.gt-phone .gt-tabbar{border-width:1px 0 0}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnA,html.gt-phone #btnE,html.gt-phone .gt-tabbar{background:#2a2c4a;border:1px solid rgba(255,255,255,.28)}
+  html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnE,html.gt-phone .gt-tabbar{background:var(--hud-2)}
+  html.gt-phone #btnA{background:var(--accent)}
 }
 @media (prefers-reduced-transparency:reduce){
-  html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnA,html.gt-phone #btnE,html.gt-phone .gt-tabbar{background:#2a2c4a;border:1px solid rgba(255,255,255,.28);-webkit-backdrop-filter:none;backdrop-filter:none}
+  html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnE,html.gt-phone .gt-tabbar{background:var(--hud-2);-webkit-backdrop-filter:none;backdrop-filter:none}
+  html.gt-phone #btnA{background:var(--accent);-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 
 /* bottom bar: the four places, labelled, 52px tall, above the home indicator */
 html.gt-phone .gt-tabbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0 8px env(safe-area-inset-bottom,0px)}
-.gt-tab{min-height:52px;padding:0 2px;border:0;background:transparent;color:var(--ink);font-family:var(--font);font-size:calc(14px*var(--ts));line-height:1.2;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.gt-tab:active{background:#1c1d36;color:var(--ink)}
-.gt-tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.gt-tab{min-height:52px;padding:0 2px;border:0;background:transparent;color:var(--glass-ink);font-family:var(--font);font-size:calc(14px*var(--ts));line-height:1.2;border-radius:var(--r-ctl);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color var(--t-press) var(--ease)}
+.gt-tab:active{background:var(--accent);color:var(--accent-ink);text-shadow:none}
+.gt-tab:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
 
 /* windows open as sheets from the bottom, within thumb reach */
 html.gt-phone #mroot .mover{align-items:flex-end;padding:8px 0 0}
-html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:88dvh;border-radius:12px 12px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:88dvh;border-radius:var(--r-win) var(--r-win) 0 0;border-bottom-width:0;padding-bottom:env(safe-area-inset-bottom,0px)}
 
 /* small phones */
 @media (max-width:350px){
@@ -83,4 +87,8 @@ html:not(.gt-phone) #acts > button{display:none!important}
 html:not(.gt-phone) #acts > #chainbtn,html:not(.gt-phone) #acts > #pasarbtn,html:not(.gt-phone) #acts > #mapbtn,
 html:not(.gt-phone) #acts > #simbtn,html:not(.gt-phone) #acts > #gt-morebtn{display:inline-block!important}
 #acts > #chainbtn{order:1}#acts > #pasarbtn{order:2}#acts > #mapbtn{order:3}#acts > #simbtn{order:4}#acts > #gt-morebtn{order:5}
-#acts > #chainbtn{background:var(--btn);color:#fff}
+#acts > #chainbtn{background:var(--accent);color:var(--accent-ink)}
+#acts > #chainbtn:hover{background:var(--accent-hi)}
+
+@media (prefers-reduced-motion:reduce){.gt-tab{transition:none}}
+html.gt-phone .btn,html.gt-phone .mbtn{min-height:44px}
