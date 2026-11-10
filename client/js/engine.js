@@ -1968,6 +1968,7 @@ function charStep(o){
    position; it hands the view the same entities it would draw, then draws the mods' overlays (signs, monsters, tags,
    effects) on this now transparent canvas with camX/camY moved so the player's 2D feet sit on the player's 3D feet.
    The view keeps one world pixel at the player's depth equal to one canvas pixel, so overlays near the player line up. */
+var playerHidden = false; // the character screen's throw draws the player itself until it lands (GT.setPlayerHidden)
 var view3d = null, ovK = 0; // ovK: while the 3D overlays draw, device px per art px at the player's depth (else 0)
 function v3on(){ return !!(view3d && scene && scene.kind === 'out' && view3d.ready()); }
 /** Where a mod draws something that stands on tile (tx, ty) (fractions allowed): the tile's top-left in the overlay's
@@ -1983,7 +1984,7 @@ function render3d(pp){
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, elCv.width, elCv.height); ctx.setTransform(S, 0, 0, S, 0, 0);
   var ents = [];
   scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n, pal:n.pal, dir:n.dir, step:charStep(n)}); });
-  ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true});
+  ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true, hidden:playerHidden});
   callMods('onEntities', [ents, ctx, camX, camY, T]); // mods add {px, py, pal, dir, step, id}; their draw() is not called
   var g = view3d.groundCtx(scene.map);
   if (g) { g.clearRect(0, 0, g.canvas.width, g.canvas.height); callMods('onDrawGround', [g, 0, 0, T]); }
@@ -2031,7 +2032,7 @@ function render(){
   // entities sorted by y
   var ents = [];
   scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n}); });
-  ents.push({py:pp.py, px:pp.px, n:null});
+  if (!playerHidden) ents.push({py:pp.py, px:pp.px, n:null});
   // mods may add their own characters (other players) as {py, draw}: they join the same y-sort as NPCs and trees
   callMods('onEntities', [ents, ctx, camX, camY, T]);
   ents.sort(function(a, b){ return a.py - b.py; });
@@ -2522,6 +2523,14 @@ var GT = {
   // Round an overlay position for crisp drawing: whole art pixels in 2D, whole screen pixels in 2.5D. There one overlay
   // unit is several screen pixels while the camera glides, so rounding to units made tags hop and shiver as you walked.
   snap: function(v){ return ovK ? Math.round(v * ovK) / ovK : Math.round(v); },
+  setPlayerHidden: function(on){ playerHidden = !!on; },
+  // where the player's feet are on #screen (CSS px) and how big one art pixel of their sprite is there, in 2D and 2.5D,
+  // so an effect drawn over the view (the character screen's throw) can land exactly on the real sprite
+  playerScreen: function(){
+    var pp = lerpPos(P);
+    if (v3on()){ var p = view3d.toScreen(pp.px / T + 0.5, pp.py / T + 0.5, 0); return { x:p.x * S, y:p.y * S, scale:view3d.artScale(S) }; }
+    return { x:(pp.px + 6 - camX) * S, y:(pp.py + 12 - camY) * S, scale:S };
+  },
   // an analog walk on screen axes (-1..1 each), e.g. a drag in the 2.5D view; null lets go
   setStick: function(x, y){ stick = x == null ? null : {x:+x || 0, y:+y || 0}; },
   view3dOn: function(){ return v3on(); }

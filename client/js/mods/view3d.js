@@ -26,7 +26,7 @@
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
   var actors = new Map(), gctx = null, gtex = null, gAt = 0, last = 0, sw = 0, sh = 0, VW = 1, VH = 1;
   var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null, yawWant = 0, zoom = 1;
-  var ui = null, drag = null, took = 0, shownWorld = '';
+  var ui = null, drag = null, took = 0, shownWorld = '', snapNext = true;
 
   function saved() { try { var v = localStorage.getItem(LS); return v === '2d' || v === '3d' ? v : null; } catch (e) { return null; } }
   function phone() { try { return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900; } catch (e) { return false; } }
@@ -152,7 +152,7 @@
     if (world) { world.dispose(); world = null; see = null; }
     if (gtex) { scene.remove(gtex.userData.mesh); gtex.userData.mesh.geometry.dispose(); gtex.userData.mesh.material.dispose(); gtex.dispose(); gtex = null; gctx = null; }
     actors.forEach(function (a) { a.actor.dispose(); }); actors.clear();
-    built = m; seasonKey = '';
+    built = m; seasonKey = ''; snapNext = true;
     var L = m.layout;
     // the engine's own tiles: it adds the street lamps to the layout's
     world = GT3.World(Object.assign({}, L, { tiles: m.tiles, seed: L.seed || m.seed }));
@@ -281,14 +281,16 @@
         if (!a) { a = { actor: GT3.Actor(e.pal | 0), pal: e.pal }; scene.add(a.actor.group); actors.set(key, a); }
         var x = e.px / T + 0.5, z = e.py / T + 0.5;
         a.actor.set(x, z, screenDir(e.dir || 'down'), e.step | 0);
+        a.actor.group.visible = !e.hidden; // the character screen's throw is drawing the player until it lands
         seen.add(key);
         if (e.me) { pt.x = x; pt.y = z; }
       });
       actors.forEach(function (a, k) { if (!seen.has(k)) { a.actor.dispose(); actors.delete(k); } });
       rig.follow(pt.x, pt.y, dt);
+      if (snapNext || Math.hypot(rig.target.x - pt.x, rig.target.z - pt.y) > 8) { rig.snap(); snapNext = false; } // a new world or a long jump: no glide across the map
       sky.set(o.hour, season); sky.follow(pt.x, pt.y);
       world.update(now / 1000, o.hour, sky.night);
-      see.update(pt.x, pt.y, dt);
+      see.update(pt.x, pt.y, dt, camera);
       actors.forEach(function (a) { a.actor.face(camera); });
       updateSwings(dt);
       renderer.render(scene, camera);

@@ -177,7 +177,7 @@
     rig.follow(px, pz, dt);
     sky.set(state.hour, state.season); sky.follow(px, pz);
     world.update(now / 1000, state.hour, sky.night);
-    see.update(px, pz, dt);
+    see.update(px, pz, dt, camera);
     player.face(camera); npcs.forEach(function (n) { n.face(camera); });
     renderer.render(scene, camera);
     requestAnimationFrame(frame);

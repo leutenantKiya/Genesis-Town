@@ -124,7 +124,15 @@
         mine = { name: r.named ? r.name : v, tag: r.tag, look: r.look | 0, named: !!r.named };
         if (GT.setPlayerName && r.named) GT.setPlayerName(r.name);
         clearInterval(idle);
-        play(look, root, finish);
+        // Seamless: move to the Homeland while this screen still covers the view, then throw the player in there,
+        // landing on the real sprite (which stays hidden until the landing). No village first, no jump after.
+        msg.style.color = 'inherit'; msg.textContent = 'Menuju Homeland…';
+        var going = window.GT_HOME && GT_HOME.enter ? GT_HOME.enter() : Promise.resolve(false);
+        going.then(null, function () { return false; }).then(function () {
+          if (!root) return;
+          if (GT.setPlayerHidden) GT.setPlayerHidden(true);
+          requestAnimationFrame(function () { play(look, root, finish); }); // one frame so the new world and camera are drawn
+        });
       }, function (e) { fail((e && e.message) || 'Gagal menyimpan.'); });
     }
     go.addEventListener('click', start);
@@ -134,7 +142,7 @@
 
   function finish() {
     close();
-    try { if (window.GT_HOME && window.GT_HOME.enter) window.GT_HOME.enter(); } catch (e) { console.error(e); }
+    if (GT.setPlayerHidden) GT.setPlayerHidden(false);
   }
 
   /* ---------------------------------------------------------------- thrown up, spin, fall, dust */
@@ -154,10 +162,26 @@
     var spr = pixelCanvas(); paint(spr, look, 'down', 1);
     var S = Math.max(4, Math.round(Math.min(W, H) / 70)) * dpr;   // pixels per sprite pixel
     var cx = cv.width / 2, landY = cv.height / 2, startY = cv.height + 16 * S, topY = cv.height * 0.12;
+    // land where the real sprite stands, at its size (2D or 2.5D), so the hand-over at the end is invisible
+    function aim() {
+      var ps = GT.playerScreen && GT.playerScreen(), gc = document.getElementById('cv');
+      if (!ps || !gc) return;
+      var hr = host.getBoundingClientRect(), cr = gc.getBoundingClientRect();
+      cx = (ps.x + cr.left - hr.left) * dpr; landY = (ps.y + cr.top - hr.top) * dpr; S = ps.scale * dpr;
+      startY = cv.height + 16 * S;
+    }
+    aim();
     var t0 = performance.now();
     function frame(now) {
       var t = Math.min(1, (now - t0) / ANIM_MS), y, rot;
+      aim();
       g.clearRect(0, 0, cv.width, cv.height);
+      if (t >= 0.85) { // landed and settled: the real sprite takes over, only the dust is left here
+        if (GT.setPlayerHidden) GT.setPlayerHidden(false);
+        dust(g, cx, landY, (t - 0.75) / 0.25, S);
+        if (t < 1) requestAnimationFrame(frame); else done();
+        return;
+      }
       if (t < 0.4) { var u = t / 0.4; y = startY + (topY - startY) * (1 - (1 - u) * (1 - u)); }       // thrown up, slowing at the top
       else if (t < 0.75) { var d = (t - 0.4) / 0.35; y = topY + (landY - topY) * d * d; }              // falls, speeding up
       else y = landY;
@@ -166,7 +190,7 @@
       g.save(); g.translate(cx, y); g.rotate(rot); g.scale(1, squash);
       g.drawImage(spr, -8 * S, -14 * S, 16 * S, 20 * S);
       g.restore();
-      if (t >= 0.75) dust(g, cx, landY + 6 * S, (t - 0.75) / 0.25, S);
+      if (t >= 0.75) dust(g, cx, landY, (t - 0.75) / 0.25, S);
       if (t < 1) requestAnimationFrame(frame); else done();
     }
     requestAnimationFrame(frame);
