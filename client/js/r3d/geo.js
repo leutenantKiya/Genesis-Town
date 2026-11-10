@@ -14,7 +14,7 @@
 
   function hash(a, b, c) { var h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 1274126177)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 
-  function Builder() { this.p = []; this.c = []; this.snow = 0; } // snow: 0..1, whitens roofs, foliage and rocks
+  function Builder() { this.p = []; this.c = []; this.snow = 0; this.uvScale = 0.25; } // snow: 0..1, whitens roofs, foliage and rocks
   Builder.prototype.col = function (hex, k, snowy) {
     tmpC.set(hex);
     if (snowy && this.snow) tmpC.lerp(SNOWC, Math.min(1, this.snow * snowy));
@@ -100,6 +100,18 @@
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
     g.computeVertexNormals();
+    // uv: project each face along its dominant axis (so a wood or stone texture lays flat on floors and walls alike)
+    var P = this.p, nT = P.length / 9, uv = new Float32Array(nT * 6), s = this.uvScale, t, v;
+    for (t = 0; t < nT; t++) {
+      var o9 = t * 9, ax = P[o9 + 3] - P[o9], ay = P[o9 + 4] - P[o9 + 1], az = P[o9 + 5] - P[o9 + 2], bx = P[o9 + 6] - P[o9], by = P[o9 + 7] - P[o9 + 1], bz = P[o9 + 8] - P[o9 + 2];
+      var nx = Math.abs(ay * bz - az * by), ny = Math.abs(az * bx - ax * bz), nz = Math.abs(ax * by - ay * bx);
+      for (v = 0; v < 3; v++) {
+        var X = P[o9 + v * 3], Y = P[o9 + v * 3 + 1], Z = P[o9 + v * 3 + 2], uu, vv;
+        if (ny >= nx && ny >= nz) { uu = X; vv = Z; } else if (nx >= nz) { uu = Z; vv = Y; } else { uu = X; vv = Y; }
+        uv[t * 6 + v * 2] = uu * s; uv[t * 6 + v * 2 + 1] = vv * s;
+      }
+    }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     return g;
   };
   Builder.prototype.mesh = function (material, shadows) {

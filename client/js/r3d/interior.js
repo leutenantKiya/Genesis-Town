@@ -13,7 +13,7 @@
   if (!THREE || !R3D.geo) return;
   var Builder = R3D.geo.Builder, hash = R3D.geo.hash;
 
-  var group = null, litMat = null, glowMat = null, curMap = null;
+  var group = null, litMat = null, glowMat = null, woodMat = null, curMap = null;
   var WALLS = {
     house:   ['#ebe0c8', '#b28a5c'], mart: ['#e8eef6', '#8aa0c8'], casino: ['#4a3a62', '#2a2038'], hall: ['#f0e6d0', '#a8442e'],
     church:  ['#ece6da', '#6a7898'], clinic: ['#f4f6f6', '#58a8a4'], post: ['#f4e6c8', '#d0702c'], broker: ['#efe4cc', '#4c8a58'], warung: ['#d6aa72', '#8a5a30']
@@ -27,11 +27,11 @@
   }
   function T(m, x, y) { return x >= 0 && y >= 0 && x < m.w && y < m.h ? m.tiles[y * m.w + x] : 'wall'; }
 
-  function floorTile(B, type, x, y) {
+  function floorTile(B, type, x, y, FW) {
     var h = hash(x, y, 3);
     if (type === 'floor_wood') {
-      var cols = ['#c48a50', '#b9804a', '#cc9258'];
-      for (var s = 0; s < 3; s++) B.flat(x + s / 3, y, x + (s + 1) / 3 - 0.012, y + 1, 0, cols[(s + x + y + Math.floor(h * 3)) % 3], 1);
+      if (FW) FW.flat(x, y, x + 1, y + 1, 0, '#ffe9d4', 1); // the grain comes from the wood texture
+      else { var cols = ['#c48a50', '#b9804a', '#cc9258']; for (var s = 0; s < 3; s++) B.flat(x + s / 3, y, x + (s + 1) / 3 - 0.012, y + 1, 0, cols[(s + x + y + Math.floor(h * 3)) % 3], 1); }
     } else if (type === 'floor_tile') B.flat(x, y, x + 1, y + 1, 0, (x + y) % 2 ? '#c6ccda' : '#dde1ea', 1);
     else if (type === 'floor_dark') B.flat(x, y, x + 1, y + 1, 0, (x + y) % 2 ? '#2f2b44' : '#3a3550', 1);
     else if (type === 'carpet_red') { B.flat(x, y, x + 1, y + 1, 0.005, '#8d2a3b', 1); B.flat(x + 0.08, y + 0.08, x + 0.92, y + 0.92, 0.012, '#a83a4c', 1); }
@@ -102,7 +102,8 @@
   }
 
   function build(m, kind) {
-    var B = new Builder(), G = new Builder(), w = m.w, h = m.h, base = floorBase(m), pal = WALLS[kind] || WALLS.house, x, y;
+    var B = new Builder(), G = new Builder(), FW = new Builder(); FW.uvScale = 0.3;
+    var w = m.w, h = m.h, base = floorBase(m), pal = WALLS[kind] || WALLS.house, x, y;
     var windowsOn = kind === 'house' || kind === 'hall' || kind === 'church' || kind === 'clinic' || kind === 'post' || kind === 'broker' || kind === 'warung';
     for (y = 0; y < h; y++) for (x = 0; x < w; x++) {
       var t = m.tiles[y * w + x];
@@ -116,17 +117,21 @@
         }
         continue;
       }
-      floorTile(B, (t === 'rug' || t === 'carpet_red' || t === 'doormat') ? t : base, x, y);
+      floorTile(B, (t === 'rug' || t === 'carpet_red' || t === 'doormat') ? t : base, x, y, FW);
       if (t !== 'rug' && t !== 'carpet_red' && t !== 'doormat' && t.indexOf('floor') !== 0) furniture(B, G, m, t, x, y, kind);
     }
     var g = new THREE.Group();
     g.add(B.mesh(litMat, true));
+    if (!FW.empty()) g.add(FW.mesh(woodMat, true));
     if (!G.empty()) g.add(G.mesh(glowMat));
     return g;
   }
 
   R3D.interior = {
-    init: function (C) { litMat = R3D.geo.lit(); glowMat = R3D.geo.basic(); group = null; curMap = null; },
+    init: function (C) {
+      litMat = R3D.geo.lit(); glowMat = R3D.geo.basic(); group = null; curMap = null;
+      woodMat = R3D.geo.lit(); if (R3D.assets) woodMat.map = R3D.assets.tex('wood_floor');
+    },
     show: function (C, m, kind) {
       this.hide(C);
       curMap = m; group = build(m, kind || 'house'); C.scene.add(group);
@@ -141,6 +146,6 @@
     },
     onWorld: function () {},
     group: function () { return group; },
-    dispose: function (C) { this.hide(C); if (litMat) litMat.dispose(); if (glowMat) glowMat.dispose(); litMat = glowMat = null; }
+    dispose: function (C) { this.hide(C); if (litMat) litMat.dispose(); if (glowMat) glowMat.dispose(); if (woodMat) woodMat.dispose(); litMat = glowMat = woodMat = null; }
   };
 })();

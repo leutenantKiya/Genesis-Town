@@ -194,6 +194,7 @@
     document.documentElement.classList.remove('gt-soft3d');
     C.scene.fog = null;
     each(function (m) { m.dispose(C); });
+    if (R3D.assets) R3D.assets.disposeAll();
     C.renderer.dispose();
     if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
     C = canvas = hemi = sun = moon = map = imap = null; interior = false;

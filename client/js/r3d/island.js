@@ -156,8 +156,14 @@
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // texture coordinates: world-aligned, stretched along the cliff so the strata run level
+    var uvs = new Float32Array(W1 * H1 * 2);
+    for (var q2 = 0; q2 < W1 * H1; q2++) { var qx = pos[q2 * 3], qy = pos[q2 * 3 + 1], qz = pos[q2 * 3 + 2]; uvs[q2 * 2] = (qx + qz) * 0.12; uvs[q2 * 2 + 1] = qy * 0.16 + (qx - qz) * 0.02; }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geo.setIndex(idx); geo.computeVertexNormals();
-    var bm = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })); bm.userData.nopick = true; group.add(bm);
+    var A = R3D.assets, bmat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+    if (A) { bmat.map = A.tex('cliff_detail'); bmat.normalMap = A.tex('cliff_normal', { linear: true }); bmat.normalScale = new THREE.Vector2(0.9, 0.9); }
+    var bm = new THREE.Mesh(geo, bmat); bm.userData.nopick = true; group.add(bm);
     var mx = sx / area + 0.5, mz = sz / area + 0.5, i2;
     // hanging roots along the rim
     var rootMat = new THREE.MeshLambertMaterial({ color: 0x4a3220 }), nRoots = Math.min(40, Math.round(bnd.length / (opts.rootEvery || 6)));
