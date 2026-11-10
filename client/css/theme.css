@@ -1,0 +1,77 @@
+/*
+ * theme.css - the design tokens for Genesis Town's UI (direction: DESIGN.md). Loaded before every other stylesheet.
+ * One constant base (dark HUD, paper windows, status colours) plus ONE accent and ONE header tone per season.
+ * The engine sets html.gt-s-<season> (semi | panas | gugur | dingin) from the game clock; with no class, spring applies.
+ * Contrast (WCAG 2.x, computed): ink on paper 14.75, on paper-2 13.0, on paper-3 11.4; paper-dim on paper 5.9, on
+ * paper-2 5.2, on paper-3 4.55; hud-ink on hud 14.1, on hud-2 11.5; hud-dim on hud 7.1, on hud-2 5.8.
+ * Accents: ink label on accent fill 7.0-9.4; accent as text on hud 7.5-10.0, on hud-2 6.1-8.2, on the season header
+ * 5.6-7.5. An accent is NEVER text on paper (1.6-2.1): on paper it is a fill with an ink label and an ink outline.
+ */
+:root{
+  /* HUD (dark tray over the game) */
+  --hud:#14152a;            /* ground of the HUD strip, the tab bar, dark chips */
+  --hud-2:#23254a;          /* cells, pills and slots on the HUD: one step lighter */
+  --hud-3:#33366a;          /* hover / pressed step on the HUD */
+  --hud-ink:#dfe8c2;        /* text on the HUD */
+  --hud-dim:#9aa3b5;        /* secondary text on the HUD */
+  --hud-hi:rgba(255,255,255,.14); /* 1px top highlight inside a HUD cell */
+
+  /* Paper (windows, cards, dialog) */
+  --paper:#f4f1dc;          /* window ground */
+  --paper-2:#e9e3c6;        /* cells, rows, cards inside a window: one step darker */
+  --paper-3:#ddd5b3;        /* hover / pressed / selected step */
+  --paper-ink:#1c1c2c;      /* text and outlines */
+  --paper-dim:#565a78;      /* secondary text on paper */
+  --paper-hi:rgba(255,255,255,.55); /* 1px top highlight inside a paper cell */
+
+  /* Status: the same in every season */
+  --good:#2f6b3a;
+  --bad:#8a2f3a;
+  --gold:#f2c94c;           /* coin */
+  --energy:#b8d94a;         /* energy bar */
+  --link:#234f9c;           /* links on paper (Detail, explorer) */
+  --warn-bg:#f3d6c8;        /* warning strip on paper */
+  --warn-ink:#7a2a14;
+
+  /* Shape: chunky outline + a hard darker bottom edge, no blur */
+  --line:2px;               /* outline width */
+  --edge:3px;               /* the darker bottom edge of buttons, cards, windows */
+  --r-win:6px;              /* windows, cards, the HUD strip */
+  --r-ctl:4px;              /* buttons, chips, slots, inputs */
+  --outline:#0b0c16;        /* outline on the HUD side */
+  --shade:rgba(0,0,0,.30);  /* the bottom edge, as an inset shadow */
+
+  /* Motion */
+  --ease:cubic-bezier(.16,1,.3,1);
+  --t-press:90ms;
+  --t-open:180ms;
+
+  /* Type */
+  --font:'Pixelify Sans','Press Start 2P',ui-sans-serif,system-ui,sans-serif;       /* everything people read */
+  --font-display:'Press Start 2P',ui-monospace,Menlo,Consolas,monospace;            /* titles and big counters, 16px or 24px only */
+  --ts:1;                   /* the player's text size (Pengaturan) */
+
+  /* Season: spring is the default */
+  --accent:#f28fb0;         /* blossom */
+  --accent-ink:#1c1c2c;     /* label on an accent fill */
+  --season:#24382a;         /* moss: window headers and the HUD strip */
+  --season-ink:#f4f1dc;     /* text on the season tone */
+
+  /* Names the older stylesheets still use */
+  --bg:#0d0e16;
+  --shell:var(--hud);
+  --shell-hi:var(--hud-3);
+  --shell-lo:#0f1022;
+  --bezel:#0b0c14;
+  --ink:var(--hud-ink);
+  --dim:var(--hud-dim);
+  --key:var(--hud-2);
+  --key-hi:var(--hud-3);
+  --paper-edge:var(--paper-dim);
+  --btn:var(--accent);
+  --btn-hi:var(--accent);
+}
+html.gt-s-semi{ --accent:#f28fb0; --season:#24382a; }     /* blossom on moss */
+html.gt-s-panas{ --accent:#34c3c9; --season:#163a44; }    /* sea teal on deep teal */
+html.gt-s-gugur{ --accent:#f0903a; --season:#3a2616; }    /* pumpkin on bark */
+html.gt-s-dingin{ --accent:#8fc8f2; --season:#1e3046; }   /* ice on slate */
