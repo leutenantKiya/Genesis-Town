@@ -49,6 +49,22 @@ test('starter kit, gathering with energy, node charges and respawn', async () =>
   assert.equal(game.state(P).energy, 100 - 16 + 4 - 4, 'energy regenerated 2/hour');
 });
 
+test('a felled tree is a stump in the state until it grows back', async () => {
+  const { game, clock, econ } = await world();
+  for (let i = 0; i < 3; i++) game.act(P, { action: 'gather', tile: 'tree', x: 7, y: 3 });
+  assert.deepEqual(game.state(P).stumps, [], 'still standing with charges left');
+  game.act(P, { action: 'gather', tile: 'tree', x: 7, y: 3 });
+  const total = econ.gather.respawnGameHours * econ.time.realMsPerGameHour;
+  const [s] = game.state(Q).stumps; // every player in the world sees it
+  assert.equal(s.x, 7); assert.equal(s.y, 3); assert.equal(s.msTotal, total);
+  assert.ok(s.msLeft > 0 && s.msLeft <= total, `msLeft ${s.msLeft}`);
+  clock.advanceHours(1);
+  assert.ok(game.state(P).stumps[0].msLeft <= total / 2, 'grows back over time');
+  clock.advanceHours(1);
+  assert.deepEqual(game.state(P).stumps, [], 'grown back');
+  assert.equal(game.state(P).stumps.length, 0);
+});
+
 test('ore and wood need a tool, and the tool breaks after 20 uses', async () => {
   const { game, clock } = await world();
   game.gs.add(0, Q, 'tool', -1, 'test');

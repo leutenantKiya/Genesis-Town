@@ -331,7 +331,16 @@ export class Game {
       koUntil,
       night: this.monsters ? { now: this.monsters.isNight(), guarded: this.monsters.guarded(wid !== 'public') } : null,
       weather,
+      stumps: this.stumps(hrow ? `${wid}:` : '', t.totalHours),
     };
+  }
+
+  /** Trees of this world felled to their last charge: drawn as stumps that grow back by stages (client/js/three/nature.js).
+   *  msLeft counts down to the refill hour; msTotal is the whole regrowth. Same node keys as `gather` (world.ts). */
+  stumps(prefix: string, nowHours: number) {
+    const msHour = this.econ.time.realMsPerGameHour, msTotal = this.econ.gather.respawnGameHours * msHour;
+    const into = this.clock.hourFraction() * msHour;
+    return this.gs.emptyNodes(prefix, 'tree', nowHours).map((n) => ({ x: n.x, y: n.y, msTotal, msLeft: Math.max(0, Math.min(msTotal, (n.refill_hour - nowHours) * msHour - into)) }));
   }
 
   /** Papan Juara. */

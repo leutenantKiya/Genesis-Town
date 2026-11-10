@@ -152,7 +152,7 @@
     if (world) { world.dispose(); world = null; see = null; }
     if (gtex) { scene.remove(gtex.userData.mesh); gtex.userData.mesh.geometry.dispose(); gtex.userData.mesh.material.dispose(); gtex.dispose(); gtex = null; gctx = null; }
     actors.forEach(function (a) { a.actor.dispose(); }); actors.clear();
-    built = m; seasonKey = ''; snapNext = true;
+    built = m; seasonKey = ''; snapNext = true; stumpSynced = false; stumpSt = null; // a new world: its stumps appear, none fall
     var L = m.layout;
     // the engine's own tiles: it adds the street lamps to the layout's
     world = GT3.World(Object.assign({}, L, { tiles: m.tiles, seed: L.seed || m.seed }));
@@ -258,6 +258,32 @@
   /* ---------------------------------------------------------------- dropping into the world (after the character screen)
      The player's own 3D card falls from high above, speeding up and spinning twice, lands on their tile with a squash and
      a ring of dust. Being the real sprite, it is lit like the world at that hour and lands exactly where the player is. */
+  /* ---------------------------------------------------------------- felled trees (server: state.stumps)
+     A tree chopped to its last charge is a stump until it refills, then grows back by stages (nature.js): stump for the
+     first third, a sapling, a young tree, grown and choppable again. The moment it is felled near the player, its top
+     tips over away from them, lands and fades. msLeft counts down locally from when the state arrived. */
+  var stumpSt = null, stumpAt = 0, stumpSynced = false;
+  function syncStumps(now) {
+    var C = window.GT_CHAIN, st = C && C.state && C.state.st, nat = world && world.nature;
+    if (!nat || !nat.stage) return;
+    if (st && st !== stumpSt) { stumpSt = st; stumpAt = now; }
+    var list = (stumpSt && stumpSt.stumps) || [], want = {};
+    list.forEach(function (s) { var left = s.msLeft - (now - stumpAt); if (left > 0) want[s.x + ',' + s.y] = 1 - left / s.msTotal; });
+    nat.trees.forEach(function (tr) {
+      var p = want[tr.item.tx + ',' + tr.item.ty];
+      var name = p == null ? 'full' : p < 0.34 ? 'stump' : p < 0.67 ? 'sapling' : 'young';
+      if (name === (tr.stage || 'full')) return;
+      var was = tr.stage || 'full', dx = tr.item.x - pt.x, dz = tr.item.z - pt.y;
+      nat.stage(tr, name);
+      if (name === 'stump' && was === 'full' && stumpSynced && Math.hypot(dx, dz) < 14) {
+        nat.fell(tr, dx, dz); // falls away from the player
+        var k = 1 - 0.6 * sky.night;
+        for (var i = 0; i < 6; i++) bit(new THREE.Color(i % 2 ? '#48a046' : '#86c85a').multiplyScalar(k), tr.item.x + (Math.random() - 0.5), 1.4 + Math.random() * 0.5, tr.item.z + (Math.random() - 0.5), (Math.random() - 0.5) * 0.8, -0.3, (Math.random() - 0.5) * 0.8, 1.2, 0.6, 0.07);
+      }
+    });
+    if (stumpSt) stumpSynced = true;
+  }
+
   var drop = null;
   function updateDrop(now) {
     var a = actors.get('me');
@@ -311,6 +337,7 @@
       if (snapNext || Math.hypot(rig.target.x - pt.x, rig.target.z - pt.y) > 8) { rig.snap(); snapNext = false; } // a new world or a long jump: no glide across the map
       sky.set(o.hour, season); sky.follow(pt.x, pt.y);
       world.update(now / 1000, o.hour, sky.night);
+      syncStumps(now); world.nature.tick(dt);
       see.update(pt.x, pt.y, dt, camera);
       actors.forEach(function (a) { a.actor.face(camera); });
       updateDrop(now);

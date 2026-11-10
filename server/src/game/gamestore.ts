@@ -192,6 +192,15 @@ export class GameStore {
   node(key: string): { key: string; charges: number; refill_hour: number } | undefined {
     return this.db.prepare('SELECT * FROM nodes WHERE key = ?').get(key) as { key: string; charges: number; refill_hour: number } | undefined;
   }
+  /** Emptied nodes of one kind in one world (key prefix '' = the village, 'HL-<n>:' = a Homeland) that have not refilled yet. */
+  emptyNodes(prefix: string, tile: string, nowHours: number): Array<{ x: number; y: number; refill_hour: number }> {
+    const rows = this.db.prepare('SELECT key, refill_hour FROM nodes WHERE charges = 0 AND refill_hour > ? AND key LIKE ?')
+      .all(nowHours, `${prefix}${tile}:%`) as Array<{ key: string; refill_hour: number }>;
+    return rows.flatMap((r) => {
+      const m = /:(\d+),(\d+)$/.exec(r.key);
+      return m && r.key === `${prefix}${tile}:${m[1]},${m[2]}` ? [{ x: Number(m[1]), y: Number(m[2]), refill_hour: r.refill_hour }] : [];
+    });
+  }
   saveNode(key: string, charges: number, refillHour: number) {
     this.db.prepare('INSERT INTO nodes (key, charges, refill_hour) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET charges = excluded.charges, refill_hour = excluded.refill_hour')
       .run(key, charges, refillHour);

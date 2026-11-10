@@ -57,6 +57,7 @@
     (world.nature ? world.nature.trees : []).forEach(function (tr) {
       var crown = new THREE.Box3(new THREE.Vector3(tr.x - 0.75, 0.5, tr.z - 0.75), new THREE.Vector3(tr.x + 0.75, tr.height + 0.2, tr.z + 0.75));
       items.push({ kind: 'tree', a: 1, x: tr.x, z: tr.z, test: function (px, pz, cam) {
+        if (tr.item && tr.item.k != null && tr.item.k < 0.75) return 1; // a stump or a small regrowing tree hides nobody
         if (cam) return hides(crown, cam, px, pz) ? 0.45 : 1;
         return Math.abs(px - tr.x) < 0.85 && pz < tr.z + 0.2 && pz > tr.z - tr.height * REACH ? 0.45 : 1;
       }, apply: function (a) { world.nature.fade(tr, a); } });

@@ -28,6 +28,8 @@
 >   along walls; walking up into a door still goes in. The server still gets the tile under the player's feet, so its
 >   position and walking-speed checks are unchanged. Indoors and in the 2D view walking stays on the grid. Same rules and positions as 2D: the engine
 >   still owns them (`client/js/mods/view3d.js`). Walking into a building without a scene cut is still *(planned)*.
+>   **Felled trees** show as stumps: the last chop tips the top over and it fades, then the tree regrows as a sapling,
+>   a young tree and a grown one over its 2 game hour cooldown (server `state.stumps`).
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow,

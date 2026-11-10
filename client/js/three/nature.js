@@ -103,9 +103,12 @@
     var meshes = {}, trees = [], m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
     var solidMat = GT3.mat({ vertexColors: true });
     var dim = new THREE.Color(0.45, 0.43, 0.58), full = new THREE.Color(1, 1, 1);
+    // a tree's size: its own scale times its growth stage (it.k: 0 = felled to a stump, then a sapling, a young tree, 1 grown)
+    function scaleOf(it) { return it.k == null ? it.s : Math.max(0.0001, it.s * it.k); }
     function place(mesh, list) {
       list.forEach(function (it, i) {
-        q.setFromAxisAngle(UP, it.ry); m4.compose(v.set(it.x, 0, it.z), q, sc.set(it.s, it.s, it.s));
+        var s = scaleOf(it);
+        q.setFromAxisAngle(UP, it.ry); m4.compose(v.set(it.x, 0, it.z), q, sc.set(s, s, s));
         mesh.setMatrixAt(i, m4); mesh.setColorAt(i, it.fog ? dim : full);
       });
       mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -149,7 +152,7 @@
     var ghosts = {}; // tree index in `trees` -> mesh
     var ghostMat = GT3.mat({ vertexColors: true, transparent: true, opacity: 0.45, depthWrite: false });
     function setHidden(tr, hidden) {
-      var m = meshes[tr.kind], it = tr.item, s = hidden ? 0.0001 : it.s;
+      var m = meshes[tr.kind], it = tr.item, s = hidden ? 0.0001 : scaleOf(it);
       q.setFromAxisAngle(UP, it.ry); m4.compose(v.set(it.x, 0, it.z), q, sc.set(s, s, s));
       m.setMatrixAt(tr.index, m4); m.instanceMatrix.needsUpdate = true;
     }
@@ -161,17 +164,72 @@
       }
       if (!g) {
         g = new THREE.Mesh(meshes[tr.kind].geometry, ghostMat.clone());
-        q.setFromAxisAngle(UP, tr.item.ry); g.quaternion.copy(q); g.position.set(tr.item.x, 0, tr.item.z); g.scale.setScalar(tr.item.s);
+        q.setFromAxisAngle(UP, tr.item.ry); g.quaternion.copy(q); g.position.set(tr.item.x, 0, tr.item.z); g.scale.setScalar(scaleOf(tr.item));
         g.renderOrder = 2; ghosts[id] = g; group.add(g); setHidden(tr, true);
       }
       g.material.opacity = alpha;
     }
 
+    /* --- felled trees: a stump while the tree is spent, then it grows back by stages; the felled top falls and fades
+       stage(tr, 'stump' | 'sapling' | 'young' | 'full'); fell(tr, dx, dz) drops the top away along (dx, dz); tick(dt) */
+    var STAGE_K = { stump: 0, sapling: 0.4, young: 0.7, full: 1 };
+    var stumpGeo = null, stumpMat = null, stumps = {}, falls = [];
+    function stumpOf(tr) {
+      if (!stumpGeo) {
+        stumpGeo = new THREE.CylinderGeometry(0.1, 0.14, 0.22, 7); stumpGeo.translate(0, 0.11, 0);
+        stumpMat = GT3.mat({ color: S.PAL.bark[1] });
+      }
+      var m = new THREE.Mesh(stumpGeo, stumpMat); m.castShadow = true; m.receiveShadow = true;
+      m.position.set(tr.item.x, 0, tr.item.z); m.rotation.y = tr.item.ry; m.scale.setScalar(tr.item.s);
+      return m;
+    }
+    function applyK(tr) {
+      var m = meshes[tr.kind], it = tr.item, s = scaleOf(it);
+      q.setFromAxisAngle(UP, it.ry); m4.compose(v.set(it.x, 0, it.z), q, sc.set(s, s, s));
+      m.setMatrixAt(tr.index, m4); m.instanceMatrix.needsUpdate = true;
+    }
+    function stage(tr, name) {
+      var id = trees.indexOf(tr), goal = STAGE_K[name];
+      if (goal == null) return;
+      tr.stage = name; tr.kGoal = goal;
+      if (ghosts[id]) fade(tr, 1); // a see-through copy would show the old size
+      if (name === 'stump') {
+        if (!stumps[id]) { stumps[id] = stumpOf(tr); group.add(stumps[id]); }
+        tr.item.k = 0; applyK(tr); // the felled top goes at once (fell() animates a copy of it)
+      } else if (stumps[id]) { group.remove(stumps[id]); delete stumps[id]; }
+    }
+    function fell(tr, dx, dz) {
+      var it = tr.item, mat = solidMat.clone(); mat.transparent = true;
+      var m = new THREE.Mesh(meshes[tr.kind].geometry, mat); m.castShadow = true;
+      var len = Math.hypot(dx, dz) || 1, axis = new THREE.Vector3(dz / len, 0, -dx / len); // tips the top toward (dx, dz)
+      m.position.set(it.x, 0.2, it.z); m.scale.setScalar(it.s); group.add(m);
+      falls.push({ m: m, axis: axis, yaw: new THREE.Quaternion().setFromAxisAngle(UP, it.ry), t: 0 });
+    }
+    var tq = new THREE.Quaternion();
+    function tick(dt) {
+      trees.forEach(function (tr) { // grow toward the stage size instead of popping
+        var k = tr.item.k == null ? 1 : tr.item.k, d = tr.kGoal - k;
+        if (tr.kGoal == null || d === 0) return;
+        tr.item.k = Math.abs(d) < 0.01 ? tr.kGoal : k + d * Math.min(1, dt * 3);
+        if (tr.item.k === 1) tr.item.k = null;
+        applyK(tr);
+      });
+      for (var i = falls.length - 1; i >= 0; i--) {
+        var f = falls[i]; f.t += dt;
+        var u = Math.min(1, f.t / 0.8), ang = u * u * (Math.PI / 2 - 0.06); // tips over, speeding up
+        if (f.t > 0.8 && f.t < 1.05) ang -= Math.sin((f.t - 0.8) / 0.25 * Math.PI) * 0.09; // a small bounce on the ground
+        tq.setFromAxisAngle(f.axis, ang); f.m.quaternion.copy(tq).multiply(f.yaw);
+        if (f.t > 1.4) { f.m.material.opacity = Math.max(0, 1 - (f.t - 1.4) / 0.7); f.m.position.y -= dt * 0.25; f.m.material.depthWrite = false; }
+        if (f.t > 2.1) { group.remove(f.m); f.m.material.dispose(); falls.splice(i, 1); }
+      }
+    }
+
     return {
-      group: group, trees: trees, fade: fade,
+      group: group, trees: trees, fade: fade, stage: stage, fell: fell, tick: tick,
       recolor: function () {
         Object.keys(ghosts).forEach(function (id) { fade(trees[id], 1); });
         build(); buildCards();
+        if (stumpMat) stumpMat.color.set(S.PAL.bark[1]);
       },
       update: function () {}
     };
