@@ -140,6 +140,7 @@
       glowMat.color.setRGB(0.85, 0.95, 1.0);
     },
     onWorld: function () {},
+    group: function () { return group; },
     dispose: function (C) { this.hide(C); if (litMat) litMat.dispose(); if (glowMat) glowMat.dispose(); litMat = glowMat = null; }
   };
 })();

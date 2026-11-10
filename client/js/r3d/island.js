@@ -157,7 +157,7 @@
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setIndex(idx); geo.computeVertexNormals();
-    group.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })));
+    var bm = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })); bm.userData.nopick = true; group.add(bm);
     var mx = sx / area + 0.5, mz = sz / area + 0.5, i2;
     // hanging roots along the rim
     var rootMat = new THREE.MeshLambertMaterial({ color: 0x4a3220 }), nRoots = Math.min(40, Math.round(bnd.length / (opts.rootEvery || 6)));

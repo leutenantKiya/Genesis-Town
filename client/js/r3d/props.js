@@ -166,7 +166,7 @@
         B.box(px + 0.76, 0.1, pz + 0.32, px + 0.96, 1.55, pz + 0.68, stone, stoneL, 1);
         B.box(px + 0.0, 1.55, pz + 0.28, px + 1.0, 1.85, pz + 0.72, stone, stoneL, 1);
         var pm = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 1.4), portalMat);
-        pm.position.set(px + 0.5, 0.82, pz + 0.5); pm.renderOrder = 2; group[RG.of(m.portal.x, m.portal.y)].add(pm);
+        pm.position.set(px + 0.5, 0.82, pz + 0.5); pm.renderOrder = 2; pm.userData.pick = true; group[RG.of(m.portal.x, m.portal.y)].add(pm);
       }
 
       BS.forEach(function (b, r) { if (!b.empty()) group[r].add(b.mesh(litMat, true)); });

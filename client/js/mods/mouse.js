@@ -67,7 +67,9 @@
       go(path, function () { key('keydown', 'up'); setTimeout(function () { key('keyup', 'up'); }, 160); });
       return;
     }
-    var thing = !walkable(sc, t.x, t.y) || npcAt(sc, t.x, t.y);
+    var por = sc.kind === 'out' && GT.world && GT.world.portal;
+    var thing = !walkable(sc, t.x, t.y) || npcAt(sc, t.x, t.y) || (por && t.x === por.x && t.y === por.y); // the portal opens its menu when you face it
+    if (por && t.x === por.x && t.y === por.y && Math.abs(t.x - p.x) + Math.abs(t.y - p.y) <= 1 && window.GT_HOME) { cancel(); GT_HOME.openPortal(); return; } // already at the portal: just open it
     if (!thing) {
       if (t.x === p.x && t.y === p.y) return;
       var p2 = GT.findPath(sc, p, t);

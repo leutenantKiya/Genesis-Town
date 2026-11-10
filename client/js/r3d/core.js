@@ -320,6 +320,23 @@
     var r = canvas.getBoundingClientRect(); if (!r.width) return null;
     tmpN.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(tmpN, C.cam);
+    // what is under the pointer: the nearest solid object (a tree canopy, a house wall, a person, the portal arch), so clicking
+    // something tall selects the tile it stands on, not the ground behind it
+    var roots = [];
+    if (interior) { if (R3D.interior && R3D.interior.group && R3D.interior.group()) roots.push(R3D.interior.group()); } else roots.push(C.root);
+    if (R3D.actors && R3D.actors.group) roots.push(R3D.actors.group);
+    var hits = ray.intersectObjects(roots, true), found = null, i;
+    for (i = 0; i < hits.length; i++) {
+      var ob = hits[i].object, ud = ob.userData || {};
+      if (ud.nopick) continue;
+      if (ob.material && ob.material.transparent && !ud.pick) continue; // effects, glow, mist, shadows
+      found = hits[i]; break;
+    }
+    if (found) {
+      var pt = found.point.clone();
+      if (pt.y > 0.12) pt.addScaledVector(ray.ray.direction, 0.4); // a point on a tall thing's skin: step into it, toward its axis
+      return { x: Math.floor(pt.x), y: Math.floor(pt.z) };
+    }
     var hit = ray.ray.intersectPlane(plane, tmpV);
     if (!hit) return null;
     return { x: Math.floor(hit.x), y: Math.floor(hit.z) };
