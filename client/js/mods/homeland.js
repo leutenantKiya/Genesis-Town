@@ -514,7 +514,7 @@
   }
   function drawHat(ctx, n, name, camX, camY, T, sick) {
     var d = name && H.cosmetics && H.cosmetics[name]; if (!d || !n) return;
-    var sx = Math.round(n.x * T - camX), sy = Math.round(n.y * T - camY);
+    var ha = GT.at(n.x, n.y), sx = Math.round(ha.x), sy = Math.round(ha.y);
     if (sick) { if (name === 'syal') return; sx -= 2; sy += 5; } // a collapsed worker lies down: the hat goes on the lying head
     ctx.fillStyle = '#2a2430';
     if (name === 'syal') { ctx.fillRect(sx + 3, sy + 7, 10, 3); ctx.fillStyle = d.color; ctx.fillRect(sx + 4, sy + 8, 8, 1); ctx.fillRect(sx + 9, sy + 8, 2, 4); return; }
@@ -635,7 +635,7 @@
     var now = Date.now(), tt = now / 1000, p = portalPos(), L = layoutOf();
     ctx.save();
     if (p) { // portal shimmer
-      var px = p.x * T - camX, py = p.y * T - camY;
+      var pa = GT.at(p.x, p.y), px = pa.x, py = pa.y;
       for (var k = 0; k < 3; k++) {
         var a = tt * 2.2 + k * 2.1, yy = py - 4 + ((tt * 6 + k * 4) % 12) * 0.7;
         ctx.fillStyle = 'rgba(228,220,255,' + (0.55 - k * 0.12).toFixed(2) + ')';
@@ -647,7 +647,7 @@
       H.built.forEach(function (b) {
         if (!(b.stored > 0)) return;
         var lot = lotById(b.lot); if (!lot) return;
-        var x = (lot.x + lot.w / 2) * T - camX, y = lot.y * T - camY - 3 + Math.sin(tt * 3 + lot.x) * 1.5;
+        var la = GT.at(lot.x + lot.w / 2, lot.y), x = la.x, y = la.y - 3 + Math.sin(tt * 3 + lot.x) * 1.5;
         GT_THEME.label(ctx, '+' + b.stored, x, y + 5, { tone: b.stored >= b.capacity ? 'accent' : 'paper', size: 7, bold: true });
       });
       // hats (a sick worker's hat is drawn on the lying figure below)
@@ -662,7 +662,7 @@
         if (n.hidden !== sickNow) GT.npcHide(n, sickNow); // the standing figure makes room for the one lying down
         if (!sickNow) return;
         n.working = false;
-        var sx = n.x * T - camX, sy = n.y * T - camY;
+        var na = GT.at(n.x, n.y), sx = na.x, sy = na.y;
         ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(sx - 1), Math.round(sy + 4), T + 2, 8);
         ctx.fillStyle = '#e8e4d8'; ctx.fillRect(Math.round(sx), Math.round(sy + 5), T, 6);
         ctx.fillStyle = '#7aa0d8'; ctx.fillRect(Math.round(sx + 5), Math.round(sy + 5), T - 5, 6);
@@ -675,7 +675,7 @@
       // builder at work: hammer swing, sparks and the countdown over the target
       var f = jobFocus();
       if (f && builder) {
-        var bx = builder.x * T - camX + T / 2, by = builder.y * T - camY + T / 2;
+        var ba = GT.at(builder.x, builder.y), bx = ba.x + T / 2, by = ba.y + T / 2;
         var side = builder.dir === 'left' ? -1 : 1, ang = Math.sin(tt * 9) * 0.9 - 0.5;
         if (builder.dir === 'up' || builder.dir === 'down') side = 1;
         ctx.save();
@@ -685,12 +685,13 @@
         ctx.fillStyle = '#d8d4e4'; ctx.fillRect(-2, -7, 5, 1);
         ctx.restore();
         if (Math.sin(tt * 9) > 0.8) { ctx.fillStyle = '#ffe066'; ctx.fillRect(Math.round(bx + side * 7), Math.round(by - 4), 1, 1); ctx.fillRect(Math.round(bx + side * 8), Math.round(by - 6), 1, 1); }
-        var left = endMs(f.job) - now, lx = f.fx * T - camX, ly = f.fy * T - camY - (f.job.kind === 'th' ? 28 : 20);
+        var fa = GT.at(f.fx, f.fy), left = endMs(f.job) - now, lx = fa.x, ly = fa.y - (f.job.kind === 'th' ? 28 : 20);
         GT_THEME.label(ctx, clock(left), lx, ly + 5, { tone: 'paper', size: 7, bold: true });
       }
       pops.forEach(function (q) {
         ctx.globalAlpha = Math.max(0, 1 - q.t / 1.4);
-        GT_THEME.text(ctx, q.text, q.x * T - camX, q.y * T - camY - 8 - q.t * 14, GT_THEME.get('gold'), 8);
+        var qa = GT.at(q.x, q.y);
+        GT_THEME.text(ctx, q.text, qa.x, qa.y - 8 - q.t * 14, GT_THEME.get('gold'), 8);
         ctx.globalAlpha = 1;
       });
     }

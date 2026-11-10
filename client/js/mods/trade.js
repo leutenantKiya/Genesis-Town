@@ -229,6 +229,11 @@
   function onDraw(ctx, camX, camY, T) {
     var m = marks(); if (!m) return;
     ctx.save();
+    if (GT.view3dOn && GT.view3dOn()) { // 2.5D: the stall and board stand in the 3D world; here only small name signs
+      var c = GT.at(m.consign.x, m.consign.y), b = GT.at(m.board.x, m.board.y);
+      label(ctx, 'Titip Jual', c.x + T / 2, c.y + T + 5); label(ctx, 'Papan Juara', b.x + T / 2, b.y + T + 5);
+      ctx.restore(); return;
+    }
     // Titip Jual: striped awning over a counter, a crate of goods on it
     var x = m.consign.x * T - camX, y = m.consign.y * T - camY;
     ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 1, y + 5, T - 2, T - 5);

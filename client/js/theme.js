@@ -31,6 +31,8 @@
     o = o || {};
     var t = (TONES[o.tone] || TONES.dark)(), size = o.size || 7;
     ctx.save();
+    var k = window.GT_THEME.scale || 1; // the 2.5D view draws labels smaller so they do not cover the world (view3d.js)
+    if (k !== 1) { ctx.translate(Math.round(x), Math.round(y)); ctx.scale(k, k); x = 0; y = 0; }
     ctx.font = font(size, o.bold);
     ctx.textBaseline = 'bottom';
     var w = Math.ceil(ctx.measureText(text).width) + 4, h = size + 3;
@@ -47,6 +49,8 @@
 
   function text(ctx, str, x, y, colour, size) {
     ctx.save();
+    var k = window.GT_THEME.scale || 1;
+    if (k !== 1) { ctx.translate(Math.round(x), Math.round(y)); ctx.scale(k, k); x = 0; y = 0; }
     ctx.font = (size || 8) + 'px "Press Start 2P", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillStyle = get('outline') || '#0b0c16';
@@ -56,5 +60,5 @@
     ctx.restore();
   }
 
-  window.GT_THEME = { get: get, season: season, label: label, text: text };
+  window.GT_THEME = { get: get, season: season, label: label, text: text, scale: 1 };
 })();

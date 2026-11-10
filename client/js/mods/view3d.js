@@ -5,21 +5,24 @@
  *
  * three.js and the kit load the first time the view is on. The choice is kept in localStorage 'gt.view' ('2d' | '3d');
  * the default is 2.5D on a computer and 2D on a phone (the forest is heavy on a small GPU).
- * One world pixel at the player's depth is one canvas pixel, the same scale as 2D, so the mods' 2D overlays (signs,
- * monsters, effects) line up near the player; name tags use toScreen to sit exactly over each head.
+ * The camera is the lab's (GT3.Rig defaults: pitch 52, fov 28) and so are its keys: Q / E turn it by 45 degrees,
+ * + / - zoom. The arrows and WASD then walk the way they point on screen (worldDir), and sprites face the same way.
+ * The mods' overlays (signs, monsters, hats, effects, name tags) are placed with GT.at, which follows each tile's feet
+ * on screen at any turn (engine.js render3d).
  *
- *   window.GT_VIEW3D = { get(), set('2d' | '3d'), toScreen(x, z, lift) (canvas px), playerTile() }
+ *   window.GT_VIEW3D = { get(), set('2d' | '3d'), toScreen(x, z, lift) (canvas px), playerTile(), turn(steps) }
  */
 (function () {
   'use strict';
-  var LS = 'gt.view', T = 12, PITCH = 58, FOV = 22;
+  var LS = 'gt.view', T = 12, STEP = Math.PI / 4;
+  var DV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var KIT = ['vendor/three.js', 'js/three/kit.js', 'js/three/ground.js', 'js/three/building.js', 'js/three/nature.js', 'js/three/props.js',
     'js/three/actor.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/world.js'];
   var mode = saved() || (phone() ? '2d' : '3d');
   var loading = null, ok = false, failed = false;
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
   var actors = new Map(), gctx = null, gtex = null, gAt = 0, last = 0, sw = 0, sh = 0, VW = 1, VH = 1;
-  var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null;
+  var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null, yawWant = 0, zoom = 1;
 
   function saved() { try { var v = localStorage.getItem(LS); return v === '2d' || v === '3d' ? v : null; } catch (e) { return null; } }
   function phone() { try { return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900; } catch (e) { return false; } }
@@ -55,8 +58,8 @@
     cv = renderer.domElement; cv.className = 'gt3d'; cv.setAttribute('aria-hidden', 'true');
     cv.addEventListener('webglcontextlost', function (e) { e.preventDefault(); fail('Tampilan 2.5D berhenti (grafis penuh). Kembali ke 2D.'); });
     var scr = document.getElementById('screen'); scr.insertBefore(cv, scr.firstChild);
-    scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(FOV, 1, 1, 220);
-    sky = GT3.Sky(scene, renderer); rig = GT3.Rig(camera, { pitch: PITCH, fov: FOV });
+    scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(28, 1, 1, 160);
+    sky = GT3.Sky(scene, renderer); rig = GT3.Rig(camera); // the lab's camera, unchanged
     tmp = new THREE.Vector3(); ray = new THREE.Raycaster(); ndc = new THREE.Vector2();
     plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); hit = new THREE.Vector3();
     ok = true;
@@ -87,15 +90,21 @@
     if (w === sw && h === sh) return;
     sw = w; sh = h;
     renderer.setSize(w, h);
-    camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
-    // one world pixel at the player's depth = one canvas pixel: the camera sees VH / T tiles top to bottom there
-    rig.distance((VH / T) / 2 / Math.tan(FOV * Math.PI / 360));
+    camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix(); rig.zoom(zoom);
   }
+  // the camera's turn now (eased) and where it is going (yawWant): 0 looks north
+  function yawNow() { return Math.atan2(camera.position.x - rig.target.x, camera.position.z - rig.target.z); }
+  function dirOf(x, z) { return Math.abs(x) > Math.abs(z) + 1e-6 ? (x > 0 ? 'right' : 'left') : (z > 0 ? 'down' : 'up'); }
+  // screen direction -> world direction (the lab's walk: mx = ix c + iz s, mz = -ix s + iz c)
+  function worldDir(d) { var v = DV[d], c = Math.cos(yawWant), s = Math.sin(yawWant); return v ? dirOf(v[0] * c + v[1] * s, -v[0] * s + v[1] * c) : d; }
+  // world direction -> the way the sprite looks on screen
+  function screenDir(d) { var v = DV[d], y = yawNow(), c = Math.cos(y), s = Math.sin(y); return v ? dirOf(v[0] * c - v[1] * s, v[0] * s + v[1] * c) : d; }
+  function turn(steps) { yawWant += steps * STEP; rig.turn(yawWant); }
   // three.js puts display:block on its canvas inline, so the class alone cannot hide it (indoors, Tampilan 2D)
   function hide() { document.documentElement.classList.remove('gt-3d'); if (cv) cv.style.display = 'none'; }
   function toScreen(x, z, lift) {
-    var k = (lift || 0), p = rig.pitch; // the cards lean back by about the camera's pitch (actor.js)
-    tmp.set(x, k * Math.cos(p), z - k * Math.sin(p)).project(camera);
+    var k = (lift || 0), p = rig.pitch, y = yawNow(); // the cards lean away from the camera by about its pitch (actor.js)
+    tmp.set(x - k * Math.sin(p) * Math.sin(y), k * Math.cos(p), z - k * Math.sin(p) * Math.cos(y)).project(camera);
     return { x: (tmp.x + 1) / 2 * VW, y: (1 - tmp.y) / 2 * VH };
   }
 
@@ -124,7 +133,7 @@
         if (a && a.pal !== e.pal) { a.actor.dispose(); a = null; }
         if (!a) { a = { actor: GT3.Actor(e.pal | 0), pal: e.pal }; scene.add(a.actor.group); actors.set(key, a); }
         var x = e.px / T + 0.5, z = e.py / T + 0.5;
-        a.actor.set(x, z, e.dir || 'down', e.step | 0);
+        a.actor.set(x, z, screenDir(e.dir || 'down'), e.step | 0);
         seen.add(key);
         if (e.me) { pt.x = x; pt.y = z; }
       });
@@ -138,6 +147,9 @@
       return toScreen(pt.x, pt.y, 0);
     },
     toScreen: toScreen,
+    worldDir: worldDir,
+    // device px per art px at the player's depth: one tile up the card is 12 art px
+    artScale: function (S) { var a = toScreen(pt.x, pt.y, 0), b = toScreen(pt.x, pt.y, 1); return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y) * S / T); },
     pick: function (clientX, clientY) {
       var r = cv.getBoundingClientRect(); if (!r.width) return null;
       ndc.set((clientX - r.left) / r.width * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
@@ -157,7 +169,16 @@
       else { GT.setView3d(null); hide(); }
     },
     toScreen: function (x, z, l) { return toScreen(x, z, l); },
-    playerTile: function () { return api.playerTile(); }
+    playerTile: function () { return api.playerTile(); },
+    turn: turn,
+    // the lab's keys while the 2.5D view shows (settings.js asks first): Q / E turn, + / - zoom
+    onKey: function (e) {
+      if (!GT.view3dOn || !GT.view3dOn()) return false;
+      var c = e.code, k = c === 'KeyQ' ? -1 : c === 'KeyE' ? 1 : 0, z = c === 'Equal' || c === 'NumpadAdd' ? 1.2 : c === 'Minus' || c === 'NumpadSubtract' ? 1 / 1.2 : 0;
+      if (!k && !z) return false;
+      if (e.type === 'keydown' && !e.repeat && !GT.isUiOpen()) { if (k) turn(k); else zoom = rig.zoom(zoom * z); }
+      return true;
+    }
   };
   GT.register({ id: 'view3d', init: function () { if (mode === '3d') start(); } });
 })();

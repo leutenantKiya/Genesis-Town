@@ -19,7 +19,7 @@
     o = o || {};
     var target = new THREE.Vector3(), want = new THREE.Vector3(), first = true;
     var pitch = (o.pitch || 52) * Math.PI / 180, dist = 30, zoom = 1, yaw = 0, yawWant = 0;
-    camera.fov = o.fov || 28; camera.near = 1; camera.far = 220; camera.updateProjectionMatrix();
+    camera.fov = o.fov || 28; camera.near = 1; camera.far = 160; camera.updateProjectionMatrix();
     function place() {
       var d = dist / zoom;
       camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, target.z + Math.cos(yaw) * Math.cos(pitch) * d);

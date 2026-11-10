@@ -110,12 +110,14 @@
     flashes.forEach(function (f) {
       ctx.globalAlpha = Math.max(0, 1 - f.t / 0.25);
       ctx.fillStyle = f.col;
-      ctx.fillRect(f.tile.x * T - camX + 1, f.tile.y * T - camY - 2, T - 2, T + 1);
+      var fa = GT.at(f.tile.x, f.tile.y);
+      ctx.fillRect(fa.x + 1, fa.y - 2, T - 2, T + 1);
       ctx.globalAlpha = 1;
     });
     fx.forEach(function (e) {
-      var base = ANG[e.dir], hx = e.from.x * T - camX + T / 2, hy = e.from.y * T - camY + T / 2 - 1;
-      var tx = e.tile.x * T - camX + T / 2, ty = e.tile.y * T - camY + T / 2;
+      var ea = GT.at(e.from.x, e.from.y), ta = GT.at(e.tile.x, e.tile.y);
+      var base = ANG[e.dir], hx = ea.x + T / 2, hy = ea.y + T / 2 - 1;
+      var tx = ta.x + T / 2, ty = ta.y + T / 2;
       // swing: from behind the shoulder to past the target, fast at first (ease-out)
       var k = Math.min(1, e.t / HIT), ease = 1 - Math.pow(1 - k, 3);
       var side = e.dir === 'left' ? -1 : 1, from = base - side * 1.9, to = base + side * 0.7;
@@ -147,12 +149,12 @@
       });
     });
     puffs.forEach(function (p) {
-      var cx = p.tile.x * T - camX + T / 2, cy = p.tile.y * T - camY + T / 2, a = Math.max(0, 1 - p.t / 0.7);
+      var pa = GT.at(p.tile.x, p.tile.y), cx = pa.x + T / 2, cy = pa.y + T / 2, a = Math.max(0, 1 - p.t / 0.7);
       p.parts.forEach(function (q) { ctx.fillStyle = 'rgba(230,230,236,' + (a * 0.9).toFixed(3) + ')'; var r = q.r * (1 + p.t * 2); ctx.fillRect(Math.round(cx + q.x - r / 2), Math.round(cy + q.y - r / 2), Math.ceil(r), Math.ceil(r)); });
     });
     // rising words and numbers, outlined so they read on any ground
     texts.forEach(function (s) {
-      var k = s.t / 1.1, x = Math.round(s.tile.x * T - camX + T / 2), y = Math.round(s.tile.y * T - camY - 2 - k * 10);
+      var k = s.t / 1.1, sa = GT.at(s.tile.x, s.tile.y), x = Math.round(sa.x + T / 2), y = Math.round(sa.y - 2 - k * 10);
       ctx.globalAlpha = k < 0.7 ? 1 : Math.max(0, 1 - (k - 0.7) / 0.3);
       if (window.GT_THEME) GT_THEME.text(ctx, s.text, x, y, s.col, 8);
       ctx.globalAlpha = 1;

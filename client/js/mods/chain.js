@@ -447,12 +447,14 @@
     roamers().forEach(function (m) {
       if (e && e.id === m.id) return;
       var w = wander(m, t);
-      drawMonster(ctx, m.kind, Math.round((m.x + w.dx) * T - camX), Math.round((m.y + w.dy) * T - camY), t + m.x);
+      var ma = GT.at(m.x + w.dx, m.y + w.dy);
+      drawMonster(ctx, m.kind, Math.round(ma.x), Math.round(ma.y), t + m.x);
     });
     if (e) {
       var lx = 0, ly = 0, lk = (performance.now() - fightLunge) / 260;
       if (lk >= 0 && lk < 1) { var reach = Math.sin(lk * Math.PI) * 6, dxp = GT.player.x - e.x, dyp = GT.player.y - e.y, dl = Math.max(1, Math.abs(dxp) + Math.abs(dyp)); lx = dxp / dl * reach; ly = dyp / dl * reach; }
-      drawMonster(ctx, e.kind, Math.round(e.x * T - camX + lx), Math.round(e.y * T - camY + ly), t);
+      var ea = GT.at(e.x, e.y);
+      drawMonster(ctx, e.kind, Math.round(ea.x + lx), Math.round(ea.y + ly), t);
     }
     drawWeather(ctx, T, t);
   }

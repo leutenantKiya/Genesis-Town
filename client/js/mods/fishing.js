@@ -58,14 +58,14 @@
   }
 
   function rodTip(T, camX, camY) {
-    var p = GT.player, off = { up: [8, 0], down: [9, 6], left: [1, 3], right: [11, 3] }[p.dir] || [9, 4];
-    return { x: p.x * T - camX + off[0], y: p.y * T - camY + off[1] };
+    var p = GT.player, off = { up: [8, 0], down: [9, 6], left: [1, 3], right: [11, 3] }[p.dir] || [9, 4], a = GT.at(p.x, p.y);
+    return { x: a.x + off[0], y: a.y + off[1] };
   }
 
   function onDraw(ctx, camX, camY, T) {
     if (!F) return;
     var tip = rodTip(T, camX, camY), t = performance.now() / 1000;
-    var bx = F.tile.x * T - camX + T / 2, by = F.tile.y * T - camY + T / 2;
+    var fa = GT.at(F.tile.x, F.tile.y), bx = fa.x + T / 2, by = fa.y + T / 2;
     if (F.phase === 'cast') { // the float flies in an arc
       var k = Math.min(1, F.t / 0.45);
       bx = tip.x + (bx - tip.x) * k; by = tip.y + (by - tip.y) * k - Math.sin(k * Math.PI) * 10;
@@ -88,7 +88,7 @@
       ctx.beginPath(); ctx.ellipse(Math.round(bx) + 0.5, Math.round(by) + 1.5, 2 + ph * 5, (2 + ph * 5) * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
     }
     if (F.phase === 'bite') { // "!" over the player
-      var px = GT.player.x * T - camX + T / 2, py = GT.player.y * T - camY - 7 + Math.round(Math.sin(t * 20));
+      var pa = GT.at(GT.player.x, GT.player.y), px = pa.x + T / 2, py = pa.y - 7 + Math.round(Math.sin(t * 20));
       var TH = window.GT_THEME;
       ctx.fillStyle = (TH && TH.get('outline')) || '#0b0c16'; ctx.fillRect(px - 2, py - 1, 4, 9);
       ctx.fillStyle = (TH && TH.get('gold')) || '#f2c94c'; ctx.fillRect(px - 1, py, 2, 5); ctx.fillRect(px - 1, py + 6, 2, 1);

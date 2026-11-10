@@ -1813,7 +1813,7 @@ function interact(mode){
 
 /* ---------- update ---------- */
 function canControl(){ return !D && !tr && !mapOpen && !modals.length; }
-function desired(){ return held.length ? held[held.length - 1].d : null; }
+function desired(){ return held.length ? worldDir(held[held.length - 1].d) : null; }
 
 function tryMove(d){
   var m = scene.map, dv = DIRS[d], nx = P.x + dv[0], ny = P.y + dv[1];
@@ -1918,8 +1918,17 @@ function charStep(o){
    position; it hands the view the same entities it would draw, then draws the mods' overlays (signs, monsters, tags,
    effects) on this now transparent canvas with camX/camY moved so the player's 2D feet sit on the player's 3D feet.
    The view keeps one world pixel at the player's depth equal to one canvas pixel, so overlays near the player line up. */
-var view3d = null;
+var view3d = null, ovK = 0; // ovK: while the 3D overlays draw, device px per art px at the player's depth (else 0)
 function v3on(){ return !!(view3d && scene && scene.kind === 'out' && view3d.ready()); }
+/** Where a mod draws something that stands on tile (tx, ty) (fractions allowed): the tile's top-left in the overlay's
+    units, as tx*T - camX, ty*T - camY in 2D. In 2.5D it follows that tile's feet on screen at any camera turn, and
+    offsets from it stay in art pixels at the sprites' size, so a hat still sits on a head. */
+function at(tx, ty){
+  if (ovK){ var p = view3d.toScreen(tx + 0.5, ty + 0.5, 0); return { x: p.x * S / ovK - 6, y: p.y * S / ovK - 12 }; }
+  return { x: tx * T - camX, y: ty * T - camY };
+}
+/** A walking direction as pressed (screen) to the world direction under the 2.5D camera's turn. */
+function worldDir(d){ return d && v3on() && view3d.worldDir ? view3d.worldDir(d) : d; }
 function render3d(pp){
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, elCv.width, elCv.height); ctx.setTransform(S, 0, 0, S, 0, 0);
   var ents = [];
@@ -1929,8 +1938,12 @@ function render3d(pp){
   var g = view3d.groundCtx(scene.map);
   if (g) { g.clearRect(0, 0, g.canvas.width, g.canvas.height); callMods('onDrawGround', [g, 0, 0, T]); }
   var feet = view3d.draw({ ents:ents, VW:VW, VH:VH, S:S, map:scene.map, hour:clockInfo().phase * 24 });
-  camX = pp.px + 6 - feet.x; camY = pp.py + 12 - feet.y;
-  callMods('onDraw', [ctx, camX, camY, T]);
+  ovK = view3d.artScale(S);
+  camX = pp.px + 6 - feet.x * S / ovK; camY = pp.py + 12 - feet.y * S / ovK;
+  ctx.setTransform(ovK, 0, 0, ovK, 0, 0);
+  if (window.GT_THEME) GT_THEME.scale = 0.6;
+  try { callMods('onDraw', [ctx, camX, camY, T]); }
+  finally { ovK = 0; if (window.GT_THEME) GT_THEME.scale = 1; ctx.setTransform(S, 0, 0, S, 0, 0); }
   lastDark = currentDark();
   if (tr){
     var a = tr.ph === 0 ? tr.t : 1 - tr.t;
@@ -2240,7 +2253,8 @@ var KEYDIR = { ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down', ArrowLeft
 function pressDir(d, id){
   id = id || d; releaseDir(id);
   held.push({id:id, d:d});
-  if (canControl() && !P.moving && !waitRelease && P.dir !== d){ P.dir = d; P.turnT = TURN_T; }
+  var wd = worldDir(d);
+  if (canControl() && !P.moving && !waitRelease && P.dir !== wd){ P.dir = wd; P.turnT = TURN_T; }
 }
 function releaseDir(id){ for (var i = held.length - 1; i >= 0; i--) if (held[i].id === id) held.splice(i, 1); }
 function onButton(e){ return !!(e.target && e.target.closest && e.target.closest('button')); }
@@ -2454,6 +2468,7 @@ var GT = {
   openDev: function(){ return openDev(); },
   // the 2.5D view registers here (mods/view3d.js); null turns it off
   setView3d: function(v){ view3d = v || null; },
+  at: function(tx, ty){ return at(tx, ty); },
   view3dOn: function(){ return v3on(); }
 };
 GT.dev = {};
