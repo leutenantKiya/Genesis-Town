@@ -46,9 +46,11 @@
     // 2) overlay on the 2D canvas, drawn after the WebGL frame
     overlay: function (C, info) {
       var ctx = info.ctx, w = ctx.canvas.width, h = ctx.canvas.height;
-      var O = proj(C, 0, 0, w, h), PX = proj(C, T, 0, w, h), PY = proj(C, 0, T, w, h);
+      var qx = info.player.pos.px + 6, qy = info.player.pos.py + 6; // linearise around the player
+      var O = proj(C, qx, qy, w, h), PX = proj(C, qx + T, qy, w, h), PY = proj(C, qx, qy + T, w, h);
+      var a = (PX[0] - O[0]) / T, b = (PX[1] - O[1]) / T, c2 = (PY[0] - O[0]) / T, d2 = (PY[1] - O[1]) / T;
       ctx.save();
-      ctx.setTransform((PX[0] - O[0]) / T, (PX[1] - O[1]) / T, (PY[0] - O[0]) / T, (PY[1] - O[1]) / T, O[0], O[1]);
+      ctx.setTransform(a, b, c2, d2, O[0] - a * qx - c2 * qy, O[1] - b * qx - d2 * qy);
       ctx.imageSmoothingEnabled = false;
       try { info.call('onDraw', [ctx, 0, 0, T]); } finally { ctx.restore(); }
     },

@@ -229,6 +229,15 @@
       lab.appendChild(inp); lab.appendChild($('span', null, o[1])); qseg.appendChild(lab);
     });
     wrap.appendChild(qseg);
+    wrap.appendChild($('h3', null, 'Kamera 3D'));
+    var cseg = $('div', 'mseg'), ccur = 'perspektif';
+    try { ccur = localStorage.getItem('gt-cam3d') === 'datar' ? 'datar' : 'perspektif'; } catch (e) { /* ignore */ }
+    [['perspektif', 'Perspektif (benda jauh mengecil)'], ['datar', 'Datar (isometrik)']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-cam3d'; inp.value = o[0]; inp.checked = ccur === o[0];
+      inp.addEventListener('change', function () { try { localStorage.setItem('gt-cam3d', o[0]); } catch (e) { /* ignore */ } window.dispatchEvent(new Event('gt3dcam')); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); cseg.appendChild(lab);
+    });
+    wrap.appendChild(cseg);
     wrap.appendChild($('p', 'mnote', 'Rendah: tanpa bayangan dan lampu nyata (paling ringan). Tinggi: bayangan halus dan lebih banyak lampu.'));
 
     wrap.appendChild($('h3', null, 'Layar'));

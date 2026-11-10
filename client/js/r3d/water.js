@@ -23,6 +23,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     'varying vec3 vPos;',
     'uniform float uTime;',
     'uniform float uDark;',
+    'uniform vec3 uFogC; uniform float uFogN; uniform float uFogF; uniform float uFogOn;',
     'float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }'
   ].join('\n');
 
@@ -61,6 +62,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     '  col = mix(col, foam, fo * 0.9);',
     '  col *= mix(vec3(1.0), vec3(0.42, 0.46, 0.72), uDark);',
     '  col *= mix(vec3(1.0), vec3(0.58, 0.52, 0.78), vLock);',
+    '  float fd = length(cameraPosition - vPos); col = mix(col, uFogC, clamp((fd - uFogN) / max(1.0, uFogF - uFogN), 0.0, 1.0) * uFogOn);',
     '  gl_FragColor = vec4(col, 1.0);',
     '}'
   ].join('\n');
@@ -87,6 +89,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     '  vec3 col = mix(base, vec3(0.95, 0.99, 1.0), bright * 0.7);',
     '  float a = (1.0 - smoothstep(uFall * 0.25, uFall, down)) * (0.9 - 0.25 * streak);',
     '  col *= mix(vec3(1.0), vec3(0.42, 0.46, 0.72), uDark);',
+    '  float fd = length(cameraPosition - vPos); col = mix(col, uFogC, clamp((fd - uFogN) / max(1.0, uFogF - uFogN), 0.0, 1.0) * uFogOn);',
     '  gl_FragColor = vec4(col, a);',
     '}'
   ].join('\n');
@@ -106,7 +109,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
 
   R3D.water = {
     init: function (C) {
-      var u = function () { return { uTime: { value: 0 }, uDark: { value: 0 } }; };
+      var u = function () { return { uTime: { value: 0 }, uDark: { value: 0 }, uFogC: { value: new THREE.Color(0xbfe6f8) }, uFogN: { value: 50 }, uFogF: { value: 140 }, uFogOn: { value: 0 } }; };
       var su = u();
       surfMat = new THREE.ShaderMaterial({ uniforms: su, vertexShader: SURF_VS, fragmentShader: SURF_FS });
       var fu = u(); fu.uFall = { value: FALL }; fu.uLevel = { value: WL };
@@ -176,6 +179,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
       if (!surfMat) return;
       var t = info.timeAcc, d = Math.min(1, info.dark);
       surfMat.uniforms.uTime.value = t; surfMat.uniforms.uDark.value = d;
+      var fg = R3D.fog; if (fg) [surfMat, fallMat].forEach(function (mt) { mt.uniforms.uFogC.value.copy(fg.color); mt.uniforms.uFogN.value = fg.near; mt.uniforms.uFogF.value = fg.far; mt.uniforms.uFogOn.value = fg.on; });
       fallMat.uniforms.uTime.value = t; fallMat.uniforms.uDark.value = d;
       mistMat.color.copy(DAYC).lerp(NIGHTC, d);
       bankMat.color.copy(DAYC).lerp(NIGHTC, d);

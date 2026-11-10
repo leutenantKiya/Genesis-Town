@@ -30,7 +30,15 @@
   function qualityName() { var q = null; try { q = localStorage.getItem('gt-q3d'); } catch (e) { /* ignore */ } return QUALITY[q] ? q : 'sedang'; }
   R3D.Q = QUALITY[qualityName()];
 
-  var T = 12, host = null, canvas = null, C = null, size = { w: 0, h: 0 }, zoom = 1, wheelFn = null, qFn = null;
+  var FOV = 30, camDist = DIST, persp = true, fog = new THREE.Fog(0xbfe6f8, 50, 140);
+  function camMode() { var m = null; try { m = localStorage.getItem('gt-cam3d'); } catch (e) { /* ignore */ } return m === 'datar' ? 'datar' : 'perspektif'; }
+  function makeCamera() {
+    persp = camMode() === 'perspektif';
+    var c = persp ? new THREE.PerspectiveCamera(FOV, 1, 1, 900) : new THREE.OrthographicCamera(-8, 8, 6, -6, 0.1, 600);
+    c.position.set(0, DIST * Math.sin(ELEV), DIST * Math.cos(ELEV)); c.lookAt(0, 0, 0); c.updateMatrixWorld(true);
+    return c;
+  }
+  var T = 12, host = null, canvas = null, C = null, size = { w: 0, h: 0 }, zoom = 1, wheelFn = null, qFn = null, camFn = null;
   // orbit camera: drag turns and tilts it around the player, wheel / pinch zooms, V resets (movement keys follow the view)
   var yaw = 0, pitch = ELEV, pointers = new Map(), dragStart = null, dragged = false, pinch = 0, orbitFns = null;
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -98,10 +106,7 @@
     R3D.Q = QUALITY[qualityName()];
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, R3D.Q.pr));
     var scene = new THREE.Scene();
-    var cam = new THREE.OrthographicCamera(-8, 8, 6, -6, 0.1, 600);
-    // fixed orientation: looking north and down at ELEV
-    cam.position.set(0, DIST * Math.sin(ELEV), DIST * Math.cos(ELEV));
-    cam.lookAt(0, 0, 0); cam.updateMatrixWorld(true);
+    var cam = makeCamera();
     hemi = new THREE.HemisphereLight(0xffffff, 0x8a90a8, HEMI); scene.add(hemi);
     sun = new THREE.DirectionalLight(0xfff2dc, SUN); scene.add(sun); scene.add(sun.target);
     sun.shadow.camera.near = 1; sun.shadow.camera.far = 220; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
@@ -147,6 +152,8 @@
     host.addEventListener('click', orbitFns.click, true);
     if (GT.hotkey) GT.hotkey('V', function () { yaw = 0; pitch = ELEV; zoom = homeZoom(); size.w = size.h = 0; });
     qFn = function () { applyQuality(); };
+    camFn = function () { C.cam = makeCamera(); size.w = size.h = 0; if (!persp) C.scene.fog = null; };
+    window.addEventListener('gt3dcam', camFn);
     wd.last = 0; wd.n = 0; wd.done = false; wd.acc = 0; wd.frames = 0;
     try { if (/[?&]fps\b/.test(location.search)) { wd.el = document.createElement('div'); wd.el.style.cssText = 'position:absolute;left:4px;bottom:4px;z-index:9;font:11px monospace;color:#fff;background:rgba(0,0,0,.6);padding:2px 5px;pointer-events:none'; host.appendChild(wd.el); } } catch (e) { /* ignore */ }
     window.addEventListener('gt3dquality', qFn);
@@ -163,6 +170,8 @@
     orbitFns = null; R3D.turns = 0;
     if (wd.el && wd.el.parentNode) wd.el.parentNode.removeChild(wd.el); wd.el = null;
     if (qFn) window.removeEventListener('gt3dquality', qFn);
+    if (camFn) window.removeEventListener('gt3dcam', camFn);
+    C.scene.fog = null;
     each(function (m) { m.dispose(C); });
     C.renderer.dispose();
     if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
@@ -203,9 +212,13 @@
       var asp = w / hh, need = Math.max(imap.w + 2.6, (imap.h * Math.sin(ELEV) + 1.9 * Math.cos(ELEV) + 1.8) * asp);
       cols = need; rows = cols / asp;
     }
-    var cam = C.cam;
-    cam.left = -cols / 2; cam.right = cols / 2; cam.top = rows / 2; cam.bottom = -rows / 2;
-    cam.updateProjectionMatrix();
+    var cam = C.cam; C.viewW = cols;
+    if (persp) { // the same visible rows, now as a distance
+      camDist = rows / (2 * Math.tan(FOV * Math.PI / 360)); cam.fov = FOV; cam.aspect = w / hh; cam.updateProjectionMatrix();
+    } else {
+      cam.left = -cols / 2; cam.right = cols / 2; cam.top = rows / 2; cam.bottom = -rows / 2;
+      cam.updateProjectionMatrix();
+    }
   }
 
   function weatherOf() {
@@ -241,7 +254,7 @@
     moon.target.position.copy(target); moon.position.copy(target).addScaledVector(moonDir, 80);
     sun.target.updateMatrixWorld(); moon.target.updateMatrixWorld();
     if (sun.castShadow) {
-      var cam = C.cam, half = Math.max(12, Math.min(44, (cam.right - cam.left) * 0.62));
+      var cam = C.cam, half = Math.max(12, Math.min(44, (persp ? (C.viewW || 30) * 1.1 : cam.right - cam.left) * 0.62));
       if (Math.abs(half - shadowHalf) > 0.4) {
         shadowHalf = half; var sc = sun.shadow.camera; sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.updateProjectionMatrix();
       }
@@ -258,12 +271,17 @@
     if (interior && imap) { px = imap.w / 2; pz = imap.h / 2 + 0.7; }
     // orbit around the player (rooms stay in the fixed front view)
     var yw = interior ? 0 : yaw, pt = interior ? ELEV : pitch;
-    cam.position.set(px + Math.sin(yw) * Math.cos(pt) * DIST, Math.sin(pt) * DIST, pz + Math.cos(yw) * Math.cos(pt) * DIST);
+    var dd = persp ? camDist : DIST;
+    cam.position.set(px + Math.sin(yw) * Math.cos(pt) * dd, Math.sin(pt) * dd, pz + Math.cos(yw) * Math.cos(pt) * dd);
     cam.lookAt(px, 0, pz);
     cam.updateMatrixWorld(true);
     R3D.turns = interior ? 0 : (((4 - Math.round(yw / (Math.PI / 2))) % 4) + 4) % 4; // which way "up" on the keys points in the world
     info.weather = weatherOf(); info.quality = R3D.Q;
     lighting(info, px, pz);
+    // distance haze in the colour of the horizon (perspective only): it is what makes far islands soft and pale
+    var hz = R3D.sky && R3D.sky.horizon;
+    if (persp && !interior && hz) { fog.color.copy(hz); fog.near = camDist * 0.8; fog.far = camDist * 2.6; C.scene.fog = fog; R3D.fog = { on: 1, color: hz, near: fog.near, far: fog.far }; }
+    else { C.scene.fog = null; R3D.fog = { on: 0, color: hz || fog.color, near: 1, far: 2 }; }
     each(function (m, n) { if (!interior || IN_UPDATE[n]) m.update(C, info); });
     C.renderer.render(C.scene, cam);
     watchdog(info);

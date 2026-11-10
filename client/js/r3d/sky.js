@@ -27,10 +27,12 @@
 
   function paintSky(d, h, oc) {
     var p = pair(d), H = cv.height, W = cv.width, y, x;
+    R3D.sky.horizon = null; // set below, once overcast is applied
     if (oc > 0) { // overcast: the sky turns grey (darker at night)
       var g0 = new THREE.Color('#7f8b99').lerp(new THREE.Color('#12162a'), d), g1 = new THREE.Color('#bcc6d0').lerp(new THREE.Color('#222840'), d);
       p[0].lerp(g0, oc * 0.85); p[1].lerp(g1, oc * 0.85);
     }
+    R3D.sky.horizon = p[1].clone();
     for (y = 0; y < H; y += 2) {
       var c = p[0].clone().lerp(p[1], y / H);
       g.fillStyle = '#' + c.getHexString();
