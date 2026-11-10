@@ -269,13 +269,18 @@ button:disabled{cursor:not-allowed}
 .toast{background:var(--chip);color:var(--hud-ink);border:var(--line) solid var(--outline);border-radius:var(--r-ctl);padding:6px 10px;font-size:calc(14px*var(--ts));line-height:1.5;text-align:center;overflow-wrap:anywhere;font-family:var(--font)}
 
 /* ---------------------------------------------------------------- character screen (mods/charscreen.js) */
-.gt-cs{position:absolute;inset:0;z-index:60;display:flex;padding:12px;background:var(--chip-strong);color:var(--hud-ink);overflow:auto;transition:background .3s}
+.gt-cs{position:absolute;inset:0;z-index:60;display:flex;padding:12px;background:var(--chip-strong);color:var(--hud-ink);overflow:auto;line-height:1.4;transition:background .3s}
+/* phone: #screen is only the strip between the HUD and the pad, so picking a look takes the whole screen; the throw
+   (.gt-cs-throw) goes back into #screen so the character still lands on the player */
+html.gt-phone .gt-cs:not(.gt-cs-throw){position:fixed;z-index:1100;padding:max(12px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom))}
+html.gt-phone .gt-cs-card{gap:12px}
+html.gt-phone .gt-cs-stage{min-height:150px}
 .gt-cs-load{font-size:calc(16px*var(--ts))}
 .gt-cs-card{margin:auto;display:flex;flex-wrap:wrap;gap:20px;align-items:stretch;justify-content:center;max-width:760px;width:100%}
 .gt-cs-left,.gt-cs-right{flex:1 1 280px;display:flex;flex-direction:column;gap:12px;background:var(--paper);color:var(--paper-ink);border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);padding:14px;border-top:10px solid var(--season);
   box-shadow:inset 0 calc(-1*var(--edge)) 0 var(--shade)}
 .gt-cs-namerow{display:flex;align-items:center;gap:8px}
-.gt-cs-name{flex:1;min-width:0;font:inherit;font-size:calc(20px*var(--ts));padding:6px 8px;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);background:var(--field);color:inherit}
+.gt-cs-name{flex:1;min-width:0;width:0;font:inherit;font-size:calc(20px*var(--ts));padding:6px 8px;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);background:var(--field);color:inherit}
 .gt-cs-name:focus-visible,.gt-cs-sw:focus-visible,.gt-cs-go:focus-visible{outline:3px solid var(--paper-ink);outline-offset:2px}
 .gt-cs-tag{font-size:calc(20px*var(--ts));color:var(--paper-dim);white-space:nowrap;font-variant-numeric:tabular-nums}
 .gt-cs-stage{flex:1;min-height:200px;display:flex;align-items:center;justify-content:center;background:var(--stage);border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl)}
