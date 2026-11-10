@@ -39,6 +39,32 @@
   var cWarm = new THREE.Color(0xffb27a), cWhite = new THREE.Color(0xfff6ea), cMoon = new THREE.Color(0x9fb4ff);
   var sunDir = new THREE.Vector3(), moonDir = new THREE.Vector3(), target = new THREE.Vector3();
 
+  /* ---- performance watchdog: if the first 10 seconds average under 20 fps the quality drops one step; if Rendah is still
+     too slow the player is offered the 2D view. ?fps shows a small fps counter. ---- */
+  var wd = { t0: 0, n: 0, last: 0, done: false, el: null, acc: 0, frames: 0 };
+  function watchdog(info) {
+    var now = performance.now();
+    if (!wd.last) { wd.last = now; wd.t0 = now; return; }
+    var dt = now - wd.last; wd.last = now;
+    if (wd.el) { wd.acc += dt; wd.frames++; if (wd.acc > 500) { wd.el.textContent = Math.round(wd.frames * 1000 / wd.acc) + ' fps \u00b7 ' + C.renderer.info.render.calls + ' calls'; wd.acc = 0; wd.frames = 0; } }
+    if (wd.done || dt > 500) return; // ignore pauses (hidden tab, loading)
+    wd.n++;
+    if (now - wd.t0 < 10000) return;
+    wd.done = true;
+    var fps = wd.n * 1000 / (now - wd.t0);
+    if (fps >= 20) return;
+    var q = qualityName();
+    if (q !== 'rendah') {
+      try { localStorage.setItem('gt-q3d', q === 'tinggi' ? 'sedang' : 'rendah'); } catch (e) { /* ignore */ }
+      window.dispatchEvent(new Event('gt3dquality'));
+      GT.toast('Tampilan 3D agak berat di perangkat ini. Kualitas diturunkan.');
+      wd.done = false; wd.n = 0; wd.t0 = now; // look again with the lower setting
+    } else if (GT.modal) {
+      GT.modal({ title: 'Tampilan 3D terasa berat', body: 'Perangkat ini kesulitan menjalankan tampilan 3D (sekitar ' + Math.round(fps) + ' fps). Mau pindah ke tampilan 2D yang lebih ringan? Kamu bisa kembali ke 3D kapan saja dari Pengaturan.',
+        actions: [{ label: 'Pindah ke 2D', primary: true, onClick: function () { GT.setView('2d'); return true; } }, { label: 'Tetap 3D', close: true }] });
+    }
+  }
+
   function each(fn) { MODS.forEach(function (n) { if (R3D[n]) fn(R3D[n], n); }); }
   function outdoors(fn) { each(function (m, n) { if (n !== 'interior') fn(m, n); }); }
 
@@ -78,7 +104,7 @@
     var root = new THREE.Group(); scene.add(root);
     C = { renderer: renderer, scene: scene, cam: cam, root: root, THREE: THREE };
     R3D.ctx = C; // debugging handle (scene, camera, renderer)
-    size.w = size.h = 0; zoom = 1; map = null; imap = null; interior = false; shadowHalf = 0;
+    size.w = size.h = 0; zoom = document.documentElement.classList.contains('gt-phone') ? 1.3 : 1; map = null; imap = null; interior = false; shadowHalf = 0;
     each(function (m) { m.init(C); });
     wheelFn = function (e) {
       if (!e.ctrlKey) return;
@@ -88,6 +114,8 @@
     };
     host.addEventListener('wheel', wheelFn, { passive: false });
     qFn = function () { applyQuality(); };
+    wd.last = 0; wd.n = 0; wd.done = false; wd.acc = 0; wd.frames = 0;
+    try { if (/[?&]fps\b/.test(location.search)) { wd.el = document.createElement('div'); wd.el.style.cssText = 'position:absolute;left:4px;bottom:4px;z-index:9;font:11px monospace;color:#fff;background:rgba(0,0,0,.6);padding:2px 5px;pointer-events:none'; host.appendChild(wd.el); } } catch (e) { /* ignore */ }
     window.addEventListener('gt3dquality', qFn);
     applyQuality();
   }
@@ -95,6 +123,7 @@
   function dispose() {
     if (!C) return;
     if (host && wheelFn) host.removeEventListener('wheel', wheelFn);
+    if (wd.el && wd.el.parentNode) wd.el.parentNode.removeChild(wd.el); wd.el = null;
     if (qFn) window.removeEventListener('gt3dquality', qFn);
     each(function (m) { m.dispose(C); });
     C.renderer.dispose();
@@ -195,6 +224,7 @@
     lighting(info, px, pz);
     each(function (m, n) { if (!interior || IN_UPDATE[n]) m.update(C, info); });
     C.renderer.render(C.scene, cam);
+    watchdog(info);
     if (R3D.compat) R3D.compat.overlay(C, info);
   }
 

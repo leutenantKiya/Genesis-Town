@@ -70,6 +70,14 @@
 >   **Pos Ronda** town project (on chain) keeps the forest safe for everyone. **Weather** for everyone each day (rain,
 >   snow, bright summer sun); rain waters the farm. Calmer HUD and a first-steps guide.
 >
+> - **3D floating-island view** (branch `floating-island-3d`, optional; the 2D view is unchanged): open with `?view=3d` or
+>   Pengaturan → Tampilan dunia. The village and every Homeland become islands in the sky: cliffs and a hanging underside,
+>   clouds and distant islets, recessed animated water with waterfalls off the edge, real low-poly buildings, trees, props,
+>   market stalls and rooms inside buildings (furniture, windows), 3D characters (same looks, walk, axe, fishing, Homeland hats),
+>   a sun and moon that follow the game clock with shadows, street lamps and lit windows at night, rain, snow and snowy roofs,
+>   chunks that are not open yet floating as their own islands that dock when the town opens them. Quality Rendah / Sedang /
+>   Tinggi in Pengaturan; the game drops quality (and offers 2D) on slow devices; `?fps` shows a counter. Three.js loads only
+>   when the 3D view is on. Plan and decisions: [docs/superpowers/plans/2026-11-10-floating-island-3d.md](docs/superpowers/plans/2026-11-10-floating-island-3d.md).
 > - **Homeland, phase A** (built on branch `homeland`; replaces the broker-sold Private Islands, which are gone): after
 >   login a character screen shows `name#12345` (rename it, pick skin, hair and shirt) and **Mulai** drops you into your
 >   own world. Every player has a **Homeland**: a seeded 3 x 3 chunk map (48 x 48 tiles) with a Town Hall in the middle and

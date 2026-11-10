@@ -185,3 +185,25 @@ chain) with N simulated players for D days, deterministic from a seed. It runs i
 `casino`, `combat`, `thief`, `police`, `curfew`, `gossip`, and the claude.ai-only `social` online mode. The code stays,
 and the flags are set in `client/flags.js` and the Dev panel. Player-to-player gifts and trades are replaced by the
 on-chain player market.
+
+## 3D view (optional renderer)
+
+The game logic stays on a tile grid in `engine.js`; the 2D canvas renderer is the default. `?view=3d` (or Pengaturan) loads
+`vendor/three.js` and `js/r3d/*` on demand and registers a second renderer through `GT.registerRenderer('3d', ...)`. While it is
+active `render()` gives it `GT.frameInfo()` (map, entities, player, game clock, darkness) instead of drawing 2D, and it supports
+rooms (`interior: true`), so the whole game is shown in 3D. If WebGL2 is missing or it fails, the game falls back to 2D.
+
+- **Data stays shared.** The village and Homeland generators run unchanged on server and client; the 3D view only reads their
+  output. Tile (x, y) maps to world (x + 0.5, 0, y + 0.5); the camera is a fixed tilted orthographic camera that follows the player.
+- **Islands.** `regions.js` makes region 0 the open island and one region per locked chunk; each region is a Group that floats,
+  and every module mounts its meshes per region. A chunk that becomes open slides back and merges ("berlabuh").
+- **Ground and props.** `GT.bakeFlat` bakes the 2D ground without sprites that have 3D versions; trees, rocks, fences, lamps,
+  stalls, buildings and the portal are procedural low-poly meshes merged per region (`geo.js` Builder).
+- **People and effects.** `rig.js` is one blocky character built from the 2D palettes; `actors.js` poses it from engine and mod
+  state (`GT.charState`, `GT_FX.swinging`, `GT_FISH`, `npc.cosmetic`). `fx.js` exposes `GT.fx3d` (labels, floating text,
+  particles, flashes, monsters, fishing) and mods use it only when the 3D view is on. `compat.js` keeps old 2D mod hooks
+  (`onDrawGround`, `onDraw`) working through a decal plane and an affine overlay.
+- **Light.** Sun and moon follow `gameMin`; lamps and windows light up at night; weather comes from the `gt-w-*` classes that
+  `chain.js` sets from the server's shared weather; winter whitens roofs and foliage.
+- **Quality and performance.** Rendah / Sedang / Tinggi (`localStorage gt-q3d`) set pixel ratio, shadows, lamp lights and
+  particle counts. A watchdog lowers the quality after a slow first ten seconds and then offers the 2D view. `?fps` shows a counter.
