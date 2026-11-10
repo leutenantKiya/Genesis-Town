@@ -33,7 +33,22 @@
     font-size: 14px; color: var(--hud-dim); white-space: nowrap; }
   kbd { font: 600 13px var(--font); color: var(--hud-ink); background: var(--hud-3); border: var(--line) solid var(--outline); border-radius: var(--r-ctl); padding: 0 5px; }
   .err { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; font-size: 18px; }
-  @media (max-width: 720px) { .hint { display: none; } input[type=range] { width: 100px; } }
+  /* touch: drag anywhere on the world to walk; the ring shows where the drag started */
+  .stick { position: fixed; width: 88px; height: 88px; margin: -44px 0 0 -44px; border-radius: 50%; pointer-events: none; display: none;
+    border: var(--line) solid var(--outline); background: color-mix(in srgb, var(--hud) 45%, transparent); }
+  .stick i { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: var(--accent); }
+  @media (max-width: 720px) {
+    .hint { display: none; }
+    /* phone: the controls sit at the bottom under the thumb, full width with equal edges, 44px targets */
+    .bar { top: auto; bottom: calc(12px + env(safe-area-inset-bottom)); gap: 6px; }
+    .tray { flex: 1 1 100%; }
+    .tray button { flex: 1 1 0; padding: 0 6px; }
+    .tray label { flex: 1 1 0; min-width: 0; padding: 0 2px 0 6px; }
+    .tray label + button, .tray label ~ button { flex: 0 0 44px; padding: 0; }
+    .title { display: none; }
+    button { height: 44px; min-width: 44px; }
+    input[type=range] { flex: 1 1 0; width: 0; min-width: 0; height: 44px; }
+  }
 </style>
 </head>
 <body>
@@ -45,9 +60,11 @@
     <button data-season="semi" aria-pressed="true">Semi</button><button data-season="panas" aria-pressed="false">Panas</button>
     <button data-season="gugur" aria-pressed="false">Gugur</button><button data-season="dingin" aria-pressed="false">Dingin</button></div>
   <div class="tray"><label>Jam <input id="hour" type="range" min="0" max="24" step="0.25" value="10"> <output id="hourOut">10:00</output></label>
-    <button id="zin" aria-label="Perbesar">+</button><button id="zout" aria-label="Perkecil">-</button></div>
+    <button id="zin" aria-label="Perbesar">+</button><button id="zout" aria-label="Perkecil">-</button>
+    <button id="tl" aria-label="Putar kamera ke kiri">&#8634;</button><button id="tr" aria-label="Putar kamera ke kanan">&#8635;</button></div>
 </div>
-<div class="hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> jalan · <kbd>Q</kbd><kbd>E</kbd> putar kamera · scroll zoom</div>
+<div class="stick" aria-hidden="true"><i></i></div>
+<div class="hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> atau seret jalan · <kbd>Q</kbd><kbd>E</kbd> putar kamera · scroll zoom</div>
 
 <script src="vendor/three.js"></script>
 <script src="js/sprites.js"></script>
@@ -112,12 +129,29 @@
   document.getElementById('zout').onclick = function () { rig.zoom(rig.getZoom() / 1.2); };
   renderer.domElement.addEventListener('wheel', function (e) { e.preventDefault(); rig.zoom(rig.getZoom() * (e.deltaY < 0 ? 1.1 : 1 / 1.1)); }, { passive: false });
 
-  var keys = {}, yaw = 0;
+  var keys = {}, yaw = 0, stick = null; // stick: a drag on the world (touch or mouse), {id, x0, y0, dx, dy}
+  var stickEl = document.querySelector('.stick'), knob = stickEl.firstChild;
+  function turnBy(r) { yaw += r; rig.turn(yaw); }
+  document.getElementById('tl').onclick = function () { turnBy(-Math.PI / 4); };
+  document.getElementById('tr').onclick = function () { turnBy(Math.PI / 4); };
+  var cv = renderer.domElement;
+  cv.addEventListener('pointerdown', function (e) {
+    stick = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dx: 0, dy: 0 };
+    try { cv.setPointerCapture(e.pointerId); } catch (_) { /* old browsers */ }
+    stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.style.display = 'block'; knob.style.transform = '';
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!stick || e.pointerId !== stick.id) return;
+    var dx = e.clientX - stick.x0, dy = e.clientY - stick.y0, d = Math.hypot(dx, dy), k = d > 26 ? 26 / d : 1;
+    stick.dx = dx; stick.dy = dy; knob.style.transform = 'translate(' + dx * k + 'px,' + dy * k + 'px)';
+  });
+  function endStick(e) { if (stick && e.pointerId === stick.id) { stick = null; stickEl.style.display = 'none'; } }
+  cv.addEventListener('pointerup', endStick); cv.addEventListener('pointercancel', endStick);
   addEventListener('keydown', function (e) {
     if (e.target && /INPUT|BUTTON/.test(e.target.tagName) && e.key === ' ') return;
     keys[e.key.toLowerCase()] = true;
-    if (e.key === 'q' || e.key === 'Q') { yaw -= Math.PI / 4; rig.turn(yaw); }
-    if (e.key === 'e' || e.key === 'E') { yaw += Math.PI / 4; rig.turn(yaw); }
+    if (e.key === 'q' || e.key === 'Q') turnBy(-Math.PI / 4);
+    if (e.key === 'e' || e.key === 'E') turnBy(Math.PI / 4);
   });
   addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
 
@@ -129,6 +163,7 @@
     var dt = Math.min(0.1, (now - last) / 1000); last = now;
     // walk: screen-relative to the camera's turn, blocked by solid tiles
     var ix = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), iz = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+    if (stick && Math.hypot(stick.dx, stick.dy) > 12) { ix = stick.dx; iz = stick.dy; } // past a small dead zone
     if (ix || iz) {
       var c = Math.cos(yaw), s = Math.sin(yaw), mx = ix * c + iz * s, mz = -ix * s + iz * c, len = Math.hypot(mx, mz), sp = 4 * dt / len;
       var nx = px + mx * sp, nz = pz + mz * sp;

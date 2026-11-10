@@ -2,7 +2,7 @@
  * actor.js - GT3.Actor(palette): one character. The 2D sprite (SPRITES.drawCharacter, 9 palettes, 4 directions, 3
  * steps) stands in the 3D world as a card that always turns to the camera, the HD-2D way, with a soft round
  * shadow on the ground. The card is lit like the world (it darkens at night and in shade) but never casts a flat
- * card-shaped shadow.
+ * card-shaped shadow. Its depth is that of an upright card at its feet, so a wall behind the player never cuts into the sprite.
  *
  *   var a = GT3.Actor(3); scene.add(a.group);
  *   a.set(x, z, dir, step)    tile units (feet at x, z), dir: up | down | left | right, step 0..2
@@ -38,6 +38,19 @@
     var group = new THREE.Group(), pal = palette | 0, dir = 'down', step = 0;
     var mat = GT3.mat({ map: frame(pal, dir, step), alphaTest: 0.5, side: THREE.DoubleSide });
     var w = 12 * PX, h = 16 * PX;
+    // The card leans back about a tile, so next to a wall its top half sat inside the building and the wall hid it
+    // (the player "sank" into it). Each pixel takes its depth from where its camera ray crosses an upright plane at the
+    // feet (facing the camera, 0.35 nearer so ground and the wall at the tile edge never win): what stands behind the
+    // feet never covers the sprite, what stands in front still does. A plane, so the depth interpolates exactly.
+    mat.onBeforeCompile = function (sh) {
+      sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n' +
+        'vec3 gtF = (modelMatrix * vec4(0.0, ' + (-(h / 2 - PX)).toFixed(4) + ', 0.0, 1.0)).xyz;\n' +
+        'vec3 gtN = cameraPosition - gtF; gtN.y = 0.0; gtN = normalize(gtN); gtF += gtN * 0.35;\n' +
+        'vec3 gtD = (modelMatrix * vec4(transformed, 1.0)).xyz - cameraPosition;\n' +
+        'vec4 gtQ = projectionMatrix * viewMatrix * vec4(cameraPosition + gtD * (dot(gtF - cameraPosition, gtN) / dot(gtD, gtN)), 1.0);\n' +
+        'gl_Position.z = gtQ.z / gtQ.w * gl_Position.w;');
+    };
+    mat.customProgramCacheKey = function () { return 'gt-actor-upright-depth'; };
     var card = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
     card.position.y = h / 2 - 1 * PX; card.receiveShadow = true; card.name = 'actor-card';
     var pivot = new THREE.Group(); pivot.add(card); group.add(pivot);
