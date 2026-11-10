@@ -122,7 +122,7 @@
           ctx.arc(hx, hy, reach + w * 1.8, Math.min(trailFrom, ang), Math.max(trailFrom, ang), false);
           ctx.stroke();
         }
-        if (e.t < DUR * 0.8) drawAxe(ctx, hx, hy, ang);
+        if (e.t < DUR * 0.8 && GT.view !== '3d') drawAxe(ctx, hx, hy, ang); // the 3D character swings its own axe
       }
       // impact flash on the target
       if (e.hit && e.t >= HIT && e.t < HIT + 0.08) {
@@ -156,6 +156,6 @@
     ctx.restore();
   }
 
-  window.GT_FX = { chop: chop, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; } };
+  window.GT_FX = { swinging: function () { for (var i = 0; i < fx.length; i++) if (fx[i].t < DUR) return { kind: fx[i].kind, dir: fx[i].dir, p: fx[i].t / DUR }; return null; }, chop: chop, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; } };
   GT.register({ id: 'actfx', onFrame: onFrame, onDraw: onDraw });
 })();

@@ -492,7 +492,10 @@
     return !!(w && w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now());
   }
   function drawHat(ctx, n, name, camX, camY, T, sick) {
-    var d = name && H.cosmetics && H.cosmetics[name]; if (!d || !n) return;
+    var d = name && H.cosmetics && H.cosmetics[name];
+    if (n) { n.cosmetic = d ? name : null; n.cosmeticColor = d ? d.color : null; } // the 3D view builds the hat itself
+    if (GT.view === '3d' && !sick) return;
+    if (!d || !n) return;
     var sx = Math.round(n.x * T - camX), sy = Math.round(n.y * T - camY);
     if (sick) { if (name === 'syal') return; sx -= 2; sy += 5; } // a collapsed worker lies down: the hat goes on the lying head
     ctx.fillStyle = '#2a2430';

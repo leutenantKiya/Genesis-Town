@@ -2034,7 +2034,7 @@ function render(){
 }
 // label / bubble anchor for the 3D view: a point above the character's head, relative to the #fx layer
 function fx3dProj(en){
-  var q = altRenderer.mapToScreen(en.px + 6, en.py + 12, 14); if (!q) return null;
+  var q = altRenderer.mapToScreen(en.px + 6, en.py + 6, 15); if (!q) return null;
   var r = elFx.getBoundingClientRect();
   return { x:q.x - r.left, y:q.y - r.top };
 }

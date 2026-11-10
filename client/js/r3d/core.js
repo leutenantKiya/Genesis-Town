@@ -31,7 +31,7 @@ var HEMI = 2.5, SUN = 1.7;          // light intensities (three.js uses physical
     canvas = document.createElement('canvas');
     canvas.id = 'cv3d'; canvas.setAttribute('aria-hidden', 'true');
     host.insertBefore(canvas, host.firstChild);
-    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, alpha: false, stencil: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     var scene = new THREE.Scene();
     var cam = new THREE.OrthographicCamera(-8, 8, 6, -6, 0.1, 600);

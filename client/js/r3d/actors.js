@@ -1,83 +1,68 @@
 /*
- * r3d/actors.js - characters as camera-facing billboards. Each actor (the player, NPCs and bots, other players) has a small
- * canvas that the existing 2D character art (GT.charDraw / GT.drawChar, so looks, combat flashes and KO poses keep working)
- * is drawn into, uploaded as a texture on a plane. One sprite pixel = 1/12 world unit, so it matches the pixel scale of the
- * ground. The feet sit on the map pixel the 2D view would draw them at.
+ * r3d/actors.js - every person in the 3D view (the player, NPCs and bots, merchants, other players) as a 3D rig (rig.js).
+ * Position, facing and walking come from the engine's entity list; poses come from the mods through small hooks:
+ * GT.charState (combat flash/knock-back/KO), GT_FX.swinging (axe), GT_FISH.active (fishing), npc.cosmetic (Homeland hats).
+ * GT.charDraw is still called on a scratch canvas so mods that remember where each character is (combat bars, KO stars)
+ * keep working with the same coordinates the compat overlay uses.
  */
 (function () {
   'use strict';
   var R3D = window.R3D = window.R3D || {};
   var THREE = window.THREE, GT = window.GT;
-  if (!THREE) return;
+  if (!THREE || !R3D.rig) return;
 
-  var CW = 20, CH = 24, OX = 4, OY = 8, FX = 10, FY = 20; // canvas size, where the 2D tile origin goes, where the feet are
-  var geo = null, pool = null, T = 12;
-  var DAYC = new THREE.Color(1, 1, 1), NIGHTC = new THREE.Color(0.42, 0.46, 0.72);
+  var pool = null, T = 12, scratch = null, sg = null;
 
-  function makeGeo() {
-    var gm = new THREE.PlaneGeometry(CW / T, CH / T);
-    gm.translate(-(FX - CW / 2) / T, -(CH / 2 - FY) / T, 0);
-    return gm;
-  }
-
-  function create() {
-    var c = document.createElement('canvas'); c.width = CW; c.height = CH;
-    var tex = new THREE.CanvasTexture(c);
-    tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.colorSpace = THREE.SRGBColorSpace;
-    var mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.04, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-    var mesh = new THREE.Mesh(geo, mat);
-    mesh.frustumCulled = false;
-    return { mesh: mesh, canvas: c, g: c.getContext('2d'), tex: tex, mat: mat, sig: null, seen: 0 };
-  }
-
-  function drawInto(a, en) {
-    var g = a.g; g.clearRect(0, 0, CW, CH); g.imageSmoothingEnabled = false;
-    var done = false;
-    if (en.char) { GT.drawChar(g, OX, OY, en.char.look, en.char.dir, en.char.step); return; }
-    var n = en.n, pal = n ? n.pal : 0, dir = n ? n.dir : (en.dir || 'down'), step = en.step || 0;
-    if (typeof GT.charDraw === 'function') {
-      try { done = GT.charDraw(g, n, OX, OY, pal, dir, step) === true; } catch (e) { done = false; }
-    }
-    if (!done) GT.drawChar(g, OX, OY, pal, dir, step);
+  function ownLook() {
+    var c = window.GT_CHARSCREEN; try { return c && c._mine ? (c._mine().look | 0) : 0; } catch (e) { return 0; }
   }
 
   R3D.actors = {
-    init: function (C) { geo = makeGeo(); pool = new Map(); T = (window.SPRITES && SPRITES.TILE) || 12; this.group = new THREE.Group(); C.scene.add(this.group); },
+    init: function (C) {
+      pool = new Map(); T = (window.SPRITES && SPRITES.TILE) || 12; this.frame = 0;
+      this.group = new THREE.Group(); C.scene.add(this.group);
+      scratch = document.createElement('canvas'); scratch.width = scratch.height = 64; sg = scratch.getContext('2d');
+    },
     onWorld: function () {},
     update: function (C, info) {
-      var frame = (this.frame = (this.frame || 0) + 1), fighting = document.documentElement.classList.contains('gt-fighting');
-      var night = DAYC.clone().lerp(NIGHTC, Math.min(1, info.dark));
-      var ents = info.ents, i;
+      var frame = ++this.frame, ents = info.ents, i, t = info.timeAcc;
+      var fx = window.GT_FX, fish = window.GT_FISH;
       for (i = 0; i < ents.length; i++) {
-        var en = ents[i], key, px, py;
-        if (en.char) { key = 'c:' + (en.char.id != null ? en.char.id : i); px = en.char.x; py = en.char.y; }
-        else if (en.n) { key = en.n; px = en.px; py = en.py; }
-        else if (en.n === null) { key = 'P'; px = en.px; py = en.py; }
+        var en = ents[i], key, px, py, look, dir, moving, n = null, isP = false, st;
+        if (en.char) { key = 'c:' + (en.char.id != null ? en.char.id : i); px = en.char.x; py = en.char.y; look = en.char.look; dir = en.char.dir; moving = en.char.step > 0; }
+        else if (en.n) { n = en.n; key = n; px = en.px; py = en.py; look = n.pal | 0; dir = n.dir; moving = en.step > 0; }
+        else if (en.n === null) { isP = true; key = 'P'; px = en.px; py = en.py; look = ownLook(); dir = en.dir; moving = en.step > 0; }
         else continue;
         if (px == null) continue;
-        var a = pool.get(key);
-        if (!a) { a = create(); pool.set(key, a); this.group.add(a.mesh); }
-        a.seen = frame;
-        var sig = en.char ? ('c' + en.char.look + en.char.dir + en.char.step) : ((en.n ? en.n.pal : 0) + '|' + (en.n ? en.n.dir : '') + '|' + (en.step || 0));
-        var always = key === 'P' || fighting;
-        if (always || sig !== a.sig) { a.sig = sig; drawInto(a, en); a.tex.needsUpdate = true; }
-        a.mesh.position.set((px + 6) / T, 0, (py + 12) / T);
-        a.mesh.quaternion.copy(C.cam.quaternion);
-        a.mat.color.copy(night);
-        if (key === 'P') { // a faint silhouette shows through whatever stands in front of the player (trees, roofs)
-          if (!a.ghost) { a.ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: a.tex, transparent: true, opacity: 0.5, depthFunc: THREE.GreaterDepth, depthWrite: false, alphaTest: 0.04, color: 0xa8b8ff })); a.ghost.renderOrder = 5; a.ghost.frustumCulled = false; this.group.add(a.ghost); }
-          a.ghost.position.copy(a.mesh.position); a.ghost.quaternion.copy(a.mesh.quaternion);
+        if (n || isP) { try { if (typeof GT.charDraw === 'function') GT.charDraw(sg, n, px, py, look, dir, en.step || 0); } catch (e) { /* ignore */ } }
+        var entry = pool.get(key);
+        if (!entry || entry.rig.look !== look) {
+          if (entry) { R3D.rig.destroy(entry.rig); }
+          entry = { rig: R3D.rig.create(look, { ghost: isP }), seen: 0 };
+          pool.set(key, entry); this.group.add(entry.rig.root);
         }
+        entry.seen = frame;
+        var cs = null;
+        if ((n || isP) && typeof GT.charState === 'function') { try { cs = GT.charState(n); } catch (e) { cs = null; } }
+        st = { moving: moving, t: t + (typeof key === 'string' ? 0 : (n && n.x || 0) * 0.37), dir: dir, swing: null, fish: false, ko: !!(cs && cs.ko), side: cs ? cs.side : 1, tint: cs ? cs.tint : null };
+        if (isP) {
+          st.swing = fx && fx.swinging ? fx.swinging() : null;
+          st.fish = !!(fish && fish.active && fish.active());
+        }
+        if (n) R3D.rig.setHat(entry.rig, n.cosmetic || null, n.cosmeticColor);
+        R3D.rig.pose(entry.rig, st);
+        var ox = cs ? cs.ox : 0, oz = cs ? cs.oy : 0;
+        entry.rig.root.position.set((px + 6 + ox) / T, 0, (py + 6 + oz) / T);
       }
-      pool.forEach(function (a, key) {
-        if (a.seen !== frame) { if (a.ghost) { this.group.remove(a.ghost); a.ghost.material.dispose(); } this.group.remove(a.mesh); a.tex.dispose(); a.mat.dispose(); pool.delete(key); }
-      }, this);
+      pool.forEach(function (e, key) {
+        if (e.seen !== frame) { R3D.rig.destroy(e.rig); pool.delete(key); }
+      });
     },
     dispose: function (C) {
-      if (pool) pool.forEach(function (a) { a.tex.dispose(); a.mat.dispose(); });
+      if (pool) pool.forEach(function (e) { R3D.rig.destroy(e.rig); });
       if (this.group) C.scene.remove(this.group);
-      if (geo) geo.dispose();
-      pool = null; geo = null; this.group = null;
+      R3D.rig.disposeAll();
+      pool = null; this.group = null; scratch = sg = null;
     }
   };
 })();
