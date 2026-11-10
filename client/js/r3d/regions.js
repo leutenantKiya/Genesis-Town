@@ -110,7 +110,7 @@
         var r = list[i], bob = Math.sin(t * 0.6 + r.phase) * 0.22;
         if (r.kind === 'locked') {
           r.group.position.set(r.base.x, r.base.y + bob, r.base.z);
-          r.puffs.forEach(function (p) { var a = p.a + t * 0.04; p.mesh.position.set(r.cx + Math.cos(a) * p.rad, 0.4 + (p.ph % 3) * 0.5 + Math.sin(t * 0.5 + p.ph) * 0.2, r.cz + Math.sin(a) * p.rad); });
+          r.puffs.forEach(function (p) { p.mesh.quaternion.copy(C.cam.quaternion); var a = p.a + t * 0.04; p.mesh.position.set(r.cx + Math.cos(a) * p.rad, 0.4 + (p.ph % 3) * 0.5 + Math.sin(t * 0.5 + p.ph) * 0.2, r.cz + Math.sin(a) * p.rad); });
         } else if (r.kind === 'dock') {
           if (r.t0 == null) r.t0 = t;
           var p = Math.min(1, (t - r.t0) / DOCK_SECS), e = 1 - Math.pow(1 - p, 3);

@@ -2269,6 +2269,13 @@ function layout(){
 
 /* ---------- input ---------- */
 var KEYDIR = { ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down', ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right' };
+// in the 3D view the camera can be turned: "up" on the keys means "away from the camera", whatever that is in the world
+function turnDir(d){
+  var t = altRenderer && altRenderer.turns ? altRenderer.turns() : 0;
+  if (!t) return d;
+  var cw = ['up', 'right', 'down', 'left'];
+  return cw[(cw.indexOf(d) + t) % 4];
+}
 function pressDir(d, id){
   id = id || d; releaseDir(id);
   held.push({id:id, d:d});
@@ -2283,7 +2290,7 @@ function setupInput(){
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (callModsBool('onKey', [e])){ e.preventDefault(); return; }
     var d = KEYDIR[e.code];
-    if (d){ e.preventDefault(); if (!e.repeat) pressDir(d, e.code); return; }
+    if (d){ e.preventDefault(); if (!e.repeat) pressDir(e.isTrusted ? turnDir(d) : d, e.code); return; } // synthetic keys (click-to-walk) already speak in world directions
     if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyZ'){
       if (onButton(e)) return;
       e.preventDefault();
@@ -2312,7 +2319,7 @@ function setupInput(){
   // touch pad
   Array.prototype.forEach.call(document.querySelectorAll('.dp'), function(btn){
     var dir = btn.getAttribute('data-dir');
-    function down(e){ e.preventDefault(); try { btn.setPointerCapture(e.pointerId); } catch(_){} btn.classList.add('down'); pressDir(dir, 'pad:' + dir); }
+    function down(e){ e.preventDefault(); try { btn.setPointerCapture(e.pointerId); } catch(_){} btn.classList.add('down'); pressDir(turnDir(dir), 'pad:' + dir); }
     function up(e){ btn.classList.remove('down'); releaseDir('pad:' + dir); }
     btn.addEventListener('pointerdown', down);
     btn.addEventListener('pointerup', up);

@@ -8,7 +8,7 @@
   var THREE = window.THREE;
   if (!THREE) return;
 
-  var cv = null, g = null, tex = null, lastQ = -1, group = null, clouds = [], islets = [], cloudTex = null, cloudMat = null;
+  var cv = null, g = null, tex = null, lastQ = -1, group = null, clouds = [], islets = [], cloudTex = null, cloudMat = null, lowMat = null;
   var cx = 0, cz = 0, span = 100;
   // [top, bottom] sky colours
   var DAY = ['#4f9be0', '#bfe6f8'], DUSK = ['#4b3f86', '#f2a46a'], NIGHT = ['#050818', '#1a2150'];
@@ -85,6 +85,7 @@
       lastQ = -1;
       group = new THREE.Group(); C.scene.add(group);
       cloudTex = makeCloudTexture();
+      lowMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
       cloudMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, opacity: 0.92 });
       clouds = []; islets = [];
     },
@@ -95,12 +96,17 @@
       clouds.forEach(function (c) { group.remove(c.mesh); c.mesh.geometry.dispose(); });
       islets.forEach(function (s) { group.remove(s.group); s.built.group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); });
       clouds = []; islets = [];
-      for (i = 0; i < 26; i++) {
-        var w = 10 + r() * 16, mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.5), cloudMat);
-        mesh.rotation.x = -Math.PI / 2;
-        var y = -5 - r() * 16; mesh.position.y = y;
+      // big soft low-poly clouds drifting around and below the island
+      for (i = 0; i < 18 && R3D.geo; i++) {
+        var CB = new R3D.geo.Builder(), sz = 2 + r() * 3.2, nb = 3 + Math.floor(r() * 3), k2;
+        for (k2 = 0; k2 < nb; k2++) {
+          var bs = sz * (0.55 + r() * 0.6);
+          CB.blob((k2 - nb / 2) * sz * 0.8 + (r() - 0.5) * sz * 0.3, (r() - 0.3) * sz * 0.3, (r() - 0.5) * sz * 0.7, bs * 1.25, bs * 0.7, bs * 0.9, '#e4ebf3', 1, i * 11 + k2, '#ffffff');
+        }
+        var mesh = CB.mesh(lowMat);
+        mesh.position.y = -12 + r() * 11;
         group.add(mesh);
-        clouds.push({ mesh: mesh, ox: r() * span * 2, z: cz + (r() - 0.5) * span * 1.6, speed: 0.25 + r() * 0.5 });
+        clouds.push({ mesh: mesh, ox: r() * span * 2, z: cz + (r() < 0.5 ? -1 : 1) * (map.h / 2 + 14 + r() * 32), speed: 0.12 + r() * 0.3 });
       }
       if (R3D.island) for (i = 0; i < 7; i++) {
         var ang = (i / 7) * 6.283 + r() * 0.6, dist = Math.max(map.w, map.h) * 0.5 + 22 + r() * 36;
@@ -130,7 +136,7 @@
       if (q !== lastQ) {
         lastQ = q; var dd = Math.round(Math.max(0, Math.min(1, info.dark)) * 40) / 40; paintSky(dd, h, oc);
         var tint = new THREE.Color(1, 1, 1).lerp(new THREE.Color(0.28, 0.32, 0.55), dd).multiplyScalar(1 - 0.38 * oc);
-        cloudMat.color.copy(tint); cloudMat.opacity = 0.92 + 0.08 * oc;
+        cloudMat.color.copy(tint); cloudMat.opacity = 0.92 + 0.08 * oc; lowMat.color.copy(tint);
       }
       var t = info.timeAcc, i;
       for (i = 0; i < clouds.length; i++) {
@@ -141,7 +147,7 @@
     },
     dispose: function (C) {
       if (group) { C.scene.remove(group); group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); }
-      if (tex) tex.dispose(); if (cloudTex) cloudTex.dispose(); if (cloudMat) cloudMat.dispose();
+      if (tex) tex.dispose(); if (cloudTex) cloudTex.dispose(); if (cloudMat) cloudMat.dispose(); if (lowMat) lowMat.dispose();
       C.scene.background = null;
       cv = g = tex = group = cloudTex = cloudMat = null; clouds = []; islets = [];
     }

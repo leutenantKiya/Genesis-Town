@@ -181,6 +181,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
       bankMat.color.copy(DAYC).lerp(NIGHTC, d);
       for (var i = 0; i < mist.length; i++) {
         var m = mist[i], s = 1 + 0.25 * Math.sin(t * 1.3 + m.ph);
+        m.mesh.quaternion.copy(C.cam.quaternion);
         m.mesh.scale.set(s, s * 0.8, 1);
         m.mesh.position.y = WL - FALL + 0.5 + Math.sin(t * 0.9 + m.ph) * 0.4;
       }

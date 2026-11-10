@@ -17,7 +17,7 @@
   var ELEV = 40 * Math.PI / 180;      // camera elevation above the ground
   var DIST = 90;                       // camera distance (ortho: only affects clipping)
   var ZOOM_ROWS = 1.25;                // visible world rows per 2D view row (the tilt shows more ground)
-  var ZMIN = 0.6, ZMAX = 1.7;
+  var ZMIN = 0.35, ZMAX = 3.2, PMIN = 20 * Math.PI / 180, PMAX = 78 * Math.PI / 180; // zoom and tilt limits
   var HEMI = 2.5, SUN = 1.7;          // light intensities (three.js uses physical units: ~pi for a fully lit white surface)
   var MODS = ['regions', 'sky', 'island', 'ground', 'water', 'props', 'buildings', 'actors', 'lights', 'weather', 'fx', 'compat', 'interior'];
   var QUALITY = {
@@ -31,6 +31,11 @@
   R3D.Q = QUALITY[qualityName()];
 
   var T = 12, host = null, canvas = null, C = null, size = { w: 0, h: 0 }, zoom = 1, wheelFn = null, qFn = null;
+  // orbit camera: drag turns and tilts it around the player, wheel / pinch zooms, V resets (movement keys follow the view)
+  var yaw = 0, pitch = ELEV, pointers = new Map(), dragStart = null, dragged = false, pinch = 0, orbitFns = null;
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function homeZoom() { return document.documentElement.classList.contains('gt-phone') ? 1.3 : 1; }
+  R3D.turns = 0;
   var tmpV = new THREE.Vector3(), tmpN = new THREE.Vector2(), up = new THREE.Vector3();
   var ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   var hemi = null, sun = null, moon = null, map = null, shadowHalf = 0, interior = false, imap = null;
@@ -104,15 +109,43 @@
     var root = new THREE.Group(); scene.add(root);
     C = { renderer: renderer, scene: scene, cam: cam, root: root, THREE: THREE };
     R3D.ctx = C; // debugging handle (scene, camera, renderer)
-    size.w = size.h = 0; zoom = document.documentElement.classList.contains('gt-phone') ? 1.3 : 1; map = null; imap = null; interior = false; shadowHalf = 0;
+    size.w = size.h = 0; zoom = homeZoom(); map = null; imap = null; interior = false; shadowHalf = 0;
     each(function (m) { m.init(C); });
+    yaw = 0; pitch = ELEV; pointers.clear(); dragStart = null; dragged = false; pinch = 0;
     wheelFn = function (e) {
-      if (!e.ctrlKey) return;
+      if (!e.target || (e.target.id !== 'cv' && e.target.id !== 'cv3d')) return; // chat and windows keep their own scrolling
       e.preventDefault();
-      zoom = Math.max(ZMIN, Math.min(ZMAX, zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+      zoom = clamp(zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), ZMIN, ZMAX);
       size.w = size.h = 0; // re-fit the frustum
     };
     host.addEventListener('wheel', wheelFn, { passive: false });
+    function pinchDist() { var a = Array.from(pointers.values()); return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); }
+    orbitFns = {
+      down: function (e) {
+        if (!e.target || e.target.id !== 'cv' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        if (!pointers.size) dragged = false;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        dragStart = pointers.size === 1 ? { x: e.clientX, y: e.clientY, moved: false } : null;
+        if (pointers.size === 2) { pinch = pinchDist(); dragged = true; }
+      },
+      move: function (e) {
+        var p = pointers.get(e.pointerId); if (!p) return;
+        var dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+        if (pointers.size >= 2) { var d = pinchDist(); if (pinch > 0 && d > 0) { zoom = clamp(zoom * d / pinch, ZMIN, ZMAX); size.w = size.h = 0; } pinch = d; dragged = true; return; }
+        if (!dragStart) return;
+        if (!dragStart.moved && Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y) < 7) return; // a tap is not a drag
+        dragStart.moved = true; dragged = true;
+        if (!interior) { yaw -= dx * 0.0085; pitch = clamp(pitch + dy * 0.0045, PMIN, PMAX); }
+      },
+      up: function (e) { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = 0; if (!pointers.size) dragStart = null; },
+      click: function (e) { if (dragged) { e.stopPropagation(); e.preventDefault(); dragged = false; } } // a drag must not walk the player
+    };
+    host.addEventListener('pointerdown', orbitFns.down, true);
+    window.addEventListener('pointermove', orbitFns.move);
+    window.addEventListener('pointerup', orbitFns.up);
+    window.addEventListener('pointercancel', orbitFns.up);
+    host.addEventListener('click', orbitFns.click, true);
+    if (GT.hotkey) GT.hotkey('V', function () { yaw = 0; pitch = ELEV; zoom = homeZoom(); size.w = size.h = 0; });
     qFn = function () { applyQuality(); };
     wd.last = 0; wd.n = 0; wd.done = false; wd.acc = 0; wd.frames = 0;
     try { if (/[?&]fps\b/.test(location.search)) { wd.el = document.createElement('div'); wd.el.style.cssText = 'position:absolute;left:4px;bottom:4px;z-index:9;font:11px monospace;color:#fff;background:rgba(0,0,0,.6);padding:2px 5px;pointer-events:none'; host.appendChild(wd.el); } } catch (e) { /* ignore */ }
@@ -123,6 +156,11 @@
   function dispose() {
     if (!C) return;
     if (host && wheelFn) host.removeEventListener('wheel', wheelFn);
+    if (host && orbitFns) {
+      host.removeEventListener('pointerdown', orbitFns.down, true); host.removeEventListener('click', orbitFns.click, true);
+      window.removeEventListener('pointermove', orbitFns.move); window.removeEventListener('pointerup', orbitFns.up); window.removeEventListener('pointercancel', orbitFns.up);
+    }
+    orbitFns = null; R3D.turns = 0;
     if (wd.el && wd.el.parentNode) wd.el.parentNode.removeChild(wd.el); wd.el = null;
     if (qFn) window.removeEventListener('gt3dquality', qFn);
     each(function (m) { m.dispose(C); });
@@ -218,8 +256,12 @@
     var cam = C.cam, pos = info.player.pos;
     var px = (pos.px + 6) / T, pz = (pos.py + 12) / T;
     if (interior && imap) { px = imap.w / 2; pz = imap.h / 2 + 0.7; }
-    cam.position.set(px, DIST * Math.sin(ELEV), pz + DIST * Math.cos(ELEV));
+    // orbit around the player (rooms stay in the fixed front view)
+    var yw = interior ? 0 : yaw, pt = interior ? ELEV : pitch;
+    cam.position.set(px + Math.sin(yw) * Math.cos(pt) * DIST, Math.sin(pt) * DIST, pz + Math.cos(yw) * Math.cos(pt) * DIST);
+    cam.lookAt(px, 0, pz);
     cam.updateMatrixWorld(true);
+    R3D.turns = interior ? 0 : (((4 - Math.round(yw / (Math.PI / 2))) % 4) + 4) % 4; // which way "up" on the keys points in the world
     info.weather = weatherOf(); info.quality = R3D.Q;
     lighting(info, px, pz);
     each(function (m, n) { if (!interior || IN_UPDATE[n]) m.update(C, info); });
@@ -258,5 +300,5 @@
   }
 
   R3D.mapToScreen = mapToScreen;
-  GT.registerRenderer('3d', { interior: true, init: init, dispose: dispose, render: render, onWorld: onWorld, screenToTile: screenToTile, tileToScreen: tileToScreen, mapToScreen: mapToScreen });
+  GT.registerRenderer('3d', { interior: true, turns: function () { return R3D.turns || 0; }, init: init, dispose: dispose, render: render, onWorld: onWorld, screenToTile: screenToTile, tileToScreen: tileToScreen, mapToScreen: mapToScreen });
 })();

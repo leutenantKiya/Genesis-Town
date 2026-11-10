@@ -181,7 +181,7 @@
       useHeld(GT.screenToTile ? GT.screenToTile(e.clientX, e.clientY) : null);
     });
     if (screen) screen.addEventListener('wheel', function (e) {
-      if (!bar || bar.style.display === 'none' || GT.isUiOpen()) return;
+      if (!bar || bar.style.display === 'none' || GT.isUiOpen() || GT.view === '3d') return; // in 3D the wheel zooms
       e.preventDefault();
       setHeld(held + (e.deltaY > 0 ? 1 : -1));
     }, { passive: false });

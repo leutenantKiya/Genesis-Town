@@ -11,7 +11,7 @@
   if (!THREE) return;
 
   var group = null, pool = null, glow = null, poolMat = null, glowMat = null, texPool = null, texGlow = null, lights = [], lamps = [], count = 0;
-  var lastKey = '';
+  var lastKey = '', glowKey = '';
 
   function radial(stops, size) {
     var c = document.createElement('canvas'); c.width = c.height = size || 64;
@@ -66,6 +66,14 @@
     setInterior: function (C, on) { if (on) lights.forEach(function (l) { l.intensity = 0; }); },
     onQuality: function (C) { setCount(C, (R3D.Q && R3D.Q.lamps) || 0); },
     update: function (C, info) {
+      if (glow) { // the glow discs face the camera, which can turn
+        var q = C.cam.quaternion, qk = q.x.toFixed(3) + q.y.toFixed(3) + q.z.toFixed(3);
+        if (qk !== glowKey) {
+          glowKey = qk; var m4 = new THREE.Matrix4(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+          for (var gi = 0; gi < lamps.length; gi++) { p.set(lamps[gi].x + 0.5, 1.64, lamps[gi].y + 0.5); m4.compose(p, q, one); glow.setMatrixAt(gi, m4); }
+          glow.instanceMatrix.needsUpdate = true;
+        }
+      }
       var n = info.lamps ? info.lamps.length : 0;
       var key = n + ':' + (n ? info.lamps[0].x + ',' + info.lamps[0].y : '');
       if (key !== lastKey) build(C, info);
