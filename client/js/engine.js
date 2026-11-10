@@ -1813,7 +1813,54 @@ function interact(mode){
 
 /* ---------- update ---------- */
 function canControl(){ return !D && !tr && !mapOpen && !modals.length; }
-function desired(){ return held.length ? worldDir(held[held.length - 1].d) : null; }
+// held arrows are screen directions (turned by the 2.5D camera) unless a mod pressed them as world ones (mouse.js paths)
+function desired(){ if (!held.length) return null; var h = held[held.length - 1]; return h.world ? h.d : worldDir(h.d); }
+
+/* ---------- free walking (2.5D outdoors) ----------
+   In the 2.5D view outdoors the player walks freely, diagonals too, like lab3d.html: P.cx / P.cy is the centre of the feet
+   in tile units, and P.x / P.y stay the tile under it, which is what the server, interactions, NPCs and mods see. Held
+   arrows add up (two keys walk a diagonal), turned by the camera; a drag on the world is an analog stick (GT.setStick).
+   FREE_SPEED * sqrt(2) stays under the server's walking check (8 tiles a second, Manhattan, worldmap.ts). */
+var FREE_SPEED = 5, FREE_R = 0.28, stick = null;
+function freeOn(){ return v3on(); }
+function freeOk(x, y){
+  var r = FREE_R, c = [[-r, -r], [r, -r], [-r, r], [r, r]];
+  for (var i = 0; i < 4; i++) if (!canEnterPlayer(Math.floor(x + c[i][0]), Math.floor(y + c[i][1]))) return false;
+  return true;
+}
+function updatePlayerFree(dt){
+  // placed by someone else (a door, a teleport, a world switch): start again from the middle of that tile
+  if (P.cx == null || Math.floor(P.cx) !== P.x || Math.floor(P.cy) !== P.y){ P.cx = P.x + 0.5; P.cy = P.y + 0.5; }
+  P.fx = P.x; P.fy = P.y; P.t = 0; P.turnT = 0;
+  if (P.bumpT > 0) P.bumpT -= dt;
+  if (!canControl()){ P.moving = false; return; }
+  var sx = 0, sy = 0, wx = 0, wy = 0;
+  held.forEach(function(h){ var v = DIRS[h.d]; if (h.world){ wx += v[0]; wy += v[1]; } else { sx += v[0]; sy += v[1]; } });
+  if (stick){ sx += stick.x; sy += stick.y; }
+  sx = Math.max(-1, Math.min(1, sx)); sy = Math.max(-1, Math.min(1, sy));
+  var r = view3d.screenToWorld ? view3d.screenToWorld(sx, sy) : {x:sx, y:sy};
+  var mx = r.x + wx, my = r.y + wy, len = Math.hypot(mx, my);
+  if (waitRelease){ if (len > 0.01) { P.moving = false; return; } waitRelease = false; }
+  if (len < 0.01){ P.moving = false; P.walkT = 0; return; }
+  mx /= len; my /= len;
+  // lane assist: walking along one axis eases to the middle of the lane, so doors, bridges and paths line up
+  var k = Math.min(1, dt * 8), cx = P.cx + (Math.floor(P.cx) + 0.5 - P.cx) * k, cy = P.cy + (Math.floor(P.cy) + 0.5 - P.cy) * k;
+  if (Math.abs(mx) < 0.2 && freeOk(cx, P.cy)) P.cx = cx;
+  if (Math.abs(my) < 0.2 && freeOk(P.cx, cy)) P.cy = cy;
+  // walking up into a door goes in, as a grid step into it does
+  var m = scene.map, dtx = Math.floor(P.cx), dty = Math.floor(P.cy - FREE_R - 0.04);
+  if (my < -0.6 && dty !== P.y && inb(m, dtx, dty) && m.door.has(dty*m.w + dtx) && !(P.bumpT > 0)){
+    P.bumpT = 0.8; P.dir = 'up'; P.moving = false; doorBump(m.door.get(dty*m.w + dtx)); return;
+  }
+  var sp = FREE_SPEED * dt, nx = P.cx + mx * sp, ny = P.cy + my * sp;
+  if (freeOk(nx, P.cy)) P.cx = nx;
+  if (freeOk(P.cx, ny)) P.cy = ny;
+  P.dir = Math.abs(mx) > Math.abs(my) ? (mx > 0 ? 'right' : 'left') : (my > 0 ? 'down' : 'up');
+  P.walkT = (P.walkT || 0) + dt; P.flip = Math.floor(P.walkT / MOVE_T) % 2 === 0;
+  P.moving = true;
+  var tx = Math.floor(P.cx), ty = Math.floor(P.cy);
+  if (tx !== P.x || ty !== P.y){ P.x = P.fx = tx; P.y = P.fy = ty; hudDirty = true; }
+}
 
 function tryMove(d){
   var m = scene.map, dv = DIRS[d], nx = P.x + dv[0], ny = P.y + dv[1];
@@ -1836,6 +1883,8 @@ function tryMove(d){
 }
 
 function updatePlayer(dt){
+  if (freeOn()) return updatePlayerFree(dt);
+  if (P.cx != null){ P.cx = null; P.moving = false; P.t = 0; P.fx = P.x; P.fy = P.y; } // back on the grid (indoors, 2D)
   var chained = false;
   if (P.moving){
     P.t += dt / MOVE_T;
@@ -1906,6 +1955,7 @@ function update(dt){
 var ctx;
 var camX = 0, camY = 0;
 function lerpPos(o){
+  if (o === P && P.cx != null) return { px:(P.cx - 0.5) * T, py:(P.cy - 0.5) * T }; // free walking: no rounding, the 3D view is smooth
   var t = o.moving ? Math.min(1, o.t) : 1;
   var a = o.moving ? o.fx : o.x, b = o.x, c = o.moving ? o.fy : o.y, e = o.y;
   return { px:Math.round((a + (b - a) * t) * T), py:Math.round((c + (e - c) * t) * T) };
@@ -2250,10 +2300,10 @@ function layout(){
 
 /* ---------- input ---------- */
 var KEYDIR = { ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down', ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right' };
-function pressDir(d, id){
+function pressDir(d, id, world){
   id = id || d; releaseDir(id);
-  held.push({id:id, d:d});
-  var wd = worldDir(d);
+  held.push({id:id, d:d, world:!!world});
+  var wd = world ? d : worldDir(d);
   if (canControl() && !P.moving && !waitRelease && P.dir !== wd){ P.dir = wd; P.turnT = TURN_T; }
 }
 function releaseDir(id){ for (var i = held.length - 1; i >= 0; i--) if (held[i].id === id) held.splice(i, 1); }
@@ -2265,7 +2315,7 @@ function setupInput(){
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (callModsBool('onKey', [e])){ e.preventDefault(); return; }
     var d = KEYDIR[e.code];
-    if (d){ e.preventDefault(); if (!e.repeat) pressDir(d, e.code); return; }
+    if (d){ e.preventDefault(); if (!e.repeat) pressDir(d, e.code, e.gtWorld); return; } // gtWorld: a mod walking a map path (mouse.js)
     if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyZ'){
       if (onButton(e)) return;
       e.preventDefault();
@@ -2283,7 +2333,7 @@ function setupInput(){
     if (d){ releaseDir(e.code); if (!modals.length) e.preventDefault(); }
     else if ((e.code === 'Space' || e.code === 'Enter') && !modals.length && !onButton(e)) e.preventDefault();
   });
-  window.addEventListener('blur', function(){ held.length = 0; });
+  window.addEventListener('blur', function(){ held.length = 0; stick = null; });
   document.addEventListener('visibilitychange', function(){ if (document.hidden) held.length = 0; });
   document.addEventListener('focusin', function(e){
     if (!modals.length) return;
@@ -2469,6 +2519,8 @@ var GT = {
   // the 2.5D view registers here (mods/view3d.js); null turns it off
   setView3d: function(v){ view3d = v || null; },
   at: function(tx, ty){ return at(tx, ty); },
+  // an analog walk on screen axes (-1..1 each), e.g. a drag in the 2.5D view; null lets go
+  setStick: function(x, y){ stick = x == null ? null : {x:+x || 0, y:+y || 0}; },
   view3dOn: function(){ return v3on(); }
 };
 GT.dev = {};

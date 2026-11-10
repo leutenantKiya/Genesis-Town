@@ -26,7 +26,6 @@
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
   var actors = new Map(), gctx = null, gtex = null, gAt = 0, last = 0, sw = 0, sh = 0, VW = 1, VH = 1;
   var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null, yawWant = 0, zoom = 1;
-  var KEY = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
   var ui = null, drag = null, took = 0, shownWorld = '';
 
   function saved() { try { var v = localStorage.getItem(LS); return v === '2d' || v === '3d' ? v : null; } catch (e) { return null; } }
@@ -96,10 +95,10 @@
     ui.hint.innerHTML = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> atau seret jalan · <kbd>Q</kbd><kbd>E</kbd> putar kamera · scroll zoom';
     ui.stick.setAttribute('aria-hidden', 'true'); ui.stick.appendChild(el('i'));
     scr.appendChild(ui.bar); scr.appendChild(ui.hint); document.body.appendChild(ui.stick);
-    // a drag on the world walks: past a small dead zone it holds the arrow it points at on screen, the way mouse.js walks
+    // a drag on the world walks: past a small dead zone it is an analog stick (any direction, diagonals too), as in the lab
     c2.addEventListener('pointerdown', function (e) {
       if (!GT.view3dOn() || e.button !== 0 || GT.isUiOpen()) return;
-      drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, dir: null };
+      drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false };
     });
     c2.addEventListener('pointermove', function (e) {
       if (!drag || e.pointerId !== drag.id) return;
@@ -112,12 +111,11 @@
       }
       var k = d > 26 ? 26 / d : 1;
       ui.stick.firstChild.style.transform = 'translate(' + dx * k + 'px,' + dy * k + 'px)';
-      var dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-      if (dir !== drag.dir) { if (drag.dir) key('keyup', drag.dir); key('keydown', dir); drag.dir = dir; }
+      GT.setStick(dx / d, dy / d);
     });
     function end(e) {
       if (!drag || e.pointerId !== drag.id) return;
-      if (drag.on) { if (drag.dir) key('keyup', drag.dir); ui.stick.style.display = 'none'; took = performance.now(); }
+      if (drag.on) { GT.setStick(null); ui.stick.style.display = 'none'; took = performance.now(); }
       drag = null;
     }
     c2.addEventListener('pointerup', end); c2.addEventListener('pointercancel', end);
@@ -128,7 +126,6 @@
       zoom = rig.zoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
     }, { passive: false });
   }
-  function key(type, d) { window.dispatchEvent(new KeyboardEvent(type, { code: KEY[d], key: KEY[d], bubbles: true, cancelable: true })); }
   function syncUi() {
     var w = GT.worldId ? GT.worldId() : 'public';
     if (!ui || w === shownWorld) return;
@@ -231,6 +228,8 @@
     },
     toScreen: toScreen,
     worldDir: worldDir,
+    // a walk on screen axes to the world, by the camera's turn (the lab's walk)
+    screenToWorld: function (ix, iz) { var c = Math.cos(yawWant), s = Math.sin(yawWant); return { x: ix * c + iz * s, y: -ix * s + iz * c }; },
     tookClick: function () { return performance.now() - took < 400; },
     // device px per art px at the player's depth: one tile up the card is 12 art px
     artScale: function (S) { var a = toScreen(pt.x, pt.y, 0), b = toScreen(pt.x, pt.y, 1); return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y) * S / T); },

@@ -15,7 +15,8 @@
   var KEY = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
   var walk = null; // { path:[{x,y}], held:dir|null, then:fn|null, last:ms, lastPos:'x,y' }
 
-  function key(type, dir) { window.dispatchEvent(new KeyboardEvent(type, { code: KEY[dir], key: KEY[dir], bubbles: true, cancelable: true })); }
+  // a map path is in world directions: gtWorld keeps the 2.5D camera's turn from turning them (engine.js pressDir)
+  function key(type, dir) { var e = new KeyboardEvent(type, { code: KEY[dir], key: KEY[dir], bubbles: true, cancelable: true }); e.gtWorld = true; window.dispatchEvent(e); }
   function release() { if (walk && walk.held) { key('keyup', walk.held); walk.held = null; } }
   function cancel() { release(); walk = null; }
   function dirOf(from, to) {

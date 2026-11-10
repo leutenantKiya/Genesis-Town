@@ -23,7 +23,10 @@
 >   The lab's controls are in the game too: its trays (top right) hold **Desa / Homeland** (walks to the portal, then
 >   travels), zoom and turn; a **drag** on the world walks with the lab's ring, the **mouse wheel** over the world zooms
 >   (over the hotbar it still picks the item), and the lab's key hint sits bottom left on wide screens. Season and hour
->   follow the server, so the lab's season buttons and hour slider are not in the game. Same rules and positions as 2D: the engine
+>   follow the server, so the lab's season buttons and hour slider are not in the game.
+>   **Free walking** in the 2.5D view outdoors: no tile grid, diagonals with two keys or a drag, 5 tiles a second, sliding
+>   along walls; walking up into a door still goes in. The server still gets the tile under the player's feet, so its
+>   position and walking-speed checks are unchanged. Indoors and in the 2D view walking stays on the grid. Same rules and positions as 2D: the engine
 >   still owns them (`client/js/mods/view3d.js`). Walking into a building without a scene cut is still *(planned)*.
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
