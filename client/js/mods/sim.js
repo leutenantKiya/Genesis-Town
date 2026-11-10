@@ -175,7 +175,7 @@
   function load() {
     st.res = null; st.upto = 0; els.minis && (els.minis.textContent = '');
     els.label.textContent = 'Menjalankan simulasi ' + st.players + ' pemain selama 7 hari…';
-    fetch('/api/sim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ days: 7, players: st.players, seed: 42 }) })
+    fetch((window.GT_API || '') + '/api/sim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ days: 7, players: st.players, seed: 42 }) })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (res) {
         st.res = res; st.upto = 1; st.playing = true; els.play.textContent = 'Jeda';

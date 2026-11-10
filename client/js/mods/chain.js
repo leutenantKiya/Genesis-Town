@@ -43,6 +43,7 @@
       return { 'x-account-id': S.account, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': b64(sig) };
     });
   }
+  var API_BASE = window.GT_API || ''; // vendor/env.js: the server's origin when this page is hosted apart from it
   function api(path, opts) {
     opts = opts || {};
     var method = opts.method || 'GET', body = opts.body ? JSON.stringify(opts.body) : '';
@@ -50,7 +51,7 @@
     var signing = S.account && window.NearLib ? signHeaders(method, '/api' + path, body) : Promise.resolve({});
     return signing.then(function (sh) {
       for (var k in sh) headers[k] = sh[k];
-      return fetch('/api' + path, { method: method, headers: headers, body: body || undefined });
+      return fetch(API_BASE + '/api' + path, { method: method, headers: headers, body: body || undefined });
     })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {

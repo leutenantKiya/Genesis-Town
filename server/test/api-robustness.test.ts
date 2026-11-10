@@ -179,3 +179,22 @@ test('chat only in the world the server has the player in', async () => {
     assert.equal(r.status, 409);
   } finally { h.close(); }
 });
+
+test('a client on another origin listed in CORS_ORIGINS may call the API, others get no CORS headers', async () => {
+  const h = await harness();
+  h.cfg.corsOrigins = ['https://genesis.example'];
+  try {
+    const base = `http://127.0.0.1:${h.port}`;
+    const pre = await fetch(`${base}/api/act`, { method: 'OPTIONS', headers: { origin: 'https://genesis.example', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type,x-gt-sig' } });
+    assert.equal(pre.status, 204);
+    assert.equal(pre.headers.get('access-control-allow-origin'), 'https://genesis.example');
+    assert.match(pre.headers.get('access-control-allow-headers') ?? '', /x-gt-sig/);
+    const ok = await fetch(`${base}/api/config`, { headers: { origin: 'https://genesis.example' } });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.headers.get('access-control-allow-origin'), 'https://genesis.example');
+    const other = await fetch(`${base}/api/config`, { headers: { origin: 'https://evil.example' } });
+    assert.equal(other.headers.get('access-control-allow-origin'), null);
+    const otherPre = await fetch(`${base}/api/act`, { method: 'OPTIONS', headers: { origin: 'https://evil.example' } });
+    assert.equal(otherPre.headers.get('access-control-allow-origin'), null);
+  } finally { h.close(); }
+});

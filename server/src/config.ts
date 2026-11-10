@@ -16,6 +16,8 @@ export interface Config {
   devTools: boolean;
   /** Behind a hosting proxy: take the client address from the proxy's X-Forwarded-For (last entry) for rate limits. */
   trustProxy: boolean;
+  /** Origins (e.g. the Vercel client) whose browsers may call the API cross-origin. Empty: same origin only. */
+  corsOrigins: string[];
   playersParentId: string;
   playersParentPrivateKey: string;
   playerInitialNear: bigint; // yoctoNEAR sent to each new player account
@@ -60,6 +62,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     merchantParentId: get('MERCHANT_PARENT_ACCOUNT_ID'),
     devTools: env.DEV_TOOLS === '1',
     trustProxy: env.TRUST_PROXY === '1',
+    corsOrigins: (env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean),
     playersParentId: get('PLAYERS_PARENT_ACCOUNT_ID'),
     playersParentPrivateKey: get('PLAYERS_PARENT_PRIVATE_KEY'),
     playerInitialNear: BigInt(env.PLAYER_INITIAL_YOCTO ?? '10000000000000000000000'), // 0.01 NEAR
