@@ -31,31 +31,55 @@
   };
   S.PAL = PAL;
 
-  /* Snow: swap the ground palettes in place (originals kept) and drop the baked ground tiles. */
-  var SNOW_PAL = {
-    grass: ['#b8c6d8', '#e8eef5', '#f4f7fb', '#ffffff'],
-    path: ['#8a7f78', '#c8c3c0', '#d9d6d4', '#ecebea'],
-    plaza: ['#7d8290', '#b9bfcc', '#d7dce6', '#f1f4f8']
+  /* Seasons (DESIGN.md "World"): ramps are dark / base / light / highlight and are swapped in place; everything that
+   * holds their colours (ground, tile and canopy caches) is dropped when the season or the snow cover changes. */
+  var SEASONS = {
+    semi: { grass: ['#3f8a2e', '#5fae36', '#7cc23e', '#a8d84a'], water: ['#17507e', '#2a8cc0', '#64c4e2', '#e4f6f2'],
+      oak: ['#1d4a2a', '#2e7a3a', '#48a046', '#86c85a'], pine: ['#123a30', '#1f5c44', '#2f7d52', '#5aa860'], fruit: ['#1d4a2a', '#2f7d3a', '#4fa646', '#f2a8c0'],
+      light: 'rgba(255,236,214,0.05)', shadow: 'rgba(30,38,64,0.30)', tall: { d: '#3c7a38', l: '#68b050' } },
+    panas: { grass: ['#3a7c26', '#58a830', '#84c43a', '#c6e05a'], water: ['#145a7e', '#1f96b8', '#5cd0dc', '#eafcf6'],
+      oak: ['#1a4626', '#2b7234', '#4a9c3c', '#96cc4e'], pine: ['#113a2c', '#1d5e40', '#2e8050', '#62ac5c'], fruit: ['#1a4626', '#2c7a34', '#58a840', '#f09a3a'],
+      light: 'rgba(255,214,150,0.08)', shadow: 'rgba(28,34,62,0.34)', tall: { d: '#3a7a2c', l: '#7cb840' } },
+    gugur: { grass: ['#4e5a24', '#7c8a34', '#a0a444', '#c8c06a'], water: ['#1a4a6a', '#2e7aa0', '#6aaec6', '#dceee6'],
+      oak: ['#4a1e14', '#a3441e', '#d07028', '#f0b048'], pine: ['#13362c', '#1e543e', '#2c724a', '#4f9654'], fruit: ['#4a3a14', '#9a7422', '#c8a034', '#ecd068'],
+      light: 'rgba(255,168,96,0.10)', shadow: 'rgba(34,34,52,0.32)', tall: { d: '#6a6a2a', l: '#a8a048' } },
+    dingin: { grass: ['#b8c6d8', '#e8eef5', '#f4f7fb', '#ffffff'], water: ['#1e4a6a', '#3a7ea6', '#8cc4dc', '#f0f8fa'],
+      oak: ['#3e2a20', '#5e4434', '#7e6450', '#e8eef5'], pine: ['#10302a', '#1a4e3c', '#2a6a4a', '#f4f7fb'], fruit: ['#3e2a20', '#5e4434', '#7e6450', '#e8eef5'],
+      light: 'rgba(196,216,255,0.10)', shadow: 'rgba(70,96,150,0.28)', tall: { d: '#6a7a6a', l: '#a8b4a8' } }
   };
-  var NORMAL_PAL = { grass: PAL.grass.slice(), path: PAL.path.slice(), plaza: PAL.plaza.slice() };
-  S.snow = false;
-  S.setSnow = function (on) {
-    on = !!on;
-    if (on === S.snow) return false;
-    var src = on ? SNOW_PAL : NORMAL_PAL;
-    ['grass', 'path', 'plaza'].forEach(function (k) { for (var i = 0; i < src[k].length; i++) PAL[k][i] = src[k][i]; });
-    // tall grass pokes through the snow as dry stalks; flowers are buried (pale frosted tips)
+  var PATH_WARM = ['#a8642c', '#d89c48', '#e8b45c', '#f4cc78'], PATH_SNOW = ['#6e645e', '#a89c92', '#c4bab2', '#dcd6d0'];
+  var PLAZA_WARM = PAL.plaza.slice(), PLAZA_SNOW = ['#7d8290', '#b9bfcc', '#d7dce6', '#f1f4f8'];
+  var SNOW_GRASS = SEASONS.dingin.grass;
+  var FLOWER_SNOW = function () { return { r: '#cfd8e2', p: '#e2e8ef', w: '#ffffff', s: '#8a9aa0', y: '#eef2f6' }; };
+  var TALL_SNOW = { d: '#7f8f86', l: '#c9d4cf' };
+  function copyInto(dst, src) { for (var i = 0; i < src.length; i++) dst[i] = src[i]; }
+  S.snow = false; S.season = 'semi';
+  var flowerPal = null, bushPal = null;
+  /** Swap every seasonal ramp in place and drop the caches that hold them. season: semi|panas|gugur|dingin;
+   *  snowy: snow on the ground (always in dingin, also with snowy weather). Returns true when anything changed. */
+  S.setSeason = function (season, snowy) {
+    if (!SEASONS[season]) season = 'semi';
+    snowy = !!snowy || season === 'dingin';
+    var first = !S._seasonApplied;
+    if (!first && season === S.season && snowy === S.snow) return false;
+    var D = SEASONS[season];
+    copyInto(PAL.grass, snowy ? SNOW_GRASS : D.grass);
+    copyInto(PAL.path, snowy ? PATH_SNOW : PATH_WARM);
+    copyInto(PAL.plaza, snowy ? PLAZA_SNOW : PLAZA_WARM);
+    copyInto(PAL.water, D.water);
+    copyInto(PAL.leaf.oak, D.oak); copyInto(PAL.leaf.pine, D.pine); copyInto(PAL.leaf.fruit, D.fruit);
+    PAL.shadow = D.shadow; PAL.light = D.light;
     var T = S._T;
-    if (T && T.tallgrass) { if (!NORMAL_PAL.tall) NORMAL_PAL.tall = T.tallgrass.pal; T.tallgrass.pal = on ? { d: '#7f8f86', l: '#c9d4cf' } : NORMAL_PAL.tall; }
-    if (T && T.flower) {
-      if (!NORMAL_PAL.flower) NORMAL_PAL.flower = T.flower.pal;
-      T.flower.pal = on ? function () { return { r: '#cfd8e2', p: '#e2e8ef', w: '#ffffff', s: '#8a9aa0', y: '#eef2f6' }; } : NORMAL_PAL.flower;
-    }
+    if (T && T.tallgrass) T.tallgrass.pal = snowy ? TALL_SNOW : D.tall;
+    if (T && T.flower) { if (!flowerPal) flowerPal = T.flower.pal; T.flower.pal = snowy ? FLOWER_SNOW : flowerPal; }
+    if (T && T.bush) { if (!bushPal) bushPal = T.bush.pal; var o = D.oak; T.bush.pal = { k: o[0], d: o[1], m: o[2], l: o[3], b: season === 'dingin' ? o[3] : bushPal.b }; }
     if (S._clearTiles) S._clearTiles();
-    groundCache = {};
-    S.snow = on;
-    return true;
+    groundCache = {}; canopyCache = {};
+    S.season = season; S.snow = snowy; S._seasonApplied = true;
+    return !first;
   };
+  S.setSnow = function (on) { return S.setSeason(S.season, on); };
+  S.ambientLight = function () { return PAL.light; };
 
   /* ------------------------------------------------------------------ ground variants */
   var groundCache = {};
@@ -173,10 +197,24 @@
 
   /* ------------------------------------------------------------------ trees */
   var canopyCache = {};
+  /** Winter oak and fruit tree: a sparse crown of twigs with snow on the upper side. */
+  function buildBare(pal, r) {
+    var W = 22, H = 24, c = mk(W, H), g = c.getContext('2d'), x, y;
+    for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
+      var dx = (x - 11) / 10, dy = (y - 11) / 10, d = dx * dx + dy * dy;
+      if (d > 1) continue;
+      var h = (x * 7 + y * 13) % 5, twig = ((x + y) % 3 === 0 && r() < 0.8) || ((x - y + 40) % 4 === 0 && r() < 0.5);
+      if (!twig) continue;
+      var snow = dy < -0.15 && h < 3;
+      R(g, x, y, 1, 1, snow ? pal[3] : (d > 0.6 ? pal[0] : h < 2 ? pal[1] : pal[2]));
+    }
+    return c;
+  }
   function buildCanopy(kind) {
     var W = 22, H = 24, c = mk(W, H), g = c.getContext('2d');
     var pal = PAL.leaf[kind] || PAL.leaf.oak, r = rng(hash(kind.length, 5, 9));
     var x, y;
+    if (S.season === 'dingin' && kind !== 'pine') return buildBare(pal, r);
     if (kind === 'pine') {
       for (y = 0; y < H - 2; y++) {
         var tier = y % 7, half = Math.min(10, 2 + Math.floor(y / 7) * 2 + tier);
@@ -203,9 +241,9 @@
       if (col !== pal[0] && r() < 0.12) col = r() < 0.5 ? pal[1] : pal[2];
       R(g, x, y, 1, 1, col);
     }
-    if (kind === 'fruit') {
+    if (kind === 'fruit' && S.season !== 'gugur') {
       var spots = [[6, 7], [13, 5], [9, 13], [15, 11], [5, 12], [12, 16]];
-      spots.forEach(function (s, i) { R(g, s[0], s[1], 2, 2, i % 2 ? '#e8503c' : '#f29a3a'); R(g, s[0], s[1], 1, 1, '#ffd0a0'); });
+      spots.forEach(function (s, i) { R(g, s[0], s[1], 2, 2, S.season === 'semi' ? pal[3] : i % 2 ? '#e8503c' : '#f29a3a'); R(g, s[0], s[1], 1, 1, S.season === 'semi' ? '#fff0f4' : '#ffd0a0'); });
     }
     return c;
   }
@@ -295,4 +333,5 @@
 
   /** Character ground shadow. x,y = where the engine draws the character (tile top-left). */
   S.charShadow = function (g, x, y) { S.shadowEllipse(g, x + 6, y + 12, 5, 1); };
+  S.setSeason('semi', false); // bake the Semi ramps into the palettes before anything is drawn
 })();

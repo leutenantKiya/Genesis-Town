@@ -269,6 +269,10 @@ function valueNoise(seed, x, y){
   var a = h(x0, y0), b = h(x0 + 1, y0), c = h(x0, y0 + 1), d = h(x0 + 1, y0 + 1);
   return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
 }
+// per-season noise tint on the grass: [dark rgb, light rgb, dark strength, light strength]
+var seasonSet = false;
+var NOISE_TINT = { semi: ['20,60,30', '220,240,120', 0.45, 0.28], panas: ['16,64,24', '244,240,96', 0.45, 0.30],
+  gugur: ['64,40,12', '240,196,104', 0.45, 0.30], snow: ['120,140,180', '255,255,255', 0.35, 0.4] };
 function buildWorldCache(m){
   var Sp = SPRITES, c = document.createElement('canvas');
   c.width = m.w * T; c.height = m.h * T;
@@ -280,8 +284,8 @@ function buildWorldCache(m){
     Sp.drawGround(g, gt, x*T, y*T, gt === 'grass' ? (hv < 6 ? 0 : hv < 8 ? 1 : hv < 9 ? 2 : 3) : hv & 3);
     if (gt === 'grass'){
       var n = valueNoise(m.seed, x / 5, y / 5) - 0.5;
-      if (Sp.snow) g.fillStyle = n < 0 ? 'rgba(120,140,180,' + (-n * 0.35).toFixed(3) + ')' : 'rgba(255,255,255,' + (n * 0.4).toFixed(3) + ')';
-      else g.fillStyle = n < 0 ? 'rgba(20,60,30,' + (-n * 0.45).toFixed(3) + ')' : 'rgba(220,240,120,' + (n * 0.28).toFixed(3) + ')';
+      var nt = Sp.snow ? NOISE_TINT.snow : NOISE_TINT[Sp.season] || NOISE_TINT.semi;
+      g.fillStyle = n < 0 ? 'rgba(' + nt[0] + ',' + (-n * nt[2]).toFixed(3) + ')' : 'rgba(' + nt[1] + ',' + (n * nt[3]).toFixed(3) + ')';
       g.fillRect(x*T, y*T, T, T);
     }
   }
@@ -1660,6 +1664,14 @@ function setMap(on){
 }
 var MM_COL = { grass:'#5fae36', flower:'#5fae36', tallgrass:'#56a232', path:'#d0903c', plaza:'#c6bba4', stall:'#e8a13c', water:'#2a8cc0', bridge:'#8e5a30',
   tree:'#2e6a34', bush:'#3f8a2e', rock:'#8a8478', sand:'#e8bf72', soil:'#6a4024', fence:'#8a6038' };
+// the minimap takes its ground, water and tree colours from the current season ramps (art.js PAL)
+function syncMinimapColours(){
+  var P = window.SPRITES && SPRITES.PAL; if (!P) return;
+  MM_COL.grass = MM_COL.flower = P.grass[1]; MM_COL.tallgrass = P.grass[0]; MM_COL.path = P.path[1]; MM_COL.plaza = P.plaza[2];
+  MM_COL.water = P.water[1];
+  var winter = SPRITES.season === 'dingin';
+  MM_COL.tree = (winter ? P.leaf.pine : P.leaf.oak)[1]; MM_COL.bush = (winter ? P.leaf.pine : P.leaf.oak)[0];
+}
 function minimapBase(){
   if (world.mmCache) return world.mmCache;
   var c = document.createElement('canvas'), W = world.w, H = world.h;
@@ -2340,9 +2352,22 @@ var GT = {
   // Snowy ground (art.js palette swap); rebuilds the baked world only when it changed.
   worldId: function(){ return worldId; },
   switchWorld: switchWorld,
-  setSnow: function(on){
-    if (window.SPRITES && SPRITES.setSnow && SPRITES.setSnow(on) && world) buildWorldCache(world);
+  setSnow: function(on){ GT.setSeason(SPRITES.season, on); },
+  // The world follows the season: palette ramps (art.js), baked ground, minimap, and the one gt-s-<season> class on <html>.
+  setSeason: function(season, snowy){
+    if (!/^(semi|panas|gugur|dingin)$/.test(season)) season = 'semi';
+    var root = document.documentElement, cls = 'gt-s-' + season, had = root.classList.contains(cls), first = !seasonSet;
+    var changed = !!(window.SPRITES && SPRITES.setSeason && SPRITES.setSeason(season, snowy));
+    if (changed || first) { syncMinimapColours(); if (world){ world.mmCache = null; if (changed) buildWorldCache(world); if (mapOpen) drawMinimap(); } }
+    ['semi', 'panas', 'gugur', 'dingin'].forEach(function(x){ if (x !== season) root.classList.remove('gt-s-' + x); });
+    if (!had) root.classList.add(cls);
+    if (!had || first){ seasonSet = true; emit('season', {season:season, snowy:!!SPRITES.snow}); }
+    return changed;
   },
+  season: function(){ return window.SPRITES ? SPRITES.season : 'semi'; },
+  // daylight 0..1 and the current season's ambient light colour (rgba string), for mods that tint the world
+  daylight: function(){ return clockInfo().light; },
+  ambientLight: function(){ return window.SPRITES && SPRITES.ambientLight ? SPRITES.ambientLight() : null; },
   version: 2,
   state: state,
   ITEMS: ITEMS,

@@ -463,18 +463,30 @@
   var previewWeather = (/[?&]cuaca=(cerah|berawan|hujan|terik|salju)\b/.exec(location.search) || [])[1] || null;
   function weatherKind() { if (previewWeather) return previewWeather; var w = (S.st && S.st.weather) || S.weather; return w ? w.kind : null; }
   // Winter, snowy weather or the ?musim=dingin preview turns the baked ground white (art.js palette swap)
-  var previewWinter = /[?&]musim=dingin\b/.test(location.search);
+  // ?musim=semi|panas|gugur|dingin previews a season on this screen only (world and UI class); the server's season is unchanged
+  var previewSeason = (/[?&]musim=(semi|panas|gugur|dingin)\b/.exec(location.search) || [])[1] || null;
+  function seasonNow() {
+    return previewSeason || (S.st && S.st.time && S.st.time.season) || S.season || null;
+  }
   function snowOn() {
-    var season = (S.st && S.st.time && S.st.time.season) || S.season;
-    return previewWinter || season === 'dingin' || weatherKind() === 'salju';
+    return seasonNow() === 'dingin' || weatherKind() === 'salju';
   }
   function applyWeatherClass() {
     var k = weatherKind(), root = document.documentElement;
-    if (GT.setSnow) GT.setSnow(snowOn());
+    var season = seasonNow();
+    if (season && GT.setSeason) GT.setSeason(season, snowOn());
+    else if (GT.setSnow) GT.setSnow(snowOn());
     ['cerah', 'berawan', 'hujan', 'terik', 'salju'].forEach(function (x) { root.classList.toggle('gt-w-' + x, k === x && (!GT.scene || GT.scene.kind === 'out')); });
   }
   function drawWeather(ctx, T, t) {
     var k = weatherKind();
+    // the season's ambient light: one flat fill over the visible world, scaled by daylight (gone at night)
+    var amb = GT.ambientLight && GT.ambientLight(), day = GT.daylight ? GT.daylight() : 1, m = amb && /rgba\((\d+),(\d+),(\d+),([\d.]+)\)/.exec(amb);
+    if (m && day > 0.01) {
+      var sc0 = ctx.getTransform().a || 1;
+      ctx.save(); ctx.fillStyle = 'rgba(' + m[1] + ',' + m[2] + ',' + m[3] + ',' + (Math.min(0.12, +m[4]) * day).toFixed(3) + ')';
+      ctx.fillRect(0, 0, ctx.canvas.width / sc0, ctx.canvas.height / sc0); ctx.restore();
+    }
     if (k !== 'hujan' && k !== 'salju') return;
     var sx = ctx.getTransform().a || 1, W = ctx.canvas.width / sx, H = ctx.canvas.height / sx;
     var calm = document.documentElement.classList.contains('gt-reduced-motion');

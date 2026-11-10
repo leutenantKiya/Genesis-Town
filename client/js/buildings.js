@@ -142,6 +142,8 @@
     R(g, 0, 0, 1, TILE, '#5a3a1e'); R(g, TILE - 1, 0, 1, TILE, '#5a3a1e');
     return c;
   }
+  var clearTiles = S._clearTiles;
+  S._clearTiles = function () { bridgeTile = null; if (clearTiles) clearTiles(); }; // the plank tile bakes the water colour
   var drawGround = S.drawGround, groundOf = S.groundOf;
   if (drawGround && S.GROUND_TYPES) {
     S.GROUND_TYPES.bridge = 1;
