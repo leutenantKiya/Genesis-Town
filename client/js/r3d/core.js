@@ -15,7 +15,7 @@
   var DIST = 90;                       // camera distance (ortho: only affects clipping)
   var ZOOM_ROWS = 1.25;                // visible world rows per 2D view row (the tilt shows more ground)
   var ZMIN = 0.6, ZMAX = 1.7;
-  var MODS = ['sky', 'island', 'ground', 'props', 'actors', 'compat'];
+  var MODS = ['sky', 'island', 'ground', 'water', 'props', 'actors', 'compat'];
 
   var T = 12, host = null, canvas = null, C = null, size = { w: 0, h: 0 }, zoom = 1, wheelFn = null;
   var tmpV = new THREE.Vector3(), tmpN = new THREE.Vector2(), up = new THREE.Vector3();

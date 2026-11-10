@@ -11,6 +11,7 @@
   if (!THREE) return;
 
   var mesh = null, tex = null, lastCache = null, curMap = null;
+  function isWater(m, x, y) { return m.tiles[y * m.w + x] === 'water'; }
   var DAYC = new THREE.Color(1, 1, 1), NIGHTC = new THREE.Color(0.33, 0.38, 0.62);
 
   function makeTexture(cache) {
@@ -27,10 +28,25 @@
     onWorld: function (C, map) {
       this.dispose(C);
       curMap = map;
-      var geo = new THREE.PlaneGeometry(map.w, map.h);
-      geo.rotateX(-Math.PI / 2);
-      mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      mesh.position.set(map.w / 2, 0, map.h / 2);
+      // one quad per horizontal run of land; water tiles are left as holes (water.js fills them, recessed)
+      var pos = [], uv = [], idx = [], n = 0, x, y, x0;
+      for (y = 0; y < map.h; y++) {
+        x = 0;
+        while (x < map.w) {
+          if (isWater(map, x, y)) { x++; continue; }
+          x0 = x;
+          while (x < map.w && !isWater(map, x, y)) x++;
+          pos.push(x0, 0, y, x0, 0, y + 1, x, 0, y + 1, x, 0, y);
+          uv.push(x0 / map.w, 1 - y / map.h, x0 / map.w, 1 - (y + 1) / map.h, x / map.w, 1 - (y + 1) / map.h, x / map.w, 1 - y / map.h);
+          idx.push(n, n + 1, n + 2, n, n + 2, n + 3); n += 4;
+        }
+      }
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+      mesh.frustumCulled = false;
       C.root.add(mesh);
       this.sync();
     },
