@@ -10,7 +10,7 @@
   var THREE = window.THREE;
   if (!THREE) return;
 
-  var mesh = null, tex = null, lastCache = null, curMap = null;
+  var mesh = null, tex = null, lastCache = null, curMap = null, shadowMesh = null;
   function isWater(m, x, y) { return m.tiles[y * m.w + x] === 'water'; }
   var DAYC = new THREE.Color(1, 1, 1), NIGHTC = new THREE.Color(0.33, 0.38, 0.62);
 
@@ -48,6 +48,11 @@
       mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
       mesh.frustumCulled = false;
       C.root.add(mesh);
+      // real sun shadows fall on this clear plane (the ground texture itself is unlit)
+      var sgeo = new THREE.PlaneGeometry(map.w, map.h); sgeo.rotateX(-Math.PI / 2);
+      shadowMesh = new THREE.Mesh(sgeo, new THREE.ShadowMaterial({ color: 0x141a38, opacity: 0.34, depthWrite: false }));
+      shadowMesh.position.set(map.w / 2, 0.012, map.h / 2); shadowMesh.receiveShadow = true; shadowMesh.renderOrder = 0.5; shadowMesh.frustumCulled = false;
+      C.root.add(shadowMesh);
       this.sync();
     },
     // pick up a freshly baked cache canvas
@@ -63,10 +68,12 @@
       if (!mesh) return;
       if (info.map !== curMap) return;
       this.sync();
+      if (shadowMesh) shadowMesh.visible = !!info.shadowsOn;
       mesh.material.color.copy(DAYC).lerp(NIGHTC, Math.min(1, info.dark));
     },
     dispose: function (C) {
       if (mesh) { C.root.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+      if (shadowMesh) { C.root.remove(shadowMesh); shadowMesh.geometry.dispose(); shadowMesh.material.dispose(); shadowMesh = null; }
       if (tex) tex.dispose();
       mesh = tex = lastCache = curMap = null;
     }

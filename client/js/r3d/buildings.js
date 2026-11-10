@@ -12,7 +12,7 @@
   if (!THREE || !R3D.geo) return;
   var Builder = R3D.geo.Builder;
 
-  var group = null, litMat = null, glassMat = null;
+  var group = null, litMat = null, glassMat = null, curSnow = null, curMapRef = null, curC = null;
   var GLASS_DAY = new THREE.Color('#a8d8f0'), GLASS_NIGHT = new THREE.Color('#ffd27a');
 
   var PAL = {
@@ -257,16 +257,19 @@
     onWorld: function (C, m) {
       clear(C);
       group = new THREE.Group(); C.root.add(group);
+      curMapRef = m; curC = C; curSnow = !!(window.SPRITES && SPRITES.snow);
       var B = new Builder(), G = new Builder();
+      B.snow = curSnow ? 0.9 : 0;
       m.buildings.forEach(function (b) {
         var k = (m.locked && m.locked[b.y * m.w + b.x]) ? 0.5 : 1;
         if (b.dx == null) b.dx = b.x + Math.floor(b.w / 2);
         (KINDS[b.kind] || generic)(B, G, b, k);
       });
-      if (!B.empty()) group.add(B.mesh(litMat));
+      if (!B.empty()) group.add(B.mesh(litMat, true));
       if (!G.empty()) group.add(G.mesh(glassMat));
     },
     update: function (C, info) {
+      if (curMapRef && !!(window.SPRITES && SPRITES.snow) !== curSnow) this.onWorld(curC, curMapRef);
       var d = Math.min(1, info.dark);
       glassMat.color.copy(GLASS_DAY).lerp(GLASS_NIGHT, d);
     },

@@ -83,7 +83,7 @@
     root.add(body);
     function part(geo, x, y) {
       var g = new THREE.Group(); g.position.set(x, y, 0);
-      var m = new THREE.Mesh(geo, (opts && opts.ghost) ? smats.lit : mats.lit); m.frustumCulled = false; g.add(m); meshes.push(m);
+      var m = new THREE.Mesh(geo, (opts && opts.ghost) ? smats.lit : mats.lit); m.frustumCulled = false; m.castShadow = true; g.add(m); meshes.push(m);
       if (opts && opts.ghost) { var gm = new THREE.Mesh(geo, mats.ghost); gm.renderOrder = 5; gm.frustumCulled = false; g.add(gm); }
       body.add(g); return g;
     }

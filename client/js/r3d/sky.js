@@ -25,15 +25,32 @@
     var v = (t - 0.5) / 0.5; return [mix(DUSK[0], NIGHT[0], v), mix(DUSK[1], NIGHT[1], v)];
   }
 
-  function paintSky(d) {
+  function paintSky(d, h, oc) {
     var p = pair(d), H = cv.height, W = cv.width, y, x;
+    if (oc > 0) { // overcast: the sky turns grey (darker at night)
+      var g0 = new THREE.Color('#7f8b99').lerp(new THREE.Color('#12162a'), d), g1 = new THREE.Color('#bcc6d0').lerp(new THREE.Color('#222840'), d);
+      p[0].lerp(g0, oc * 0.85); p[1].lerp(g1, oc * 0.85);
+    }
     for (y = 0; y < H; y += 2) {
       var c = p[0].clone().lerp(p[1], y / H);
       g.fillStyle = '#' + c.getHexString();
       g.fillRect(0, y, W, 2);
     }
+    // sun and moon cross the sky with the clock
+    var clear = 1 - oc, t, sx, sy;
+    if (h >= 5.5 && h <= 18.5 && clear > 0.05) {
+      t = Math.min(1, Math.max(0, (h - 6) / 12)); sx = Math.round(W * (0.08 + 0.84 * t)); sy = Math.round(H * (0.62 - 0.5 * Math.sin(Math.PI * t)));
+      g.fillStyle = 'rgba(255,236,160,' + (0.22 * clear).toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 10, 0, 6.3); g.fill();
+      g.fillStyle = 'rgba(255,226,120,' + clear.toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 5, 0, 6.3); g.fill();
+    }
+    if ((h >= 18.5 || h <= 6.5) && clear > 0.05) {
+      t = Math.min(1, Math.max(0, (((h - 19) % 24 + 24) % 24) / 10)); sx = Math.round(W * (0.08 + 0.84 * t)); sy = Math.round(H * (0.62 - 0.5 * Math.sin(Math.PI * t)));
+      g.fillStyle = 'rgba(200,215,255,' + (0.18 * clear).toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 9, 0, 6.3); g.fill();
+      g.fillStyle = 'rgba(236,242,255,' + clear.toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 4, 0, 6.3); g.fill();
+      g.fillStyle = 'rgba(170,185,220,' + clear.toFixed(2) + ')'; g.fillRect(sx - 1, sy - 1, 1, 1); g.fillRect(sx + 1, sy + 1, 1, 1);
+    }
     if (d > 0.55) {
-      var a = Math.min(1, (d - 0.55) / 0.35), r = rng(77);
+      var a = Math.min(1, (d - 0.55) / 0.35) * (1 - oc), r = rng(77);
       for (var i = 0; i < 70; i++) {
         x = Math.floor(r() * W); y = Math.floor(r() * H * 0.75);
         g.fillStyle = 'rgba(255,255,255,' + (a * (0.35 + r() * 0.65)).toFixed(2) + ')';
@@ -107,11 +124,12 @@
       lastQ = -1;
     },
     update: function (C, info) {
-      var q = Math.round(Math.max(0, Math.min(1, info.dark)) * 40);
+      var oc = (info.weather && info.weather.overcast) || 0, h = (info.gameMin % 1440) / 60;
+      var q = Math.round(Math.max(0, Math.min(1, info.dark)) * 40) + ':' + Math.floor(h * 6) + ':' + Math.round(oc * 10);
       if (q !== lastQ) {
-        lastQ = q; paintSky(q / 40);
-        var d = q / 40, tint = new THREE.Color(1, 1, 1).lerp(new THREE.Color(0.28, 0.32, 0.55), d);
-        cloudMat.color.copy(tint);
+        lastQ = q; var dd = Math.round(Math.max(0, Math.min(1, info.dark)) * 40) / 40; paintSky(dd, h, oc);
+        var tint = new THREE.Color(1, 1, 1).lerp(new THREE.Color(0.28, 0.32, 0.55), dd).multiplyScalar(1 - 0.38 * oc);
+        cloudMat.color.copy(tint); cloudMat.opacity = 0.92 + 0.08 * oc;
       }
       var t = info.timeAcc, i;
       for (i = 0; i < clouds.length; i++) {

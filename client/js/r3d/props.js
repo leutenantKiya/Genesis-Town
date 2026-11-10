@@ -11,7 +11,7 @@
   if (!THREE || !R3D.geo) return;
   var Builder = R3D.geo.Builder, hash = R3D.geo.hash;
 
-  var group = null, litMat = null, glowMat = null, portalMat = null, lampList = [];
+  var group = null, litMat = null, glowMat = null, portalMat = null, lampList = [], curSnow = null, curMapRef = null, curC = null;
   var DAYC = new THREE.Color(1, 1, 1), NIGHTC = new THREE.Color(0.55, 0.6, 0.85);
   var GREENS = ['#3f8a3a', '#47983f', '#368038', '#4aa046'], DEEP = ['#2a6a48', '#2d7350'];
 
@@ -48,8 +48,10 @@
     },
     onWorld: function (C, m) {
       clear(C);
+      curMapRef = m; curC = C; curSnow = !!(window.SPRITES && SPRITES.snow);
       group = new THREE.Group(); C.root.add(group);
       var B = new Builder(), G = new Builder(), x, y, i, t, k, h, cx, cz;
+      B.snow = curSnow ? 0.85 : 0;
       var locked = m.locked;
       function kk(x, y) { return (locked && locked[y * m.w + x]) ? 0.5 : 1; }
 
@@ -160,10 +162,11 @@
         pm.position.set(px + 0.5, 0.82, pz + 0.5); pm.renderOrder = 2; group.add(pm);
       }
 
-      if (!B.empty()) group.add(B.mesh(litMat));
+      if (!B.empty()) group.add(B.mesh(litMat, true));
       if (!G.empty()) group.add(G.mesh(glowMat));
     },
     update: function (C, info) {
+      if (curMapRef && !!(window.SPRITES && SPRITES.snow) !== curSnow) this.onWorld(curC, curMapRef); // winter came or went: rebuild with or without snow
       var d = Math.min(1, info.dark);
       portalMat.uniforms.uTime.value = info.timeAcc;
       glowMat.color.setRGB(0.78 + 0.22 * d, 0.76 + 0.2 * d, 0.62 + 0.08 * d);

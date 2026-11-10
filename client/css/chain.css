@@ -49,12 +49,12 @@
 .gt-goals-x{border:0;background:transparent;color:var(--paper-edge);font-size:calc(14px*var(--ts));padding:4px 2px;min-height:24px}
 
 /* Weather mood on the game view (outdoors only; set by chain.js from the day's shared weather) */
-#cv{transition:filter .8s}
-html.gt-w-terik #cv{filter:saturate(1.38) contrast(1.06) brightness(1.05)}
-html.gt-w-cerah #cv{filter:saturate(1.12)}
-html.gt-w-berawan #cv{filter:saturate(.86) brightness(.95)}
-html.gt-w-hujan #cv{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
-html.gt-reduced-motion #cv{transition:none}
+#cv,#cv3d{transition:filter .8s}
+html.gt-w-terik #cv,html.gt-w-terik #cv3d{filter:saturate(1.38) contrast(1.06) brightness(1.05)}
+html.gt-w-cerah #cv,html.gt-w-cerah #cv3d{filter:saturate(1.12)}
+html.gt-w-berawan #cv,html.gt-w-berawan #cv3d{filter:saturate(.86) brightness(.95)}
+html.gt-w-hujan #cv,html.gt-w-hujan #cv3d{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
+html.gt-reduced-motion #cv,html.gt-reduced-motion #cv3d{transition:none}
 
 /* Hotbar: item slots along the bottom of the game view (js/mods/hotbar.js) */
 .gt-hotbar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:3;display:flex;gap:4px;padding:4px;background:rgba(14,15,30,.82);border-radius:6px;box-shadow:0 0 0 2px #000;line-height:1}

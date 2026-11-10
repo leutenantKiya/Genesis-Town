@@ -466,6 +466,7 @@
     ['cerah', 'berawan', 'hujan', 'terik', 'salju'].forEach(function (x) { root.classList.toggle('gt-w-' + x, k === x && (!GT.scene || GT.scene.kind === 'out')); });
   }
   function drawWeather(ctx, T, t) {
+    if (GT.view === '3d') return; // the 3D view has its own rain, snow and light
     var k = weatherKind();
     if (k !== 'hujan' && k !== 'salju') return;
     var sx = ctx.getTransform().a || 1, W = ctx.canvas.width / sx, H = ctx.canvas.height / sx;
