@@ -196,6 +196,7 @@
     each(function (m) { m.dispose(C); });
     if (R3D.assets) R3D.assets.disposeAll();
     if (R3D.models) R3D.models.dispose();
+    if (R3D.icons) R3D.icons.dispose();
     C.renderer.dispose();
     if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
     C = canvas = hemi = sun = moon = map = imap = null; interior = false;

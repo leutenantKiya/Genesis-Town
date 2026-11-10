@@ -40,7 +40,7 @@
     if (state === 'loading' || state === 'ready' || state === 'failed') return;
     state = 'loading';
     if (!hasWebGL2()) return fail('WebGL2 tidak tersedia');
-    var parts = ['geo', 'assets', 'models', 'regions', 'sky', 'island', 'ground', 'water', 'props', 'buildings', 'rig', 'actors', 'lights', 'weather', 'fx', 'interior', 'compat']; // core comes last: it registers the renderer
+    var parts = ['geo', 'assets', 'models', 'regions', 'sky', 'island', 'ground', 'water', 'props', 'buildings', 'rig', 'icons', 'actors', 'lights', 'weather', 'fx', 'interior', 'compat']; // core comes last: it registers the renderer
     function seq(list) { return list.reduce(function (p, n) { return p.then(function () { return loadScript('js/r3d/' + n + '.js'); }); }, Promise.resolve()); }
     loadScript('vendor/three.js')
       .then(function () { return seq(parts); })

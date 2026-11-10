@@ -1,0 +1,133 @@
+/*
+ * hud3d.css - the interface for the 3D view. Everything here applies only while the 3D view is on (html.gt-3d), so the 2D
+ * view keeps its pixel-art console look. Smooth rounded type (Nunito, Fredoka), soft glass panels, rounded buttons, soft shadows
+ * instead of hard black outlines, and smooth scaling for every icon and picture. The item icons themselves are rendered in 3D
+ * (js/r3d/icons.js).
+ */
+html.gt-3d{
+  --font:'Nunito',ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-display:'Fredoka','Nunito',ui-rounded,system-ui,sans-serif;
+  --bg:#0e1124;
+  --shell:#262b54;
+  --key:#3a4170;
+  --key-hi:#4c558c;
+  --btn:#d1457a;
+  --btn-hi:#e45f93;
+  --paper:#fbf7ea;
+  --paper-ink:#232846;
+  --paper-edge:#8a8fb4;
+  --accent:#c6e86a;
+  --soft-shadow:0 10px 30px rgba(8,10,30,.38);
+}
+html.gt-3d body{font-weight:600;letter-spacing:.01em;background:radial-gradient(1100px 620px at 50% -12%,#394286 0%,#1a1f4a 52%,#0d1024 100%) fixed;background-color:var(--bg)}
+html.gt-3d button,html.gt-3d input,html.gt-3d select,html.gt-3d textarea{font-family:var(--font)}
+html.gt-3d canvas{image-rendering:auto}
+html.gt-3d #cv{image-rendering:auto}
+
+/* frame around the game */
+html.gt-3d .shell{border-radius:28px;background:linear-gradient(180deg,rgba(66,74,138,.62),rgba(32,37,80,.7));border:1px solid rgba(255,255,255,.14);box-shadow:0 22px 60px rgba(4,6,22,.5),inset 0 1px 0 rgba(255,255,255,.2)}
+html.gt-3d .bezel{border-radius:22px;padding:8px;background:rgba(8,10,26,.55);box-shadow:inset 0 2px 12px rgba(0,0,0,.45)}
+html.gt-3d #screen{border-radius:16px;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 8px 28px rgba(0,0,0,.45)}
+html.gt-3d .brand b{font-family:var(--font-display);font-weight:600;letter-spacing:.02em}
+html.gt-3d .hud .val{font-weight:700}
+html.gt-3d .hud .loc .val{font-family:var(--font-display);font-weight:600;letter-spacing:.01em}
+html.gt-3d .coin,html.gt-3d .sm{width:13px;height:13px;vertical-align:-2px;margin-right:6px;background:radial-gradient(circle at 35% 30%,#fff3b0 0%,#f6cf55 45%,#d9a024 100%);box-shadow:0 1px 3px rgba(0,0,0,.45)}
+html.gt-3d .sm.dusk{background:radial-gradient(circle at 35% 30%,#ffd6a8,#f29a4c 60%,#c9722a)}
+html.gt-3d .sm.night{background:transparent;box-shadow:inset -4px -3px 0 0 #dbe3ff,0 1px 3px rgba(0,0,0,.4)}
+html.gt-3d .badge{border-radius:10px;padding:2px 8px;box-shadow:none}
+
+/* buttons */
+html.gt-3d .btn{border-radius:12px;padding:8px 13px;font-weight:700;background:linear-gradient(180deg,var(--key-hi),var(--key));box-shadow:0 2px 0 rgba(0,0,0,.28),0 6px 14px rgba(5,7,24,.3),inset 0 1px 0 rgba(255,255,255,.2)}
+html.gt-3d .btn:hover{background:linear-gradient(180deg,#5c66a4,var(--key-hi))}
+html.gt-3d .btn.hot{background:linear-gradient(180deg,var(--btn-hi),var(--btn))}
+html.gt-3d .btn.hot:hover{background:linear-gradient(180deg,#f276a6,var(--btn-hi))}
+html.gt-3d .btn:active{transform:translateY(1px)}
+html.gt-3d .gt-camctl{gap:7px;opacity:.9}
+html.gt-3d .gt-camctl button{border-radius:50%;font-family:var(--font);border:1px solid rgba(255,255,255,.28);background:rgba(20,24,56,.6);backdrop-filter:blur(6px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+html.gt-3d .gt-camctl button:hover{background:rgba(70,80,140,.85)}
+
+/* the hotbar */
+html.gt-3d .gt-hotbar{gap:6px;padding:6px;border-radius:20px;background:rgba(18,22,52,.66);backdrop-filter:blur(8px);box-shadow:0 8px 22px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.12)}
+html.gt-3d .gt-slot{width:46px;height:46px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.06));box-shadow:inset 0 1px 0 rgba(255,255,255,.18);transition:transform .12s,background .12s}
+html.gt-3d .gt-slot:hover{background:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.1));transform:translateY(-2px)}
+html.gt-3d .gt-slot.sel{background:linear-gradient(180deg,rgba(255,226,120,.38),rgba(255,226,120,.16));box-shadow:0 0 0 2px var(--gold),0 0 16px rgba(255,214,90,.5)}
+html.gt-3d .gt-slot canvas{width:34px!important;height:34px!important;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+html.gt-3d .gt-slot.empty canvas{opacity:.4;filter:grayscale(.5)}
+html.gt-3d .gt-slot-n{right:5px;bottom:2px;font-weight:800;font-size:calc(13px*var(--ts));text-shadow:0 1px 3px #000,0 0 2px #000}
+html.gt-3d .gt-slot-k{left:5px;top:3px;font-weight:700;opacity:.7}
+html.gt-3d .gt-slot.today::after{border-radius:50%;box-shadow:0 0 6px var(--gold)}
+html.gt-3d .gt-slot-bag{width:auto;padding:0 14px;border-radius:14px;font-weight:800;background:linear-gradient(180deg,var(--btn-hi),var(--btn))}
+html.gt-3d .gt-slotpop{border:0;border-radius:18px;box-shadow:0 14px 34px rgba(0,0,0,.5)}
+html.gt-3d .gt-held{border-radius:12px;padding:4px 12px;background:rgba(18,22,52,.72);backdrop-filter:blur(6px);font-weight:700}
+html.gt-3d #gt-hint{border-radius:14px;backdrop-filter:blur(6px)}
+
+/* talking, text above characters, toasts */
+html.gt-3d #dlg{border:0;border-radius:20px;background:linear-gradient(180deg,#fffaf0,#f3eedb);box-shadow:0 14px 36px rgba(0,0,0,.5),inset 0 0 0 2px rgba(35,40,70,.12);font-weight:600}
+html.gt-3d #dwho{border-radius:12px 12px 0 0;font-family:var(--font-display);font-weight:600;padding-inline:calc(var(--fs)*1.1)}
+html.gt-3d .bub{border:0;border-radius:14px;padding:5px 9px;box-shadow:0 4px 14px rgba(0,0,0,.35);font-weight:700}
+html.gt-3d .bub::after{border-top-color:var(--paper)}
+html.gt-3d .ntag{border-radius:10px;padding:2px 8px;background:rgba(14,18,44,.72);backdrop-filter:blur(3px);font-weight:700}
+html.gt-3d .gt-fxl{border-radius:10px;font-family:var(--font);font-weight:800;padding:3px 8px;background:rgba(14,18,44,.72);backdrop-filter:blur(3px)}
+html.gt-3d .gt-fxl.plain{text-shadow:0 1px 3px rgba(0,0,0,.8),0 0 2px #000}
+html.gt-3d .gt-fxl.light{background:rgba(255,250,236,.96);color:var(--paper-ink)}
+html.gt-3d .toast{border:0;border-radius:16px;padding:9px 16px;background:rgba(24,28,62,.92);backdrop-filter:blur(8px);box-shadow:0 10px 28px rgba(0,0,0,.45);font-weight:700}
+
+/* windows (bag, shops, market, history, settings) */
+html.gt-3d .mover{background:rgba(6,8,22,.62);backdrop-filter:blur(3px)}
+html.gt-3d .mbox{border:0;border-radius:24px;background:linear-gradient(180deg,#fffaf0,#f1ecd8);box-shadow:0 24px 60px rgba(0,0,0,.55),inset 0 0 0 2px rgba(35,40,70,.08)}
+html.gt-3d .mtitle{font-family:var(--font-display);font-weight:600;font-size:calc(19px*var(--ts))}
+html.gt-3d .mx{width:32px;height:32px;border-radius:50%;background:rgba(35,40,70,.9);font-weight:800}
+html.gt-3d .mbtn{border-radius:12px;font-weight:700;background:linear-gradient(180deg,#3a4170,var(--paper-ink));box-shadow:0 2px 0 rgba(0,0,0,.25),0 5px 10px rgba(35,40,70,.25);padding:8px 14px}
+html.gt-3d .mbtn:hover{background:linear-gradient(180deg,#4c558c,#323a6c)}
+html.gt-3d .mbtn.primary{background:linear-gradient(180deg,var(--btn-hi),var(--btn))}
+html.gt-3d .mrow{border-bottom:1px solid rgba(35,40,70,.14)}
+html.gt-3d .dsec{border-top:1px solid rgba(35,40,70,.14)}
+html.gt-3d .dsec h3{font-family:var(--font-display);font-weight:600}
+html.gt-3d .mmoney{border-radius:12px;padding:4px 12px;font-weight:800}
+html.gt-3d .mbox input[type=text],html.gt-3d .dsec input[type=number]{border:2px solid rgba(35,40,70,.25);border-radius:12px;padding:9px 12px;font-weight:700}
+html.gt-3d .mbox input:focus-visible{outline:3px solid #6aa0ff;outline-offset:1px}
+html.gt-3d .mseg span{border:2px solid rgba(35,40,70,.25);border-radius:12px;font-weight:700}
+html.gt-3d .choice{border:2px solid rgba(35,40,70,.2);border-radius:16px;background:#fff;box-shadow:0 4px 12px rgba(35,40,70,.1)}
+html.gt-3d .choice b{font-family:var(--font-display);font-weight:600}
+html.gt-3d .gt-card,html.gt-3d .gt-detail,html.gt-3d .gt-group,html.gt-3d .gt-hist-row,html.gt-3d .gt-shop-why{border-radius:16px;background:#f2edd9;box-shadow:0 2px 0 rgba(35,40,70,.1),0 5px 12px rgba(35,40,70,.08)}
+html.gt-3d .gt-card{transition:transform .12s,box-shadow .12s}
+html.gt-3d .gt-card:hover{background:#ebe5cb;transform:translateY(-2px);box-shadow:0 3px 0 rgba(35,40,70,.1),0 9px 18px rgba(35,40,70,.16)}
+html.gt-3d .gt-card.sel{box-shadow:0 0 0 3px #4b7be5,0 8px 16px rgba(35,40,70,.18)}
+html.gt-3d .gt-card.accent{background:#e0ebc4}
+html.gt-3d .gt-card canvas{filter:drop-shadow(0 2px 2px rgba(35,40,70,.3))}
+html.gt-3d .gt-card-name{font-weight:800}
+html.gt-3d .gt-card-coin{width:26px;height:26px;background:radial-gradient(circle at 35% 30%,#fff3b0 0%,#f6cf55 45%,#d9a024 100%);box-shadow:0 2px 4px rgba(0,0,0,.35)}
+html.gt-3d .gt-warn{border-radius:14px}
+html.gt-3d .gt-hist-row.bad{background:#f6dccf}
+
+/* the map screen and the character screen */
+html.gt-3d #map{backdrop-filter:blur(4px)}
+html.gt-3d #mm{border-radius:16px;box-shadow:0 0 0 1px rgba(255,255,255,.2),0 12px 30px rgba(0,0,0,.5)}
+html.gt-3d .legend i{border-radius:50%;box-shadow:none}
+html.gt-3d .gt-cs{background:rgba(10,12,30,.82);backdrop-filter:blur(8px)}
+html.gt-3d .gt-cs-left,html.gt-3d .gt-cs-right{border:0;border-radius:26px;background:linear-gradient(180deg,#fffaf0,#f1ecd8);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+html.gt-3d .gt-cs-h{font-family:var(--font-display);font-weight:600}
+html.gt-3d .gt-cs-name{border:2px solid rgba(35,40,70,.25);border-radius:14px;font-weight:800}
+html.gt-3d .gt-cs-stage{border-radius:20px;overflow:hidden;background:radial-gradient(circle at 50% 35%,#cfe9a8,#9ccf7a 70%)}
+html.gt-3d .gt-cs-sw{border-radius:16px;border-width:3px;background:#e9e4cc;transition:transform .12s}
+html.gt-3d .gt-cs-sw:hover{transform:translateY(-3px)}
+html.gt-3d .gt-cs-sw.on{background:#fff;box-shadow:0 0 0 2px #fff,0 8px 18px rgba(45,122,214,.35)}
+html.gt-3d .gt-cs-go{border:0;border-radius:18px;font-family:var(--font-display);font-weight:600;background:linear-gradient(180deg,#58c476,#3aa05a);box-shadow:0 4px 0 #2b7a44,0 10px 20px rgba(0,0,0,.3)}
+html.gt-3d .gt-cs-go:active{transform:translateY(2px);box-shadow:0 2px 0 #2b7a44}
+
+/* the title card and the phone controls */
+html.gt-3d .gt-title h1{font-weight:600;letter-spacing:0}
+html.gt-3d .dp{border-radius:14px;font-family:var(--font-display);background:linear-gradient(180deg,var(--key-hi),var(--key));box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 4px 10px rgba(0,0,0,.3)}
+html.gt-3d .dp.up{border-radius:14px 14px 4px 4px}
+html.gt-3d .dp.dn{border-radius:4px 4px 14px 14px}
+html.gt-3d .dp.left{border-radius:14px 4px 4px 14px}
+html.gt-3d .dp.right{border-radius:4px 14px 14px 4px}
+html.gt-3d #btnA,html.gt-3d #btnE{box-shadow:0 4px 0 rgba(0,0,0,.3),0 8px 16px rgba(0,0,0,.3),inset 0 3px 0 rgba(255,255,255,.28)}
+html.gt-3d .gt-tab{border-radius:12px;font-weight:700}
+
+/* phones: a narrower hotbar so all the slots and the bag button fit */
+html.gt-3d.gt-phone .gt-hotbar{gap:3px;padding:4px;border-radius:16px;max-width:calc(100% - 8px)}
+html.gt-3d.gt-phone .gt-slot{width:34px;height:40px;border-radius:11px}
+html.gt-3d.gt-phone .gt-slot canvas{width:27px!important;height:27px!important}
+html.gt-3d.gt-phone .gt-slot-n{right:3px;font-size:12px}
+html.gt-3d.gt-phone .gt-slot-bag{padding:0 9px;border-radius:12px}
