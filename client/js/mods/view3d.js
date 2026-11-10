@@ -188,6 +188,73 @@
     return { x: (tmp.x + 1) / 2 * VW, y: (1 - tmp.y) / 2 * VH };
   }
 
+  /* ---------------------------------------------------------------- the axe: a 3D swing from the sprite's hand
+     actfx.js keeps the timing (GT_FX.swings: t, HIT, DUR); here the axe is a real model (handle and steel head, lit like
+     the world). Its grip sits on the leaning sprite card at the hand, so on screen it leaves the hand at any camera turn,
+     and it sweeps a flat arc in 3D from beside the player to past the target, tilted a little down; chips, leaves and
+     sparks fly as small 3D cubes with gravity. */
+  var swings = new Map(), bits = [], bitGeo = null;
+  function axeModel(SIDE) {
+    var g = new THREE.Group(), tilt = new THREE.Group(), arm = new THREE.Group();
+    var handle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.72), GT3.mat({ color: '#6a3f22' }));
+    handle.position.z = 0.36;
+    var head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.22), GT3.mat({ color: '#d9dde6' }));
+    head.position.set(SIDE * 0.1, 0, 0.62); // the cutting edge leads the swing (local +X when SIDE is 1)
+    var back = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.065, 0.16), GT3.mat({ color: '#7d8290' }));
+    back.position.set(-SIDE * 0.04, 0, 0.62);
+    // a tool in the hand: drawn after the world and over its own sprite card, so it reads at every angle and bites
+    // visibly into the tree instead of vanishing inside the crown
+    [handle, head, back].forEach(function (m) { m.castShadow = true; m.renderOrder = 10; m.material.depthTest = false; arm.add(m); });
+    tilt.add(arm); g.add(tilt);
+    g.userData = { tilt: tilt, arm: arm, side: SIDE };
+    return g;
+  }
+  function bit(color, x, y, z, vx, vy, vz, life, g, size) {
+    bitGeo = bitGeo || new THREE.BoxGeometry(1, 1, 1);
+    var m = new THREE.Mesh(bitGeo, new THREE.MeshBasicMaterial({ color: color, fog: true }));
+    m.scale.setScalar(size || 0.07); m.position.set(x, y, z); scene.add(m);
+    bits.push({ m: m, v: new THREE.Vector3(vx, vy, vz), life: life, g: g == null ? 9 : g, spin: (Math.random() - 0.5) * 12 });
+  }
+  function burst(e, dx, dz) {
+    var tx = e.tile.x + 0.5 - dx * 0.32, tz = e.tile.y + 0.5 - dz * 0.32, i, r = Math.random;
+    if (e.kind === 'strike') {
+      if (!e.hit) return; // a miss cuts only air
+      for (i = 0; i < 9; i++) bit(r() < 0.5 ? '#fff6c8' : '#ffd84a', tx, 0.55, tz, dx * 1.5 + (r() - 0.5) * 2.4, 1.5 + r() * 2, dz * 1.5 + (r() - 0.5) * 2.4, 0.35 + r() * 0.2, 6, 0.05);
+      return;
+    }
+    for (i = 0; i < 7; i++) bit(r() < 0.5 ? '#c08848' : '#8e5a30', tx, 0.5, tz, -dx * (1 + r()) + (r() - 0.5) * 1.6, 2 + r() * 1.8, -dz * (1 + r()) + (r() - 0.5) * 1.6, 0.55 + r() * 0.25, 9, r() < 0.4 ? 0.09 : 0.06);
+    for (i = 0; i < 4; i++) bit(r() < 0.5 ? '#48a046' : '#86c85a', e.tile.x + 0.5 + (r() - 0.5) * 0.8, 1.7 + r() * 0.4, e.tile.y + 0.5 + (r() - 0.5) * 0.8, (r() - 0.5) * 0.6, -0.4, (r() - 0.5) * 0.6, 1 + r() * 0.4, 0.6, 0.07);
+  }
+  function updateSwings(dt) {
+    var FX = window.GT_FX, list = FX && FX.swings ? FX.swings() : [], live = new Set();
+    var p = rig.pitch, y = yawNow(), up = [-Math.sin(p) * Math.sin(y), Math.cos(p), -Math.sin(p) * Math.cos(y)];
+    list.forEach(function (e) {
+      live.add(e);
+      var s = swings.get(e);
+      var dx = e.tile.x + 0.5 - pt.x, dz = e.tile.y + 0.5 - pt.y, dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+      if (!s) {
+        // wind up on the side away from the camera, so the axe rises behind the shoulder instead of hanging toward us
+        var lx = dz, lz = -dx, away = lx * -Math.sin(y) + lz * -Math.cos(y);
+        s = { axe: axeModel(away > 0.05 ? -1 : 1), burst: false }; scene.add(s.axe); swings.set(e, s);
+      }
+      // the grip: half way up the leaning card, a little toward the target, i.e. where the sprite's hand is drawn
+      s.axe.position.set(pt.x + up[0] * 0.5 + dx * 0.12, up[1] * 0.5, pt.y + up[2] * 0.5 + dz * 0.12);
+      s.axe.rotation.set(0, Math.atan2(dx, dz), 0);
+      s.axe.userData.tilt.rotation.x = 0.7; // a diagonal chop: from level at the side to down-forward into the trunk
+      var k = Math.min(1, e.t / FX.HIT), ease = 1 - Math.pow(1 - k, 3);
+      s.axe.userData.arm.rotation.y = s.axe.userData.side * (-1.9 + 2.35 * ease); // from beside and behind, through the target
+      s.axe.visible = e.t < FX.DUR * 0.85;
+      if (e.t >= FX.HIT && !s.burst) { s.burst = true; burst(e, dx, dz); }
+    });
+    swings.forEach(function (s, e) { if (!live.has(e)) { GT3.dispose(s.axe); swings.delete(e); } });
+    for (var i = bits.length - 1; i >= 0; i--) {
+      var b = bits[i]; b.life -= dt;
+      if (b.life <= 0 || b.m.position.y < 0) { scene.remove(b.m); b.m.material.dispose(); bits.splice(i, 1); continue; }
+      b.v.y -= b.g * dt; b.m.position.addScaledVector(b.v, dt);
+      b.m.rotation.x += b.spin * dt; b.m.rotation.y += b.spin * dt * 0.7;
+    }
+  }
+
   var api = {
     ready: function () { return ok && mode === '3d' && !!(GT.world && GT.world.layout); },
     idle: function () { hide(); last = 0; },
@@ -223,6 +290,7 @@
       world.update(now / 1000, o.hour, sky.night);
       see.update(pt.x, pt.y, dt);
       actors.forEach(function (a) { a.actor.face(camera); });
+      updateSwings(dt);
       renderer.render(scene, camera);
       return toScreen(pt.x, pt.y, 0);
     },

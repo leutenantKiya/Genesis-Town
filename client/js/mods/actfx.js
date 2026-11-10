@@ -107,6 +107,7 @@
     if (!GT.scene || GT.scene.kind !== 'out') return;
     if (!fx.length && !texts.length && !flashes.length && !puffs.length) return;
     ctx.save();
+    var v3 = GT.view3dOn && GT.view3dOn(); // 2.5D: view3d.js swings a 3D axe from the sprite's hand and throws 3D chips
     flashes.forEach(function (f) {
       ctx.globalAlpha = Math.max(0, 1 - f.t / 0.25);
       ctx.fillStyle = f.col;
@@ -114,7 +115,7 @@
       ctx.fillRect(fa.x + 1, fa.y - 2, T - 2, T + 1);
       ctx.globalAlpha = 1;
     });
-    fx.forEach(function (e) {
+    if (!v3) fx.forEach(function (e) {
       var ea = GT.at(e.from.x, e.from.y), ta = GT.at(e.tile.x, e.tile.y);
       var base = ANG[e.dir], hx = ea.x + T / 2, hy = ea.y + T / 2 - 1;
       var tx = ta.x + T / 2, ty = ta.y + T / 2;
@@ -162,6 +163,8 @@
     ctx.restore();
   }
 
-  window.GT_FX = { chop: chop, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; } };
+  window.GT_FX = { chop: chop, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; },
+    // the swings in progress and their timing, for the 2.5D view's 3D axe (view3d.js)
+    swings: function () { return fx; }, DUR: DUR, HIT: HIT };
   GT.register({ id: 'actfx', onFrame: onFrame, init: function (g) { g.register({ id: 'actfx-draw', onDraw: onDraw }); } }); // drawn last, over signs and tags
 })();
