@@ -155,7 +155,7 @@
     });
     // rising words and numbers, outlined so they read on any ground
     texts.forEach(function (s) {
-      var k = s.t / 1.1, sa = GT.at(s.tile.x, s.tile.y), x = Math.round(sa.x + T / 2), y = Math.round(sa.y - 2 - k * 10);
+      var k = s.t / 1.1, sa = GT.at(s.tile.x, s.tile.y), x = GT.snap(sa.x + T / 2), y = GT.snap(sa.y - 2 - k * 10);
       ctx.globalAlpha = k < 0.7 ? 1 : Math.max(0, 1 - (k - 0.7) / 0.3);
       if (window.GT_THEME) GT_THEME.text(ctx, s.text, x, y, s.col, 8);
       ctx.globalAlpha = 1;

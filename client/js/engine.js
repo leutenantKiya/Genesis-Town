@@ -2519,6 +2519,9 @@ var GT = {
   // the 2.5D view registers here (mods/view3d.js); null turns it off
   setView3d: function(v){ view3d = v || null; },
   at: function(tx, ty){ return at(tx, ty); },
+  // Round an overlay position for crisp drawing: whole art pixels in 2D, whole screen pixels in 2.5D. There one overlay
+  // unit is several screen pixels while the camera glides, so rounding to units made tags hop and shiver as you walked.
+  snap: function(v){ return ovK ? Math.round(v * ovK) / ovK : Math.round(v); },
   // an analog walk on screen axes (-1..1 each), e.g. a drag in the 2.5D view; null lets go
   setStick: function(x, y){ stick = x == null ? null : {x:+x || 0, y:+y || 0}; },
   view3dOn: function(){ return v3on(); }

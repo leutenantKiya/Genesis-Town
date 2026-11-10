@@ -97,7 +97,7 @@
     Object.keys(others).forEach(function (a) {
       var o = others[a], cx = curX(o, now);
       var at = GT.at(cx, curY(o, now)); // in 2.5D this follows the head at any camera turn
-      var x = Math.round(at.x + T / 2), y = Math.round(at.y - 3 - (o.npc && Math.round(cx) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
+      var x = GT.snap(at.x + T / 2), y = GT.snap(at.y - 3 - (o.npc && Math.round(cx) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
       ctx.font = '7px "Pixelify Sans", sans-serif';
       var text = o.nick + (!o.npc && o.title && o.title !== 'Pedagang baru' ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
       tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.npc ? 'accent' : 'dark', k: key(o.nick, o.tag) });
@@ -112,7 +112,7 @@
     });
     if (me) {
       var p = GT.player, mt = fitBubble(ctx, key(me, meTag), now), ma = GT.at(p.x, p.y);
-      if (mt) bubs.push({ x: Math.round(ma.x + T / 2), y: Math.round(ma.y - 4), text: mt, mine: true });
+      if (mt) bubs.push({ x: GT.snap(ma.x + T / 2), y: GT.snap(ma.y - 4), text: mt, mine: true });
     }
     bubs.sort(function (p, q) { return (p.mine ? 1 : 0) - (q.mine ? 1 : 0) || q.y - p.y; }); // my own bubble is drawn last, on top
     var bp = placed.slice(); // bubbles also keep clear of every name tag
@@ -129,7 +129,7 @@
   function bubble(ctx, TH, b, W) {
     var x = Math.max(Math.ceil(b.w / 2) + 1, Math.min(W - Math.ceil(b.w / 2) - 1, b.x)); // keep it on screen
     TH.label(ctx, b.text, x, b.y, { tone: 'paper', size: 7 });
-    ctx.fillStyle = TH.get('paper-ink'); ctx.fillRect(Math.round(Math.max(x - 1, Math.min(b.x, x + 1))), b.y + 1, 2, 2); // the tail points at the speaker
+    ctx.fillStyle = TH.get('paper-ink'); ctx.fillRect(GT.snap(Math.max(x - 1, Math.min(b.x, x + 1))), b.y + 1, 2, 2); // the tail points at the speaker
   }
 
   /* ---------------------------------------------------------------- chat box */

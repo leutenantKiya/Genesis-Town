@@ -25,6 +25,8 @@
     paper: function () { return { bg: get('paper') || '#f4f1dc', fg: get('paper-ink') || '#1c1c2c', alpha: 1 }; },
     accent: function () { return { bg: get('accent') || '#f28fb0', fg: get('accent-ink') || '#1c1c2c', alpha: 1 }; }
   };
+  // in 2.5D an overlay unit spans several screen pixels: anchor labels on whole screen pixels so they glide with the camera
+  function snap(v) { return window.GT && GT.snap ? GT.snap(v) : Math.round(v); }
   function font(size, bold) { return (bold ? '600 ' : '') + (size || 7) + 'px "Pixelify Sans", sans-serif'; }
 
   function label(ctx, text, x, y, o) {
@@ -32,7 +34,7 @@
     var t = (TONES[o.tone] || TONES.dark)(), size = o.size || 7;
     ctx.save();
     var k = window.GT_THEME.scale || 1; // the 2.5D view draws labels smaller so they do not cover the world (view3d.js)
-    if (k !== 1) { ctx.translate(Math.round(x), Math.round(y)); ctx.scale(k, k); x = 0; y = 0; }
+    if (k !== 1) { ctx.translate(snap(x), snap(y)); ctx.scale(k, k); x = 0; y = 0; }
     ctx.font = font(size, o.bold);
     ctx.textBaseline = 'bottom';
     var w = Math.ceil(ctx.measureText(text).width) + 4, h = size + 3;
@@ -50,7 +52,7 @@
   function text(ctx, str, x, y, colour, size) {
     ctx.save();
     var k = window.GT_THEME.scale || 1;
-    if (k !== 1) { ctx.translate(Math.round(x), Math.round(y)); ctx.scale(k, k); x = 0; y = 0; }
+    if (k !== 1) { ctx.translate(snap(x), snap(y)); ctx.scale(k, k); x = 0; y = 0; }
     ctx.font = (size || 8) + 'px "Press Start 2P", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillStyle = get('outline') || '#0b0c16';

@@ -514,7 +514,7 @@
   }
   function drawHat(ctx, n, name, camX, camY, T, sick) {
     var d = name && H.cosmetics && H.cosmetics[name]; if (!d || !n) return;
-    var ha = GT.at(n.x, n.y), sx = Math.round(ha.x), sy = Math.round(ha.y);
+    var ha = GT.at(n.x, n.y), sx = GT.snap(ha.x), sy = GT.snap(ha.y);
     if (sick) { if (name === 'syal') return; sx -= 2; sy += 5; } // a collapsed worker lies down: the hat goes on the lying head
     ctx.fillStyle = '#2a2430';
     if (name === 'syal') { ctx.fillRect(sx + 3, sy + 7, 10, 3); ctx.fillStyle = d.color; ctx.fillRect(sx + 4, sy + 8, 8, 1); ctx.fillRect(sx + 9, sy + 8, 2, 4); return; }
