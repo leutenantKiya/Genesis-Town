@@ -64,9 +64,13 @@
         a.mesh.position.set((px + 6) / T, 0, (py + 12) / T);
         a.mesh.quaternion.copy(C.cam.quaternion);
         a.mat.color.copy(night);
+        if (key === 'P') { // a faint silhouette shows through whatever stands in front of the player (trees, roofs)
+          if (!a.ghost) { a.ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: a.tex, transparent: true, opacity: 0.5, depthFunc: THREE.GreaterDepth, depthWrite: false, alphaTest: 0.04, color: 0xa8b8ff })); a.ghost.renderOrder = 5; a.ghost.frustumCulled = false; this.group.add(a.ghost); }
+          a.ghost.position.copy(a.mesh.position); a.ghost.quaternion.copy(a.mesh.quaternion);
+        }
       }
       pool.forEach(function (a, key) {
-        if (a.seen !== frame) { this.group.remove(a.mesh); a.tex.dispose(); a.mat.dispose(); pool.delete(key); }
+        if (a.seen !== frame) { if (a.ghost) { this.group.remove(a.ghost); a.ghost.material.dispose(); } this.group.remove(a.mesh); a.tex.dispose(); a.mat.dispose(); pool.delete(key); }
       }, this);
     },
     dispose: function (C) {

@@ -269,7 +269,11 @@ function valueNoise(seed, x, y){
   var a = h(x0, y0), b = h(x0 + 1, y0), c = h(x0, y0 + 1), d = h(x0 + 1, y0 + 1);
   return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
 }
-function buildWorldCache(m){
+// o.flat (3D view): the same bake without sprites that become real 3D meshes (tree trunks, props, buildings, lots, portal);
+// shadows and the fog stay, canopies are not recomputed, and the canvas is returned instead of stored.
+var PROP3D = {tree:1, rock:1, bush:1, barrel:1, crate:1, fence:1, sign:1, mailbox:1, lamp:1, stall:1};
+function buildWorldCache(m, o){
+  var flat = !!(o && o.flat);
   var Sp = SPRITES, c = document.createElement('canvas');
   c.width = m.w * T; c.height = m.h * T;
   var g = c.getContext('2d'); g.imageSmoothingEnabled = false;
@@ -292,27 +296,28 @@ function buildWorldCache(m){
     else if (gt !== 'grass') Sp.drawEdges(g, gt, x*T, y*T, {n:gAt(x, y-1) === 'grass', s:gAt(x, y+1) === 'grass', w:gAt(x-1, y) === 'grass', e:gAt(x+1, y) === 'grass'});
   }
   m.buildings.forEach(function(b){ Sp.buildingShadow(g, b.x*T, b.y*T, (b.w || 3)*T, (b.h || 3)*T); });
-  m.canopies = [];
+  var canopyList = flat ? [] : (m.canopies = []);
   for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
     t = m.tiles[y*m.w + x];
     if (Sp.GROUND_TYPES[t]) continue;
     if (t === 'tree'){
-      Sp.drawTrunk(g, x*T, y*T);
-      m.canopies.push({x:x, y:y, kind:Sp.treeKind(x, y, x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1), fog:!!(m.locked && m.locked[y*m.w + x])});
+      if (flat) Sp.shadowEllipse(g, x*T + 7, y*T + 10, 7, 2); else Sp.drawTrunk(g, x*T, y*T);
+      if (!flat) canopyList.push({x:x, y:y, kind:Sp.treeKind(x, y, x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1), fog:!!(m.locked && m.locked[y*m.w + x])});
       continue;
     }
     if (t === 'rock' || t === 'bush' || t === 'barrel' || t === 'crate') Sp.shadowEllipse(g, x*T + 6, y*T + 10, 5, 2);
+    if (flat && PROP3D[t]) continue;
     if (t === 'lamp' && !tileSupported('lamp')){ fbLamp(g, x*T, y*T); continue; }
     Sp.drawOverlay(g, t, x*T, y*T, 0);
   }
-  m.buildings.forEach(function(b){
+  if (!flat) m.buildings.forEach(function(b){
     if (b.kind === 'mart') Sp.drawMart(g, b.x*T, b.y*T);
     else if (b.kind === 'casino'){ if (Sp.drawCasino) Sp.drawCasino(g, b.x*T, b.y*T); else Sp.drawHouse(g, b.x*T, b.y*T, 2, false); }
     else if (PUBLIC_KINDS[b.kind] && Sp.drawPublic) Sp.drawPublic(g, b.kind, b.x*T, b.y*T, b.w, b.h);
     else Sp.drawHouse(g, b.x*T, b.y*T, b.style, !b.invited);
   });
-  if (m.layout && m.layout.lots) drawLots(g, m);
-  if (m.portal) drawPortal(g, m);
+  if (!flat && m.layout && m.layout.lots) drawLots(g, m);
+  if (!flat && m.portal) drawPortal(g, m);
   if (m.locked){
     // fog over areas that are not open yet, a little lighter along the edge so the border reads as mist
     for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++){
@@ -322,6 +327,7 @@ function buildWorldCache(m){
       g.fillRect(x*T, y*T, T, T);
     }
   }
+  if (flat) return c;
   m.layered = true;
   m.cache = c;
 }
@@ -2415,6 +2421,7 @@ var GT = {
   setView: setView,
   registerRenderer: function(name, impl){ renderers[name] = impl; if (name === viewWanted) applyView(); },
   frameInfo: frameInfo,
+  bakeFlat: function(m){ return (m && m.kind === 'world' && SPRITES.drawGround) ? buildWorldCache(m, {flat:true}) : (m && m.cache) || null; },
   tileToScreen: function(x, y, h){
     if (altRenderer && altRenderer.tileToScreen) return altRenderer.tileToScreen(x, y, h || 0);
     var r = elCv.getBoundingClientRect(); if (!r.width) return null;

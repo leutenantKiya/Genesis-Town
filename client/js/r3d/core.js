@@ -15,7 +15,8 @@
   var DIST = 90;                       // camera distance (ortho: only affects clipping)
   var ZOOM_ROWS = 1.25;                // visible world rows per 2D view row (the tilt shows more ground)
   var ZMIN = 0.6, ZMAX = 1.7;
-  var MODS = ['sky', 'island', 'ground', 'water', 'props', 'actors', 'compat'];
+var HEMI = 2.5, SUN = 1.7;          // light intensities (three.js uses physical units: ~pi for a fully lit white surface)
+  var MODS = ['sky', 'island', 'ground', 'water', 'props', 'buildings', 'actors', 'compat'];
 
   var T = 12, host = null, canvas = null, C = null, size = { w: 0, h: 0 }, zoom = 1, wheelFn = null;
   var tmpV = new THREE.Vector3(), tmpN = new THREE.Vector2(), up = new THREE.Vector3();
@@ -37,8 +38,8 @@
     // fixed orientation: looking north and down at ELEV
     cam.position.set(0, DIST * Math.sin(ELEV), DIST * Math.cos(ELEV));
     cam.lookAt(0, 0, 0); cam.updateMatrixWorld(true);
-    hemi = new THREE.HemisphereLight(0xffffff, 0x6b7388, 1.05); scene.add(hemi);
-    sun = new THREE.DirectionalLight(0xffffff, 1.0); sun.position.set(-20, 40, 15); scene.add(sun);
+    hemi = new THREE.HemisphereLight(0xffffff, 0x8a90a8, HEMI); scene.add(hemi);
+    sun = new THREE.DirectionalLight(0xfff2dc, SUN); sun.position.set(-20, 40, 15); scene.add(sun);
     var root = new THREE.Group(); scene.add(root);
     C = { renderer: renderer, scene: scene, cam: cam, root: root, THREE: THREE };
     R3D.ctx = C; // debugging handle (scene, camera, renderer)
@@ -88,7 +89,7 @@
     cam.position.set(px, DIST * Math.sin(ELEV), pz + DIST * Math.cos(ELEV));
     cam.updateMatrixWorld(true);
     var d = Math.min(1, info.dark);
-    hemi.intensity = 1.05 - 0.72 * d; sun.intensity = 1.0 - 0.8 * d;
+    hemi.intensity = HEMI * (1 - 0.72 * d); sun.intensity = SUN * (1 - 0.85 * d);
     each(function (m) { m.update(C, info); });
     C.renderer.render(C.scene, cam);
     if (R3D.compat) R3D.compat.overlay(C, info);

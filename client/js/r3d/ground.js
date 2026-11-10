@@ -55,7 +55,7 @@
       if (!mesh || !curMap || !curMap.cache || curMap.cache === lastCache) return;
       lastCache = curMap.cache;
       if (tex) tex.dispose();
-      tex = makeTexture(lastCache);
+      tex = makeTexture((window.GT && GT.bakeFlat && GT.bakeFlat(curMap)) || lastCache);
       mesh.material.map = tex;
       mesh.material.needsUpdate = true;
     },
