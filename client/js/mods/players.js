@@ -70,7 +70,7 @@
       if (o.npc) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
       var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
       var moving = ease(o, now) < 1, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
-      ents.push({ py: py, draw: function () { GT.drawChar(ctx, px - camX, py - camY, (o.look != null ? o.look : pal(o.nick || a)), o.dir, step); } });
+      ents.push({ py: py, char: { id: a, x: px, y: py, look: (o.look != null ? o.look : pal(o.nick || a)), dir: o.dir, step: step }, draw: function () { GT.drawChar(ctx, px - camX, py - camY, (o.look != null ? o.look : pal(o.nick || a)), o.dir, step); } });
     });
   }
   function onDraw(ctx, camX, camY, T) {

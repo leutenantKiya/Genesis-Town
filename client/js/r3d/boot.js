@@ -40,8 +40,9 @@
     if (state === 'loading' || state === 'ready' || state === 'failed') return;
     state = 'loading';
     if (!hasWebGL2()) return fail('WebGL2 tidak tersedia');
+    var parts = ['sky', 'island', 'ground', 'props', 'actors', 'compat', 'core']; // core last: it registers the renderer
     loadScript('vendor/three.js')
-      .then(function () { return loadScript('js/r3d/core.js'); })
+      .then(function () { return parts.reduce(function (p, n) { return p.then(function () { return loadScript('js/r3d/' + n + '.js'); }); }, Promise.resolve()); })
       .then(function () { state = 'ready'; })
       .catch(function (e) { fail(e && e.message); });
   }

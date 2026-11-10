@@ -1982,8 +1982,11 @@ function readView(){
   return v === '3d' ? '3d' : '2d';
 }
 function frameInfo(){
-  var m = scene.map;
-  return { scene:scene, map:m, npcs:scene.npcs, world:world, worldId:worldId, kind:scene.kind,
+  var m = scene.map, pp = lerpPos(P), ents = [];
+  scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n, step:charStep(n)}); });
+  ents.push({py:pp.py, px:pp.px, n:null, dir:P.dir, step:charStep(P)});
+  callMods('onEntities', [ents, ctx, 0, 0, T]); // mods add {py, draw, char:{id,x,y,look,dir,step}}; the 3D view reads `char`
+  return { ents:ents, ctx:ctx, call:callMods, scene:scene, map:m, npcs:scene.npcs, world:world, worldId:worldId, kind:scene.kind,
     player:{ x:P.x, y:P.y, fx:P.fx, fy:P.fy, t:P.t, moving:P.moving, dir:P.dir, step:charStep(P), pos:lerpPos(P) },
     gameMin:gameMin, dark:scene.kind === 'out' ? currentDark() : 0, lamps:(world && world.lamps) || [], timeAcc:timeAcc, tr:tr,
     VW:VW, VH:VH, S:S, T:T, reduce:REDUCE };
@@ -2006,9 +2009,28 @@ function setView(v){
 }
 function render(){
   if (!altRenderer) return render2d();
+  var out = scene.kind === 'out';
+  document.documentElement.classList.toggle('gt-3d-in', !out); // indoors the 2D renderer draws (the 3D canvas is hidden)
+  if (!out) return render2d();
   ctx.clearRect(0, 0, VW, VH);
-  try { if (altMap !== scene.map){ altMap = scene.map; if (altRenderer.onWorld) altRenderer.onWorld(altMap); } altRenderer.render(frameInfo()); }
+  try {
+    var info = frameInfo();
+    if (altMap !== scene.map){ altMap = scene.map; if (altRenderer.onWorld) altRenderer.onWorld(altMap); }
+    altRenderer.render(info);
+    if (tr){
+      var a = tr.ph === 0 ? tr.t : 1 - tr.t;
+      ctx.fillStyle = 'rgba(0,0,0,' + Math.max(0, Math.min(1, a)).toFixed(3) + ')';
+      ctx.fillRect(0, 0, VW, VH);
+    }
+    renderFx(info.ents, altRenderer.mapToScreen ? fx3dProj : null);
+  }
   catch(err){ try { console.error(err); } catch(e){} viewWanted = '2d'; applyView(); toast('Tampilan 3D berhenti. Kembali ke 2D.'); }
+}
+// label / bubble anchor for the 3D view: a point above the character's head, relative to the #fx layer
+function fx3dProj(en){
+  var q = altRenderer.mapToScreen(en.px + 6, en.py + 12, 14); if (!q) return null;
+  var r = elFx.getBoundingClientRect();
+  return { x:q.x - r.left, y:q.y - r.top };
 }
 
 /* ---------- night lighting ----------
@@ -2061,14 +2083,17 @@ function fxSync(map, npc, want, cls, text){
   if (rec.text !== text){ rec.e.textContent = text; rec.text = text; rec.w = 0; }
   return rec;
 }
-function renderFx(ents){
+function renderFx(ents, proj){
   if (!elFx) return;
   var sw = VW * S, sh = VH * S;
   var live = new Set();
   ents.forEach(function(en){
     var n = en.n || (playerFx.bubble ? playerFx : null); if (!n) return;
+    if (proj && en.px == null) return;
     live.add(n);
-    var cx = (en.px - camX + T / 2) * S, top = (en.py - camY) * S;
+    var cx, top;
+    if (proj){ var q = proj(en); if (q){ cx = q.x; top = q.y; } else { cx = top = -9999; } }
+    else { cx = (en.px - camX + T / 2) * S; top = (en.py - camY) * S; }
     var visible = cx > -20 && cx < sw + 20 && top > -20 && top < sh + 20;
     var tag = fxSync(fxTag, n, !!n.label && visible, 'ntag', n.label);
     var tagH = 0;

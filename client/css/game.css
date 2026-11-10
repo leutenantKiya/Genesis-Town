@@ -66,6 +66,8 @@ button{font-family:var(--font);cursor:pointer;-webkit-tap-highlight-color:transp
 #screen{position:relative;margin-inline:auto;line-height:0;background:#000;box-shadow:0 0 0 3px #05060a,0 0 0 5px #2a2c44;overflow:hidden;--fs:10px}
 #cv{display:block;image-rendering:pixelated;image-rendering:crisp-edges;image-rendering:pixelated;touch-action:none}
 /* floating labels / speech bubbles over the canvas */
+html.gt-3d-in #cv3d{display:none}
+html.gt-3d-in #cv{background:transparent}
 #cv3d{position:absolute;left:0;top:0;display:block;image-rendering:auto;touch-action:none}
 html.gt-3d #cv{position:relative;z-index:1;background:transparent}
 #fx{position:absolute;inset:0;overflow:hidden;pointer-events:none;line-height:1.35;font-size:calc(14px*var(--ts))}
