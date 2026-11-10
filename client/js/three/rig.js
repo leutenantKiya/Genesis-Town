@@ -6,6 +6,8 @@
  *   var rig = GT3.Rig(camera); rig.follow(x, z, dt)   tile units, dt in seconds
  *   rig.zoom(k)        1 = default (about 16 tiles across on a desktop), larger = closer
  *   rig.turn(rad)      orbit around the target (0 = looking north)
+ *   GT3.Rig(camera, { pitch, fov })   degrees; the game uses a steeper, narrower camera than the lab (mods/view3d.js)
+ *   rig.distance(d)    camera distance at zoom 1, so the game can match the 2D scale
  */
 (function () {
   'use strict';
@@ -13,10 +15,11 @@
   if (!GT3) return;
   var THREE = GT3.THREE;
 
-  GT3.Rig = function (camera) {
+  GT3.Rig = function (camera, o) {
+    o = o || {};
     var target = new THREE.Vector3(), want = new THREE.Vector3(), first = true;
-    var pitch = 52 * Math.PI / 180, dist = 30, zoom = 1, yaw = 0, yawWant = 0;
-    camera.fov = 28; camera.near = 1; camera.far = 160; camera.updateProjectionMatrix();
+    var pitch = (o.pitch || 52) * Math.PI / 180, dist = 30, zoom = 1, yaw = 0, yawWant = 0;
+    camera.fov = o.fov || 28; camera.near = 1; camera.far = 220; camera.updateProjectionMatrix();
     function place() {
       var d = dist / zoom;
       camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, target.z + Math.cos(yaw) * Math.cos(pitch) * d);
@@ -34,6 +37,8 @@
       snap: function () { target.copy(want); yaw = yawWant; place(); },
       zoom: function (k) { zoom = Math.max(0.45, Math.min(2.4, k)); place(); return zoom; },
       getZoom: function () { return zoom; },
+      distance: function (d) { dist = d; place(); },
+      pitch: pitch,
       turn: function (rad) { yawWant = rad; },
       target: target
     };

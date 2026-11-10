@@ -70,7 +70,9 @@
       if (o.npc) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
       var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
       var moving = ease(o, now) < 1, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
-      ents.push({ py: py, draw: function () { GT.drawChar(ctx, px - camX, py - camY, (o.look != null ? o.look : pal(o.nick || a)), o.dir, step); } });
+      var look = o.look != null ? o.look : pal(o.nick || a);
+      // px/py/pal/dir/step/id: the 2.5D view (mods/view3d.js) draws the same player as a 3D card
+      ents.push({ py: py, px: px, pal: look, dir: o.dir, step: step, id: 'player:' + a, draw: function () { GT.drawChar(ctx, px - camX, py - camY, look, o.dir, step); } });
     });
   }
   // Name tags and bubbles are collected first, then placed so none sits on another: tags that share a row within a
@@ -91,10 +93,11 @@
     var now = performance.now(), W = ctx.canvas.width / (ctx.getTransform().a || 1);
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    var tags = [], bubs = [], placed = [];
+    var tags = [], bubs = [], placed = [], v3 = GT.view3dOn && GT.view3dOn() ? window.GT_VIEW3D : null;
     Object.keys(others).forEach(function (a) {
       var o = others[a], cx = curX(o, now);
       var x = Math.round(cx * T - camX + T / 2), y = Math.round(curY(o, now) * T - camY - 3 - (o.npc && Math.round(cx) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
+      if (v3) { var sp = v3.toScreen(cx + 0.5, curY(o, now) + 0.5, 1.25); x = Math.round(sp.x); y = Math.round(sp.y - (o.npc && Math.round(cx) % 2 ? 9 : 0)); } // 2.5D: over the head
       ctx.font = '7px "Pixelify Sans", sans-serif';
       var text = o.nick + (!o.npc && o.title && o.title !== 'Pedagang baru' ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
       tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.npc ? 'accent' : 'dark', k: key(o.nick, o.tag) });
@@ -107,7 +110,11 @@
       var bt = fitBubble(ctx, t.k, now);
       if (bt) bubs.push({ x: t.x, y: t.y - 10, text: bt, tag: t });
     });
-    if (me) { var p = GT.player, mt = fitBubble(ctx, key(me, meTag), now); if (mt) bubs.push({ x: Math.round(p.x * T - camX + T / 2), y: Math.round(p.y * T - camY - 4), text: mt, mine: true }); }
+    if (me) {
+      var p = GT.player, mt = fitBubble(ctx, key(me, meTag), now), mx = Math.round(p.x * T - camX + T / 2), my = Math.round(p.y * T - camY - 4);
+      if (v3) { var ms = v3.toScreen(v3.playerTile().x, v3.playerTile().y, 1.3); mx = Math.round(ms.x); my = Math.round(ms.y); }
+      if (mt) bubs.push({ x: mx, y: my, text: mt, mine: true });
+    }
     bubs.sort(function (p, q) { return (p.mine ? 1 : 0) - (q.mine ? 1 : 0) || q.y - p.y; }); // my own bubble is drawn last, on top
     var bp = placed.slice(); // bubbles also keep clear of every name tag
     bubs.forEach(function (b) {

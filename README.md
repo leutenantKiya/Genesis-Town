@@ -15,6 +15,10 @@
 > - **town projects** (contract v4): players pool goods and coin on chain to build the bridge to Dusun Seberang; the
 >   pledges are burned when it is built and the new area opens for everyone;
 > - warmer art, a full-window layout, fullscreen (F) and a settings menu (O) with rebindable keys.
+> - **2.5D view** (2026-11-10, Pengaturan > Tampilan): the village and Homelands in three.js with the HD-2D look of
+>   `lab3d.html` (solid buildings and trees, sun and shadows, seasons, night glow, see-through walls). Default on a
+>   computer, 2D on a phone; indoors and without WebGL the 2D view draws. Same rules and positions as 2D: the engine
+>   still owns them (`client/js/mods/view3d.js`). Walking into a building without a scene cut is still *(planned)*.
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow,

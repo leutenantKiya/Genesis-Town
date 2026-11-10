@@ -220,6 +220,17 @@
       lab.appendChild(inp); lab.appendChild($('span', null, o[1])); seg.appendChild(lab);
     });
     wrap.appendChild(seg);
+    var v3 = window.GT_VIEW3D;
+    if (v3) {
+      wrap.appendChild($('h3', null, 'Tampilan'));
+      var vs = $('div', 'mseg');
+      [['3d', '2.5D'], ['2d', '2D (ringan)']].forEach(function (o) {
+        var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-view'; inp.value = o[0]; inp.checked = v3.get() === o[0];
+        inp.addEventListener('change', function () { v3.set(o[0]); });
+        lab.appendChild(inp); lab.appendChild($('span', null, o[1])); vs.appendChild(lab);
+      });
+      wrap.appendChild(vs);
+    }
     var pwa = window.GT_PWA;
     var fs = $('div', 'dbtns');
     if (fsSupported()) {

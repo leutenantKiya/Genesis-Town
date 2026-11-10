@@ -1914,10 +1914,37 @@ function charStep(o){
   if (!o.moving) return 0;
   return o.flip ? 1 : 2;
 }
+/* 2.5D view (mods/view3d.js): outdoors it draws the world in three.js under this canvas. The engine still owns every
+   position; it hands the view the same entities it would draw, then draws the mods' overlays (signs, monsters, tags,
+   effects) on this now transparent canvas with camX/camY moved so the player's 2D feet sit on the player's 3D feet.
+   The view keeps one world pixel at the player's depth equal to one canvas pixel, so overlays near the player line up. */
+var view3d = null;
+function v3on(){ return !!(view3d && scene && scene.kind === 'out' && view3d.ready()); }
+function render3d(pp){
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, elCv.width, elCv.height); ctx.setTransform(S, 0, 0, S, 0, 0);
+  var ents = [];
+  scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n, pal:n.pal, dir:n.dir, step:charStep(n)}); });
+  ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true});
+  callMods('onEntities', [ents, ctx, camX, camY, T]); // mods add {px, py, pal, dir, step, id}; their draw() is not called
+  var g = view3d.groundCtx(scene.map);
+  if (g) { g.clearRect(0, 0, g.canvas.width, g.canvas.height); callMods('onDrawGround', [g, 0, 0, T]); }
+  var feet = view3d.draw({ ents:ents, VW:VW, VH:VH, S:S, map:scene.map, hour:clockInfo().phase * 24 });
+  camX = pp.px + 6 - feet.x; camY = pp.py + 12 - feet.y;
+  callMods('onDraw', [ctx, camX, camY, T]);
+  lastDark = currentDark();
+  if (tr){
+    var a = tr.ph === 0 ? tr.t : 1 - tr.t;
+    ctx.fillStyle = 'rgba(0,0,0,' + Math.max(0, Math.min(1, a)).toFixed(3) + ')';
+    ctx.fillRect(0, 0, VW, VH);
+  }
+  renderFx(ents);
+}
 function render(){
   var m = scene.map, mw = m.w * T, mh = m.h * T;
-  ctx.fillStyle = '#0b0c14'; ctx.fillRect(0, 0, VW, VH);
   var pp = lerpPos(P);
+  if (v3on()) return render3d(pp);
+  if (view3d) view3d.idle();
+  ctx.fillStyle = '#0b0c14'; ctx.fillRect(0, 0, VW, VH);
   if (mw <= VW) camX = -Math.floor((VW - mw) / 2); else camX = Math.max(0, Math.min(mw - VW, pp.px + 6 - Math.floor(VW / 2)));
   if (mh <= VH) camY = -Math.floor((VH - mh) / 2); else camY = Math.max(0, Math.min(mh - VH, pp.py + 6 - Math.floor(VH / 2)));
   // static layer
@@ -2040,6 +2067,7 @@ function renderFx(ents){
     var n = en.n || (playerFx.bubble ? playerFx : null); if (!n) return;
     live.add(n);
     var cx = (en.px - camX + T / 2) * S, top = (en.py - camY) * S;
+    if (v3on()){ var sp = view3d.toScreen(en.px / T + 0.5, en.py / T + 0.5, 1); cx = sp.x * S; top = sp.y * S; }
     var visible = cx > -20 && cx < sw + 20 && top > -20 && top < sh + 20;
     var tag = fxSync(fxTag, n, !!n.label && visible, 'ntag', n.label);
     var tagH = 0;
@@ -2401,6 +2429,7 @@ var GT = {
   interact: function(mode){ return interact(mode || 'talk'); },
   // A point on the screen (e.g. a mouse click) to the map tile under it, in the current scene
   screenToTile: function(clientX, clientY){
+    if (v3on()) return view3d.pick(clientX, clientY);
     var r = elCv.getBoundingClientRect(); if (!r.width) return null;
     var wx = (clientX - r.left) * (VW / r.width) + camX, wy = (clientY - r.top) * (VH / r.height) + camY;
     return { x: Math.floor(wx / T), y: Math.floor(wy / T) };
@@ -2422,7 +2451,10 @@ var GT = {
   setDayLength: setDayLength, setTime: setTime, pauseTime: pauseTime,
   lampNear: lampNear,
   addDevSection: addDevSection,
-  openDev: function(){ return openDev(); }
+  openDev: function(){ return openDev(); },
+  // the 2.5D view registers here (mods/view3d.js); null turns it off
+  setView3d: function(v){ view3d = v || null; },
+  view3dOn: function(){ return v3on(); }
 };
 GT.dev = {};
 Object.defineProperty(GT.dev, 'enabled', { enumerable:true, get: function(){ return devEnabled; }, set: function(v){

@@ -73,6 +73,9 @@ button:disabled{cursor:not-allowed}
 .bezel{background:var(--bezel);border-radius:var(--r-win);padding:12px;box-shadow:inset 0 var(--line) 0 var(--outline)}
 #fit{width:100%;display:flex;justify-content:center}
 #screen{position:relative;margin-inline:auto;line-height:0;background:var(--outline);box-shadow:0 0 0 var(--line) var(--outline);overflow:hidden;--fs:10px}
+/* 2.5D view (mods/view3d.js): the WebGL world under the 2D canvas, which then only carries the overlays */
+.gt3d{position:absolute;left:0;top:0}
+html.gt-3d #cv{position:relative}
 #cv{display:block;image-rendering:pixelated;image-rendering:crisp-edges;image-rendering:pixelated;touch-action:none}
 
 /* floating labels / speech bubbles over the canvas */
