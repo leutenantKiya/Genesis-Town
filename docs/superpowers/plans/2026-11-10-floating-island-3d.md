@@ -29,22 +29,26 @@ browser JS (tanpa build step untuk kode game), server Node tidak berubah.
 | Label nama dan balon chat sudah HTML (`renderFx`, `elFx`), posisinya dihitung dari `camX/camY` dan skala `S`. | Cukup ganti perhitungan posisi dengan `tileToScreen()` dari renderer aktif. Teks tetap tajam. |
 | Malam hari = overlay 2D (`drawNight`, `lightAt(gameMin)`, lampu dari `world.lamps`). Cuaca dan salju diatur `chain.js` (`GT.setSnow`, tint hujan). | Di 3D diganti cahaya sungguhan (hemisphere + matahari + point light lampu) dan partikel. Butuh satu event cuaca dari `chain.js`. |
 | Homeland punya chunk bioma `sea` (pantai), chunk terkunci digambar di bawah fog, dan portal. Desa punya sungai utara-selatan, jembatan ke Dusun Seberang (proyek desa). | Chunk terkunci menjadi **pulau kecil terpisah** yang "berlabuh" saat dibuka. Sungai jatuh dari tepi pulau sebagai air terjun. |
-| Interior bangunan adalah scene kecil terpisah (`enterBuilding`, `scene.kind !== 'out'`) dengan peta tile sendiri. | Interior tetap 2D dulu (lihat Keputusan 3). |
+| Interior bangunan adalah scene kecil terpisah (`enterBuilding`, `scene.kind !== 'out'`) dengan peta tile sendiri. | Sementara 2D, lalu 3D di Fase 8b (lihat Keputusan 3). |
 | `client/build/build.mjs` membundel `near-entry.js` menjadi `vendor/near.js` (IIFE). `client/sw.js` mem-precache daftar `SHELL`. | Three dibundel dengan cara yang sama menjadi `vendor/three.js` dan **hanya dimuat saat mode 3D aktif**. |
 
 ---
 
-## 2. Keputusan desain (rekomendasi saya, perlu persetujuan)
+## 2. Keputusan desain (sudah disetujui pemilik; poin 1 dan 3 diubah menjadi SEMUA 3D)
 
-1. **Gaya visual: HD-2D (direkomendasikan)** — dunia 3D low-poly (pulau, tebing, bangunan, pohon, air, cahaya) dengan
-   karakter tetap sprite pixel art yang berdiri sebagai billboard. Alasannya: art karakter yang ada (skin, rambut, baju
-   dari layar karakter, kilatan combat) tetap dipakai, risiko jauh lebih kecil, dan gayanya serasi dengan UI pixel.
-   Alternatif: karakter 3D low-poly penuh (Fase 8, opsional, bisa memakai skill img2threejs dari gambar referensi).
+1. **Gaya visual: SEMUA 3D (diputuskan pemilik, 2026-11-10)** — dunia, bangunan, pohon, air, cahaya, **karakter, dan
+   interior** semuanya 3D low-poly bergaya blok hangat. Billboard sprite 2D di Fase 1 hanyalah jembatan sementara dan
+   dibuang di Fase 8 (karakter) dan 8b (interior). UI HTML (hotbar, Tas, Pasar, chat, label) tetap HTML. Karakter
+   mempertahankan semua pilihan layar karakter (skin, rambut, baju) dan efek combat. Skill img2threejs dipakai untuk
+   aset unggulan bila ada gambar referensi (tanyakan dulu).
 2. **Kamera: ortografis miring tetap (direkomendasikan)**, sekitar 40° dari atas, mengikuti pemain tanpa dikunci ke
    tepi peta (supaya tepi pulau dan langit terlihat). Zoom terbatas (scroll di desktop; dua tingkat di ponsel). Rotasi
    90° ditunda: tombol panah "atas = utara" tetap benar dan adapter overlay tetap affine.
-3. **Interior tetap 2D dulu.** Masuk bangunan = transisi gelap yang sudah ada, lalu renderer 2D. Interior 3D adalah
-   pekerjaan terpisah setelah Fase 7.
+3. **Interior juga 3D (diputuskan pemilik).** Sampai Fase 8b selesai, masuk bangunan memakai transisi gelap yang sudah
+   ada lalu renderer 2D sebagai jembatan. Di Fase 8b setiap interior (rumah, Mart, Kasino, Warung, dan seterusnya)
+   dibangun dari peta tile interiornya sebagai ruangan 3D dengan perabot (meja, kursi, kasur, rak, kulkas, dll.).
+
+**Urutan pengerjaan setelah keputusan ini:** Fase 2, 3, **8 (karakter)**, 4, 5, 6, **8b (interior)**, 7, 9.
 4. **Chunk `sea` di Homeland menjadi laguna** di atas pulau, dengan air terjun di tepi pulau.
 5. **Mode default:** `3d` bila WebGL2 tersedia dan pengujian performa awal lolos; `2d` sebagai fallback otomatis dan
    pilihan manual di Pengaturan. Selama pengembangan, default tetap `2d` dan 3D hanya lewat `?view=3d`.
@@ -217,12 +221,25 @@ pulau dan langit terlihat di ujung peta. Screenshot desktop dan ponsel.
 - [ ] Layout ponsel portrait: kamera lebih dekat, tidak tertutup thumb zone; tablet portrait sama.
 - [ ] Bila fps rata-rata < 20 selama 10 detik pertama, tawarkan pindah ke 2D.
 
-### Fase 8 (opsional, perlu persetujuan): Karakter 3D
+### Fase 8 (wajib, dikerjakan setelah Fase 3): Karakter 3D
 
-- [ ] Karakter low-poly bergaya blok dengan tampilan dari layar karakter (skin, rambut, baju), animasi jalan, diam,
-      menebang, memancing, terkena serangan, pingsan.
+- [ ] Satu rig karakter low-poly bergaya blok (kepala, badan, lengan, kaki, rambut, baju) yang dibangun dari kode, dengan
+      warna dan model rambut/baju dari tampilan di layar karakter (`look`, `pal`) untuk pemain, NPC, bot, pemain lain.
+- [ ] Animasi: diam, jalan (mengikuti `step`), menebang, memancing, terkena serangan (kilatan), pingsan, tidur/duduk
+      bila dipakai game. Arah mengikuti `dir` (4 arah).
+- [ ] Topi/kosmetik Homeland (`homeland.js` `drawHat`), ikon sakit, label tetap HTML.
+- [ ] `actors.js` memakai rig ini; billboard 2D dihapus. `GT.charDraw` hanya tersisa untuk layar karakter 2D (portrait).
 - [ ] Untuk aset unggulan (karakter pemain, Town Hall), boleh memakai skill **img2threejs** bila pemilik memberi
       gambar referensi. Tanyakan dulu sebelum menjalankan pipeline-nya.
+
+### Fase 8b (wajib, dikerjakan setelah Fase 6): Interior 3D
+
+- [ ] Renderer 3D menangani semua `scene.kind` (bukan hanya `out`): ruangan dibangun dari `scene.map` interior (lantai,
+      dinding, pintu) dengan kamera yang sama; plafon dipotong/transparan agar isi ruangan terlihat.
+- [ ] Perabot 3D per jenis tile: `table, chair, bed, tv, plant, counter, fridge, bookshelf, shelf, card_table, slot, chest,
+      dice_table, lamp, barrel, crate` dan lantai/karpet. Interaksi (F/klik) tetap lewat tile yang sama.
+- [ ] Transisi masuk/keluar memakai fade yang sudah ada; cahaya interior hangat; jendela memperlihatkan siang/malam.
+- [ ] Setelah selesai, jalur `render2d` tidak lagi dipakai oleh mode 3D (tetap ada untuk mode 2D).
 
 ### Fase 9: Dokumentasi
 
