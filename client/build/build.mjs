@@ -13,3 +13,15 @@ await build({
   define: { 'process.env.NODE_ENV': '"production"', global: 'globalThis' },
   logLevel: 'info',
 });
+// three.js for the 3D world: its own file, so pages that do not draw the world in 3D never download it
+await build({
+  entryPoints: ['three-entry.js'],
+  outfile: '../vendor/three.js',
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: ['es2022'],
+  minify: true,
+  legalComments: 'linked',
+  logLevel: 'info',
+});

@@ -29,6 +29,7 @@
     rumah:      { roof: '#8a4a2c', roofD: '#5a2e1a', roofL: '#b87048', wall: '#e8d4a8', wallD: '#c8b080', sign: '#fff2d4' },
     rumahsakit: { roof: '#c84a4a', roofD: '#8a2c2c', roofL: '#e88080', wall: '#f8f6f2', wallD: '#dcd8d4', sign: '#ffffff' }
   };
+  S.PUBLIC_STYLE = STYLE; // the 3D kit (js/three/building.js) builds its roofs and side walls from the same colours
 
   function roof(g, w, top, rows, st) {
     // a pitched roof seen from the front: rows step in by one pixel every two rows, shingle lines every 3 rows

@@ -1001,6 +1001,7 @@
     drawCasino: drawCasino,
     drawIcon: drawIcon,
     ICON_IDS: Object.keys(ICONS),
+    HOUSE_STYLES: HOUSE_STYLES,
     // debug helpers (not part of the engine contract)
     _tileTypes: Object.keys(T).concat(['water']),
     _problems: problems,

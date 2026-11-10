@@ -105,6 +105,12 @@
 >   house lot per chunk and a hospital lot. Numbers: `economy/config.json` -> `homeland`; details: [docs/world.md](docs/world.md);
 >   plan: [phase C](docs/superpowers/plans/2026-11-09-homeland-phase-c.md).
 >
+> - **3D world kit** *(lab page only, not in the game yet)*: [client/lab3d.html](client/lab3d.html) draws the real
+>   village or a Homeland with three.js 0.187.0 in an HD-2D style: the game's own pixel art on solid low-poly
+>   buildings, trees, rocks and props, characters as sprite cards facing the camera, a sun that crosses the sky with
+>   shadows, glowing windows and lamps at night, the four seasons, and buildings and tree crowns that fade when they
+>   hide the player. Code in `client/js/three/`; `npm run build:client` bundles three.js to `client/vendor/three.js`.
+>   Drawing the game itself with it is *(planned)*.
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
 > and M5 (demo video, submission). Also *(planned)*: agent wallets. Anything marked *(planned)* does not exist yet.
 >
