@@ -60,6 +60,15 @@
 
     return {
       group: group, card: card, material: mat,
+      // a jump or fall: the card rises `lift` tiles, spins `spin` radians about its middle and squashes to `squash` of
+      // its height (feet stay down); the ground shadow shrinks while it is up. pose(0, 0, 1) is standing.
+      pose: function (lift, spin, squash) {
+        pivot.position.y = lift || 0;
+        card.rotation.z = spin || 0;
+        var q = squash == null ? 1 : squash;
+        card.scale.set(1 + (1 - q) * 0.6, q, 1); card.position.y = (h / 2) * q - 1 * PX;
+        sh.scale.setScalar(Math.max(0.35, 1 - (lift || 0) * 0.12));
+      },
       set: function (x, z, d, s) {
         group.position.set(x, 0, z);
         d = d || dir; s = s | 0;

@@ -132,8 +132,8 @@
   var keys = {}, yaw = 0, stick = null; // stick: a drag on the world (touch or mouse), {id, x0, y0, dx, dy}
   var stickEl = document.querySelector('.stick'), knob = stickEl.firstChild;
   function turnBy(r) { yaw += r; rig.turn(yaw); }
-  document.getElementById('tl').onclick = function () { turnBy(-Math.PI / 4); };
-  document.getElementById('tr').onclick = function () { turnBy(Math.PI / 4); };
+  document.getElementById('tl').onclick = function () { turnBy(Math.PI / 4); };
+  document.getElementById('tr').onclick = function () { turnBy(-Math.PI / 4); };
   var cv = renderer.domElement;
   cv.addEventListener('pointerdown', function (e) {
     stick = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dx: 0, dy: 0 };
@@ -150,8 +150,8 @@
   addEventListener('keydown', function (e) {
     if (e.target && /INPUT|BUTTON/.test(e.target.tagName) && e.key === ' ') return;
     keys[e.key.toLowerCase()] = true;
-    if (e.key === 'q' || e.key === 'Q') turnBy(-Math.PI / 4);
-    if (e.key === 'e' || e.key === 'E') turnBy(Math.PI / 4);
+    if (e.key === 'q' || e.key === 'Q') turnBy(Math.PI / 4);
+    if (e.key === 'e' || e.key === 'E') turnBy(-Math.PI / 4);
   });
   addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
 

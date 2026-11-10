@@ -152,6 +152,11 @@
       setTimeout(done, 350);
       return;
     }
+    // 2.5D: the player's own 3D sprite drops into the world (lit like the world at that hour, landing on their tile);
+    // this screen only fades away above it
+    if (GT.setPlayerHidden) GT.setPlayerHidden(false);
+    if (window.GT_VIEW3D && GT_VIEW3D.dropIn && GT_VIEW3D.dropIn(ANIM_MS, done)) { host.classList.add('gt-cs-fade'); return; }
+    if (GT.setPlayerHidden) GT.setPlayerHidden(true);
     host.classList.add('gt-cs-throw');
     host.textContent = '';
     var cv = document.createElement('canvas'); cv.className = 'gt-cs-anim';
@@ -190,6 +195,9 @@
       g.save(); g.translate(cx, y); g.rotate(rot); g.scale(1, squash);
       g.drawImage(spr, -8 * S, -14 * S, 16 * S, 20 * S);
       g.restore();
+      // 2D: the flying sprite takes the hour's darkness, as the night layer darkens the world under it
+      var dark = GT.daylight ? 1 - GT.daylight() : 0;
+      if (dark > 0.01) { g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(14,18,56,' + (0.72 * dark).toFixed(3) + ')'; g.fillRect(0, 0, cv.width, cv.height); g.restore(); }
       if (t >= 0.75) dust(g, cx, landY, (t - 0.75) / 0.25, S);
       if (t < 1) requestAnimationFrame(frame); else done();
     }

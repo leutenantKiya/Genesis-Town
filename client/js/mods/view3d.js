@@ -89,8 +89,8 @@
     var t2 = el('div', 'gt3d-tray'); t2.setAttribute('role', 'group'); t2.setAttribute('aria-label', 'Kamera');
     t2.appendChild(button('+', 'Perbesar', function () { zoom = rig.zoom(zoom * 1.2); }));
     t2.appendChild(button('-', 'Perkecil', function () { zoom = rig.zoom(zoom / 1.2); }));
-    t2.appendChild(button('↺', 'Putar kamera ke kiri', function () { turn(-1); }));
-    t2.appendChild(button('↻', 'Putar kamera ke kanan', function () { turn(1); }));
+    t2.appendChild(button('↺', 'Putar kamera ke kiri', function () { turn(1); })); // Q
+    t2.appendChild(button('↻', 'Putar kamera ke kanan', function () { turn(-1); })); // E
     ui.bar.appendChild(t1); ui.bar.appendChild(t2);
     ui.hint.innerHTML = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> atau seret jalan · <kbd>Q</kbd><kbd>E</kbd> putar kamera · scroll zoom';
     ui.stick.setAttribute('aria-hidden', 'true'); ui.stick.appendChild(el('i'));
@@ -255,6 +255,27 @@
     }
   }
 
+  /* ---------------------------------------------------------------- dropping into the world (after the character screen)
+     The player's own 3D card falls from high above, speeding up and spinning twice, lands on their tile with a squash and
+     a ring of dust. Being the real sprite, it is lit like the world at that hour and lands exactly where the player is. */
+  var drop = null;
+  function updateDrop(now) {
+    var a = actors.get('me');
+    if (!drop || !a) return;
+    var t = Math.min(1, (now - drop.t0) / drop.ms), lift = 0, spin = 0, sq = 1;
+    if (t < 0.7) { var u = t / 0.7; lift = 7 * (1 - u * u); spin = u * Math.PI * 4; }
+    else {
+      var v = (t - 0.7) / 0.3; sq = v < 0.45 ? 1 - Math.sin(v / 0.45 * Math.PI) * 0.22 : 1;
+      if (!drop.dusted) {
+        drop.dusted = true;
+        var k = 1 - 0.65 * sky.night, c = new THREE.Color('#d8d0bc').multiplyScalar(k);
+        for (var i = 0; i < 12; i++) { var ang = i / 12 * Math.PI * 2; bit(c, pt.x + Math.cos(ang) * 0.2, 0.06, pt.y + Math.sin(ang) * 0.2, Math.cos(ang) * 1.3, 0.7, Math.sin(ang) * 1.3, 0.45, 2.5, 0.09); }
+      }
+    }
+    a.actor.pose(lift, spin, sq);
+    if (t >= 1) { a.actor.pose(0, 0, 1); var done = drop.done; drop = null; if (done) done(); }
+  }
+
   var api = {
     ready: function () { return ok && mode === '3d' && !!(GT.world && GT.world.layout); },
     idle: function () { hide(); last = 0; },
@@ -292,6 +313,7 @@
       world.update(now / 1000, o.hour, sky.night);
       see.update(pt.x, pt.y, dt, camera);
       actors.forEach(function (a) { a.actor.face(camera); });
+      updateDrop(now);
       updateSwings(dt);
       renderer.render(scene, camera);
       return toScreen(pt.x, pt.y, 0);
@@ -324,11 +346,13 @@
     toScreen: function (x, z, l) { return toScreen(x, z, l); },
     playerTile: function () { return api.playerTile(); },
     turn: turn,
+    // drop the player's own 3D sprite into the world over `ms`, then call done (charscreen.js); false when not drawing
+    dropIn: function (ms, done) { if (!GT.view3dOn || !GT.view3dOn()) return false; drop = { t0: performance.now(), ms: ms, done: done, dusted: false }; return true; },
     tookClick: function () { return api.tookClick(); },
     // the lab's keys while the 2.5D view shows (settings.js asks first): Q / E turn, + / - zoom
     onKey: function (e) {
       if (!GT.view3dOn || !GT.view3dOn()) return false;
-      var c = e.code, k = c === 'KeyQ' ? -1 : c === 'KeyE' ? 1 : 0, z = c === 'Equal' || c === 'NumpadAdd' ? 1.2 : c === 'Minus' || c === 'NumpadSubtract' ? 1 / 1.2 : 0;
+      var c = e.code, k = c === 'KeyQ' ? 1 : c === 'KeyE' ? -1 : 0, z = c === 'Equal' || c === 'NumpadAdd' ? 1.2 : c === 'Minus' || c === 'NumpadSubtract' ? 1 / 1.2 : 0;
       if (!k && !z) return false;
       if (e.type === 'keydown' && !e.repeat && !GT.isUiOpen()) { if (k) turn(k); else zoom = rig.zoom(zoom * z); }
       return true;
