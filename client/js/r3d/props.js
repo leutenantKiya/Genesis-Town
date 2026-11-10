@@ -50,31 +50,36 @@
       var RG = R3D.regions;
       var BS = group.map(function () { var b = new Builder(); b.snow = curSnow ? 0.85 : 0; return b; }), GS = group.map(function () { return new Builder(); });
       var B = BS[0], G = GS[0], x, y, i, t, k, h, cx, cz;
+      var rockAcc = (R3D.rig && R3D.rig.acc) ? group.map(function () { return R3D.rig.acc(); }) : null;
+      function shade2(hex, k) { var c = new THREE.Color(hex); c.multiplyScalar(k); return '#' + c.getHexString(); }
       var locked = m.locked;
       function kk(x, y) { return (locked && locked[y * m.w + x]) ? 0.5 : 1; }
 
       // trees: positions and kinds come from the 2D bake's canopy list so both views agree
       var trees = m.canopies || [];
-      var MD = R3D.models, budget = (R3D.Q && R3D.Q.trees) || 0, birchLeft = 70, mt = [], inst = group.map(function () { return {}; });
+      // ONE tree family: every tree is a Quaternius model (maple for broadleaf and fruit trees, slim birch for the tall ones), so
+      // the forest never mixes styles. Quality sets how many are drawn: the ones nearest the middle of the map first, the rest of
+      // the forest is thinned out. Only when the model files failed to load do the old low-poly trees come back.
+      var MD = R3D.models, haveTrees = !!(MD && MD.has('MapleTree_4') && MD.has('BirchTree_4')), budget = (R3D.Q && R3D.Q.trees) || 0;
+      var inst = group.map(function () { return {}; }), useModel = {};
       if (MD) MD.setSnow(curSnow);
-      // the trees nearest the middle of the map are the ones in play: they are real models, the far forest stays cheap low-poly
-      var order = trees.map(function (tt, ii) { return ii; });
-      if (MD && budget) order.sort(function (a, b) { var A = trees[a], Bq = trees[b]; return Math.hypot(A.x - m.w / 2, A.y - m.h / 2) - Math.hypot(Bq.x - m.w / 2, Bq.y - m.h / 2); });
-      var useModel = {};
-      if (MD && budget) order.forEach(function (ii) {
-        var t0 = trees[ii];
-        if (budget <= 0 || t0.fog || t0.kind === 'pine' || t0.x === 0 || t0.y === 0 || t0.x === m.w - 1 || t0.y === m.h - 1) return;
-        var nm = (t0.kind === 'fruit' && birchLeft > 0) ? 'BirchTree_4' : (t0.kind === 'fruit' ? null : 'MapleTree_4');
-        if (!nm || !MD.has(nm)) return;
-        if (nm === 'BirchTree_4') birchLeft--;
-        useModel[ii] = nm; budget--;
-      });
+      if (haveTrees) {
+        var order = trees.map(function (tt, ii) { return ii; });
+        order.sort(function (a, b) { var A = trees[a], Bq = trees[b]; return Math.hypot(A.x - m.w / 2, A.y - m.h / 2) - Math.hypot(Bq.x - m.w / 2, Bq.y - m.h / 2); });
+        order.forEach(function (ii) {
+          var t0 = trees[ii];
+          if (budget <= 0 || (t0.fog && hash(t0.x, t0.y, 9) > 0.45)) return;
+          useModel[ii] = t0.kind === 'pine' ? 'BirchTree_4' : 'MapleTree_4'; budget--;
+        });
+      }
+      var TREE_TINT = [[0.72, 0.82, 0.64], [0.78, 0.84, 0.66], [0.68, 0.78, 0.64], [0.8, 0.82, 0.62], [0.7, 0.8, 0.68]]; // olive greens that sit with the ground
       for (i = 0; i < trees.length; i++) {
         var tr = trees[i]; x = tr.x; y = tr.y; k = tr.fog ? 0.5 : 1; B = BS[RG.of(x, y)];
+        if (haveTrees && !useModel[i]) continue; // thinned out
         if (useModel[i]) {
           var nmz = useModel[i], sz = MD.size(nmz), hh0 = hash(x, y, 31), rr = RG.of(x, y), tl = inst[rr][nmz] || (inst[rr][nmz] = []);
-          var tgt = (nmz === 'BirchTree_4' ? 2.3 : 2.5) * (0.88 + hh0 * 0.3);
-          tl.push({ x: x + 0.5, y: 0, z: y + 0.55, s: tgt / sz.h, ry: hh0 * 6.283 });
+          var tgt = (nmz === 'BirchTree_4' ? 3.1 : tr.kind === 'fruit' ? 2.2 : 2.6) * (0.85 + hh0 * 0.32), tn = TREE_TINT[(hh0 * 97 | 0) % 5], shade = (0.88 + 0.2 * hash(x, y, 33)) * (tr.fog ? 0.55 : 1);
+          tl.push({ x: x + 0.5, y: 0, z: y + 0.55, s: tgt / sz.h, ry: hh0 * 6.283, c: [tn[0] * shade, tn[1] * shade, tn[2] * shade] });
           continue;
         }
         h = hash(x, y, 31); cx = x + 0.5; cz = y + 0.58;
@@ -108,7 +113,10 @@
           B.box(x, 0.1, y + 0.93, x + 1, 0.16, y + 1, rw, rl, k); B.box(x, 0.46, y + 0.93, x + 1, 0.52, y + 1, rw, rl, k);
           B.box(x, 0, y, x + 0.09, 0.62, y + 0.09, rw, rl, k); B.box(x, 0, y + 0.91, x + 0.09, 0.62, y + 1, rw, rl, k);
         } else if (t === 'rock') {
-          B.blob(cx, 0.24, cz, 0.44 + h * 0.08, 0.3, 0.38, '#8c8c99', k, x + y * 9, '#adadbb');
+          if (rockAcc) { // smooth, rounded boulders in the same soft look as the characters and the models
+            var RAc = rockAcc[RG.of(x, y)], rc = ['#8f95aa', '#a3a8bc', '#7d8298'][(h * 3) | 0], kk2 = k * 1.0;
+            RAc.sph(cx, 0.2, cz, 0.42 + h * 0.08, 0.27, 0.36, shade2(rc, kk2)); RAc.sph(cx - 0.3, 0.1, cz + 0.16, 0.2, 0.15, 0.18, shade2('#767b92', kk2)); RAc.sph(cx + 0.28, 0.09, cz + 0.2, 0.16, 0.12, 0.14, shade2('#a9aec2', kk2));
+          } else B.blob(cx, 0.24, cz, 0.44 + h * 0.08, 0.3, 0.38, '#8c8c99', k, x + y * 9, '#adadbb');
         } else if (t === 'bush' && R3D.models && R3D.models.has('Bush') && (R3D.Q && R3D.Q.trees)) {
           var bn = ['Bush', 'Bush_Large', 'Bush_Small', 'Bush_Flowers', 'Bush_Large_Flowers', 'Bush_Small_Flowers'][(h * 6) | 0], bsz = R3D.models.size(bn), brr = RG.of(x, y);
           if (bsz) (inst[brr][bn] || (inst[brr][bn] = [])).push({ x: cx, y: 0, z: cz, s: (0.78 + 0.3 * hash(x, y, 8)) / bsz.w, ry: h * 6.283 });
@@ -194,6 +202,7 @@
       }
 
       BS.forEach(function (b, r) { if (!b.empty()) group[r].add(b.mesh(litMat, true)); });
+      if (rockAcc) rockAcc.forEach(function (ra, r) { if (ra.n) { var rm = ra.mesh(litMat); rm.receiveShadow = true; group[r].add(rm); } });
       if (MD) inst.forEach(function (byName, r) { Object.keys(byName).forEach(function (nm) { MD.instance(nm, byName[nm], group[r], { cast: true, pick: true }); }); });
       GS.forEach(function (g, r) { if (!g.empty()) group[r].add(g.mesh(glowMat)); });
     },

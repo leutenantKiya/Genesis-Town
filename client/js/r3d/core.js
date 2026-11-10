@@ -21,9 +21,9 @@
   var HEMI = 2.5, SUN = 1.7;          // light intensities (three.js uses physical units: ~pi for a fully lit white surface)
   var MODS = ['regions', 'sky', 'island', 'ground', 'water', 'props', 'buildings', 'actors', 'lights', 'weather', 'fx', 'compat', 'interior'];
   var QUALITY = {
-    rendah: { pr: 1, shadow: 0, lamps: 0, rain: 160, snow: 120, trees: 0, cover: 0.35 },
-    sedang: { pr: 1.5, shadow: 1024, lamps: 4, rain: 420, snow: 320, trees: 140, cover: 0.7 },
-    tinggi: { pr: 2, shadow: 2048, lamps: 8, rain: 700, snow: 520, trees: 380, cover: 1 }
+    rendah: { pr: 1, shadow: 0, lamps: 0, rain: 160, snow: 120, trees: 250, cover: 0.35 },
+    sedang: { pr: 1.5, shadow: 1024, lamps: 4, rain: 420, snow: 320, trees: 700, cover: 0.7 },
+    tinggi: { pr: 2, shadow: 2048, lamps: 8, rain: 700, snow: 520, trees: 1500, cover: 1 }
   };
   var OVERCAST = { hujan: 0.85, berawan: 0.5, salju: 0.55, cerah: 0.05, terik: 0 };
 

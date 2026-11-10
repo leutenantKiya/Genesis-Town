@@ -83,6 +83,7 @@
           q.setFromAxisAngle(up, it.ry || 0); p.set(it.x, it.y || 0, it.z); s.set(it.s, it.s, it.s);
           m4.compose(p, q, s); im.setMatrixAt(i, m4);
         }
+        if (list[0].c) { var cc = new THREE.Color(); for (i = 0; i < list.length; i++) { var c3 = list[i].c || [1, 1, 1]; cc.setRGB(c3[0], c3[1], c3[2]); im.setColorAt(i, cc); } im.instanceColor.needsUpdate = true; }
         im.instanceMatrix.needsUpdate = true; im.frustumCulled = false;
         im.castShadow = !!opts.cast; im.receiveShadow = opts.receive !== false;
         if (part.mat.userData.depth) im.customDepthMaterial = part.mat.userData.depth;

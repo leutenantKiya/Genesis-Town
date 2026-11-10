@@ -24,6 +24,8 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     'uniform float uTime;',
     'uniform float uDark;',
     'uniform vec3 uFogC; uniform float uFogN; uniform float uFogF; uniform float uFogOn;',
+    '#define W_DEEP vec3(0.13, 0.42, 0.70)', // one water palette: the pool and the waterfall both use it
+    '#define W_SHALLOW vec3(0.30, 0.68, 0.90)',
     'float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
     'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
     '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }'
@@ -54,7 +56,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     '  float diff = dot(n, L) * 0.5 + 0.5;',
     '  float spec = pow(max(dot(reflect(-L, n), V), 0.0), 36.0);',
     '  float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);',
-    '  vec3 deep = vec3(0.13, 0.42, 0.7), shallow = vec3(0.3, 0.68, 0.9);',
+    '  vec3 deep = W_DEEP, shallow = W_SHALLOW;',
     '  vec3 col = mix(deep, shallow, clamp(diff * 0.9 + vn(p * 1.3 + t * 0.15) * 0.25 - 0.1, 0.0, 1.0));',
     '  float cs = sin(p.x * 3.0 + t * 0.8 + sin(p.y * 2.3 + t * 0.5) * 1.5) * sin(p.y * 3.2 - t * 0.6 + sin(p.x * 2.7) * 1.2);',
     '  col += vec3(0.5, 0.8, 0.9) * 0.1 * smoothstep(0.45, 1.0, cs);',
@@ -98,16 +100,14 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     '  float s1 = vn(vec2(along * 9.0, vS * 15.0 - uTime * 2.6 * sp));',
     '  float s2 = vn(vec2(along * 21.0 + 7.0, vS * 26.0 - uTime * 3.4));',
     '  float st = s1 * 0.65 + s2 * 0.35;',
-    '  vec3 base = mix(vec3(0.2, 0.55, 0.85), vec3(0.55, 0.82, 0.96), vS);',
-    '  vec3 col = mix(base, vec3(0.97, 0.99, 1.0), smoothstep(0.45, 0.85, st) * 0.75);',
-    // the smooth surface normal (from screen derivatives): the sheet is lighter where it faces away from the viewer
+    // the sheet starts as exactly the pool's colour and only gets paler (more air in it) as it falls
+    '  vec3 base = mix(mix(W_DEEP, W_SHALLOW, 0.7), mix(W_SHALLOW, vec3(0.86, 0.95, 1.0), 0.55), smoothstep(0.0, 1.0, vS));',
+    '  vec3 col = mix(base, vec3(0.9, 0.97, 1.0), smoothstep(0.5, 0.9, st) * (0.25 + 0.4 * vS));',
     '  vec3 n = normalize(cross(dFdx(vPos), dFdy(vPos))); vec3 V = normalize(cameraPosition - vPos);',
     '  float rim = pow(1.0 - abs(dot(n, V)), 2.0);',
-    '  col = mix(col, vec3(0.95, 0.99, 1.0), rim * 0.55);',
-    // a bright rolling lip at the top and a foamy fade at the foot
-    '  col = mix(col, vec3(1.0), (1.0 - smoothstep(0.0, 0.12, vS)) * 0.8);',
-    '  float a = (0.92 - 0.25 * (1.0 - st)) * (1.0 - smoothstep(0.5, 1.0, vS)) * (0.7 + 0.3 * smoothstep(0.0, 0.1, vS));',
-    '  a *= 0.85 + 0.15 * smoothstep(0.0, 0.35, cf) * smoothstep(1.0, 0.65, cf);',
+    '  col = mix(col, vec3(0.9, 0.97, 1.0), rim * 0.28);',
+    '  float a = (0.97 - 0.2 * (1.0 - st) * vS) * (1.0 - smoothstep(0.55, 1.0, vS));',
+    '  a *= 0.88 + 0.12 * smoothstep(0.0, 0.35, cf) * smoothstep(1.0, 0.65, cf);',
     '  col *= mix(vec3(1.0), vec3(0.42, 0.46, 0.72), uDark);',
     '  float fd = length(cameraPosition - vPos); col = mix(col, uFogC, clamp((fd - uFogN) / max(1.0, uFogF - uFogN), 0.0, 1.0) * uFogOn);',
     '  gl_FragColor = vec4(col, a);',
@@ -165,8 +165,8 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
           R.bi.push(R.bn, R.bn + 1, R.bn + 2, R.bn, R.bn + 2, R.bn + 3); R.bn += 4;
         });
         // waterfalls where the water meets the edge of the map
-        var edges = [[y === 0, [x + 1, 0, y - 0.07], [x, 0, y - 0.07], 0, -1], [x === m.w - 1, [x + 1.07, 0, y + 1], [x + 1.07, 0, y], 1, 0],
-          [y === m.h - 1, [x, 0, y + 1.07], [x + 1, 0, y + 1.07], 0, 1], [x === 0, [x - 0.07, 0, y], [x - 0.07, 0, y + 1], -1, 0]];
+        var edges = [[y === 0, [x + 1, 0, y], [x, 0, y], 0, -1], [x === m.w - 1, [x + 1, 0, y + 1], [x + 1, 0, y], 1, 0],
+          [y === m.h - 1, [x, 0, y + 1], [x + 1, 0, y + 1], 0, 1], [x === 0, [x, 0, y], [x, 0, y + 1], -1, 0]];
         edges.forEach(function (e) {
           if (!e[0]) return;
           var a = e[1], b = e[2], ox = e[3] * FLARE, oz = e[4] * FLARE;

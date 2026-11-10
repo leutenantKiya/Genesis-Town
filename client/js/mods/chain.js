@@ -122,7 +122,7 @@
     titleEl.textContent = '';
     var card = $('div', 'gt-title-card');
     var h = $('h1', null, 'Genesis Town'); h.id = 'gt-title-h'; card.appendChild(h);
-    card.appendChild($('p', 'gt-title-lead', 'Kota pasar piksel. Kumpulkan, olah, dan jual ke pedagang yang harganya bergerak karena pemain.'));
+    card.appendChild($('p', 'gt-title-lead', (GT.view === '3d' ? 'Kota pasar mungil. ' : 'Kota pasar piksel. ') + 'Kumpulkan, olah, dan jual ke pedagang yang harganya bergerak karena pemain.'));
     var live = liveLine();
     if (live) card.appendChild($('p', 'gt-title-live', live));
     var acts = $('div', 'gt-title-acts');

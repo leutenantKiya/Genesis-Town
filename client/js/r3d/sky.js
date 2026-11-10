@@ -1,5 +1,5 @@
 /*
- * r3d/sky.js - the sky behind the island: a pixel gradient that follows the game clock (day, dusk, night with stars),
+ * r3d/sky.js - the sky behind the island: a smooth gradient that follows the game clock (day, dusk, night with stars),
  * layered drifting clouds below the island, and a few small floating islets in the distance.
  */
 (function () {
@@ -33,30 +33,28 @@
       p[0].lerp(g0, oc * 0.85); p[1].lerp(g1, oc * 0.85);
     }
     R3D.sky.horizon = p[1].clone();
-    for (y = 0; y < H; y += 2) {
-      var c = p[0].clone().lerp(p[1], y / H);
-      g.fillStyle = '#' + c.getHexString();
-      g.fillRect(0, y, W, 2);
-    }
+    var grd = g.createLinearGradient(0, 0, 0, H);
+    for (y = 0; y <= 8; y++) grd.addColorStop(y / 8, '#' + p[0].clone().lerp(p[1], Math.pow(y / 8, 0.9)).getHexString());
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    function glow(x0, y0, r, col, a) { var rg = g.createRadialGradient(x0, y0, 0, x0, y0, r); rg.addColorStop(0, 'rgba(' + col + ',' + a.toFixed(3) + ')'); rg.addColorStop(1, 'rgba(' + col + ',0)'); g.fillStyle = rg; g.beginPath(); g.arc(x0, y0, r, 0, 6.3); g.fill(); }
     // sun and moon cross the sky with the clock
-    var clear = 1 - oc, t, sx, sy;
+    var clear = 1 - oc, t, sx, sy, U = W / 192;
     if (h >= 5.5 && h <= 18.5 && clear > 0.05) {
-      t = Math.min(1, Math.max(0, (h - 6) / 12)); sx = Math.round(W * (0.08 + 0.84 * t)); sy = Math.round(H * (0.62 - 0.5 * Math.sin(Math.PI * t)));
-      g.fillStyle = 'rgba(255,236,160,' + (0.22 * clear).toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 10, 0, 6.3); g.fill();
-      g.fillStyle = 'rgba(255,226,120,' + clear.toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 5, 0, 6.3); g.fill();
+      t = Math.min(1, Math.max(0, (h - 6) / 12)); sx = W * (0.08 + 0.84 * t); sy = H * (0.62 - 0.5 * Math.sin(Math.PI * t));
+      glow(sx, sy, 34 * U, '255,236,170', 0.45 * clear); glow(sx, sy, 15 * U, '255,240,190', 0.8 * clear);
+      g.fillStyle = 'rgba(255,248,214,' + clear.toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 5.2 * U, 0, 6.3); g.fill();
     }
     if ((h >= 18.5 || h <= 6.5) && clear > 0.05) {
-      t = Math.min(1, Math.max(0, (((h - 19) % 24 + 24) % 24) / 10)); sx = Math.round(W * (0.08 + 0.84 * t)); sy = Math.round(H * (0.62 - 0.5 * Math.sin(Math.PI * t)));
-      g.fillStyle = 'rgba(200,215,255,' + (0.18 * clear).toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 9, 0, 6.3); g.fill();
-      g.fillStyle = 'rgba(236,242,255,' + clear.toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 4, 0, 6.3); g.fill();
-      g.fillStyle = 'rgba(170,185,220,' + clear.toFixed(2) + ')'; g.fillRect(sx - 1, sy - 1, 1, 1); g.fillRect(sx + 1, sy + 1, 1, 1);
+      t = Math.min(1, Math.max(0, (((h - 19) % 24 + 24) % 24) / 10)); sx = W * (0.08 + 0.84 * t); sy = H * (0.62 - 0.5 * Math.sin(Math.PI * t));
+      glow(sx, sy, 30 * U, '200,215,255', 0.4 * clear);
+      g.fillStyle = 'rgba(238,243,255,' + clear.toFixed(2) + ')'; g.beginPath(); g.arc(sx, sy, 4.4 * U, 0, 6.3); g.fill();
+      g.fillStyle = 'rgba(176,190,222,' + (0.7 * clear).toFixed(2) + ')'; g.beginPath(); g.arc(sx - 1.4 * U, sy - 0.8 * U, 1.1 * U, 0, 6.3); g.arc(sx + 1.2 * U, sy + 1.2 * U, 0.8 * U, 0, 6.3); g.fill();
     }
     if (d > 0.55) {
       var a = Math.min(1, (d - 0.55) / 0.35) * (1 - oc), r = rng(77);
-      for (var i = 0; i < 70; i++) {
-        x = Math.floor(r() * W); y = Math.floor(r() * H * 0.75);
-        g.fillStyle = 'rgba(255,255,255,' + (a * (0.35 + r() * 0.65)).toFixed(2) + ')';
-        g.fillRect(x, y, 1, 1);
+      for (var i = 0; i < 150; i++) {
+        x = r() * W; y = r() * H * 0.75;
+        glow(x, y, (0.7 + r() * 1.1) * U, '255,255,255', a * (0.3 + r() * 0.7));
       }
     }
     tex.needsUpdate = true;
@@ -79,15 +77,15 @@
 
   R3D.sky = {
     init: function (C) {
-      cv = document.createElement('canvas'); cv.width = 192; cv.height = 108;
+      cv = document.createElement('canvas'); cv.width = 768; cv.height = 432;
       g = cv.getContext('2d');
       tex = new THREE.CanvasTexture(cv);
-      tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.colorSpace = THREE.SRGBColorSpace;
+      tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.colorSpace = THREE.SRGBColorSpace;
       C.scene.background = tex;
       lastQ = -1;
       group = new THREE.Group(); C.scene.add(group);
       cloudTex = makeCloudTexture();
-      lowMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+      lowMat = new THREE.MeshLambertMaterial({ vertexColors: true });
       cloudMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, opacity: 0.92 });
       clouds = []; islets = [];
     },
@@ -100,10 +98,10 @@
       clouds = []; islets = [];
       // big soft low-poly clouds drifting around and below the island
       for (i = 0; i < 18 && R3D.geo; i++) {
-        var CB = new R3D.geo.Builder(), sz = 2 + r() * 3.2, nb = 3 + Math.floor(r() * 3), k2;
-        for (k2 = 0; k2 < nb; k2++) {
-          var bs = sz * (0.55 + r() * 0.6);
-          CB.blob((k2 - nb / 2) * sz * 0.8 + (r() - 0.5) * sz * 0.3, (r() - 0.3) * sz * 0.3, (r() - 0.5) * sz * 0.7, bs * 1.25, bs * 0.7, bs * 0.9, '#e4ebf3', 1, i * 11 + k2, '#ffffff');
+        var CB = R3D.rig && R3D.rig.acc ? R3D.rig.acc() : new R3D.geo.Builder(), sz = 2 + r() * 3.2, nb = 4 + Math.floor(r() * 3), k2;
+        for (k2 = 0; k2 < nb; k2++) { // soft puffs
+          var bs = sz * (0.5 + r() * 0.55), px = (k2 - nb / 2) * sz * 0.7 + (r() - 0.5) * sz * 0.3, py = (r() - 0.3) * sz * 0.3, pz = (r() - 0.5) * sz * 0.7;
+          if (CB.sph) CB.sph(px, py, pz, bs * 1.2, bs * 0.7, bs * 0.9, k2 % 2 ? '#f4f8fc' : '#e6edf6'); else CB.blob(px, py, pz, bs * 1.25, bs * 0.7, bs * 0.9, '#e4ebf3', 1, i * 11 + k2, '#ffffff');
         }
         var mesh = CB.mesh(lowMat);
         mesh.position.y = -12 + r() * 11;
@@ -117,13 +115,9 @@
         // grass cap and a couple of little trees
         var cap = new THREE.Mesh(new THREE.BoxGeometry(iw, 0.3, ih), new THREE.MeshLambertMaterial({ color: 0x5f9a46 }));
         cap.position.set(iw / 2, 0.1, ih / 2); built.group.add(cap);
-        var trunkMat = new THREE.MeshLambertMaterial({ color: 0x5a3b22 }), leafMat = new THREE.MeshLambertMaterial({ color: 0x2f7a3a, flatShading: true });
-        for (var t = 0; t < 2 + Math.floor(r() * 3); t++) {
-          var tx = 1 + r() * (iw - 2), tz = 1 + r() * (ih - 2);
-          var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.9, 5), trunkMat); trunk.position.set(tx, 0.7, tz);
-          var top = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.8, 6), leafMat); top.position.set(tx, 1.8, tz);
-          built.group.add(trunk); built.group.add(top);
-        }
+        var MD = R3D.models, tl = [];
+        for (var t = 0; t < 2 + Math.floor(r() * 3); t++) tl.push({ x: 1 + r() * (iw - 2), y: 0.25, z: 1 + r() * (ih - 2), s: (1.4 + r() * 0.8) / ((MD && MD.size('MapleTree_4') || { h: 3.5 }).h), ry: r() * 6.28, c: [0.74, 0.84, 0.66] });
+        if (MD && MD.has('MapleTree_4')) MD.instance('MapleTree_4', tl, built.group, { cast: false });
         var holder = new THREE.Group(); holder.add(built.group);
         built.group.position.set(-iw / 2, 0, -ih / 2);
         holder.position.set(cx + Math.cos(ang) * dist, -4 - r() * 8, cz + Math.sin(ang) * dist);

@@ -12,7 +12,8 @@
   if (!THREE || !R3D.geo) return;
   var Builder = R3D.geo.Builder;
 
-  var group = null, litMat = null, glassMat = null, curSnow = null, curMapRef = null, curC = null;
+  var group = null, litMat = null, glassMat = null, wallMat = null, roofMat = null, curSnow = null, curMapRef = null, curC = null;
+  function shade(hex, k) { var c = new THREE.Color(hex); c.multiplyScalar(k); return '#' + c.getHexString(); }
   var GLASS_DAY = new THREE.Color('#a8d8f0'), GLASS_NIGHT = new THREE.Color('#ffd27a');
 
   var PAL = {
@@ -43,18 +44,33 @@
   }
 
   // ---- pieces shared by several kinds -------------------------------------------------------------------------
+  var FLOWERS = ['#e84a6a', '#f2c94c', '#ffffff', '#b58cf0'];
   function window3(B, G, cx, z, y0, k) {
-    B.box(cx - 0.3, y0 - 0.04, z - 0.01, cx + 0.3, y0 + 0.54, z + 0.03, DARK, null, k);
-    G.faceS(cx - 0.25, cx + 0.25, y0, y0 + 0.5, z + 0.035, '#ffffff', 1);
-    B.box(cx - 0.02, y0, z + 0.03, cx + 0.02, y0 + 0.5, z + 0.05, DARK, null, k);
-    B.box(cx - 0.25, y0 + 0.23, z + 0.03, cx + 0.25, y0 + 0.27, z + 0.05, DARK, null, k);
+    var acc = B.accent || '#4a6a8a';
+    B.box(cx - 0.33, y0 - 0.06, z - 0.01, cx + 0.33, y0 + 0.56, z + 0.03, '#f3ead6', null, k);          // cream frame
+    B.box(cx - 0.27, y0 - 0.01, z + 0.02, cx + 0.27, y0 + 0.51, z + 0.04, DARK, null, k);
+    G.faceS(cx - 0.25, cx + 0.25, y0, y0 + 0.5, z + 0.045, '#ffffff', 1);
+    B.box(cx - 0.02, y0, z + 0.04, cx + 0.02, y0 + 0.5, z + 0.06, '#f3ead6', null, k);
+    B.box(cx - 0.25, y0 + 0.23, z + 0.04, cx + 0.25, y0 + 0.27, z + 0.06, '#f3ead6', null, k);
+    B.box(cx - 0.47, y0 - 0.04, z + 0.0, cx - 0.35, y0 + 0.54, z + 0.05, acc, null, k);                  // shutters
+    B.box(cx + 0.35, y0 - 0.04, z + 0.0, cx + 0.47, y0 + 0.54, z + 0.05, acc, null, k);
+    B.box(cx - 0.38, y0 - 0.1, z + 0.0, cx + 0.38, y0 - 0.05, z + 0.14, '#efe4cc', null, k);              // sill
+    B.box(cx - 0.32, y0 - 0.22, z + 0.02, cx + 0.32, y0 - 0.1, z + 0.14, '#7a4a2a', null, k);             // flower box
+    for (var f = 0; f < 4; f++) B.blob(cx - 0.24 + f * 0.16, y0 - 0.08, z + 0.09, 0.07, 0.07, 0.07, FLOWERS[(Math.floor(cx * 3) + f) % 4], k, f + 5);
   }
   function door3(B, dx, z, h, col, k) {
-    B.box(dx + 0.08, 0.1, z - 0.01, dx + 0.92, h + 0.06, z + 0.03, DARK, null, k);
-    B.faceS(dx + 0.14, dx + 0.86, 0.1, h, z + 0.035, col, k);
-    B.box(dx + 0.48, 0.1, z + 0.035, dx + 0.52, h, z + 0.05, '#6a4020', null, k);
-    B.box(dx + 0.72, 0.5, z + 0.035, dx + 0.78, 0.56, z + 0.06, '#f0d048', null, k);
-    B.box(dx - 0.02, 0, z + 0.02, dx + 1.02, 0.1, z + 0.28, '#c4bcb4', null, k); // step
+    B.box(dx + 0.03, 0.1, z - 0.01, dx + 0.97, h + 0.2, z + 0.03, '#f3ead6', null, k);                    // frame
+    B.box(dx + 0.12, 0.1, z + 0.02, dx + 0.88, h, z + 0.045, DARK, null, k);
+    B.faceS(dx + 0.14, dx + 0.86, 0.1, h, z + 0.05, col, k);
+    var cx = dx + 0.5, r = 0.36, seg = 9, i, c = B.col(col, k), d0 = B.col(DARK, k);                           // round arch over the door
+    for (i = 0; i < seg; i++) {
+      var a0 = Math.PI * i / seg, a1 = Math.PI * (i + 1) / seg;
+      B.tri([cx, h, z + 0.05], [cx + Math.cos(a0) * r, h + Math.sin(a0) * r, z + 0.05], [cx + Math.cos(a1) * r, h + Math.sin(a1) * r, z + 0.05], c);
+      B.tri([cx, h, z + 0.04], [cx + Math.cos(a0) * (r + 0.1), h + Math.sin(a0) * (r + 0.1), z + 0.04], [cx + Math.cos(a1) * (r + 0.1), h + Math.sin(a1) * (r + 0.1), z + 0.04], B.col('#f3ead6', k));
+    }
+    B.box(dx + 0.48, 0.1, z + 0.055, dx + 0.52, h, z + 0.07, '#6a4020', null, k);
+    B.blob(dx + 0.74, 0.55, z + 0.09, 0.05, 0.05, 0.05, '#f0d048', k, 3);                                      // handle
+    B.box(dx - 0.06, 0, z + 0.02, dx + 1.06, 0.1, z + 0.3, '#c4bcb4', null, k);                               // step
   }
   function sign3(B, dx, z, y0, p, k) {
     B.box(dx + 0.02, y0, z + 0.0, dx + 0.98, y0 + 0.3, z + 0.08, DARK, null, k);
@@ -63,15 +79,21 @@
   }
   function body(B, b, p, wallH, k, opts) {
     opts = opts || {};
-    var x = b.x, y = b.y, w = b.w, h = b.h;
-    B.box(x + 0.0, 0, y + 0.0, x + w, 0.12, y + h, FOUND, '#c4bcb4', k);
-    B.box(x + 0.05, 0.12, y + 0.05, x + w - 0.05, wallH, y + h - 0.05, p.wall, null, k);
-    // darker band near the ground, like the 2D siding
-    B.box(x + 0.04, 0.12, y + 0.04, x + w - 0.04, 0.3, y + h - 0.04, opts.wallD || '#cdbf9e', null, k);
+    var W = B.W || B, R = B.R || B, x = b.x, y = b.y, w = b.w, h = b.h, T = '#6a4a30', i;
+    B.accent = p.roof;
+    W.box(x - 0.02, 0, y - 0.02, x + w + 0.02, 0.16, y + h + 0.02, '#b3aa9c', '#cfc7b8', k);                  // stone plinth
+    W.box(x + 0.05, 0.16, y + 0.05, x + w - 0.05, wallH, y + h - 0.05, p.wall, null, k);                       // plastered walls
+    W.box(x + 0.04, 0.16, y + 0.04, x + w - 0.04, 0.34, y + h - 0.04, opts.wallD || '#cdbf9e', null, k);
+    [[x + 0.02, y + 0.02], [x + w - 0.11, y + 0.02], [x + 0.02, y + h - 0.11], [x + w - 0.11, y + h - 0.11]].forEach(function (c) {
+      B.box(c[0], 0.16, c[1], c[0] + 0.09, wallH, c[1] + 0.09, T, null, k);                                    // corner posts
+    });
+    B.box(x - 0.01, wallH - 0.13, y - 0.01, x + w + 0.01, wallH, y + h + 0.01, T, null, k);                    // eave beam
     if (!opts.noRoof) {
-      var rise = opts.rise || Math.max(0.9, Math.min(w, h) * 0.34);
-      B.gable(x - 0.22, y - 0.18, x + w + 0.22, y + h + 0.2, wallH, wallH + rise, p.roof, p.wall, k, p.roofL);
-      B.box(x - 0.24, wallH - 0.05, y + h + 0.0, x + w + 0.24, wallH + 0.02, y + h + 0.22, '#fff6dc', null, k); // front eave trim
+      var rise = opts.rise || Math.max(0.9, Math.min(w, h) * 0.34), zm = y + h / 2 + 0.01;
+      R.gable(x - 0.32, y - 0.3, x + w + 0.32, y + h + 0.32, wallH - 0.02, wallH + rise, p.roof, p.wall, k, p.roofL);
+      B.box(x - 0.34, wallH + rise - 0.05, zm - 0.08, x + w + 0.34, wallH + rise + 0.07, zm + 0.08, shade(p.roof, 0.72), shade(p.roof, 0.9), k); // ridge cap
+      B.box(x - 0.34, wallH - 0.08, y + h + 0.0, x + w + 0.34, wallH + 0.0, y + h + 0.34, '#f6efe0', null, k);   // front fascia
+      B.box(x - 0.34, wallH - 0.08, y - 0.32, x + w + 0.34, wallH + 0.0, y + 0.0, '#f6efe0', null, k);
       return wallH + rise;
     }
     return wallH;
@@ -102,7 +124,7 @@
     B.faceS(cx - s * 0.18, cx + s * 0.18, cy - s * 0.5, cy + s * 0.5, z, col, k);
     B.faceS(cx - s * 0.5, cx + s * 0.5, cy - s * 0.18, cy + s * 0.18, z, col, k);
   }
-  function chimney(B, x, z, y0, y1, k) { B.box(x, y0, z, x + 0.3, y1, z + 0.3, '#8a4a3a', '#5a2e1a', k); }
+  function chimney(B, x, z, y0, y1, k) { B.box(x, y0, z, x + 0.3, y1, z + 0.3, '#9a5a44', '#6a3a2a', k); B.box(x - 0.04, y1, z - 0.04, x + 0.34, y1 + 0.07, z + 0.34, '#5a4a42', '#7a6a60', k); }
 
   // ---- one builder per kind ----------------------------------------------------------------------------------
   function house(B, G, b, k) {
@@ -122,7 +144,7 @@
     // portico: two columns and a small roof over the entrance
     B.box(b.dx - 0.6, 0, zf + 0.5, b.dx - 0.4, 1.6, zf + 0.7, '#ece6da', '#fff', k);
     B.box(b.dx + 1.4, 0, zf + 0.5, b.dx + 1.6, 1.6, zf + 0.7, '#ece6da', '#fff', k);
-    B.gable(b.dx - 0.8, zf + 0.0, b.dx + 1.8, zf + 0.8, 1.6, 2.15, p.roof, p.wall, k, p.roofL);
+    (B.R || B).gable(b.dx - 0.8, zf + 0.0, b.dx + 1.8, zf + 0.8, 1.6, 2.15, p.roof, p.wall, k, p.roofL);
     flag(B, b.x + b.w / 2, top - 0.05, b.y + b.h / 2, k);
   }
   function church(B, G, b, k) {
@@ -130,12 +152,12 @@
     // nave behind the tower
     B.box(b.x, 0, b.y, b.x + b.w, 0.12, zf, FOUND, '#c4bcb4', k);
     B.box(b.x + 0.05, 0.12, b.y + 0.05, b.x + b.w - 0.05, 1.8, tz0 + 0.2, p.wall, null, k);
-    B.gable(b.x - 0.2, b.y - 0.15, b.x + b.w + 0.2, tz0 + 0.3, 1.8, 2.8, p.roof, p.wall, k, p.roofL);
+    (B.R || B).gable(b.x - 0.2, b.y - 0.15, b.x + b.w + 0.2, tz0 + 0.3, 1.8, 2.8, p.roof, p.wall, k, p.roofL);
     for (var i = 0; i < b.w; i++) { var wx = b.x + i + 0.5; if (wx > tx0 - 0.1 && wx < tx1 + 0.1) continue; window3(B, G, wx, tz0 + 0.2, 0.9, k); }
     // front tower with door, spire and cross
     B.box(tx0, 0, tz0, tx1, 3.2, zf - 0.02, p.wall, null, k);
     B.box(tx0 - 0.04, 3.2, tz0 - 0.04, tx1 + 0.04, 3.32, zf + 0.02, '#cfc6b4', null, k);
-    B.pyramid(tx0 - 0.1, tz0 - 0.1, tx1 + 0.1, zf + 0.06, 3.32, 4.9, p.roof, k, p.roofL);
+    (B.R || B).pyramid(tx0 - 0.1, tz0 - 0.1, tx1 + 0.1, zf + 0.06, 3.32, 4.9, p.roof, k, p.roofL);
     B.box(b.dx + 0.46, 4.85, tz0 + 0.95 - 0.04, b.dx + 0.54, 5.5, tz0 + 0.95 + 0.04, '#f2c94c', null, k);
     B.box(b.dx + 0.3, 5.15, tz0 + 0.95 - 0.04, b.dx + 0.7, 5.23, tz0 + 0.95 + 0.04, '#f2c94c', null, k);
     door3(B, b.dx, zf - 0.02, 1.3, '#6a4020', k);
@@ -190,7 +212,7 @@
     B.box(cx - 0.55, top - 0.3, cz - 0.55, cx + 0.55, top + th, cz + 0.55, p.wall, null, k);
     B.faceS(cx - 0.3, cx + 0.3, top + th - 0.6, top + th - 0.1, cz + 0.56, '#fff6d8', k);
     B.box(cx - 0.02, top + th - 0.4, cz + 0.56, cx + 0.02, top + th - 0.15, cz + 0.58, DARK, null, k);
-    B.pyramid(cx - 0.65, cz - 0.65, cx + 0.65, cz + 0.65, top + th, top + th + 0.9, p.roof, k, p.roofL);
+    (B.R || B).pyramid(cx - 0.65, cz - 0.65, cx + 0.65, cz + 0.65, top + th, top + th + 0.9, p.roof, k, p.roofL);
     flag(B, cx, top + th + 0.85, cz, k);
     B.box(b.dx - 0.4, 0, zf + 0.0, b.dx + 1.4, 0.18, zf + 0.5, '#c4bcb4', null, k); // steps
   }
@@ -253,12 +275,18 @@
   var KINDS = { house: house, hall: hall, church: church, clinic: clinic, post: post, broker: broker, warung: warung, townhall: townhall, kolam: kolam, tambang: tambang, restoran: restoran, rumah: rumah, rumahsakit: rumahsakit };
 
   R3D.buildings = {
-    init: function (C) { litMat = R3D.geo.lit(); glassMat = R3D.geo.basic(); group = null; },
+    init: function (C) {
+      litMat = R3D.geo.lit(); glassMat = R3D.geo.basic(); group = null;
+      wallMat = R3D.geo.lit(); roofMat = R3D.geo.lit();
+      if (R3D.assets) { wallMat.map = R3D.assets.tex('wall_detail'); roofMat.map = R3D.assets.tex('roof_detail'); }
+    },
     onWorld: function (C, m) {
       clear(C);
       group = R3D.regions.mount();
       curMapRef = m; curC = C; curSnow = !!(window.SPRITES && SPRITES.snow);
       var BS = group.map(function () { var b = new Builder(); b.snow = curSnow ? 0.9 : 0; return b; }), GS = group.map(function () { return new Builder(); });
+      var WS = group.map(function () { var b = new Builder(); b.uvScale = 0.3; return b; }), RS = group.map(function () { var b = new Builder(); b.snow = curSnow ? 0.9 : 0; b.uvScale = 0.34; return b; });
+      BS.forEach(function (b, r) { b.W = WS[r]; b.R = RS[r]; });
       m.buildings.forEach(function (b) {
         var r = R3D.regions.of(b.x, b.y), B = BS[r], G = GS[r];
         var k = (m.locked && m.locked[b.y * m.w + b.x]) ? 0.5 : 1;
@@ -266,6 +294,8 @@
         (KINDS[b.kind] || generic)(B, G, b, k);
       });
       BS.forEach(function (b, r) { if (!b.empty()) group[r].add(b.mesh(litMat, true)); });
+      WS.forEach(function (b, r) { if (!b.empty()) group[r].add(b.mesh(wallMat, true)); });
+      RS.forEach(function (b, r) { if (!b.empty()) group[r].add(b.mesh(roofMat, true)); });
       GS.forEach(function (g, r) { if (!g.empty()) group[r].add(g.mesh(glassMat)); });
     },
     update: function (C, info) {
@@ -275,8 +305,8 @@
     },
     dispose: function (C) {
       clear(C);
-      if (litMat) litMat.dispose(); if (glassMat) glassMat.dispose();
-      litMat = glassMat = null;
+      if (litMat) litMat.dispose(); if (glassMat) glassMat.dispose(); if (wallMat) wallMat.dispose(); if (roofMat) roofMat.dispose();
+      litMat = glassMat = wallMat = roofMat = null;
     }
   };
 })();
