@@ -602,12 +602,22 @@
       var due = H.jobs.some(function (j) { return endMs(j) <= now; });
       if (due) { jobPing = now; load(true); }
     }
+    var pp = portalPos(), me = GT.player;
+    if (pp && GT.scene && GT.scene.kind === 'out') {
+      if (me.x !== pp.x || me.y !== pp.y) { portalArmed = true; portalDwell = 0; } // you have left it: it can take you again
+      else {
+        portalDwell += dt; // touching the portal is enough, even while walking through it
+        if (portalArmed && portalDwell > 0.04 && !travelling && !GT.isUiOpen() && S() && S().account) { portalArmed = false; openPortal(); }
+      }
+    }
     hintT -= dt; if (hintT > 0) return; hintT = 0.5;
     var n = nearPortal();
-    if (n && !nearHint && !hintShown && S() && S().account && !GT.isUiOpen()) { hintShown = true; GT.toast('Portal: hadap portal lalu tekan ' + (document.documentElement.classList.contains('gt-phone') ? 'A' : 'F') + ' (atau tombol B) untuk bepergian.'); }
+    if (n && !nearHint && !hintShown && S() && S().account && !GT.isUiOpen()) { hintShown = true; GT.toast('Portal: melangkahlah ke dalamnya untuk bepergian (atau hadap lalu tekan ' + (document.documentElement.classList.contains('gt-phone') ? 'A' : 'F') + ' / B).'); }
     nearHint = n;
   }
+  var portalArmed = false, portalDwell = 0;
   function onWorld() {
+    portalArmed = false; // arriving puts you on the portal: step off it first
     nearHint = nearPortal(); pops.length = 0; builder = null; builderSig = ''; botNpcs = []; botSig = '';
     if (isHL(wid())) { placeBuilder(); placeBots(); }
   }
