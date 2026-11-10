@@ -30,10 +30,7 @@
   ].join('\n');
 
   function clear(C) {
-    if (group) {
-      C.root.remove(group);
-      group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
-    }
+    if (group) R3D.regions.unmount(group); // group = one Group per island (regions.js)
     group = null; lampList = [];
   }
 
@@ -49,16 +46,17 @@
     onWorld: function (C, m) {
       clear(C);
       curMapRef = m; curC = C; curSnow = !!(window.SPRITES && SPRITES.snow);
-      group = new THREE.Group(); C.root.add(group);
-      var B = new Builder(), G = new Builder(), x, y, i, t, k, h, cx, cz;
-      B.snow = curSnow ? 0.85 : 0;
+      group = R3D.regions.mount();
+      var RG = R3D.regions;
+      var BS = group.map(function () { var b = new Builder(); b.snow = curSnow ? 0.85 : 0; return b; }), GS = group.map(function () { return new Builder(); });
+      var B = BS[0], G = GS[0], x, y, i, t, k, h, cx, cz;
       var locked = m.locked;
       function kk(x, y) { return (locked && locked[y * m.w + x]) ? 0.5 : 1; }
 
       // trees: positions and kinds come from the 2D bake's canopy list so both views agree
       var trees = m.canopies || [];
       for (i = 0; i < trees.length; i++) {
-        var tr = trees[i]; x = tr.x; y = tr.y; k = tr.fog ? 0.5 : 1;
+        var tr = trees[i]; x = tr.x; y = tr.y; k = tr.fog ? 0.5 : 1; B = BS[RG.of(x, y)];
         h = hash(x, y, 31); cx = x + 0.5; cz = y + 0.58;
         var sc = 0.88 + h * 0.3;
         B.cyl(cx, 0, cz, 0.11 * sc, 0.85 * sc, 5, '#6a4a2a', k);
@@ -82,8 +80,14 @@
       for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++) {
         t = m.tiles[y * m.w + x];
         if (t === 'grass' || t === 'path' || t === 'water' || t === 'tree') continue;
+        B = BS[RG.of(x, y)]; G = GS[RG.of(x, y)];
         k = kk(x, y); h = hash(x, y, 5); cx = x + 0.5; cz = y + 0.5;
-        if (t === 'rock') {
+        if (t === 'bridge') { // planks come from the ground texture; rails and posts are real
+          var rw = '#6a4020', rl = '#b07840';
+          B.box(x, 0.1, y, x + 1, 0.16, y + 0.07, rw, rl, k); B.box(x, 0.46, y, x + 1, 0.52, y + 0.07, rw, rl, k);
+          B.box(x, 0.1, y + 0.93, x + 1, 0.16, y + 1, rw, rl, k); B.box(x, 0.46, y + 0.93, x + 1, 0.52, y + 1, rw, rl, k);
+          B.box(x, 0, y, x + 0.09, 0.62, y + 0.09, rw, rl, k); B.box(x, 0, y + 0.91, x + 0.09, 0.62, y + 1, rw, rl, k);
+        } else if (t === 'rock') {
           B.blob(cx, 0.24, cz, 0.44 + h * 0.08, 0.3, 0.38, '#8c8c99', k, x + y * 9, '#adadbb');
         } else if (t === 'bush') {
           B.blob(cx, 0.3, cz, 0.42, 0.32, 0.4, '#3f9a4a', k, x * 3 + y, '#62bd5c');
@@ -124,6 +128,7 @@
 
       // stall awnings (striped, sloping up toward the back so the merchant standing behind the counter is covered)
       if (m.market && m.market.stalls) m.market.stalls.forEach(function (st) {
+        B = BS[RG.of(st.x, st.y)];
         var k2 = kk(st.x, st.y), fz = st.y + 0.1, bz = st.y - 0.95, fy = 1.25, by = 1.72, n = 6, col = st.color || '#e8503c';
         for (var s = 0; s < n; s++) {
           var xa = st.x + 0.02 + s * 0.96 / n, xb = st.x + 0.02 + (s + 1) * 0.96 / n, c = B.col(s % 2 ? '#f6f0e0' : col, k2);
@@ -141,6 +146,7 @@
         var taken = {}; m.buildings.forEach(function (b) { if (b.lot) taken[b.lot] = 1; });
         m.layout.lots.forEach(function (l) {
           if (taken[l.id]) return;
+          B = BS[RG.of(l.x, l.y)];
           B.flat(l.x + 0.08, l.y + 0.08, l.x + l.w - 0.08, l.y + l.h - 0.08, 0.025, '#8a6038', 1);
           [[0.12, 0.12], [l.w - 0.12, 0.12], [0.12, l.h - 0.12], [l.w - 0.12, l.h - 0.12]].forEach(function (p) { B.box(l.x + p[0] - 0.05, 0, l.y + p[1] - 0.05, l.x + p[0] + 0.05, 0.4, l.y + p[1] + 0.05, '#3d2610', '#b07840', 1); });
           var sx = l.door.x + 0.5, sz = l.door.y + 0.55, tab = l.kind === 'kolam' ? '#3d7fc2' : l.kind === 'tambang' ? '#6a6678' : '#c8502e';
@@ -153,17 +159,18 @@
 
       // the portal: a stone arch with a swirling oval
       if (m.portal) {
+        B = BS[RG.of(m.portal.x, m.portal.y)];
         var px = m.portal.x, pz = m.portal.y, stone = '#6a6678', stoneL = '#8a869a';
         B.box(px + 0.02, 0, pz + 0.3, px + 0.98, 0.1, pz + 0.72, '#5a5668', stoneL, 1);
         B.box(px + 0.04, 0.1, pz + 0.32, px + 0.24, 1.55, pz + 0.68, stone, stoneL, 1);
         B.box(px + 0.76, 0.1, pz + 0.32, px + 0.96, 1.55, pz + 0.68, stone, stoneL, 1);
         B.box(px + 0.0, 1.55, pz + 0.28, px + 1.0, 1.85, pz + 0.72, stone, stoneL, 1);
         var pm = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 1.4), portalMat);
-        pm.position.set(px + 0.5, 0.82, pz + 0.5); pm.renderOrder = 2; group.add(pm);
+        pm.position.set(px + 0.5, 0.82, pz + 0.5); pm.renderOrder = 2; group[RG.of(m.portal.x, m.portal.y)].add(pm);
       }
 
-      if (!B.empty()) group.add(B.mesh(litMat, true));
-      if (!G.empty()) group.add(G.mesh(glowMat));
+      BS.forEach(function (b, r) { if (!b.empty()) group[r].add(b.mesh(litMat, true)); });
+      GS.forEach(function (g, r) { if (!g.empty()) group[r].add(g.mesh(glowMat)); });
     },
     update: function (C, info) {
       if (curMapRef && !!(window.SPRITES && SPRITES.snow) !== curSnow) this.onWorld(curC, curMapRef); // winter came or went: rebuild with or without snow

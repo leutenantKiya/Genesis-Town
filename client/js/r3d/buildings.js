@@ -38,7 +38,7 @@
   var FOUND = '#a8a098', DARK = '#2a2430';
 
   function clear(C) {
-    if (group) { C.root.remove(group); group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); }
+    if (group) R3D.regions.unmount(group); // group = one Group per island (regions.js)
     group = null;
   }
 
@@ -256,17 +256,17 @@
     init: function (C) { litMat = R3D.geo.lit(); glassMat = R3D.geo.basic(); group = null; },
     onWorld: function (C, m) {
       clear(C);
-      group = new THREE.Group(); C.root.add(group);
+      group = R3D.regions.mount();
       curMapRef = m; curC = C; curSnow = !!(window.SPRITES && SPRITES.snow);
-      var B = new Builder(), G = new Builder();
-      B.snow = curSnow ? 0.9 : 0;
+      var BS = group.map(function () { var b = new Builder(); b.snow = curSnow ? 0.9 : 0; return b; }), GS = group.map(function () { return new Builder(); });
       m.buildings.forEach(function (b) {
+        var r = R3D.regions.of(b.x, b.y), B = BS[r], G = GS[r];
         var k = (m.locked && m.locked[b.y * m.w + b.x]) ? 0.5 : 1;
         if (b.dx == null) b.dx = b.x + Math.floor(b.w / 2);
         (KINDS[b.kind] || generic)(B, G, b, k);
       });
-      if (!B.empty()) group.add(B.mesh(litMat, true));
-      if (!G.empty()) group.add(G.mesh(glassMat));
+      BS.forEach(function (b, r) { if (!b.empty()) group[r].add(b.mesh(litMat, true)); });
+      GS.forEach(function (g, r) { if (!g.empty()) group[r].add(g.mesh(glassMat)); });
     },
     update: function (C, info) {
       if (curMapRef && !!(window.SPRITES && SPRITES.snow) !== curSnow) this.onWorld(curC, curMapRef);

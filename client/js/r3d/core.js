@@ -19,7 +19,7 @@
   var ZOOM_ROWS = 1.25;                // visible world rows per 2D view row (the tilt shows more ground)
   var ZMIN = 0.6, ZMAX = 1.7;
   var HEMI = 2.5, SUN = 1.7;          // light intensities (three.js uses physical units: ~pi for a fully lit white surface)
-  var MODS = ['sky', 'island', 'ground', 'water', 'props', 'buildings', 'actors', 'lights', 'weather', 'compat'];
+  var MODS = ['regions', 'sky', 'island', 'ground', 'water', 'props', 'buildings', 'actors', 'lights', 'weather', 'compat'];
   var QUALITY = {
     rendah: { pr: 1, shadow: 0, lamps: 0, rain: 160, snow: 120 },
     sedang: { pr: 1.5, shadow: 1024, lamps: 4, rain: 420, snow: 320 },
@@ -99,6 +99,8 @@
     if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
     C = canvas = hemi = sun = moon = map = null;
   }
+
+  R3D.rebuild = function () { map = null; }; // regions.js asks for a rebuild once a docking island has arrived
 
   function onWorld(m) {
     map = m;

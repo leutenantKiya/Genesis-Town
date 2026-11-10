@@ -13,7 +13,7 @@
   var WL = -0.15;      // water level (the ground is at 0)
   var FALL = 15;       // how far a waterfall drops
 var FLARE = 3;       // how far the water arcs outward while falling (so it shows from the fixed camera on every side)
-  var group = null, surfMat = null, fallMat = null, bankMat = null, mist = [], mistMat = null, mistTex = null;
+  var parts = null, group = null, surfMat = null, fallMat = null, bankMat = null, mist = [], mistMat = null, mistTex = null;
   var DAYC = new THREE.Color(1, 1, 1), NIGHTC = new THREE.Color(0.42, 0.46, 0.72);
 
   function isWater(m, x, y) { return x >= 0 && y >= 0 && x < m.w && y < m.h && m.tiles[y * m.w + x] === 'water'; }
@@ -100,11 +100,8 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
   }
 
   function clear(C) {
-    if (group) {
-      C.root.remove(group);
-      group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
-    }
-    group = null; mist = [];
+    if (parts) R3D.regions.unmount(parts);
+    parts = null; mist = [];
   }
 
   R3D.water = {
@@ -121,54 +118,58 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     },
     onWorld: function (C, m) {
       clear(C);
-      group = new THREE.Group(); C.root.add(group);
-      var sp = [], se = [], sl = [], si = [], bp = [], bc = [], bi = [], fp = [], fi = [];
-      var x, y, n = 0, bn = 0, fn = 0;
+      var RG = R3D.regions; parts = RG.mount();
+      var B = parts.map(function () { return { sp: [], se: [], sl: [], si: [], bp: [], bc: [], bi: [], fp: [], fi: [], n: 0, bn: 0, fn: 0, mist: [] }; });
+      var x, y;
       var earthA = new THREE.Color('#7d5937'), earthB = new THREE.Color('#5b4029');
       function quad(arr, idx, base, a, b, c, d) { arr.push.apply(arr, a.concat(b, c, d)); idx.push(base, base + 1, base + 2, base, base + 2, base + 3); }
       for (y = 0; y < m.h; y++) for (x = 0; x < m.w; x++) {
         if (!isWater(m, x, y)) continue;
+        var rg = RG.of(x, y), R = B[rg];
         var nL = y > 0 && !isWater(m, x, y - 1), eL = x < m.w - 1 && !isWater(m, x + 1, y), sL = y < m.h - 1 && !isWater(m, x, y + 1), wL = x > 0 && !isWater(m, x - 1, y);
         var bits = (nL ? 1 : 0) + (eL ? 2 : 0) + (sL ? 4 : 0) + (wL ? 8 : 0), lock = (m.locked && m.locked[y * m.w + x]) ? 1 : 0;
-        quad(sp, si, n, [x, WL, y], [x, WL, y + 1], [x + 1, WL, y + 1], [x + 1, WL, y]);
-        for (var k = 0; k < 4; k++) { se.push(bits); sl.push(lock); }
-        n += 4;
-        // banks: a wall on each side that touches land, facing the water
-        var sides = [[nL, [x, y], [x + 1, y]], [eL, [x + 1, y], [x + 1, y + 1]], [sL, [x + 1, y + 1], [x, y + 1]], [wL, [x, y + 1], [x, y]]];
+        quad(R.sp, R.si, R.n, [x, WL, y], [x, WL, y + 1], [x + 1, WL, y + 1], [x + 1, WL, y]);
+        for (var k = 0; k < 4; k++) { R.se.push(bits); R.sl.push(lock); }
+        R.n += 4;
+        // banks: a wall on each side that touches land of the same island, facing the water
+        var sides = [[nL && RG.of(x, y - 1) === rg, [x, y], [x + 1, y]], [eL && RG.of(x + 1, y) === rg, [x + 1, y], [x + 1, y + 1]],
+          [sL && RG.of(x, y + 1) === rg, [x + 1, y + 1], [x, y + 1]], [wL && RG.of(x - 1, y) === rg, [x, y + 1], [x, y]]];
         sides.forEach(function (s) {
           if (!s[0]) return;
           var a = s[1], b = s[2];
-          bp.push(a[0], 0, a[1], b[0], 0, b[1], b[0], WL, b[1], a[0], WL, a[1]);
-          bc.push(earthA.r, earthA.g, earthA.b, earthA.r, earthA.g, earthA.b, earthB.r, earthB.g, earthB.b, earthB.r, earthB.g, earthB.b);
-          bi.push(bn, bn + 1, bn + 2, bn, bn + 2, bn + 3); bn += 4;
+          R.bp.push(a[0], 0, a[1], b[0], 0, b[1], b[0], WL, b[1], a[0], WL, a[1]);
+          R.bc.push(earthA.r, earthA.g, earthA.b, earthA.r, earthA.g, earthA.b, earthB.r, earthB.g, earthB.b, earthB.r, earthB.g, earthB.b);
+          R.bi.push(R.bn, R.bn + 1, R.bn + 2, R.bn, R.bn + 2, R.bn + 3); R.bn += 4;
         });
-        // waterfalls where the water meets the edge of the island
+        // waterfalls where the water meets the edge of the map
         var edges = [[y === 0, [x + 1, 0, y - 0.07], [x, 0, y - 0.07], 0, -1], [x === m.w - 1, [x + 1.07, 0, y + 1], [x + 1.07, 0, y], 1, 0],
           [y === m.h - 1, [x, 0, y + 1.07], [x + 1, 0, y + 1.07], 0, 1], [x === 0, [x - 0.07, 0, y], [x - 0.07, 0, y + 1], -1, 0]];
         edges.forEach(function (e) {
           if (!e[0]) return;
           var a = e[1], b = e[2], ox = e[3] * FLARE, oz = e[4] * FLARE;
-          fp.push(a[0], WL, a[2], b[0], WL, b[2], b[0] + ox, WL - FALL, b[2] + oz, a[0] + ox, WL - FALL, a[2] + oz);
-          fi.push(fn, fn + 1, fn + 2, fn, fn + 2, fn + 3); fn += 4;
-          if (mist.length < 70) mist.push({ x: (a[0] + b[0]) / 2 + ox, z: (a[2] + b[2]) / 2 + oz });
+          R.fp.push(a[0], WL, a[2], b[0], WL, b[2], b[0] + ox, WL - FALL, b[2] + oz, a[0] + ox, WL - FALL, a[2] + oz);
+          R.fi.push(R.fn, R.fn + 1, R.fn + 2, R.fn, R.fn + 2, R.fn + 3); R.fn += 4;
+          if (R.mist.length < 40) R.mist.push({ x: (a[0] + b[0]) / 2 + ox, z: (a[2] + b[2]) / 2 + oz });
         });
       }
-      function mesh(pos, idx, mat, extra) {
+      function mesh(r, pos, idx, mat, extra) {
         if (!pos.length) return null;
         var g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
         if (extra) Object.keys(extra).forEach(function (k) { g.setAttribute(k, new THREE.Float32BufferAttribute(extra[k][0], extra[k][1])); });
-        var mm = new THREE.Mesh(g, mat); mm.frustumCulled = false; group.add(mm); return mm;
+        var mm = new THREE.Mesh(g, mat); mm.frustumCulled = false; parts[r].add(mm); return mm;
       }
-      mesh(sp, si, surfMat, { aEdge: [se, 1], aLock: [sl, 1] });
-      mesh(bp, bi, bankMat, { color: [bc, 3] });
-      var fm = mesh(fp, fi, fallMat); if (fm) fm.renderOrder = 2;
-      // mist at the foot of every waterfall (a couple of soft puffs each, capped)
-      var pg = new THREE.PlaneGeometry(2.4, 2.4);
-      mist = mist.map(function (s, i) {
-        var puff = new THREE.Mesh(pg, mistMat); puff.quaternion.copy(C.cam.quaternion);
-        puff.position.set(s.x, WL - FALL, s.z); puff.renderOrder = 3; group.add(puff);
-        return { mesh: puff, x: s.x, z: s.z, ph: i * 1.7 };
+      var pg = new THREE.PlaneGeometry(2.4, 2.4), mi = 0;
+      B.forEach(function (R, r) {
+        mesh(r, R.sp, R.si, surfMat, { aEdge: [R.se, 1], aLock: [R.sl, 1] });
+        mesh(r, R.bp, R.bi, bankMat, { color: [R.bc, 3] });
+        var fm = mesh(r, R.fp, R.fi, fallMat); if (fm) fm.renderOrder = 2;
+        // mist at the foot of every waterfall (a couple of soft puffs each, capped)
+        R.mist.forEach(function (s) {
+          var puff = new THREE.Mesh(pg, mistMat); puff.quaternion.copy(C.cam.quaternion);
+          puff.position.set(s.x, WL - FALL, s.z); puff.renderOrder = 3; parts[r].add(puff);
+          mist.push({ mesh: puff, x: s.x, z: s.z, ph: (mi++) * 1.7 });
+        });
       });
     },
     update: function (C, info) {
