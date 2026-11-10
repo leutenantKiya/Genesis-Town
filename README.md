@@ -73,7 +73,7 @@
 > - **3D floating-island view** (branch `floating-island-3d`, optional; the 2D view is unchanged): open with `?view=3d` or
 >   Pengaturan → Tampilan dunia. The village and every Homeland become islands in the sky: cliffs and a hanging underside,
 >   clouds and distant islets, recessed animated water with waterfalls off the edge, real low-poly buildings, trees, props,
->   market stalls and rooms inside buildings (furniture, windows), 3D characters (same looks, walk, axe, fishing, Homeland hats),
+>   market stalls and rooms inside buildings (furniture, windows), soft, rounded 3D characters (same nine looks, also in the character screen; walk, axe, fishing, Homeland hats), real lit terrain with textured grass, paths and soil, glTF trees, bushes, grass and flowers from a CC0 Quaternius pack (`client/assets/models/nature_pack/`, credits in `docs/ASSET-CREDITS.md`), smooth rippling water with curved waterfalls, 3D crops on the farm plots,
 >   a sun and moon that follow the game clock with shadows, street lamps and lit windows at night, rain, snow and snowy roofs,
 >   chunks that are not open yet floating as their own islands that dock when the town opens them. Quality Rendah / Sedang /
 >   Tinggi in Pengaturan; the game drops quality (and offers 2D) on slow devices; `?fps` shows a counter. Three.js loads only

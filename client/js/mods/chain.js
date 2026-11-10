@@ -782,6 +782,11 @@
 
   // Crops are drawn in the ground pass (onDrawGround), so characters walk in front of them.
   function onDrawGround(ctx, camX, camY, T) {
+    if (GT.view === '3d' && GT.fx3d) { // real 3D soil and plants (r3d/fx.js)
+      var out3 = GT.scene && GT.scene.kind === 'out' && S.st && S.plots.length;
+      GT.fx3d.crops(out3 ? S.plots.map(function (pp, i) { var q = S.st.plots[i] || {}; return { x: pp.x, y: pp.y, state: q.state || 'empty', grown: q.grown || 0, wet: !!q.wateredToday }; }) : []);
+      return;
+    }
     if (!GT.scene || GT.scene.kind !== 'out' || !S.plots.length || !S.st) return;
     var vw = ctx.canvas.width, vh = ctx.canvas.height;
     S.plots.forEach(function (pp, i) {

@@ -24,7 +24,9 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     'uniform float uTime;',
     'uniform float uDark;',
     'uniform vec3 uFogC; uniform float uFogN; uniform float uFogF; uniform float uFogOn;',
-    'float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }'
+    'float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+    'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }'
   ].join('\n');
 
   var SURF_VS = COMMON + [
@@ -42,15 +44,22 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     'varying float vEdge;',
     'varying float vLock;',
     'void main(){',
-    '  vec2 p = vPos.xz;',
-    '  vec2 q = floor(p * 12.0) / 12.0;', // the 2D art\'s pixel grid
-    '  float wave = sin(q.x * 2.1 + uTime * 0.9) + sin(q.y * 2.7 - uTime * 0.7) + sin((q.x + q.y) * 1.3 + uTime * 0.5);',
-    '  vec3 deep = vec3(0.17, 0.46, 0.73), shallow = vec3(0.27, 0.64, 0.87), hi = vec3(0.66, 0.88, 0.96), foam = vec3(0.94, 0.98, 0.99);',
-    '  vec3 col = mix(deep, shallow, 0.5 + 0.2 * wave);',
-    '  float band = step(0.8, fract(wave * 0.5 + q.x * 0.3 + q.y * 0.2));',
-    '  col = mix(col, shallow * 1.12, band * 0.4);',
-    '  float sp = step(0.986, hash(q + floor(uTime * 1.4)));',
-    '  col = mix(col, hi, sp * 0.85);',
+    '  vec2 p = vPos.xz; float t = uTime;',
+    // a gentle moving swell: the slope of a few sine waves gives a normal, so light glints off the water smoothly
+    '  vec2 g = vec2(cos(p.x * 2.1 + t * 0.9) * 2.1 * 0.5 + cos((p.x + p.y) * 1.3 + t * 0.5) * 1.3 * 0.5,',
+    '                cos(p.y * 2.7 - t * 0.7) * 2.7 * 0.5 + cos((p.x + p.y) * 1.3 + t * 0.5) * 1.3 * 0.5);',
+    '  float r = p.x * 5.3 + p.y * 1.7 - t * 1.6; g += vec2(5.3, 1.7) * cos(r) * 0.1; r = p.y * 6.1 - p.x * 2.2 + t * 1.3; g += vec2(-2.2, 6.1) * cos(r) * 0.08;',
+    '  vec3 n = normalize(vec3(-g.x * 0.11, 1.0, -g.y * 0.11));',
+    '  vec3 L = normalize(vec3(0.35, 0.8, 0.4)), V = normalize(cameraPosition - vPos);',
+    '  float diff = dot(n, L) * 0.5 + 0.5;',
+    '  float spec = pow(max(dot(reflect(-L, n), V), 0.0), 36.0);',
+    '  float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);',
+    '  vec3 deep = vec3(0.13, 0.42, 0.7), shallow = vec3(0.3, 0.68, 0.9);',
+    '  vec3 col = mix(deep, shallow, clamp(diff * 0.9 + vn(p * 1.3 + t * 0.15) * 0.25 - 0.1, 0.0, 1.0));',
+    '  float cs = sin(p.x * 3.0 + t * 0.8 + sin(p.y * 2.3 + t * 0.5) * 1.5) * sin(p.y * 3.2 - t * 0.6 + sin(p.x * 2.7) * 1.2);',
+    '  col += vec3(0.5, 0.8, 0.9) * 0.1 * smoothstep(0.45, 1.0, cs);',
+    '  col = mix(col, vec3(0.78, 0.92, 1.0), fres * 0.4);',
+    '  col += vec3(1.0, 0.97, 0.9) * spec * 0.75;',
     '  vec2 f = fract(p);',
     '  float bits = floor(vEdge + 0.5);',
     '  float d = 1.0;',
@@ -58,8 +67,9 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     '  if (mod(floor(bits / 2.0), 2.0) >= 1.0) d = min(d, 1.0 - f.x);',
     '  if (mod(floor(bits / 4.0), 2.0) >= 1.0) d = min(d, 1.0 - f.y);',
     '  if (mod(floor(bits / 8.0), 2.0) >= 1.0) d = min(d, f.x);',
-    '  float fo = step(d, 0.1 + 0.05 * sin(uTime * 1.7 + (q.x + q.y) * 6.0));',
-    '  col = mix(col, foam, fo * 0.9);',
+    '  float fw = 0.13 + 0.05 * sin(t * 1.7 + (p.x + p.y) * 6.0) + 0.05 * (vn(p * 8.0 + t * 0.25) - 0.5);',
+    '  float fo = 1.0 - smoothstep(fw * 0.35, fw, d);',
+    '  col = mix(col, vec3(0.96, 0.99, 1.0), fo * 0.88);',
     '  col *= mix(vec3(1.0), vec3(0.42, 0.46, 0.72), uDark);',
     '  col *= mix(vec3(1.0), vec3(0.58, 0.52, 0.78), vLock);',
     '  float fd = length(cameraPosition - vPos); col = mix(col, uFogC, clamp((fd - uFogN) / max(1.0, uFogF - uFogN), 0.0, 1.0) * uFogOn);',
@@ -68,8 +78,10 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
   ].join('\n');
 
   var FALL_VS = COMMON + [
+    'attribute float aS;',
+    'varying float vS;',
     'void main(){',
-    '  vPos = position;',
+    '  vPos = position; vS = aS;',
     '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
     '}'
   ].join('\n');
@@ -77,17 +89,25 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
   var FALL_FS = COMMON + [
     'uniform float uFall;',
     'uniform float uLevel;',
+    'varying float vS;',
     'void main(){',
     '  float along = vPos.x + vPos.z;',
-    '  float down = uLevel - vPos.y;',            // 0 at the lip, uFall at the bottom
-    '  float cell = floor(along * 12.0);',
-    '  float streak = hash(vec2(cell, 3.0));',
-    '  float y = floor(vPos.y * 12.0) / 12.0;',
-    '  float flow = fract(y * 0.35 + uTime * (1.1 + streak * 0.9) + streak * 7.0);',
-    '  float bright = step(0.5, flow);',
-    '  vec3 base = mix(vec3(0.25, 0.6, 0.86), vec3(0.62, 0.85, 0.95), streak);',
-    '  vec3 col = mix(base, vec3(0.95, 0.99, 1.0), bright * 0.7);',
-    '  float a = (1.0 - smoothstep(uFall * 0.25, uFall, down)) * (0.9 - 0.25 * streak);',
+    '  float cell = floor(along * 7.0), cf = fract(along * 7.0);',
+    '  float sp = 0.8 + hash(vec2(cell, 3.0)) * 0.9;',
+    // long soft streaks that slide down: noise stretched along the fall, a different speed per column
+    '  float s1 = vn(vec2(along * 9.0, vS * 15.0 - uTime * 2.6 * sp));',
+    '  float s2 = vn(vec2(along * 21.0 + 7.0, vS * 26.0 - uTime * 3.4));',
+    '  float st = s1 * 0.65 + s2 * 0.35;',
+    '  vec3 base = mix(vec3(0.2, 0.55, 0.85), vec3(0.55, 0.82, 0.96), vS);',
+    '  vec3 col = mix(base, vec3(0.97, 0.99, 1.0), smoothstep(0.45, 0.85, st) * 0.75);',
+    // the smooth surface normal (from screen derivatives): the sheet is lighter where it faces away from the viewer
+    '  vec3 n = normalize(cross(dFdx(vPos), dFdy(vPos))); vec3 V = normalize(cameraPosition - vPos);',
+    '  float rim = pow(1.0 - abs(dot(n, V)), 2.0);',
+    '  col = mix(col, vec3(0.95, 0.99, 1.0), rim * 0.55);',
+    // a bright rolling lip at the top and a foamy fade at the foot
+    '  col = mix(col, vec3(1.0), (1.0 - smoothstep(0.0, 0.12, vS)) * 0.8);',
+    '  float a = (0.92 - 0.25 * (1.0 - st)) * (1.0 - smoothstep(0.5, 1.0, vS)) * (0.7 + 0.3 * smoothstep(0.0, 0.1, vS));',
+    '  a *= 0.85 + 0.15 * smoothstep(0.0, 0.35, cf) * smoothstep(1.0, 0.65, cf);',
     '  col *= mix(vec3(1.0), vec3(0.42, 0.46, 0.72), uDark);',
     '  float fd = length(cameraPosition - vPos); col = mix(col, uFogC, clamp((fd - uFogN) / max(1.0, uFogF - uFogN), 0.0, 1.0) * uFogOn);',
     '  gl_FragColor = vec4(col, a);',
@@ -122,7 +142,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
     onWorld: function (C, m) {
       clear(C);
       var RG = R3D.regions; parts = RG.mount();
-      var B = parts.map(function () { return { sp: [], se: [], sl: [], si: [], bp: [], bc: [], bi: [], fp: [], fi: [], n: 0, bn: 0, fn: 0, mist: [] }; });
+      var B = parts.map(function () { return { sp: [], se: [], sl: [], si: [], bp: [], bc: [], bi: [], fp: [], fs: [], fi: [], n: 0, bn: 0, fn: 0, mist: [] }; });
       var x, y;
       var earthA = new THREE.Color('#7d5937'), earthB = new THREE.Color('#5b4029');
       function quad(arr, idx, base, a, b, c, d) { arr.push.apply(arr, a.concat(b, c, d)); idx.push(base, base + 1, base + 2, base, base + 2, base + 3); }
@@ -150,8 +170,19 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
         edges.forEach(function (e) {
           if (!e[0]) return;
           var a = e[1], b = e[2], ox = e[3] * FLARE, oz = e[4] * FLARE;
-          R.fp.push(a[0], WL, a[2], b[0], WL, b[2], b[0] + ox, WL - FALL, b[2] + oz, a[0] + ox, WL - FALL, a[2] + oz);
-          R.fi.push(R.fn, R.fn + 1, R.fn + 2, R.fn, R.fn + 2, R.fn + 3); R.fn += 4;
+          var NX = 4, NS = 10, ix, js;
+          for (js = 0; js <= NS; js++) {
+            var sv = js / NS;
+            for (ix = 0; ix <= NX; ix++) {
+              var u = ix / NX;
+              R.fp.push(a[0] + (b[0] - a[0]) * u + ox * sv, WL - FALL * sv * sv, a[2] + (b[2] - a[2]) * u + oz * sv); R.fs.push(sv);
+            }
+          }
+          for (js = 0; js < NS; js++) for (ix = 0; ix < NX; ix++) {
+            var i0 = R.fn + js * (NX + 1) + ix, i1 = i0 + 1, i2 = i0 + NX + 1, i3 = i2 + 1;
+            R.fi.push(i0, i2, i1, i1, i2, i3);
+          }
+          R.fn += (NX + 1) * (NS + 1);
           if (R.mist.length < 40) R.mist.push({ x: (a[0] + b[0]) / 2 + ox, z: (a[2] + b[2]) / 2 + oz });
         });
       }
@@ -166,7 +197,7 @@ var FLARE = 3;       // how far the water arcs outward while falling (so it show
       B.forEach(function (R, r) {
         mesh(r, R.sp, R.si, surfMat, { aEdge: [R.se, 1], aLock: [R.sl, 1] });
         mesh(r, R.bp, R.bi, bankMat, { color: [R.bc, 3] });
-        var fm = mesh(r, R.fp, R.fi, fallMat); if (fm) fm.renderOrder = 2;
+        var fm = mesh(r, R.fp, R.fi, fallMat, { aS: [R.fs, 1] }); if (fm) fm.renderOrder = 2;
         // mist at the foot of every waterfall (a couple of soft puffs each, capped)
         R.mist.forEach(function (s) {
           var puff = new THREE.Mesh(pg, mistMat); puff.quaternion.copy(C.cam.quaternion);

@@ -7,6 +7,7 @@
  *   flash(tx, ty, color)              a short light on a tile.
  *   monsters(list)                    night monsters, [{id, kind:'boar'|'bat', x, y}] in (fractional) tiles, every frame.
  *   stall3d(marks)                    the Titip Jual counter and the Papan Juara board.
+ *   crops(list)                       the farm plots' soil, shoots and wheat, [{x, y, state, grown, wet}]; spots(list): fishing spots [{x, y, h}].
  * Fishing (rod, line, float, rings, the "!") is drawn here too, straight from GT_FISH's state.
  * Mods call these only while the 3D view is on (GT.view === '3d' && GT.fx3d); the 2D view still uses its own drawing.
  */
@@ -15,7 +16,7 @@
   var R3D = window.R3D = window.R3D || {};
   var THREE = window.THREE, GT = window.GT;
   if (!THREE || !R3D.geo) return;
-  var Builder = R3D.geo.Builder;
+  var Builder = R3D.geo.Builder, hash = R3D.geo.hash;
 
   var T = 12, WL = -0.15, layer = null, rect = null, frame = 0, lastT = 0, scene = null, C0 = null;
   var labels = new Map(), floats = [], flashes = [], mons = new Map(), api = null;
@@ -129,25 +130,29 @@
 
   /* ---------------------------------------------------------------- night monsters */
   function buildMonster(kind) {
-    var B = new Builder(), g = new THREE.Group();
+    var B = R3D.rig.acc(), g = new THREE.Group(), H = Math.PI / 2;
     if (kind === 'bat') {
-      B.blob(0, 0.1, 0, 0.17, 0.15, 0.2, '#3a2f4a', 1, 3);
-      B.box(-0.08, 0.14, 0.16, -0.04, 0.18, 0.2, '#ff5a5a'); B.box(0.04, 0.14, 0.16, 0.08, 0.18, 0.2, '#ff5a5a');
-      B.cone(-0.09, 0.2, 0.0, 0.05, 0.12, 4, '#2a2236'); B.cone(0.09, 0.2, 0.0, 0.05, 0.12, 4, '#2a2236');
+      B.sph(0, 0.1, 0, 0.17, 0.15, 0.19, '#3a2f4a');
+      B.sph(-0.07, 0.15, 0.15, 0.03, 0.03, 0.02, '#ff5a5a'); B.sph(0.07, 0.15, 0.15, 0.03, 0.03, 0.02, '#ff5a5a');
+      B.cone(-0.09, 0.27, 0.0, 0.05, 0.14, '#2a2236'); B.cone(0.09, 0.27, 0.0, 0.05, 0.14, '#2a2236');
+      B.sph(0, 0.05, 0.19, 0.04, 0.025, 0.04, '#e8d8f0');
       g.add(B.mesh(monMat));
-      var W = new Builder(); W.box(0, -0.02, -0.12, 0.5, 0.02, 0.14, '#2a2236', '#3a2f4a');
+      var W = R3D.rig.acc(); W.sph(0.27, 0, 0, 0.3, 0.025, 0.15, '#2a2236'); W.sph(0.4, 0, -0.1, 0.17, 0.02, 0.08, '#3a2f4a');
       var wl = new THREE.Group(), wr = new THREE.Group(), ml = W.mesh(monMat), mr = W.mesh(monMat); mr.scale.x = -1;
       wl.add(ml); wr.add(mr); wl.position.set(0.12, 0.12, 0); wr.position.set(-0.12, 0.12, 0); g.add(wl); g.add(wr); g.userData.wings = [wl, wr];
       g.userData.hover = 1.1;
-    } else { // wild boar
-      B.box(-0.28, 0.22, -0.4, 0.28, 0.62, 0.34, '#5a3a24', '#6e4a2e');
-      B.box(-0.22, 0.55, -0.3, 0.22, 0.68, 0.2, '#6e4a2e');
-      B.box(-0.2, 0.28, 0.32, 0.2, 0.6, 0.6, '#6e4a2e', '#7e5a3a');
-      B.box(-0.1, 0.3, 0.6, 0.1, 0.46, 0.72, '#c9a27a');
-      B.box(-0.18, 0.5, 0.58, -0.14, 0.56, 0.62, '#ff5a5a'); B.box(0.14, 0.5, 0.58, 0.18, 0.56, 0.62, '#ff5a5a');
-      B.box(-0.14, 0.26, 0.6, -0.1, 0.4, 0.66, '#f0f0e0'); B.box(0.1, 0.26, 0.6, 0.14, 0.4, 0.66, '#f0f0e0');
-      [[-0.2, -0.28], [0.12, -0.28], [-0.2, 0.2], [0.12, 0.2]].forEach(function (p) { B.box(p[0], 0, p[1], p[0] + 0.1, 0.24, p[1] + 0.12, '#3a2414'); });
-      B.box(-0.03, 0.4, -0.46, 0.03, 0.5, -0.4, '#3a2414');
+    } else { // wild boar: a round barrel body, a heavy head with a snout and tusks
+      B.cap(0, 0.4, -0.02, 0.26, 0.3, '#5a3a24', H, 0, 0);
+      B.sph(0, 0.44, -0.18, 0.28, 0.27, 0.26, '#6e4a2e');
+      B.sph(0, 0.4, 0.4, 0.22, 0.21, 0.24, '#6e4a2e');
+      B.cap(0, 0.35, 0.6, 0.095, 0.05, '#c9a27a', H, 0, 0);
+      B.sph(0, 0.36, 0.7, 0.07, 0.06, 0.03, '#a8785a');
+      B.sph(-0.1, 0.5, 0.56, 0.03, 0.03, 0.02, '#ff5a5a'); B.sph(0.1, 0.5, 0.56, 0.03, 0.03, 0.02, '#ff5a5a');
+      B.cone(-0.12, 0.3, 0.6, 0.03, 0.14, '#f0f0e0', -0.4, 0, -0.5); B.cone(0.12, 0.3, 0.6, 0.03, 0.14, '#f0f0e0', -0.4, 0, 0.5);
+      B.cone(-0.13, 0.65, 0.35, 0.07, 0.14, '#4a2e1c', 0, 0, -0.3); B.cone(0.13, 0.65, 0.35, 0.07, 0.14, '#4a2e1c', 0, 0, 0.3);
+      for (var i = 0; i < 5; i++) B.cone(0, 0.66, -0.3 + i * 0.12, 0.05, 0.13, '#3a2414');
+      [[-0.17, -0.22], [0.17, -0.22], [-0.17, 0.2], [0.17, 0.2]].forEach(function (p) { B.cap(p[0], 0.13, p[1], 0.06, 0.12, '#3a2414'); });
+      B.cap(0, 0.5, -0.5, 0.025, 0.1, '#3a2414', -0.9, 0, 0);
       g.add(B.mesh(monMat, true)); g.userData.hover = 0;
     }
     return g;
@@ -159,6 +164,60 @@
       if (!e || e.kind !== m.kind) { if (e) scene.remove(e.g); e = { g: buildMonster(m.kind), kind: m.kind, face: 0 }; mons.set(m.id, e); scene.add(e.g); }
       e.seen = frame; e.x = m.x; e.y = m.y;
     }
+  }
+
+  /* ---------------------------------------------------------------- crops on the farm plots, fishing spots */
+  var cropKey = '', cropMesh = null, cropMat = null, spotsList = [], ringMesh = null, ringMat = null, RING_MAX = 240;
+  function crops(list) {
+    if (!scene) return;
+    var key = list.map(function (p) { return p.x + ',' + p.y + p.state + (p.grown | 0) + (p.wet ? 'w' : ''); }).join(';');
+    if (key === cropKey) return;
+    cropKey = key;
+    if (cropMesh) { scene.remove(cropMesh); cropMesh.geometry.dispose(); cropMesh = null; }
+    if (!list.length) return;
+    var B = R3D.rig.acc();
+    list.forEach(function (p) {
+      var cx = p.x + 0.5, cz = p.y + 0.5, i, h;
+      if (p.state === 'empty') { B.sph(cx, 0.0, cz, 0.43, 0.05, 0.43, '#9a6a40'); for (i = 0; i < 3; i++) B.cyl(cx, 0.03, p.y + 0.22 + i * 0.28, 0.4, 0.02, 0.04, '#6e4628'); return; }
+      B.sph(cx, 0.0, cz, 0.45, 0.05, 0.45, p.wet ? '#4a3020' : '#7a5232'); // a mound of soil, darker when watered
+      for (i = 0; i < 3; i++) B.cyl(cx, 0.03, p.y + 0.22 + i * 0.28, 0.42, 0.02, 0.04, p.wet ? '#33200f' : '#5e3c20');
+      var k = p.state === 'ready' ? 1 : Math.min(0.85, 0.22 + (p.grown || 0) * 0.2);
+      for (i = 0; i < 9; i++) {
+        var px = p.x + 0.16 + (i % 3) * 0.34, pz = p.y + 0.22 + Math.floor(i / 3) * 0.28, hh = hash(p.x * 9 + i, p.y * 7 + i, 5);
+        h = (0.18 + 0.38 * k) * (0.85 + 0.3 * hh);
+        if (p.state === 'ready') { // golden wheat with heavy ears
+          B.cap(px, h / 2, pz, 0.016, h - 0.04, '#c9a64a', 0, 0, (hh - 0.5) * 0.25);
+          B.cap(px + (hh - 0.5) * 0.06, h + 0.03, pz, 0.035, 0.1, '#f2d24a', 0, 0, (hh - 0.5) * 0.3);
+          B.cone(px + (hh - 0.5) * 0.08, h + 0.14, pz, 0.02, 0.07, '#e8c038', 0, 0, 0);
+        } else { // green shoots with leaves
+          B.cap(px, h / 2, pz, 0.014, h - 0.03, '#3f9a3a', 0, 0, (hh - 0.5) * 0.2);
+          B.sph(px - 0.04, h * 0.72, pz, 0.045 * (0.5 + k), 0.012, 0.025, '#7cc23e'); B.sph(px + 0.04, h * 0.5, pz, 0.045 * (0.5 + k), 0.012, 0.025, '#5fae36');
+          B.sph(px, h + 0.01, pz, 0.03 * (0.6 + k), 0.025, 0.03 * (0.6 + k), '#8ed24a');
+        }
+      }
+    });
+    if (!cropMat) cropMat = R3D.geo.lit();
+    cropMesh = B.mesh(cropMat); cropMesh.receiveShadow = true; cropMesh.userData.nopick = true; scene.add(cropMesh);
+  }
+  function spots(list) { spotsList = list || []; }
+  function updateSpots(t) {
+    if (!scene) return;
+    if (!ringMesh) {
+      ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+      ringMesh = new THREE.InstancedMesh(new THREE.RingGeometry(0.88, 1, 28).rotateX(-Math.PI / 2), ringMat, RING_MAX);
+      ringMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); ringMesh.frustumCulled = false; ringMesh.userData.nopick = true; ringMesh.renderOrder = 3;
+      ringMesh.setColorAt(0, tmpC.set('#ffffff')); scene.add(ringMesh);
+    }
+    var n = 0, i, k;
+    for (i = 0; i < spotsList.length && n < RING_MAX - 3; i++) {
+      var s = spotsList[i];
+      for (k = 0; k < 3; k++) {
+        var ph = (t * 0.5 + k / 3 + s.h) % 1, r = 0.08 + ph * 0.5;
+        tmpP.set(s.x + 0.5, WL + 0.02, s.y + 0.5); tmpS.set(r, 1, r * 0.8); tmpM.compose(tmpP, tmpQ.identity(), tmpS); ringMesh.setMatrixAt(n, tmpM);
+        var f = 0.75 * (1 - ph); tmpC.setRGB(f * 0.85, f, f); ringMesh.setColorAt(n, tmpC); n++;
+      }
+    }
+    ringMesh.count = n; ringMesh.instanceMatrix.needsUpdate = true; if (ringMesh.instanceColor) ringMesh.instanceColor.needsUpdate = true;
   }
 
   /* ---------------------------------------------------------------- Titip Jual counter and Papan Juara board */
@@ -191,10 +250,10 @@
       C.scene.add(pm);
       flashGeo = new THREE.PlaneGeometry(1.1, 1.1);
       monMat = R3D.geo.lit();
-      api = { label: label, text: text, burst: burst, flash: flash, monsters: monsters, stall3d: stall3d };
+      api = { label: label, text: text, burst: burst, flash: flash, monsters: monsters, stall3d: stall3d, crops: crops, spots: spots };
       GT.fx3d = api;
     },
-    onWorld: function () { stallKey = ''; },
+    onWorld: function () { stallKey = ''; cropKey = ''; if (cropMesh) { scene.remove(cropMesh); cropMesh.geometry.dispose(); cropMesh = null; } },
     update: function (C, info) {
       frame++;
       var t = info.timeAcc, dt = lastT ? Math.min(0.05, Math.max(0, t - lastT)) : 0.016; lastT = t;
@@ -229,10 +288,12 @@
         var want = Math.atan2(px - (e.x + 0.5), pz - (e.y + 0.5)); e.face += (((want - e.face + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI) * 0.15; e.g.rotation.y = e.face;
         var w = e.g.userData.wings; if (w) { var fl2 = Math.sin(t * 28) * 0.7; w[0].rotation.z = fl2; w[1].rotation.z = -fl2; }
       });
-      updateFishing(C, info, t);
+      updateFishing(C, info, t); updateSpots(t);
     },
     dispose: function (C) {
       GT.fx3d = null; api = null;
+      if (cropMesh) { scene.remove(cropMesh); cropMesh.geometry.dispose(); cropMesh = null; } if (cropMat) { cropMat.dispose(); cropMat = null; } cropKey = '';
+      if (ringMesh) { scene.remove(ringMesh); ringMesh.geometry.dispose(); ringMesh.dispose(); ringMesh = null; } if (ringMat) { ringMat.dispose(); ringMat = null; } spotsList = [];
       labels.forEach(function (e) { if (e.el.parentNode) e.el.parentNode.removeChild(e.el); }); labels.clear();
       floats.forEach(function (f) { if (f.el.parentNode) f.el.parentNode.removeChild(f.el); }); floats = [];
       flashes.forEach(function (f) { scene.remove(f.mesh); f.mesh.material.dispose(); }); flashes = [];
