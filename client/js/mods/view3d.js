@@ -155,7 +155,8 @@
     built = m; seasonKey = ''; snapNext = true; stumpSynced = false; stumpSt = null; // a new world: its stumps appear, none fall
     var L = m.layout;
     // the engine's own tiles: it adds the street lamps to the layout's
-    world = GT3.World(Object.assign({}, L, { tiles: m.tiles, seed: L.seed || m.seed }));
+    // the village layout has no portal of its own: the engine's dock is the big portal everyone travels through
+    world = GT3.World(Object.assign({}, L, { tiles: m.tiles, seed: L.seed || m.seed }, L.portal || !m.portal ? {} : { portal: m.portal, bigPortal: true }));
     scene.add(world.group); see = GT3.SeeThrough(world);
     // what mods draw on the ground (crops, fishing ripples) goes on a transparent sheet just above it
     var c = GT3.canvas(L.w * T, L.h * T); gctx = c.getContext('2d'); gctx.imageSmoothingEnabled = false;

@@ -345,18 +345,24 @@ function drawLots(g, m){
     g.fillStyle = l.kind === 'kolam' ? '#3d7fc2' : l.kind === 'tambang' ? '#6a6678' : '#c8502e'; g.fillRect(sx + 1, sy + 1, 3, 2);
   });
 }
-/** The portal: a small stone arch with a swirling oval (the mod adds a shimmer on top). Public village and Homelands both have one. */
+/** The portal: a small stone arch with a swirling oval (the mod adds a shimmer on top). Public village and Homelands both have one;
+ *  the village's (m.bigPortal) is drawn 2 wide and 1.6 tall, standing on the same tile and growing out of it sideways and upward. */
 function drawPortal(g, m){
-  var d = m.portal, x0 = d.x*T, y0 = d.y*T;
-  g.fillStyle = '#5a5668'; g.fillRect(x0, y0 + T - 3, T, 3);
-  g.fillStyle = '#8a869a'; g.fillRect(x0, y0 + T - 3, T, 1);
-  g.fillStyle = '#2a2430'; g.fillRect(x0 + 1, y0 - 7, T - 2, T + 5);
-  g.fillStyle = '#6a6678'; g.fillRect(x0 + 1, y0 - 6, 2, T + 3); g.fillRect(x0 + T - 3, y0 - 6, 2, T + 3); g.fillRect(x0 + 1, y0 - 7, T - 2, 2);
-  g.fillStyle = '#9a96ac'; g.fillRect(x0 + 1, y0 - 7, T - 2, 1); g.fillRect(x0 + 1, y0 - 6, 1, T + 3);
-  g.fillStyle = '#3b2a78'; g.fillRect(x0 + 3, y0 - 5, T - 6, T + 1);
-  g.fillStyle = '#6a4fd8'; g.fillRect(x0 + 4, y0 - 4, T - 8, T - 1);
-  g.fillStyle = '#a58cff'; g.fillRect(x0 + 5, y0 - 2, T - 10, T - 5);
-  g.fillStyle = '#e4dcff'; g.fillRect(x0 + 5, y0, 2, 2);
+  var d = m.portal, x0 = d.x*T, y0 = d.y*T, sx = m.bigPortal ? 2 : 1, sy = m.bigPortal ? 1.6 : 1;
+  function rc(c, ax, ay, aw, ah){ // a rect given for the small arch, scaled about the tile's bottom centre
+    g.fillStyle = c;
+    var l = Math.round(x0 + T/2 + (ax - T/2)*sx), t = Math.round(y0 + T + (ay - T)*sy);
+    g.fillRect(l, t, Math.max(1, Math.round(aw*sx)), Math.max(1, Math.round(ah*sy)));
+  }
+  rc('#5a5668', 0, T - 3, T, 3);
+  rc('#8a869a', 0, T - 3, T, 1);
+  rc('#2a2430', 1, -7, T - 2, T + 5);
+  rc('#6a6678', 1, -6, 2, T + 3); rc('#6a6678', T - 3, -6, 2, T + 3); rc('#6a6678', 1, -7, T - 2, 2);
+  rc('#9a96ac', 1, -7, T - 2, 1); rc('#9a96ac', 1, -6, 1, T + 3);
+  rc('#3b2a78', 3, -5, T - 6, T + 1);
+  rc('#6a4fd8', 4, -4, T - 8, T - 1);
+  rc('#a58cff', 5, -2, T - 10, T - 5);
+  rc('#e4dcff', 5, 0, 2, 2);
 }
 function buildCache(m){
   if (m.kind === 'world' && SPRITES.drawGround) return buildWorldCache(m);
@@ -653,6 +659,7 @@ function fromLayout(L){
   m.farm = { plots: L.farm.plots.slice(), gate: L.farm.gate };
   m.spawn = { x:L.spawn.x, y:L.spawn.y };
   m.portal = homeLayout ? { x:L.portal.x, y:L.portal.y } : (GTVillage.dockOf ? GTVillage.dockOf(L) : null);
+  m.bigPortal = !homeLayout && !!m.portal; // the village portal, where everyone on the server arrives, is drawn about twice a Homeland's (look only, the tile is the same)
   finalize(m);
   // locked chunks: generated and drawn under fog, but nobody walks there until a town project opens them
   m.locked = new Uint8Array(m.w * m.h);

@@ -635,11 +635,12 @@
     var now = Date.now(), tt = now / 1000, p = portalPos(), L = layoutOf();
     ctx.save();
     if (p) { // portal shimmer
-      var pa = GT.at(p.x, p.y), px = pa.x, py = pa.y;
-      for (var k = 0; k < 3; k++) {
+      var pa = GT.at(p.x, p.y), px = pa.x, py = pa.y, big = GT.world.bigPortal; // the village's portal is drawn larger (engine drawPortal)
+      for (var k = 0; k < (big ? 6 : 3); k++) {
         var a = tt * 2.2 + k * 2.1, yy = py - 4 + ((tt * 6 + k * 4) % 12) * 0.7;
-        ctx.fillStyle = 'rgba(228,220,255,' + (0.55 - k * 0.12).toFixed(2) + ')';
-        ctx.fillRect(Math.round(px + 6 + Math.sin(a) * 2.5), Math.round(yy), 1, 2);
+        if (big) yy = py + 12 + (yy - py - 12) * 1.6;
+        ctx.fillStyle = 'rgba(228,220,255,' + (0.55 - (k % 3) * 0.12).toFixed(2) + ')';
+        ctx.fillRect(Math.round(px + 6 + Math.sin(a) * 2.5 * (big ? 2.4 : 1) + (big ? (k % 2 ? 3 : -3) : 0)), Math.round(yy), 1, 2);
       }
     }
     if (inOwnHome() && H && L) {

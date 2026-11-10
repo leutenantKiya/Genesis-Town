@@ -95,8 +95,10 @@
     /* --- the Homeland portal: a ring of standing stones round a slowly turning disc */
     var disc = null;
     if (L.portal) {
-      var pp = [], px = L.portal.x + 0.5, pz = L.portal.y + 0.5;
-      for (var k = 0; k < 8; k++) { var an = k / 8 * Math.PI * 2; box(pp, 0.16, 0.34 + (k % 2) * 0.14, 0.16, px + Math.cos(an) * 0.62, 0, pz + Math.sin(an) * 0.62, shaded('#c4bcb4', '#a8a098', '#807870'), an); }
+      // the village portal (everyone on the server comes through it) is L.bigPortal: about 1.8 times a Homeland's, with more stones
+      var pp = [], px = L.portal.x + 0.5, pz = L.portal.y + 0.5, big = L.bigPortal ? 1.8 : 1, ns = L.bigPortal ? 14 : 8;
+      for (var k = 0; k < ns; k++) { var an = k / ns * Math.PI * 2; box(pp, 0.16 * big, (0.34 + (k % 2) * 0.14) * (L.bigPortal ? 1.5 : 1), 0.16 * big, px + Math.cos(an) * 0.62 * big, 0, pz + Math.sin(an) * 0.62 * big, shaded('#c4bcb4', '#a8a098', '#807870'), an); }
+      if (L.bigPortal) for (var k2 = 0; k2 < 14; k2++) { var an2 = (k2 + 0.5) / 14 * Math.PI * 2; box(pp, 0.3, 0.07, 0.3, px + Math.cos(an2) * 0.62 * big, 0, pz + Math.sin(an2) * 0.62 * big, shaded('#a8a098', '#8a827a', '#6a645c'), an2); } // flat base stones between the standing ones
       var pm = new THREE.Mesh(GT3.merge(pp), mat); pm.castShadow = true; pm.receiveShadow = true; group.add(pm);
       var dc = GT3.canvas(24, 24), dg = dc.getContext('2d');
       for (var yy = 0; yy < 24; yy++) for (var xx = 0; xx < 24; xx++) {
@@ -105,7 +107,7 @@
         R(dg, xx, yy, 1, 1, d > 10.5 ? '#2a2a6a' : sw < 0.5 ? '#c4b4ff' : sw < 1.1 ? '#8a7ae8' : '#5a4ab8');
       }
       var dt = GT3.tex(dc);
-      disc = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), new THREE.MeshBasicMaterial({ map: dt, transparent: true, alphaTest: 0.5 }));
+      disc = new THREE.Mesh(new THREE.CircleGeometry(0.5 * big, 28), new THREE.MeshBasicMaterial({ map: dt, transparent: true, alphaTest: 0.5 }));
       disc.rotation.x = -Math.PI / 2; disc.position.set(px, 0.03, pz); disc.name = 'portal';
       group.add(disc);
     }

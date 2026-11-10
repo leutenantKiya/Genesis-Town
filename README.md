@@ -30,6 +30,8 @@
 >   still owns them (`client/js/mods/view3d.js`). Walking into a building without a scene cut is still *(planned)*.
 >   **Felled trees** show as stumps: the last chop tips the top over and it fades, then the tree regrows as a sapling,
 >   a young tree and a grown one over its 2 game hour cooldown (server `state.stumps`).
+>   The village portal, where everyone on the server arrives, is drawn about twice the size of a Homeland's in both views
+>   (look only: same tile, same walk map).
 > - **M4 so far**: off-chain requests signed with the session key; actions checked against where the player stands;
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow,
