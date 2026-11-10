@@ -70,6 +70,13 @@ html.gt-3d-in #cv3d{display:none}
 html.gt-3d-in #cv{background:transparent}
 #cv3d{position:absolute;left:0;top:0;display:block;image-rendering:auto;touch-action:none}
 html.gt-3d #cv{position:relative;z-index:1;background:transparent}
+.gt-camctl{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:5px;z-index:6;opacity:.82}
+.gt-camctl:hover,.gt-camctl:focus-within{opacity:1}
+.gt-camctl button{width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.35);background:rgba(18,20,38,.62);color:#fff;font:700 18px/1 'Pixelify Sans',sans-serif;cursor:pointer;backdrop-filter:blur(2px);padding:0}
+.gt-camctl button:hover{background:rgba(60,66,110,.8)}
+html.gt-phone .gt-camctl{top:6px;right:6px;gap:4px}
+html.gt-phone .gt-camctl button{width:32px;height:32px;font-size:16px;border-radius:7px}
+html:not(.gt-3d) .gt-camctl{display:none}
 .gt-fxl{position:absolute;left:0;top:0;white-space:nowrap;font:700 calc(11px*var(--ts,1))/1.1 'Pixelify Sans',sans-serif;padding:2px 5px;background:rgba(10,12,24,.78);color:#f6ead0;border-radius:2px;pointer-events:none;will-change:transform}
 .gt-fxl.plain{background:none;padding:0;text-shadow:0 1px 0 #2a2430,1px 0 0 #2a2430,-1px 0 0 #2a2430,0 -1px 0 #2a2430}
 .gt-fxl.light{background:#f4f1dc;color:#1c1c2c}

@@ -50,10 +50,17 @@
 
 /* Weather mood on the game view (outdoors only; set by chain.js from the day's shared weather) */
 #cv,#cv3d{transition:filter .8s}
-html.gt-w-terik #cv,html.gt-w-terik #cv3d{filter:saturate(1.38) contrast(1.06) brightness(1.05)}
-html.gt-w-cerah #cv,html.gt-w-cerah #cv3d{filter:saturate(1.12)}
-html.gt-w-berawan #cv,html.gt-w-berawan #cv3d{filter:saturate(.86) brightness(.95)}
-html.gt-w-hujan #cv,html.gt-w-hujan #cv3d{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
+html.gt-w-terik #cv{filter:saturate(1.38) contrast(1.06) brightness(1.05)}
+html.gt-w-terik{--gt-wx:saturate(1.38) contrast(1.06) brightness(1.05)}
+html.gt-w-cerah #cv{filter:saturate(1.12)}
+html.gt-w-cerah{--gt-wx:saturate(1.12)}
+html.gt-w-berawan #cv{filter:saturate(.86) brightness(.95)}
+html.gt-w-berawan{--gt-wx:saturate(.86) brightness(.95)}
+html.gt-w-hujan #cv{filter:saturate(.78) brightness(.9) hue-rotate(-6deg)}
+html.gt-w-hujan{--gt-wx:saturate(.78) brightness(.9) hue-rotate(-6deg)}
+/* the 3D canvas: weather mood and the soft colour style share one filter */
+#cv3d{filter:var(--gt-wx,) var(--gt-soft,)}
+html.gt-soft3d{--gt-soft:saturate(.84) contrast(.95) brightness(1.06)}
 html.gt-reduced-motion #cv,html.gt-reduced-motion #cv3d{transition:none}
 
 /* Hotbar: item slots along the bottom of the game view (js/mods/hotbar.js) */

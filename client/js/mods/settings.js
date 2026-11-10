@@ -229,6 +229,15 @@
       lab.appendChild(inp); lab.appendChild($('span', null, o[1])); qseg.appendChild(lab);
     });
     wrap.appendChild(qseg);
+    wrap.appendChild($('h3', null, 'Gaya warna 3D'));
+    var sseg = $('div', 'mseg'), scur = 'lembut';
+    try { scur = localStorage.getItem('gt-soft3d') === 'asli' ? 'asli' : 'lembut'; } catch (e) { /* ignore */ }
+    [['lembut', 'Lembut (pastel)'], ['asli', 'Asli (warna penuh)']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-soft3d'; inp.value = o[0]; inp.checked = scur === o[0];
+      inp.addEventListener('change', function () { try { localStorage.setItem('gt-soft3d', o[0]); } catch (e) { /* ignore */ } window.dispatchEvent(new Event('gt3dsoft')); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); sseg.appendChild(lab);
+    });
+    wrap.appendChild(sseg);
     wrap.appendChild($('h3', null, 'Kamera 3D'));
     var cseg = $('div', 'mseg'), ccur = 'perspektif';
     try { ccur = localStorage.getItem('gt-cam3d') === 'datar' ? 'datar' : 'perspektif'; } catch (e) { /* ignore */ }

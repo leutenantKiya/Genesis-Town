@@ -77,7 +77,7 @@
 >   a sun and moon that follow the game clock with shadows, street lamps and lit windows at night, rain, snow and snowy roofs,
 >   chunks that are not open yet floating as their own islands that dock when the town opens them. Quality Rendah / Sedang /
 >   Tinggi in Pengaturan; the game drops quality (and offers 2D) on slow devices; `?fps` shows a counter. Three.js loads only
->   when the 3D view is on. **Camera:** drag to turn and tilt the view around you, mouse wheel or two-finger pinch to zoom, **V** resets;
+>   when the 3D view is on. **Camera:** drag to turn and tilt the view around you, mouse wheel or two-finger pinch to zoom, **V** resets (or the round buttons at the corner of the view); perspective camera with distance haze (Pengaturan: Kamera 3D Perspektif / Datar, Gaya warna 3D Lembut / Asli); the camera eases in when the world opens;
 >   the movement keys and D-pad follow the camera ("up" = away from you). Plan and decisions: [docs/superpowers/plans/2026-11-10-floating-island-3d.md](docs/superpowers/plans/2026-11-10-floating-island-3d.md).
 > - **Homeland, phase A** (built on branch `homeland`; replaces the broker-sold Private Islands, which are gone): after
 >   login a character screen shows `name#12345` (rename it, pick skin, hair and shirt) and **Mulai** drops you into your

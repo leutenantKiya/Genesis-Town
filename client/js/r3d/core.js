@@ -38,9 +38,22 @@
     c.position.set(0, DIST * Math.sin(ELEV), DIST * Math.cos(ELEV)); c.lookAt(0, 0, 0); c.updateMatrixWorld(true);
     return c;
   }
-  var T = 12, host = null, canvas = null, C = null, size = { w: 0, h: 0 }, zoom = 1, wheelFn = null, qFn = null, camFn = null;
+  var T = 12, host = null, canvas = null, C = null, size = { w: 0, h: 0 }, zoom = 1, wheelFn = null, qFn = null, camFn = null, softFn = null;
   // orbit camera: drag turns and tilts it around the player, wheel / pinch zooms, V resets (movement keys follow the view)
-  var yaw = 0, pitch = ELEV, pointers = new Map(), dragStart = null, dragged = false, pinch = 0, orbitFns = null;
+  var yaw = 0, pitch = ELEV, yawT = 0, pitchT = ELEV, zoomT = 1, lastZoom = 0, lastT = 0, camBox = null, pointers = new Map(), dragStart = null, dragged = false, pinch = 0, orbitFns = null;
+  function resetView() { yawT = 0; pitchT = ELEV; zoomT = homeZoom(); }
+  function softOn() { var v = null; try { v = localStorage.getItem('gt-soft3d'); } catch (e) { /* ignore */ } return v !== 'asli'; }
+  function buildCamBox() { // on-screen camera buttons: for phones, and for anyone who does not know the mouse can drag
+    var d = document.createElement('div'); d.className = 'gt-camctl'; d.setAttribute('aria-label', 'Kamera');
+    [['\u21ba', 'Putar kiri', function () { yawT -= 0.6; }], ['\u21bb', 'Putar kanan', function () { yawT += 0.6; }], ['+', 'Perbesar', function () { zoomT = clamp(zoomT * 1.3, ZMIN, ZMAX); }],
+      ['\u2212', 'Perkecil', function () { zoomT = clamp(zoomT / 1.3, ZMIN, ZMAX); }], ['\u2302', 'Reset kamera (V)', resetView]].forEach(function (b) {
+      var e = document.createElement('button'); e.type = 'button'; e.textContent = b[0]; e.title = b[1]; e.setAttribute('aria-label', b[1]);
+      e.addEventListener('click', function (ev) { ev.stopPropagation(); b[2](); e.blur(); });
+      e.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
+      d.appendChild(e);
+    });
+    return d;
+  }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function homeZoom() { return document.documentElement.classList.contains('gt-phone') ? 1.3 : 1; }
   R3D.turns = 0;
@@ -114,13 +127,14 @@
     var root = new THREE.Group(); scene.add(root);
     C = { renderer: renderer, scene: scene, cam: cam, root: root, THREE: THREE };
     R3D.ctx = C; // debugging handle (scene, camera, renderer)
-    size.w = size.h = 0; zoom = homeZoom(); map = null; imap = null; interior = false; shadowHalf = 0;
+    size.w = size.h = 0; zoomT = homeZoom(); zoom = zoomT * 0.55; yaw = 0.9; yawT = 0; pitch = PMAX - 0.1; pitchT = ELEV; lastT = 0; map = null; imap = null; // starts high and turned, then settles
+    document.documentElement.classList.toggle('gt-soft3d', softOn()); interior = false; shadowHalf = 0;
     each(function (m) { m.init(C); });
-    yaw = 0; pitch = ELEV; pointers.clear(); dragStart = null; dragged = false; pinch = 0;
+    pointers.clear(); dragStart = null; dragged = false; pinch = 0;
     wheelFn = function (e) {
       if (!e.target || (e.target.id !== 'cv' && e.target.id !== 'cv3d')) return; // chat and windows keep their own scrolling
       e.preventDefault();
-      zoom = clamp(zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), ZMIN, ZMAX);
+      zoomT = clamp(zoomT * (e.deltaY < 0 ? 1.14 : 1 / 1.14), ZMIN, ZMAX);
       size.w = size.h = 0; // re-fit the frustum
     };
     host.addEventListener('wheel', wheelFn, { passive: false });
@@ -136,11 +150,11 @@
       move: function (e) {
         var p = pointers.get(e.pointerId); if (!p) return;
         var dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
-        if (pointers.size >= 2) { var d = pinchDist(); if (pinch > 0 && d > 0) { zoom = clamp(zoom * d / pinch, ZMIN, ZMAX); size.w = size.h = 0; } pinch = d; dragged = true; return; }
+        if (pointers.size >= 2) { var d = pinchDist(); if (pinch > 0 && d > 0) { zoomT = clamp(zoomT * d / pinch, ZMIN, ZMAX); } pinch = d; dragged = true; return; }
         if (!dragStart) return;
         if (!dragStart.moved && Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y) < 7) return; // a tap is not a drag
         dragStart.moved = true; dragged = true;
-        if (!interior) { yaw -= dx * 0.0085; pitch = clamp(pitch + dy * 0.0045, PMIN, PMAX); }
+        if (!interior) { yawT -= dx * 0.0085; pitchT = clamp(pitchT + dy * 0.0045, PMIN, PMAX); }
       },
       up: function (e) { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = 0; if (!pointers.size) dragStart = null; },
       click: function (e) { if (dragged) { e.stopPropagation(); e.preventDefault(); dragged = false; } } // a drag must not walk the player
@@ -150,8 +164,12 @@
     window.addEventListener('pointerup', orbitFns.up);
     window.addEventListener('pointercancel', orbitFns.up);
     host.addEventListener('click', orbitFns.click, true);
-    if (GT.hotkey) GT.hotkey('V', function () { yaw = 0; pitch = ELEV; zoom = homeZoom(); size.w = size.h = 0; });
+    if (GT.hotkey) GT.hotkey('V', resetView);
     qFn = function () { applyQuality(); };
+    softFn = function () { document.documentElement.classList.toggle('gt-soft3d', softOn()); };
+    window.addEventListener('gt3dsoft', softFn);
+    camBox = buildCamBox(); host.appendChild(camBox);
+    try { if (!localStorage.getItem('gt-cam3d-hint')) { localStorage.setItem('gt-cam3d-hint', '1'); setTimeout(function () { if (GT.toast) GT.toast('Seret layar untuk memutar kamera, scroll atau cubit untuk zoom, V untuk reset.'); }, 3500); } } catch (e) { /* ignore */ }
     camFn = function () { C.cam = makeCamera(); size.w = size.h = 0; if (!persp) C.scene.fog = null; };
     window.addEventListener('gt3dcam', camFn);
     wd.last = 0; wd.n = 0; wd.done = false; wd.acc = 0; wd.frames = 0;
@@ -171,6 +189,9 @@
     if (wd.el && wd.el.parentNode) wd.el.parentNode.removeChild(wd.el); wd.el = null;
     if (qFn) window.removeEventListener('gt3dquality', qFn);
     if (camFn) window.removeEventListener('gt3dcam', camFn);
+    if (softFn) window.removeEventListener('gt3dsoft', softFn);
+    if (camBox && camBox.parentNode) camBox.parentNode.removeChild(camBox); camBox = null;
+    document.documentElement.classList.remove('gt-soft3d');
     C.scene.fog = null;
     each(function (m) { m.dispose(C); });
     C.renderer.dispose();
@@ -263,6 +284,12 @@
   }
 
   function render(info) {
+    // ease the camera toward where the player put it; the title card slowly turns the world as a backdrop
+    var nowT = info.timeAcc, dt = lastT ? Math.min(0.1, Math.max(0, nowT - lastT)) : 0.016; lastT = nowT;
+    if (document.documentElement.classList.contains('gt-titlecard') && !dragStart) yawT += dt * 0.09;
+    var ek = 1 - Math.exp(-dt * 9);
+    yaw += (yawT - yaw) * ek; pitch += (pitchT - pitch) * ek; zoom += (zoomT - zoom) * ek;
+    if (Math.abs(zoom - lastZoom) > 0.0008) { lastZoom = zoom; size.w = size.h = 0; }
     resize(info);
     var inside = info.kind !== 'out';
     if (info.map !== (inside ? imap : map)) onWorld(info.map);
