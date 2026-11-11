@@ -57,6 +57,8 @@ export class Social {
   /** Set by the app (game.party): the party an account is in, and its other members. Party mates are shown at any distance and share /p chat. */
   partyOf: (a: string) => number | null = () => null;
   mates: (a: string) => string[] = () => [];
+  /** When the account joined its current party (ms): party lines older than that are not theirs to read. */
+  partyJoinedAt: (a: string) => number = () => 0;
 
   npcs: Npc[] = [];
   /** Set by the app: a player wrote to a merchant. May throw HttpError (rate limit); the answer comes later through npcSay. */
@@ -192,7 +194,7 @@ export class Social {
   }
   /** Lines after `since` that this player may read in `world`: the world's public lines, plus private lines to or from them. */
   since(account: string, world: string, since: number) {
-    const pid = this.partyOf(account);
-    return this.chat.filter((m) => m.id > since && (m.party ? pid !== null && m.partyId === pid : m.toAcc ? m.toAcc === account || m.fromAcc === account : m.world === world)).slice(-CHAT_KEEP).map(strip);
+    const pid = this.partyOf(account), joined = pid === null ? 0 : this.partyJoinedAt(account);
+    return this.chat.filter((m) => m.id > since && (m.party ? pid !== null && m.partyId === pid && m.t >= joined : m.toAcc ? m.toAcc === account || m.fromAcc === account : m.world === world)).slice(-CHAT_KEEP).map(strip);
   }
 }

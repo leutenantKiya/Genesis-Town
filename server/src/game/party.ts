@@ -27,6 +27,10 @@ export class Parties {
     const r = this.db.prepare('SELECT party FROM party_members WHERE account = ?').get(a) as { party: number } | undefined;
     return r ? r.party : null;
   }
+  joinedAt(a: string): number {
+    const r = this.db.prepare('SELECT joined_at FROM party_members WHERE account = ?').get(a) as { joined_at: number } | undefined;
+    return r ? r.joined_at : 0;
+  }
   membersOf(id: number): string[] {
     return (this.db.prepare('SELECT account FROM party_members WHERE party = ? ORDER BY joined_at, account').all(id) as Array<{ account: string }>).map((r) => r.account);
   }

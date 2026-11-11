@@ -161,6 +161,23 @@ test('party mates show beyond the radius and are flagged', () => {
   assert.ok(!social.nearby(C, P).some((s) => s.party));
 });
 
+test('a new party member does not read the party chat from before they joined', () => {
+  const { social, tick } = world();
+  social.setNick(A, 'Ani'); social.setNick(B, 'Budi_2'); social.setNick(C, 'Cici');
+  let cJoined: number | null = null;
+  social.partyOf = (a) => (a === A || a === B || (a === C && cJoined !== null) ? 1 : null);
+  social.partyJoinedAt = (a) => (a === C ? cJoined ?? 0 : 0);
+  tick(2100);
+  social.say(A, P, '/p secret plan');
+  tick(2100);
+  cJoined = social.now();
+  assert.equal(social.since(C, P, 0).length, 0, 'older line hidden');
+  tick(2100);
+  social.say(A, P, '/p welcome');
+  assert.deepEqual(social.since(C, P, 0).map((x) => x.text), ['welcome']);
+  assert.equal(social.since(B, P, 0).length, 2, 'old members still read all');
+});
+
 test('party chat reaches mates in other worlds only', () => {
   const { social, tick } = world();
   social.setNick(A, 'Ani'); social.setNick(B, 'Budi_2'); social.setNick(C, 'Cici');

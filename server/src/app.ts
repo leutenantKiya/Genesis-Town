@@ -135,6 +135,7 @@ export function createApp(deps: AppDeps) {
   // Homelands: only the owner and invited guests may report, chat or show up there.
   social.partyOf = (a) => game.party.idOf(a);
   social.mates = (a) => game.party.mates(a);
+  social.partyJoinedAt = (a) => game.party.joinedAt(a);
   social.access = (a, w) => {
     if (w === 'public') return true;
     try { game.worldFor(a, w, false); return true; } catch { return false; }
