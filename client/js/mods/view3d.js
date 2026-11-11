@@ -1,5 +1,5 @@
 /* view3d.js - Tampilan 2.5D: the outdoor world (the village and Homelands) drawn with the 3D world kit (js/three/*,
- * window.GT3) in the HD-2D look of lab3d.html. The engine keeps every position, rule and server call; this view only
+ * window.GT3) in an HD-2D look. The engine keeps every position, rule and server call; this view only
  * reads what the engine would draw (engine.js render3d) and draws it in three.js on a canvas under the 2D one.
  * Indoors, without WebGL, or with Tampilan 2D the 2D canvas draws as before.
  *
@@ -305,7 +305,6 @@
     for (var i = 0; i < 4; i++) { var q = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); q.rotation.x = -Math.PI / 2; q.renderOrder = 50; q.visible = false; scene.add(q); mist.planes.push(q); }
     mistCol = new THREE.Color();
   }
-  function ums() { return window.__gtUnfoldMs || UNFOLD_MS; } // a test can slow it down to photograph the steps
   function reducedMotion() {
     if (document.documentElement.classList.contains('gt-reduced-motion')) return true;
     try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
@@ -345,7 +344,7 @@
     var r = unfold.rec;
     if (!r) { cur = null; return false; }
     if (reducedMotion() || snapNext) unfold.p = unfold.want;
-    else unfold.p = unfold.want ? Math.min(1, unfold.p + dt * 1000 / ums()) : Math.max(0, unfold.p - dt * 1000 / ums());
+    else unfold.p = unfold.want ? Math.min(1, unfold.p + dt * 1000 / UNFOLD_MS) : Math.max(0, unfold.p - dt * 1000 / UNFOLD_MS);
     var P = unfold.p;
     if (P <= 0 && !unfold.want) { finishUnfold(r); unfold.rec = null; cur = null; return false; }
     r.s = r.s0 + (1 - r.s0) * smooth(0.15, 1, P);
@@ -471,7 +470,7 @@
     toScreen: function (x, z, l) { return toScreen(mx(x), mz(z), l); },
     worldDir: worldDir,
     rooms: true, // the engine keeps the 2.5D view indoors: rooms unfold out of their buildings (doorTransition)
-    unfoldMs: function () { return reducedMotion() ? 0 : ums(); },
+    unfoldMs: function () { return reducedMotion() ? 0 : UNFOLD_MS; },
     // a walk on screen axes to the world, by the camera's turn (the lab's walk)
     screenToWorld: function (ix, iz) { var c = Math.cos(yawWant), s = Math.sin(yawWant); return { x: ix * c + iz * s, y: -ix * s + iz * c }; },
     tookClick: function () { return performance.now() - took < 400; },
@@ -502,7 +501,6 @@
     // drop the player's own 3D sprite into the world over `ms`, then call done (charscreen.js); false when not drawing
     dropIn: function (ms, done) { if (!GT.view3dOn || !GT.view3dOn()) return false; drop = { t0: performance.now(), ms: ms, done: done, dusted: false }; return true; },
     tookClick: function () { return api.tookClick(); },
-    _unfold: function () { return unfold.p; },
     // the lab's keys while the 2.5D view shows (settings.js asks first): Q / E turn, + / - zoom
     onKey: function (e) {
       if (!GT.view3dOn || !GT.view3dOn()) return false;

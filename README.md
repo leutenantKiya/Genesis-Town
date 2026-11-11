@@ -16,8 +16,8 @@
 >   pledges are burned when it is built and the new area opens for everyone;
 > - warmer art, a full-window layout, fullscreen (F) and a settings menu (O) with rebindable keys.
 > - **2.5D view** (2026-11-10, Pengaturan > Tampilan): the village and Homelands in three.js with the HD-2D look of
->   `lab3d.html` (solid buildings and trees, sun and shadows, seasons, night glow, see-through walls). Default on a
->   computer, 2D on a phone; without WebGL the 2D view draws. The lab's camera and keys: **Q / E** turn the
+>   the 3D kit (solid buildings and trees, sun and shadows, seasons, night glow, see-through walls). Default on a
+>   computer, 2D on a phone; without WebGL the 2D view draws. Camera and keys: **Q / E** turn the
 >   view by 45 degrees (the bag stays on I and the Tas button), **+ / -** zoom, and the arrows walk the way they point on
 >   screen. Signs and name tags follow each head at any turn, drawn small so they do not cover the world.
 >   The lab's controls are in the game too: its trays (top right) hold **Desa / Homeland** (walks to the portal, then
@@ -148,13 +148,12 @@
 >   thing to do (blossom pink, sea teal, pumpkin, ice blue), and the world's grass, trees, water and light to match.
 >   Every window, the hotbar, chat, toasts, name tags, bubbles and floating numbers read from the same tokens
 >   (`client/css/theme.css`, `client/js/theme.js`). Glass stays only on the phone's D-pad, A/E and tab bar.
-> - **3D world kit** *(lab page only, not in the game yet)*: [client/lab3d.html](client/lab3d.html) draws the real
->   village or a Homeland with three.js 0.187.0 in an HD-2D style: the game's own pixel art on solid low-poly
->   buildings, trees, rocks and props, characters as sprite cards facing the camera, a sun that crosses the sky with
->   shadows, glowing windows and lamps at night, the four seasons, and buildings and tree crowns that fade when they
->   hide the player. Code in `client/js/three/`; `npm run build:client` bundles three.js to `client/vendor/three.js`.
->   Drawing the game itself with it, and walking into buildings with no scene cut, are *(planned)*: see
->   [docs/superpowers/plans/2026-11-10-walk-in-3d.md](docs/superpowers/plans/2026-11-10-walk-in-3d.md).
+> - **3D world kit**: `client/js/three/` draws the village or a Homeland with three.js 0.187.0 in an HD-2D style: the
+>   game's own pixel art on solid low-poly buildings, trees, rocks and props, characters as sprite cards facing the
+>   camera, a sun that crosses the sky with shadows, glowing windows and lamps at night, the four seasons, and
+>   buildings and tree crowns that fade when they hide the player. `npm run build:client` bundles three.js to
+>   `client/vendor/three.js`. The standalone test page `lab3d.html` lives on the `dev` branch; on
+>   `main` the Dev panel, `?flags=`, `?musim=` and `?cuaca=` work on localhost only.
 > Not done yet: the rest of M4 (removing the game account's full-access key before submission), **M4.5 Online**
 > and M5 (demo video, submission). Also *(planned)*: agent wallets. Anything marked *(planned)* does not exist yet.
 >

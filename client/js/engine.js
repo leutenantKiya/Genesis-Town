@@ -1599,6 +1599,7 @@ function renderDevSection(wrap, rec){
 }
 function fmtMin(v){ return (Math.round(v * 10) / 10).toString().replace('.', ','); }
 function openDev(){
+  if (!window.GT_DEV_HOST) return null; // the Dev panel is for local play only
   if (devModal && devModal.isOpen()) return devModal;
   if (modals.length || tr || D || mapOpen) return null;
   var wrap = el('div');
@@ -1656,6 +1657,7 @@ function openDev(){
   return h;
 }
 function devKey(e){
+  if (!window.GT_DEV_HOST) return false;
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
   var t = e.target;
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return false;
@@ -1836,7 +1838,7 @@ function canControl(){ return !D && !tr && !mapOpen && !modals.length && !(unfol
 function desired(){ if (!held.length) return null; var h = held[held.length - 1]; return h.world ? h.d : worldDir(h.d); }
 
 /* ---------- free walking (2.5D outdoors) ----------
-   In the 2.5D view outdoors the player walks freely, diagonals too, like lab3d.html: P.cx / P.cy is the centre of the feet
+   In the 2.5D view outdoors the player walks freely, diagonals too: P.cx / P.cy is the centre of the feet
    in tile units, and P.x / P.y stay the tile under it, which is what the server, interactions, NPCs and mods see. Held
    arrows add up (two keys walk a diagonal), turned by the camera; a drag on the world is an analog stick (GT.setStick).
    FREE_SPEED * sqrt(2) stays under the server's walking check (8 tiles a second, Manhattan, worldmap.ts). */
@@ -2399,7 +2401,7 @@ function setupInput(){
   // Mods run init first (chain.js binds I to the NEAR Tas); only fill in defaults they did not claim.
   if (!hotkeys.KeyI) hotkey('I', openBag);
   if (!hotkeys.KeyP) hotkey('P', openProfile);
-  addHudButton({id:'devbtn', label:'Dev', onClick:openDev});
+  if (window.GT_DEV_HOST) addHudButton({id:'devbtn', label:'Dev', onClick:openDev});
 }
 function toggleMapUi(){ if (tr || D || modals.length) return; setMap(!mapOpen); }
 

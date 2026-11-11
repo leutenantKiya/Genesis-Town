@@ -481,12 +481,12 @@
 
   /* ---- Weather: the same day's weather for everyone (server state, from the shared village file) ---- */
   var flakes = null;
-  // ?cuaca=hujan|salju|terik|berawan|cerah previews a look on this screen only (the server's weather is unchanged)
-  var previewWeather = (/[?&]cuaca=(cerah|berawan|hujan|terik|salju)\b/.exec(location.search) || [])[1] || null;
+  // ?cuaca=hujan|salju|terik|berawan|cerah previews a look on this screen only (the server's weather is unchanged); localhost only
+  var previewWeather = window.GT_DEV_HOST && (/[?&]cuaca=(cerah|berawan|hujan|terik|salju)\b/.exec(location.search) || [])[1] || null;
   function weatherKind() { if (previewWeather) return previewWeather; var w = (S.st && S.st.weather) || S.weather; return w ? w.kind : null; }
   // Winter, snowy weather or the ?musim=dingin preview turns the baked ground white (art.js palette swap)
-  // ?musim=semi|panas|gugur|dingin previews a season on this screen only (world and UI class); the server's season is unchanged
-  var previewSeason = (/[?&]musim=(semi|panas|gugur|dingin)\b/.exec(location.search) || [])[1] || null;
+  // ?musim=semi|panas|gugur|dingin previews a season on this screen only (world and UI class); the server's season is unchanged; localhost only
+  var previewSeason = window.GT_DEV_HOST && (/[?&]musim=(semi|panas|gugur|dingin)\b/.exec(location.search) || [])[1] || null;
   function seasonNow() {
     return previewSeason || (S.st && S.st.time && S.st.time.season) || S.season || null;
   }

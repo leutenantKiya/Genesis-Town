@@ -97,7 +97,7 @@
     }
     if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
     if (document.querySelector('.mover:not(.under)')) return; // inside menus the engine's own keys apply (Esc, digits, buttons)
-    // 2.5D view: Q / E turn the camera and + / - zoom, as in lab3d.html (the bag stays on I and the Tas button)
+    // 2.5D view: Q / E turn the camera and + / - zoom (the bag stays on I and the Tas button)
     if (window.GT_VIEW3D && GT_VIEW3D.onKey && GT_VIEW3D.onKey(e)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
     var canon = translate[e.code];
     if (canon === 'KeyF' || canon === 'KeyO') {
