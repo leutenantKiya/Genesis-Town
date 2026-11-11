@@ -1,5 +1,6 @@
 # Genesis Town: one Node 24 process serves the client (static files) and the API, and runs the game loop.
-# The SQLite database lives on a persistent volume at /data. Secrets come from the host's environment variables,
+# The SQLite database lives at /data: on a persistent volume, or brought back from its Neon copy at start when
+# DATABASE_URL is set (server/src/snapshot.ts). Secrets come from the host's environment variables,
 # never from this image (see docs/deploy.md).
 FROM node:24.22.1-bookworm-slim
 

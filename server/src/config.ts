@@ -26,6 +26,9 @@ export interface Config {
   relay: { perMinute: number; perDay: number; maxGasTera: number; maxBlocksAhead: number };
   settleChunk: number;
   dbPath: string;
+  /** Neon Postgres (direct connection string): keeps a copy of the SQLite database for hosts without a disk (snapshot.ts). */
+  databaseUrl: string | null;
+  snapshotMinutes: number;
   chainMode: 'testnet' | 'mock';
   devLogin: boolean; // mock chain only: accept idToken "dev:<name>" so tests run without a Google account
   // Merchant dialogue via NEAR AI Cloud (optional; local lines without a key). Base URL: near-ai-cloud skill / docs.near.ai.
@@ -83,6 +86,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     settleChunk: Number(env.SETTLE_CHUNK ?? 25),
     dbPath: env.DB_PATH ?? 'data/genesis-town.db',
+    databaseUrl: env.DATABASE_URL?.trim() || null,
+    snapshotMinutes: Math.max(1, Number(env.SNAPSHOT_MINUTES ?? 5) || 5),
     chainMode,
     devLogin: chainMode === 'mock' && env.DEV_LOGIN === '1',
     worldSeed: Number(env.WORLD_SEED ?? 20261114) >>> 0,

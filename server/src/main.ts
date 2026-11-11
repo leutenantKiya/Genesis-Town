@@ -9,12 +9,21 @@ import { blockHeightSource } from './relayer.ts';
 import { createApp } from './app.ts';
 import { Game } from './game/game.ts';
 import { loadEcon } from './game/econ.ts';
+import { pgRemote, restoreSnapshot, startSnapshots } from './snapshot.ts';
 
 try { process.loadEnvFile(join(dirname(fileURLToPath(import.meta.url)), '../../.env')); } catch { /* no .env: use the real environment */ }
 const cfg = loadConfig();
 // The mock chain lives in memory, so its off-chain database must start fresh too or the two disagree after a restart.
 if (cfg.chainMode === 'mock' && cfg.dbPath !== ':memory:') {
   for (const f of [cfg.dbPath, cfg.dbPath + '-wal', cfg.dbPath + '-shm']) rmSync(f, { force: true });
+}
+// Neon keeps a copy of the database (snapshot.ts): on a host without a disk the copy comes back here, before the Store
+// opens. Not with the mock chain: that chain starts empty every time, so its database must too.
+const remote = cfg.databaseUrl && cfg.chainMode !== 'mock' ? pgRemote(cfg.databaseUrl) : null;
+if (cfg.databaseUrl && !remote) console.log('DATABASE_URL is ignored with the mock chain (it starts fresh every time).');
+if (remote) {
+  try { console.log(`snapshot: ${await restoreSnapshot(cfg.dbPath, cfg.gameContractId, remote)}`); }
+  catch (e) { console.error(`snapshot: could not load the copy from Neon (${(e as Error).message}); refusing to start on an empty database`); process.exit(1); }
 }
 const store = new Store(cfg.dbPath);
 const econ = loadEcon();
@@ -40,6 +49,7 @@ if (cfg.chainMode === 'mock') {
 const game = new Game(store, chain, { merchantParent: cfg.merchantParentId, town: cfg.townAccountId, chunkSize: cfg.settleChunk, econ, worldSeed: cfg.worldSeed });
 await game.init();
 game.start();
+const snapshots = remote ? startSnapshots({ db: store.db, path: cfg.dbPath, key: cfg.gameContractId, remote, everyMinutes: cfg.snapshotMinutes, settledThrough: () => game.settlement.settledThrough() }) : null;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const { server } = createApp({
@@ -50,6 +60,7 @@ const { server } = createApp({
   verify: withDevLogin(cfg, auth0Verifier(cfg)),
   currentBlockHeight: cfg.chainMode === 'mock' ? async () => 0n : blockHeightSource(cfg),
   clientDir: join(here, '../../client'),
+  snapshot: snapshots ?? undefined,
 });
 server.listen(cfg.port, () => {
   if (cfg.devLogin) console.log('DEV_LOGIN is on (mock chain only): tokens "dev:<name>" are accepted.');
@@ -58,5 +69,5 @@ server.listen(cfg.port, () => {
   console.log(`Genesis Town server on http://localhost:${cfg.port} (chain: ${chain.mode}, contract: ${cfg.gameContractId}, day ${t.day} ${t.hour}:00 ${t.season})`);
 });
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(sig, () => { game.stop(); server.close(); process.exit(0); });
+  process.on(sig, async () => { game.stop(); server.close(); if (snapshots) await snapshots.flush(); process.exit(0); });
 }

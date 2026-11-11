@@ -171,6 +171,9 @@
 >   checks), `GET /api/health`, and `TRUST_PROXY=1` so per-address limits see each visitor behind the host's proxy.
 >   Split setup also ready: client on Vercel (`vercel.json`, `GT_API_BASE`), server on Railway (`railway.json`,
 >   volume at `/data`, `CORS_ORIGINS`), browser calls the server directly.
+>   Database: the server keeps SQLite; with `DATABASE_URL` set, a gzipped copy is kept in **Neon Postgres** (saved every
+>   5 minutes when it changed, after each settlement and on shutdown; loaded back on a host with no disk), so Railway
+>   needs no volume (`server/src/snapshot.ts`, docs/deploy.md).
 >   Waiting on: the host (owner's account) and NEAR Auth accepting the public domain.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:

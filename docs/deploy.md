@@ -7,7 +7,8 @@ bundles the NEAR browser libraries into `client/vendor/near.js`, and the `Docker
 ## What the host must offer
 
 - Node 24 or Docker (the repo's `Dockerfile` pins `node:24.22.1-bookworm-slim`).
-- **A persistent disk** mounted at `/data`. Without it every restart loses today's off-chain progress and the history.
+- **A persistent disk** mounted at `/data`, **or** a Neon Postgres database (`DATABASE_URL`, see "Database copy in
+  Neon" below). With neither, every restart loses today's off-chain progress and the history.
 - **A process that stays on** (no sleeping when idle). The game clock ticks every 2 seconds and settles on chain every
   24 real minutes.
 - **One instance only.** SQLite and the game loop are single-process; never scale to two replicas.
@@ -48,6 +49,8 @@ private keys are typed by you into the host, never committed and never put in a 
 | `PORT` | usually set by the host; the Dockerfile defaults to 3000 |
 | `DB_PATH` | `/data/genesis-town.db` (the Dockerfile sets it) |
 | `CORS_ORIGINS` | empty, or the client's origin when it is hosted apart (see the split setup below) |
+| `DATABASE_URL` | optional (**secret**): Neon's **direct** connection string (host without `-pooler`), see below |
+| `SNAPSHOT_MINUTES` | empty (5): how often the database copy is saved to Neon when something changed |
 
 Dev tools stay closed on a host even if `DEV_TOOLS=1` is left on: they only answer direct requests from the same
 machine with no proxy headers.
@@ -92,8 +95,39 @@ rewrite: behind a rewrite every request would reach the server from Vercel's add
 To try the split on one machine first: `npm run dev:split` (mock server on :3100 with `CORS_ORIGINS`, the static
 client on :5173 whose `vendor/env.js` points at it; `API_PORT` / `WEB_PORT` change the ports).
 
+The landing page lives in its own repository and its own Vercel project (e.g. the bare domain); its play button links
+to this client (e.g. a `play.` subdomain). Only the game client's origin goes in `CORS_ORIGINS` and in NEAR Auth's
+callbacks: the landing page never calls the API. The server itself cannot run on Vercel: it keeps a game loop (every 2
+s), settles on chain every 24 real minutes and holds presence in memory, while Vercel functions stop after each request.
+
 The Railway URL still serves the whole game on its own, so it keeps working as a fallback. NEAR Auth must accept the
 Vercel domain as a callback (next section).
+
+## Database copy in Neon
+
+The server works on SQLite either way. With `DATABASE_URL` set (testnet chain only; the mock chain starts fresh every
+time and ignores it), `server/src/snapshot.ts` keeps a gzipped copy of the whole database in one Neon row (table
+`gt_snapshot`, keyed by `GAME_CONTRACT_ID`):
+
+- **at start**, if the host has no database file (no volume, or a fresh deploy), it loads the copy before the server
+  opens the database; if Neon cannot be reached then, the server refuses to start rather than run on an empty day;
+- **every `SNAPSHOT_MINUTES`** (5) when something changed, **right after each daily settlement**, and **when the
+  host stops the process** (SIGTERM, as on every redeploy), it saves a new copy. The copy is made with node:sqlite's
+  `backup()`, which does not block the game loop; a copy is about 100 KB after ten days of testnet play.
+- At most `SNAPSHOT_MINUTES` of off-chain play can be lost if the process dies without warning. Items and coin settled
+  on chain are never at risk.
+- `GET /api/health` shows `snapshot`: when it last saved, the size and the last error.
+
+Setting it up (driver: `pg`, as the Neon docs advise for a long-running Node server):
+
+1. In Neon, create a project with **Postgres only** (no object storage, functions, AI gateway, realtime or auth),
+   region **AWS Asia Pacific 1 (Singapore)**, the same region as the Railway service.
+2. Connect → copy the connection string with **connection pooling off** (the host has no `-pooler`). You enter it
+   yourself into Railway as `DATABASE_URL` (a secret); it never goes into the repo or a file.
+3. First deploy only: to carry the current testnet game over, either upload `data/genesis-town.db` to the volume (step
+   3 above) or start the server once on your machine with `DATABASE_URL` in `.env` (after stopping the local testnet
+   server cleanly) so it saves the current database to Neon; then stop it before the hosted one starts.
+4. With Neon, the Railway volume is optional; keeping it too makes a restart independent of Neon.
 
 ## Login on the public domain
 

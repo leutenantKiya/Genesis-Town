@@ -46,6 +46,8 @@ export interface AppDeps {
   currentBlockHeight: () => Promise<bigint>;
   clientDir: string;
   dialogue?: Dialogue;
+  /** The Neon copy of the database, when DATABASE_URL is set (snapshot.ts): its state shows in /api/health. */
+  snapshot?: { status(): { lastSavedAt: number | null; lastSize: number | null; lastError: string | null; saves: number } };
 }
 
 const MIME: Record<string, string> = {
@@ -265,7 +267,7 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/health') {
         // for the host's health check: the process is up and the game clock and settlement are where they should be
         const t = game.clock.time();
-        return send(res, 200, { ok: true, chain: deps.chain.mode, day: t.day, hour: t.hour, settledThrough: game.settlement.settledThrough() });
+        return send(res, 200, { ok: true, chain: deps.chain.mode, day: t.day, hour: t.hour, settledThrough: game.settlement.settledThrough(), snapshot: deps.snapshot ? deps.snapshot.status() : null });
       }
       if (req.method === 'POST' && p === '/api/auth/register') {
         const ip = clientIp(req);
