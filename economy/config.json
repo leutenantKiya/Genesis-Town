@@ -8,14 +8,14 @@
     "seasons": ["semi", "panas", "gugur", "dingin"]
   },
   "items": {
-    "coin":  { "name": "Koin",       "kind": "currency", "base": 1 },
-    "fish":  { "name": "Ikan",       "kind": "raw",      "base": 8 },
-    "ore":   { "name": "Bijih",      "kind": "raw",      "base": 12, "needsTool": true },
-    "wood":  { "name": "Kayu",       "kind": "raw",      "base": 6 },
-    "wheat": { "name": "Gandum",     "kind": "raw",      "base": 5 },
-    "bread": { "name": "Roti",       "kind": "crafted",  "base": 16, "energy": 25 },
-    "meal":  { "name": "Ikan Bakar", "kind": "crafted",  "base": 20, "energy": 45 },
-    "tool":  { "name": "Alat",       "kind": "crafted",  "base": 45, "durability": 20 }
+    "coin":  { "name": "Coin",       "kind": "currency", "base": 1 },
+    "fish":  { "name": "Fish",       "kind": "raw",      "base": 8 },
+    "ore":   { "name": "Ore",      "kind": "raw",      "base": 12, "needsTool": true },
+    "wood":  { "name": "Wood",       "kind": "raw",      "base": 6 },
+    "wheat": { "name": "Wheat",     "kind": "raw",      "base": 5 },
+    "bread": { "name": "Bread",       "kind": "crafted",  "base": 16, "energy": 25 },
+    "meal":  { "name": "Grilled Fish", "kind": "crafted",  "base": 20, "energy": 45 },
+    "tool":  { "name": "Tool",       "kind": "crafted",  "base": 45, "durability": 20 }
   },
   "recipes": {
     "bread": { "inputs": { "wheat": 2 }, "output": "bread", "fee": 0, "energy": 5 },
@@ -48,7 +48,7 @@
   },
   "merchants": {
     "sari": {
-      "name": "Sari", "shop": "Lapak Ikan Sari", "personality": "fair",
+      "name": "Sarah", "shop": "Sarah's Fish Stall", "personality": "fair",
       "buys": ["fish", "wood"], "sells": ["fish", "meal"],
       "target": { "fish": 20, "wood": 10, "meal": 8 },
       "crafts": ["meal"],
@@ -56,7 +56,7 @@
       "restore": { "coin": 200, "items": { "fish": 6, "wood": 4 } }
     },
     "budi": {
-      "name": "Budi", "shop": "Bengkel Budi", "personality": "fair",
+      "name": "Ben", "shop": "Ben's Workshop", "personality": "fair",
       "buys": ["ore", "wood"], "sells": ["tool"],
       "target": { "ore": 15, "wood": 10, "tool": 4 },
       "crafts": ["tool"],
@@ -64,7 +64,7 @@
       "restore": { "coin": 200, "items": { "ore": 10, "wood": 5 } }
     },
     "wati": {
-      "name": "Wati", "shop": "Toko Roti Wati", "personality": "greedy",
+      "name": "Wendy", "shop": "Wendy's Bakery", "personality": "greedy",
       "buys": ["wheat"], "sells": ["bread", "wheat"],
       "target": { "wheat": 30, "bread": 12 },
       "crafts": ["bread"],
@@ -72,7 +72,7 @@
       "restore": { "coin": 200, "items": { "wheat": 12 } }
     },
     "joko": {
-      "name": "Joko", "shop": "Toko Serba Ada Joko", "personality": "generous",
+      "name": "Jack", "shop": "Jack's General Store", "personality": "generous",
       "buys": ["wood", "wheat", "fish"], "sells": ["wood", "bread"],
       "target": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },
       "crafts": [],
@@ -127,16 +127,16 @@
     "maxSendAmount": 10
   },
   "projects": [
-    { "id": "jembatan-timur", "name": "Jembatan ke Dusun Seberang", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } },
-    { "id": "pos-ronda", "name": "Pos Ronda di Hutan Utara", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 }, "retired": "Monster sekarang ada di Homeland masing-masing, jadi hutan desa tidak perlu dijaga lagi." }
+    { "id": "jembatan-timur", "name": "Bridge to Far Bank Hamlet", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } },
+    { "id": "pos-ronda", "name": "Watch Post in the North Forest", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 }, "retired": "Monsters now live in each player's Homeland, so the village forest no longer needs guarding." }
   ],
   "trade": { "expireSecs": 120, "maxLines": 4 },
-  "consign": { "merchant": "Mbok Darmi", "feeBps": 500, "maxPerItem": 50, "sellPerGameHour": 3 },
+  "consign": { "merchant": "Granny Daisy", "feeBps": 500, "maxPerItem": 50, "sellPerGameHour": 3 },
   "homeland": {
     "builders": 1,
     "publicTradeOnly": true,
     "fatigue": { "perJobMinute": 10, "idleRecoverPerGameHour": 5, "collapseAt": 100, "slowdownAt100": 1.0, "sickGameHoursWithoutHospital": 24 },
-    "cosmetics": { "caping": { "name": "Caping", "price": 80, "boost": 0.2, "color": "#d8b04a" }, "syal": { "name": "Syal", "price": 150, "boost": 0.35, "color": "#d84a4a" }, "mahkota": { "name": "Mahkota", "price": 300, "boost": 0.5, "color": "#f2d030" } },
+    "cosmetics": { "caping": { "name": "Straw Hat", "price": 80, "boost": 0.2, "color": "#d8b04a" }, "syal": { "name": "Scarf", "price": 150, "boost": 0.35, "color": "#d84a4a" }, "mahkota": { "name": "Crown", "price": 300, "boost": 0.5, "color": "#f2d030" } },
     "motivation": { "tukang": 60, "base": 40, "perHiburan": 20, "factorBase": 0.75, "factorSpan": 0.5 },
     "restoran": { "pantryMax": 20, "serveEveryGameHours": 1, "serveRelief": 30, "serveMinFatigue": 20, "chefServeFactor": 2 },
     "townhall": [
@@ -156,23 +156,23 @@
       { "n": 8, "th": 5, "cost": { "wood": 200, "ore": 80, "coin": 450 }, "secs": 1200 }
     ],
     "bots": {
-      "builder":  { "name": "Tukang",   "rarity": "common", "price": 150, "max": 3, "th": 1, "effect": { "builders": 1 } },
-      "petani":   { "name": "Petani",   "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "farmGrowFactor": 1.5 } },
-      "nelayan":  { "name": "Nelayan",  "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "fishRate": 1.5 } },
-      "penebang": { "name": "Penebang", "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "woodBonus": 1 } },
-      "hunter":   { "name": "Pemburu",  "rarity": "rare",   "price": 400, "max": 1, "th": 3, "effect": { "forage": { "items": ["fish", "wood"], "perGameHour": 1, "capacity": 6, "winterFactor": 2 } } },
-      "chef":     { "name": "Koki",     "rarity": "rare",   "price": 350, "max": 1, "th": 3, "effect": { "chef": true } }
+      "builder":  { "name": "Builder",   "rarity": "common", "price": 150, "max": 3, "th": 1, "effect": { "builders": 1 } },
+      "petani":   { "name": "Farmer",   "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "farmGrowFactor": 1.5 } },
+      "nelayan":  { "name": "Fisher",  "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "fishRate": 1.5 } },
+      "penebang": { "name": "Woodcutter", "rarity": "common", "price": 120, "max": 2, "th": 2, "effect": { "woodBonus": 1 } },
+      "hunter":   { "name": "Hunter",  "rarity": "rare",   "price": 400, "max": 1, "th": 3, "effect": { "forage": { "items": ["fish", "wood"], "perGameHour": 1, "capacity": 6, "winterFactor": 2 } } },
+      "chef":     { "name": "Cook",     "rarity": "rare",   "price": 350, "max": 1, "th": 3, "effect": { "chef": true } }
     },
     "buildings": {
-      "kolam":   { "name": "Kolam Ikan", "th": 1, "cost": { "wood": 5 },  "secs": 45,  "produces": "fish", "perGameHour": 2, "capacity": 6 },
-      "tambang":  { "name": "Tambang",    "th": 2, "cost": { "wood": 20, "coin": 30 }, "secs": 120, "produces": "ore", "perGameHour": 2, "capacity": 8, "needsChunk": true },
-      "restoran": { "name": "Restoran",   "th": 3, "cost": { "wood": 40, "ore": 10, "coin": 60 }, "secs": 240, "cooks": "meal" },
-      "rumah": { "name": "Rumah Pekerja", "th": 1, "cost": { "wood": 15 }, "secs": 60, "needsChunk": true,
+      "kolam":   { "name": "Fish Pond", "th": 1, "cost": { "wood": 5 },  "secs": 45,  "produces": "fish", "perGameHour": 2, "capacity": 6 },
+      "tambang":  { "name": "Mine",    "th": 2, "cost": { "wood": 20, "coin": 30 }, "secs": 120, "produces": "ore", "perGameHour": 2, "capacity": 8, "needsChunk": true },
+      "restoran": { "name": "Restaurant",   "th": 3, "cost": { "wood": 40, "ore": 10, "coin": 60 }, "secs": 240, "cooks": "meal" },
+      "rumah": { "name": "Workers' House", "th": 1, "cost": { "wood": 15 }, "secs": 60, "needsChunk": true,
         "furniture": {
-          "kasur":   { "name": "Kasur",   "max": 4, "levels": [ { "cost": { "wood": 10 }, "secs": 30 }, { "cost": { "wood": 20, "coin": 20 }, "secs": 60 }, { "cost": { "wood": 30, "coin": 40 }, "secs": 90 }, { "cost": { "wood": 40, "coin": 80 }, "secs": 120 } ] },
-          "hiburan": { "name": "Hiburan", "max": 3, "names": ["Radio", "TV", "Gamelan"], "levels": [ { "cost": { "wood": 10, "coin": 30 }, "secs": 60 }, { "cost": { "wood": 20, "ore": 10, "coin": 80 }, "secs": 120 }, { "cost": { "wood": 30, "ore": 20, "coin": 150 }, "secs": 240 } ] }
+          "kasur":   { "name": "Bed",   "max": 4, "levels": [ { "cost": { "wood": 10 }, "secs": 30 }, { "cost": { "wood": 20, "coin": 20 }, "secs": 60 }, { "cost": { "wood": 30, "coin": 40 }, "secs": 90 }, { "cost": { "wood": 40, "coin": 80 }, "secs": 120 } ] },
+          "hiburan": { "name": "Entertainment", "max": 3, "names": ["Radio", "TV", "Gamelan"], "levels": [ { "cost": { "wood": 10, "coin": 30 }, "secs": 60 }, { "cost": { "wood": 20, "ore": 10, "coin": 80 }, "secs": 120 }, { "cost": { "wood": 30, "ore": 20, "coin": 150 }, "secs": 240 } ] }
         } },
-      "rumahsakit": { "name": "Rumah Sakit", "th": 2, "cost": { "wood": 30, "ore": 10, "coin": 60 }, "secs": 180, "maxLevel": 3, "healGameHours": [3, 2, 1],
+      "rumahsakit": { "name": "Hospital", "th": 2, "cost": { "wood": 30, "ore": 10, "coin": 60 }, "secs": 180, "maxLevel": 3, "healGameHours": [3, 2, 1],
         "upgrade": [ { "cost": { "wood": 30, "ore": 15, "coin": 100 }, "secs": 240 }, { "cost": { "wood": 50, "ore": 30, "coin": 200 }, "secs": 480 } ] }
     }
   },
@@ -184,8 +184,8 @@
     "chance": { "tree": 0.15, "rock": 0.25 },
     "byTile": { "tree": "boar", "rock": "bat" },
     "kinds": {
-      "boar": { "name": "Babi hutan", "hp": 2, "hit": 4, "drop": "wood" },
-      "bat": { "name": "Kelelawar tambang", "hp": 2, "hit": 3, "drop": "ore" }
+      "boar": { "name": "Wild Boar", "hp": 2, "hit": 4, "drop": "wood" },
+      "bat": { "name": "Mine Bat", "hp": 2, "hit": 3, "drop": "ore" }
     },
     "roaming": { "boar": 5, "bat": 3 },
     "homeland": { "roaming": { "boar": 3, "bat": 2 } },

@@ -33,7 +33,7 @@ test('two accounts may share a name with different tags', () => {
 test('same name+tag cannot be taken', () => {
   const { store } = mk();
   store.setName(A, 'Ayu', '12345');
-  assert.throws(() => store.setName(B, 'AYU', '12345'), /sudah dipakai/);
+  assert.throws(() => store.setName(B, 'AYU', '12345'), /already taken/);
   store.setName(B, 'Ayu', '12346');
   assert.equal(store.accountByNameTag('Ayu', '12346'), B);
 });

@@ -48,43 +48,44 @@ function qaMode(){
 var QA = false;
 
 /* ---------- data pools ---------- */
-var FIRST = ['Budi','Siti','Agus','Dewi','Rina','Joko','Wayan','Putu','Ayu','Bayu','Citra','Dimas','Eko','Fajar','Gita','Hadi','Intan','Kadek','Lestari','Maya','Nanda','Oka','Putri','Rizky','Sari','Tono','Utami','Vina','Wahyu','Yuni','Zaki','Andi','Bimo','Dian','Endah','Farah','Galih','Heru','Indra','Jaya','Kirana','Lina','Mawar','Nugi'];
-var LAST = ['Santoso','Wijaya','Pratama','Hartono','Siregar','Nugroho','Saputra','Kusuma','Hidayat','Lubis','Purnama','Setiawan','Wibowo','Rahman','Susanto','Halim','Utomo','Permata','Firmansyah','Gunawan'];
-var PARK = ['Melati','Kenanga','Flamboyan','Cempaka','Anggrek','Teratai','Mawar','Dahlia'];
+var EN = window.GT_LANG === 'en'; // villager names follow the language; both lists have the same length so the seeded village stays deterministic
+var FIRST = EN ? ['Emma','Noah','Olivia','Liam','Ava','Lucas','Mia','Ethan','Chloe','Owen','Grace','Leo','Zoe','Henry','Ruby','Oscar','Ivy','Felix','Nora','Theo','Alice','Max','Lily','Sam','Hazel','Eli','Clara','Finn','Maya','Jude','Rose','Ian','Lena','Cole','Faye','Dean','Nina','Kai','Amy','Ross','Tess','Hugo','Vera','Luke'] : ['Budi','Siti','Agus','Dewi','Rina','Joko','Wayan','Putu','Ayu','Bayu','Citra','Dimas','Eko','Fajar','Gita','Hadi','Intan','Kadek','Lestari','Maya','Nanda','Oka','Putri','Rizky','Sari','Tono','Utami','Vina','Wahyu','Yuni','Zaki','Andi','Bimo','Dian','Endah','Farah','Galih','Heru','Indra','Jaya','Kirana','Lina','Mawar','Nugi'];
+var LAST = EN ? ['Smith','Baker','Turner','Parker','Hughes','Fisher','Cooper','Mason','Brooks','Warren','Hayes','Foster','Reed','Carter','Bishop','Porter','Webb','Lane','Holt','Wells'] : ['Santoso','Wijaya','Pratama','Hartono','Siregar','Nugroho','Saputra','Kusuma','Hidayat','Lubis','Purnama','Setiawan','Wibowo','Rahman','Susanto','Halim','Utomo','Permata','Firmansyah','Gunawan'];
+var PARK = EN ? ['Jasmine','Ylang','Flame Tree','Magnolia','Orchid','Lotus','Rose','Dahlia'] : ['Melati','Kenanga','Flamboyan','Cempaka','Anggrek','Teratai','Mawar','Dahlia'];
 var NPC_LINES = [
-  'Halo! Cuacanya cerah ya hari ini.',
-  'Kamu warga baru? Selamat datang di Genesis Town!',
-  'Rumah yang bergembok cuma bisa dimasuki kalau kamu diundang.',
-  'Katanya ada Mart di dekat sini. Stok mie instannya banyak!',
-  'Aku lagi jalan-jalan sore. Kamu juga?',
-  'Hati-hati di rumput tinggi. Banyak serangga!',
-  'Taman kota itu tempat favoritku buat bersantai.',
-  'Setiap kota dibuat ulang, jalanannya berubah lho.',
-  'Ada beberapa tetangga yang sudah mengundangmu, coba cari rumah yang tidak bergembok.',
-  'Aku lupa mau ke mana tadi... hehe.',
-  'Peta ada di tombol M. Praktis banget!',
-  'Ada Kasino di kota ini, tapi cuma pakai koin permainan lho.'
+  $t('Halo! Cuacanya cerah ya hari ini.'),
+  $t('Kamu warga baru? Selamat datang di Genesis Town!'),
+  $t('Rumah yang bergembok cuma bisa dimasuki kalau kamu diundang.'),
+  $t('Katanya ada Mart di dekat sini. Stok mie instannya banyak!'),
+  $t('Aku lagi jalan-jalan sore. Kamu juga?'),
+  $t('Hati-hati di rumput tinggi. Banyak serangga!'),
+  $t('Taman kota itu tempat favoritku buat bersantai.'),
+  $t('Setiap kota dibuat ulang, jalanannya berubah lho.'),
+  $t('Ada beberapa tetangga yang sudah mengundangmu, coba cari rumah yang tidak bergembok.'),
+  $t('Aku lupa mau ke mana tadi... hehe.'),
+  $t('Peta ada di tombol M. Praktis banget!'),
+  $t('Ada Kasino di kota ini, tapi cuma pakai koin permainan lho.')
 ];
 var HOME_LINES = [
-  ['Selamat datang di rumahku!','Anggap saja rumah sendiri ya.'],
-  ['Eh, ada tamu! Silakan duduk.'],
-  ['Kamu diundang masuk, jadi jangan sungkan.'],
-  ['Rumahku kecil, tapi nyaman.']
+  [$t('Selamat datang di rumahku!'),$t('Anggap saja rumah sendiri ya.')],
+  [$t('Eh, ada tamu! Silakan duduk.')],
+  [$t('Kamu diundang masuk, jadi jangan sungkan.')],
+  [$t('Rumahku kecil, tapi nyaman.')]
 ];
 var MART_LINES = [
-  ['Selamat datang di Mart Genesis!','Mau beli apa hari ini?'],
-  ['Hari ini roti dan susu lagi segar.','Silakan lihat-lihat dulu!'],
-  ['Obeng juga ada lho, buat yang butuh.','Mau beli apa?'],
-  ['Jangan lupa bawa tas belanja sendiri.','Mau beli apa?']
+  [$t('Selamat datang di Mart Genesis!'),$t('Mau beli apa hari ini?')],
+  [$t('Hari ini roti dan susu lagi segar.'),$t('Silakan lihat-lihat dulu!')],
+  [$t('Obeng juga ada lho, buat yang butuh.'),$t('Mau beli apa?')],
+  [$t('Jangan lupa bawa tas belanja sendiri.'),$t('Mau beli apa?')]
 ];
 var CASINO_LINES = [
-  ['Selamat datang di Kasino Genesis!','(Meja belum dibuka: modul kasino belum terpasang.)']
+  [$t('Selamat datang di Kasino Genesis!'),$t('(Meja belum dibuka: modul kasino belum terpasang.)')]
 ];
 var SIGN_LINES = [
-  'Dilarang menginjak bunga.',
-  'Jaga kebersihan taman ya!',
-  'Awas rumput tinggi, banyak serangga.',
-  'Bebek dilarang diberi makan roti.'
+  $t('Dilarang menginjak bunga.'),
+  $t('Jaga kebersihan taman ya!'),
+  $t('Awas rumput tinggi, banyak serangga.'),
+  $t('Bebek dilarang diberi makan roti.')
 ];
 
 /* ---------- PRNG ---------- */
@@ -165,17 +166,17 @@ function drawChar(g, x, y, pal, dir, step){
 
 /* ---------- GT state / events ---------- */
 var ITEMS = {
-  roti:   {name:'Roti',   price:10, icon:'roti'},
-  apel:   {name:'Apel',   price:8,  icon:'apel'},
-  susu:   {name:'Susu',   price:12, icon:'susu'},
-  bunga:  {name:'Bunga',  price:15, icon:'bunga'},
-  kue:    {name:'Kue',    price:25, icon:'kue'},
-  obeng:  {name:'Obeng',  price:60, icon:'obeng'},
-  permen: {name:'Permen', price:3,  icon:'permen'}
+  roti:   {name:$t('Roti'),   price:10, icon:'roti'},
+  apel:   {name:$t('Apel'),   price:8,  icon:'apel'},
+  susu:   {name:$t('Susu'),   price:12, icon:'susu'},
+  bunga:  {name:$t('Bunga'),  price:15, icon:'bunga'},
+  kue:    {name:$t('Kue'),    price:25, icon:'kue'},
+  obeng:  {name:$t('Obeng'),  price:60, icon:'obeng'},
+  permen: {name:$t('Permen'), price:3,  icon:'permen'}
 };
 var SHOP_CORE = ['roti','apel','susu','bunga','kue','permen','obeng'];
-var CONSUMABLE = {roti:'Kamu makan roti. Kenyang!', apel:'Apelnya renyah dan manis.', susu:'Segar! Susunya habis diminum.', kue:'Kue yang lezat. Enak banget!', permen:'Manis... permennya cepat habis.'};
-var state = { coins:500, inventory:{}, role:'warga', reputation:0, affinity:{}, clan:null, playerName:'Kamu', onboarded:false };
+var CONSUMABLE = {roti:$t('Kamu makan roti. Kenyang!'), apel:$t('Apelnya renyah dan manis.'), susu:$t('Segar! Susunya habis diminum.'), kue:$t('Kue yang lezat. Enak banget!'), permen:$t('Manis... permennya cepat habis.')};
+var state = { coins:500, inventory:{}, role:'warga', reputation:0, affinity:{}, clan:null, playerName:$t('Kamu'), onboarded:false };
 var LS_KEY = 'gt.v2';
 var listeners = {};
 function on(evt, fn){ (listeners[evt] = listeners[evt] || []).push(fn); return function(){ off(evt, fn); }; }
@@ -415,7 +416,7 @@ function genWorld(seed){
     var w = tryWorld(seed, att);
     if (w) { w.attempt = att; return w; }
   }
-  throw new Error('Gagal membuat dunia');
+  throw new Error($t('Gagal membuat dunia'));
 }
 
 function tryWorld(seed, att){
@@ -502,7 +503,7 @@ function tryWorld(seed, att){
       m.market = { stalls: [], block: {bx:bx, by:by} };
       sxs.forEach(function(sx, k){ set(sx, iy0 + 1, 'stall'); m.market.stalls.push({x:sx, y:iy0 + 1, seat:{x:sx, y:iy0}, color:stallColors[k % 4]}); });
       if (iy1 >= iy0 + 4){ set(ix0, iy1, 'crate'); set(ix1, iy1, 'barrel'); }
-      m.info.set(I(ix0 + 2, iy0), 'Pasar Genesis. Pedagang berjualan di sini setiap hari.');
+      m.info.set(I(ix0 + 2, iy0), $t('Pasar Genesis. Pedagang berjualan di sini setiap hari.'));
       continue;
     }
     if (type === 'farm'){
@@ -523,7 +524,7 @@ function tryWorld(seed, att){
       var sy = iy0; do { sy = iy0 + R.int(0, iy1 - iy0); } while (sy === pathRow);
       set(ix0, sy, 'sign'); reserved.add(I(ix0, sy));
       var parkName = R.pick(PARK);
-      m.info.set(I(ix0, sy), 'Taman ' + parkName + '. ' + R.pick(SIGN_LINES));
+      m.info.set(I(ix0, sy), $t('Taman {0}. {1}', [parkName, R.pick(SIGN_LINES)]));
       // pond
       var pw = R.int(2,3), ph = 2, tries = 0, placed = false;
       while (!placed && tries++ < 30){
@@ -562,7 +563,7 @@ function tryWorld(seed, att){
       b.id = houses.length; b.owner = fullName(); b.invited = false; b.own = false;
       b.iseed = R.int(1, 1073741823); b.hasNpc = R.chance(0.4);
       houses.push(b);
-    } else { b.invited = true; b.owner = type === 'mart' ? 'Mart Genesis' : 'Kasino Genesis'; b.iseed = (seed ^ (bx * 131 + by * 17)) >>> 0; }
+    } else { b.invited = true; b.owner = type === 'mart' ? $t('Mart Genesis') : $t('Kasino Genesis'); b.iseed = (seed ^ (bx * 131 + by * 17)) >>> 0; }
     m.buildings.push(b);
     for (y = hy; y < hy + 3; y++) for (x = hx; x < hx + 3; x++){
       var bi = I(x,y);
@@ -581,7 +582,7 @@ function tryWorld(seed, att){
         var mx = mxs[k];
         if (mx >= ix0 && mx <= ix1 && !reserved.has(I(mx, hy + 2))){
           set(mx, hy + 2, 'mailbox'); reserved.add(I(mx, hy + 2)); b.mail = I(mx, hy + 2);
-          m.info.set(I(mx, hy + 2), 'Kotak surat milik ' + b.owner + '. Isinya kosong.');
+          m.info.set(I(mx, hy + 2), $t('Kotak surat milik {0}. Isinya kosong.', [b.owner]));
           break;
         }
       }
@@ -614,8 +615,8 @@ function tryWorld(seed, att){
   // ownership / invitations
   var own = houses.filter(function(h){ return h.bx === ownB.x && h.by === ownB.y; })[0];
   if (!own) return null;
-  own.own = true; own.invited = true; own.owner = 'Kamu';
-  if (own.mail != null) m.info.set(own.mail, 'Kotak surat milikmu. Belum ada surat.');
+  own.own = true; own.invited = true; own.owner = $t('Kamu');
+  if (own.mail != null) m.info.set(own.mail, $t('Kotak surat milikmu. Belum ada surat.'));
   var others = R.shuffle(houses.filter(function(h){ return h !== own; }));
   for (i = 0; i < 4; i++) others[i].invited = true;
   m.houses = houses; m.own = own;
@@ -646,7 +647,7 @@ function tryWorld(seed, att){
   return m;
 }
 
-var HOME_NAMES = { townhall:'Balai Kota', kolam:'Kolam Ikan', tambang:'Tambang', restoran:'Restoran', rumah:'Rumah Pekerja', rumahsakit:'Rumah Sakit' };
+var HOME_NAMES = { townhall:$t('Balai Kota'), kolam:$t('Kolam Ikan'), tambang:$t('Tambang'), restoran:$t('Restoran'), rumah:$t('Rumah Pekerja'), rumahsakit:$t('Rumah Sakit') };
 var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1, townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1 };
 var HOME_KINDS = { townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1 };
 function layoutChunk(L, x, y){ return homeLayout && window.GTHomeland ? GTHomeland.chunkOf(L, x, y) : GTVillage.chunkOf(L, x, y); }
@@ -659,13 +660,13 @@ function fromLayout(L){
   L.buildings.forEach(function(lb){
     var b = { kind:lb.kind, x:lb.x, y:lb.y, w:lb.w, h:lb.h, dx:lb.dx, dy:lb.dy, style:lb.style || 0, open:lb.open, chunk:lb.chunk, lot:lb.lot || null };
     if (lb.kind === 'house'){
-      b.id = houses.length; b.own = !!lb.own; b.owner = b.own ? 'Kamu' : R.pick(FIRST) + ' ' + R.pick(LAST);
+      b.id = houses.length; b.own = !!lb.own; b.owner = b.own ? $t('Kamu') : R.pick(FIRST) + ' ' + R.pick(LAST);
       b.invited = b.own; b.iseed = R.int(1, 1073741823); b.hasNpc = R.chance(0.4);
       houses.push(b);
     } else {
       b.id = lb.lot || lb.kind; b.name = lb.name || HOME_NAMES[lb.kind] || lb.kind; b.owner = b.name; b.invited = HOME_KINDS[lb.kind] ? false : lb.open; // Homeland buildings are never entered: the door opens the mod's menu b.iseed = hashStr(L.seed + ':' + lb.kind);
     }
-    if (lb.mail != null){ b.mail = lb.mail; m.info.set(lb.mail, b.own ? 'Kotak surat milikmu. Belum ada surat.' : 'Kotak surat milik ' + b.owner + '. Isinya kosong.'); }
+    if (lb.mail != null){ b.mail = lb.mail; m.info.set(lb.mail, b.own ? $t('Kotak surat milikmu. Belum ada surat.') : $t('Kotak surat milik {0}. Isinya kosong.', [b.owner])); }
     m.buildings.push(b);
     for (y = b.y; y < b.y + b.h; y++) for (x = b.x; x < b.x + b.w; x++){
       i = y*m.w + x; m.blocked.add(i);
@@ -706,9 +707,9 @@ function fromLayout(L){
 /** Name of the area at an outdoor tile: the chunk, or the landmark the player stands next to. */
 function areaName(x, y){
   var m = world, L = m && m.layout;
-  if (!L) return 'Blok (' + Math.floor(x / BS) + ',' + Math.floor(y / BS) + ')';
+  if (!L) return $t('Blok ({0},{1})', [Math.floor(x / BS), Math.floor(y / BS)]);
   if (homeLayout) return layoutChunk(L, x, y).name;
-  if (L.plaza && x >= L.plaza.x0 - 1 && x <= L.plaza.x1 + 1 && y >= L.plaza.y0 - 1 && y <= L.plaza.y1 + 1) return 'Pasar Genesis';
+  if (L.plaza && x >= L.plaza.x0 - 1 && x <= L.plaza.x1 + 1 && y >= L.plaza.y0 - 1 && y <= L.plaza.y1 + 1) return $t('Pasar Genesis');
   for (var k = 0; k < m.buildings.length; k++){ var b = m.buildings[k]; if (b.name && Math.abs(x - b.dx) <= 2 && y >= b.dy && y <= b.dy + 2) return b.name; }
   return layoutChunk(L, x, y).name;
 }
@@ -751,7 +752,7 @@ function placeLamps(m, seed, att, reserved){
     if (!ok){ m.walk[c.i] = 1; return false; }
     m.tiles[c.i] = 'lamp'; lamps.push({x:c.x, y:c.y});
     nw.forEach(function(q){ lit[q] = 1; litN++; });
-    m.info.set(c.i, 'Tiang listrik. Lampunya menyala saat malam.');
+    m.info.set(c.i, $t('Tiang listrik. Lampunya menyala saat malam.'));
     return true;
   }
   var c;
@@ -790,13 +791,13 @@ function genHouseInterior(h){
   m.tiles[I(4,hh-1)] = 'doormat'; m.exit.add(I(4,hh-1));
   m.entry = {x:4, y:hh-2};
   for (y = 5; y <= 6; y++) for (x = 3; x <= 6; x++) m.tiles[I(x,y)] = 'rug';
-  var names = {bed:'Kasur yang empuk. Jangan tidur dulu!', bookshelf:'Buku resep, komik, dan satu kamus tebal.', tv:'Acaranya lagi seru, tapi kamu tidak punya waktu nonton.', fridge:'Isinya jus jeruk dan telur. Jangan diambil!', plant:'Tanamannya terawat dengan baik.'};
+  var names = {bed:$t('Kasur yang empuk. Jangan tidur dulu!'), bookshelf:$t('Buku resep, komik, dan satu kamus tebal.'), tv:$t('Acaranya lagi seru, tapi kamu tidak punya waktu nonton.'), fridge:$t('Isinya jus jeruk dan telur. Jangan diambil!'), plant:$t('Tanamannya terawat dengan baik.')};
   var items = ['bed','bookshelf','tv','fridge','plant'];
   var slots = R.shuffle([1,2,3,4,5,6,7,8]);
   items.forEach(function(it, n){ m.tiles[I(slots[n],1)] = it; m.info.set(I(slots[n],1), names[it]); });
   var tx = R.int(2,7);
-  m.tiles[I(tx,3)] = 'table'; m.info.set(I(tx,3), 'Meja makan. Ada sepiring pisang goreng.');
-  m.tiles[I(tx,4)] = 'chair'; m.info.set(I(tx,4), 'Kursi kayu yang kokoh.');
+  m.tiles[I(tx,3)] = 'table'; m.info.set(I(tx,3), $t('Meja makan. Ada sepiring pisang goreng.'));
+  m.tiles[I(tx,4)] = 'chair'; m.info.set(I(tx,4), $t('Kursi kayu yang kokoh.'));
   if (R.chance(0.6)){ m.tiles[I(1,6)] = 'plant'; m.info.set(I(1,6), names.plant); }
   if (R.chance(0.6)){ m.tiles[I(8,6)] = 'plant'; m.info.set(I(8,6), names.plant); }
   // storage chest on a free back-wall slot (row 1 is always reachable from row 2); separate PRNG keeps the layout above unchanged
@@ -809,8 +810,8 @@ function genHouseInterior(h){
     var cand = [];
     for (y = 2; y <= 6; y++) for (x = 1; x <= 8; x++) if (m.walk[I(x,y)] && !(x === 4 && y >= 5)) cand.push([x,y]);
     var c = R.pick(cand);
-    var nm = h.own ? 'Ibu' : h.owner.split(' ')[0];
-    var npc = mkNpc(c[0], c[1], nm, R.int(1,5), h.own ? [['Kamu sudah pulang, nak?','Jangan lupa makan ya.'],['Rumah ini selalu terbuka buatmu.']] : HOME_LINES, {turns:true});
+    var nm = h.own ? $t('Ibu') : h.owner.split(' ')[0];
+    var npc = mkNpc(c[0], c[1], nm, R.int(1,5), h.own ? [[$t('Kamu sudah pulang, nak?'),$t('Jangan lupa makan ya.')],[$t('Rumah ini selalu terbuka buatmu.')]] : HOME_LINES, {turns:true});
     npc.key = 'house:' + h.id + ':0';
     if (h.own) npc.aff0 = 70;
     m.npcs.push(npc);
@@ -832,31 +833,31 @@ function genPublicInterior(b){
   m.mat = {x:6, y:hh-1}; m.tiles[I(6,hh-1)] = 'doormat'; m.exit.add(I(6,hh-1)); m.entry = {x:6, y:hh-2};
   m.board = null;
   if (k === 'hall'){
-    for (x = 3; x <= 8; x++) put(x, 3, 'table', 'Meja rapat warga.');
+    for (x = 3; x <= 8; x++) put(x, 3, 'table', $t('Meja rapat warga.'));
     for (x = 3; x <= 8; x += 2){ put(x, 2, 'chair'); put(x, 4, 'chair'); }
-    put(5, 1, 'bookshelf', 'Papan proyek desa. Bicara di sini untuk melihat dan menyumbang.'); m.board = {x:5, y:1};
-    put(6, 1, 'bookshelf', 'Arsip desa: peta lama dan catatan panen.');
+    put(5, 1, 'bookshelf', $t('Papan proyek desa. Bicara di sini untuk melihat dan menyumbang.')); m.board = {x:5, y:1};
+    put(6, 1, 'bookshelf', $t('Arsip desa: peta lama dan catatan panen.'));
     put(1, 1, 'plant'); put(10, 1, 'plant');
   } else if (k === 'church'){
     for (y = 3; y <= 6; y++){ for (x = 2; x <= 4; x++) put(x, y, 'chair'); for (x = 7; x <= 9; x++) put(x, y, 'chair'); }
-    put(5, 1, 'table', 'Meja di depan, dengan lilin dan bunga segar.'); put(6, 1, 'table', 'Meja di depan, dengan lilin dan bunga segar.');
+    put(5, 1, 'table', $t('Meja di depan, dengan lilin dan bunga segar.')); put(6, 1, 'table', $t('Meja di depan, dengan lilin dan bunga segar.'));
     put(1, 1, 'plant'); put(10, 1, 'plant');
     for (x = 5; x <= 6; x++) for (y = 3; y <= 6; y++) put(x, y, 'rug');
   } else if (k === 'clinic'){
-    put(2, 1, 'bed', 'Ranjang periksa yang bersih.'); put(4, 1, 'bed', 'Ranjang periksa yang bersih.');
-    put(8, 3, 'counter', 'Meja perawat. Obat belum dijual di sini (segera).'); put(9, 3, 'counter', 'Meja perawat.');
-    put(10, 1, 'shelf', 'Rak obat dan perban.'); put(1, 6, 'plant');
+    put(2, 1, 'bed', $t('Ranjang periksa yang bersih.')); put(4, 1, 'bed', $t('Ranjang periksa yang bersih.'));
+    put(8, 3, 'counter', $t('Meja perawat. Obat belum dijual di sini (segera).')); put(9, 3, 'counter', $t('Meja perawat.'));
+    put(10, 1, 'shelf', $t('Rak obat dan perban.')); put(1, 6, 'plant');
   } else if (k === 'post'){
-    for (x = 3; x <= 8; x++) put(x, 3, 'counter', 'Loket pos. Kirim barang ke pemain lain lewat Tas NEAR (on-chain).');
-    put(2, 1, 'shelf', 'Rak paket.'); put(9, 1, 'shelf', 'Rak paket.'); put(10, 6, 'plant');
+    for (x = 3; x <= 8; x++) put(x, 3, 'counter', $t('Loket pos. Kirim barang ke pemain lain lewat Tas NEAR (on-chain).'));
+    put(2, 1, 'shelf', $t('Rak paket.')); put(9, 1, 'shelf', $t('Rak paket.')); put(10, 6, 'plant');
   } else if (k === 'broker'){
-    put(3, 2, 'table', 'Meja makelar. Daftar lapak Pasar Pemain ada di sini.'); put(4, 2, 'table', 'Meja makelar.'); m.board = {x:3, y:2};
-    put(5, 2, 'table', 'Meja makelar pulau. Pulau Pribadi dijual di sini.'); m.board2 = {x:5, y:2};
-    put(3, 3, 'chair'); put(8, 1, 'bookshelf', 'Buku catatan transaksi.'); put(9, 1, 'bookshelf', 'Buku catatan transaksi.'); put(1, 6, 'plant');
+    put(3, 2, 'table', $t('Meja makelar. Daftar lapak Pasar Pemain ada di sini.')); put(4, 2, 'table', $t('Meja makelar.')); m.board = {x:3, y:2};
+    put(5, 2, 'table', $t('Meja makelar pulau. Pulau Pribadi dijual di sini.')); m.board2 = {x:5, y:2};
+    put(3, 3, 'chair'); put(8, 1, 'bookshelf', $t('Buku catatan transaksi.')); put(9, 1, 'bookshelf', $t('Buku catatan transaksi.')); put(1, 6, 'plant');
   } else {
-    put(3, 2, 'counter', 'Kopi tubruk dan pisang goreng.'); put(4, 2, 'counter'); put(5, 2, 'counter');
-    for (x = 2; x <= 8; x += 3){ put(x, 5, 'table', 'Meja warung. Warga suka ngobrol di sini.'); put(x + 1, 5, 'chair'); }
-    put(10, 1, 'fridge', 'Es teh manis.');
+    put(3, 2, 'counter', $t('Kopi tubruk dan pisang goreng.')); put(4, 2, 'counter'); put(5, 2, 'counter');
+    for (x = 2; x <= 8; x += 3){ put(x, 5, 'table', $t('Meja warung. Warga suka ngobrol di sini.')); put(x + 1, 5, 'chair'); }
+    put(10, 1, 'fridge', $t('Es teh manis.'));
   }
   finalize(m);
   m.npcs = [];
@@ -873,24 +874,24 @@ function genMartInterior(b, martIdx){
   m.mat = {x:5, y:hh-1};
   m.tiles[I(5,hh-1)] = 'doormat'; m.exit.add(I(5,hh-1));
   m.entry = {x:5, y:hh-2};
-  var shelfTxt = ['Rak penuh mie instan dan biskuit.','Sabun, sampo, dan odol berjejer rapi.','Camilan keripik aneka rasa.','Minuman kaleng dingin.'];
+  var shelfTxt = [$t('Rak penuh mie instan dan biskuit.'),$t('Sabun, sampo, dan odol berjejer rapi.'),$t('Camilan keripik aneka rasa.'),$t('Minuman kaleng dingin.')];
   var n = 0;
   for (x = 1; x <= 2; x++){ m.tiles[I(x,1)] = 'shelf'; m.info.set(I(x,1), shelfTxt[n++ % 4]); }
-  for (x = 6; x <= 7; x++){ m.tiles[I(x,1)] = 'fridge'; m.info.set(I(x,1), 'Lemari pendingin: es krim dan susu.'); }
+  for (x = 6; x <= 7; x++){ m.tiles[I(x,1)] = 'fridge'; m.info.set(I(x,1), $t('Lemari pendingin: es krim dan susu.')); }
   for (x = 8; x <= 9; x++){ m.tiles[I(x,1)] = 'shelf'; m.info.set(I(x,1), shelfTxt[n++ % 4]); }
-  for (x = 4; x <= 5; x++){ m.tiles[I(x,2)] = 'counter'; m.info.set(I(x,2), 'Meja kasir. Mesin kasirnya berkedip-kedip.'); }
+  for (x = 4; x <= 5; x++){ m.tiles[I(x,2)] = 'counter'; m.info.set(I(x,2), $t('Meja kasir. Mesin kasirnya berkedip-kedip.')); }
   // staff-only pocket behind the counter (x=4..5, row 1), enclosed by a plant at (3,1), the fridge and the counter
-  m.tiles[I(3,1)] = 'plant'; m.info.set(I(3,1), 'Tanaman hias di belakang kasir.');
+  m.tiles[I(3,1)] = 'plant'; m.info.set(I(3,1), $t('Tanaman hias di belakang kasir.'));
   m.staff = new Set(); for (x = 4; x <= 5; x++) m.staff.add(I(x,1));
   for (y = 4; y <= 5; y++){
     for (x = 2; x <= 4; x++){ m.tiles[I(x,y)] = 'shelf'; m.info.set(I(x,y), shelfTxt[n++ % 4]); }
     for (x = 6; x <= 8; x++){ m.tiles[I(x,y)] = 'shelf'; m.info.set(I(x,y), shelfTxt[n++ % 4]); }
   }
-  m.tiles[I(1,7)] = 'plant'; m.info.set(I(1,7), 'Tanaman hias di dekat pintu.');
-  m.tiles[I(9,7)] = 'plant'; m.info.set(I(9,7), 'Tanaman hias di dekat pintu.');
+  m.tiles[I(1,7)] = 'plant'; m.info.set(I(1,7), $t('Tanaman hias di dekat pintu.'));
+  m.tiles[I(9,7)] = 'plant'; m.info.set(I(9,7), $t('Tanaman hias di dekat pintu.'));
   finalize(m);
   // the pocket is fully enclosed (plant, fridge, counter) and blocked for the player via m.staff.
-  var keeper = mkNpc(4, 1, 'Penjaga Mart', 3, MART_LINES, {});
+  var keeper = mkNpc(4, 1, $t('Penjaga Mart'), 3, MART_LINES, {});
   keeper.dir = 'down'; keeper.key = 'mart:' + martIdx + ':keeper';
   m.npcs = [keeper];
   buildCache(m);
@@ -912,11 +913,11 @@ function genCasinoInterior(b){
   [1,2,3,7,8,9].forEach(function(sx){ m.tiles[I(sx,1)] = 'slot'; });
   [4,5,6].forEach(function(dx){ m.tiles[I(dx,2)] = 'dice_table'; });
   [[2,4],[2,5],[8,4],[8,5]].forEach(function(p){ m.tiles[I(p[0],p[1])] = 'card_table'; });
-  m.tiles[I(1,7)] = 'plant'; m.info.set(I(1,7), 'Tanaman plastik. Tetap terlihat mewah.');
-  m.tiles[I(9,7)] = 'plant'; m.info.set(I(9,7), 'Tanaman plastik. Tetap terlihat mewah.');
+  m.tiles[I(1,7)] = 'plant'; m.info.set(I(1,7), $t('Tanaman plastik. Tetap terlihat mewah.'));
+  m.tiles[I(9,7)] = 'plant'; m.info.set(I(9,7), $t('Tanaman plastik. Tetap terlihat mewah.'));
   m.staff = new Set(); [4,5,6].forEach(function(sx){ m.staff.add(I(sx,1)); });
   finalize(m);
-  var dealer = mkNpc(5, 1, 'Bandar', 6, CASINO_LINES, {});
+  var dealer = mkNpc(5, 1, $t('Bandar'), 6, CASINO_LINES, {});
   dealer.dir = 'down'; dealer.key = 'casino:dealer';
   m.npcs = [dealer];
   buildCache(m);
@@ -1294,7 +1295,7 @@ function modal(o){
   title.id = 'mt' + h.id; box.setAttribute('aria-labelledby', title.id);
   head.appendChild(title);
   if (o.closable !== false){
-    var x = el('button', 'mx', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Tutup');
+    var x = el('button', 'mx', '×'); x.type = 'button'; x.setAttribute('aria-label', $t('Tutup'));
     x.addEventListener('click', function(){ h.close('x'); });
     head.appendChild(x);
   }
@@ -1426,25 +1427,25 @@ function itemName(id){ return (ITEMS[id] && ITEMS[id].name) || id; }
 /* ---------- Tas (inventory) / Profil / Peran / Toko / konfirmasi ---------- */
 function openBag(){
   if (modals.length || tr) return null;
-  var h = modal({ title:'Tas', backdropClose:true, actions:[{label:'Tutup', primary:true}] });
+  var h = modal({ title:$t('Tas'), backdropClose:true, actions:[{label:$t('Tutup'), primary:true}] });
   function render(){
     var wrap = el('div');
-    var money = el('div', 'mmoney', 'Koin: ' + state.coins); wrap.appendChild(money);
+    var money = el('div', 'mmoney', $t('Koin: {0}', [state.coins])); wrap.appendChild(money);
     var ids = Object.keys(state.inventory).filter(function(k){ return state.inventory[k] > 0; });
-    if (!ids.length) wrap.appendChild(el('p', 'mnote', 'Tasmu kosong. Beli sesuatu di Mart!'));
+    if (!ids.length) wrap.appendChild(el('p', 'mnote', $t('Tasmu kosong. Beli sesuatu di Mart!')));
     ids.forEach(function(id){
       var row = el('div', 'mrow');
       row.appendChild(iconEl((ITEMS[id] && ITEMS[id].icon) || id, 16));
       row.appendChild(el('span', 'grow', itemName(id)));
       row.appendChild(el('span', 'num', 'x' + state.inventory[id]));
-      var use = el('button', 'mbtn', CONSUMABLE[id] ? 'Makan' : 'Pakai'); use.type = 'button';
+      var use = el('button', 'mbtn', CONSUMABLE[id] ? $t('Makan') : $t('Pakai')); use.type = 'button';
       use.addEventListener('click', function(){ useItem(id); render(); });
-      var give = el('button', 'mbtn', 'Beri'); give.type = 'button';
+      var give = el('button', 'mbtn', $t('Beri')); give.type = 'button';
       give.addEventListener('click', function(){
         var handled = false;
         try { if (typeof GT.giveHandler === 'function') handled = GT.giveHandler(id) === true; } catch(e){ console.error(e); }
         emit('giveRequest', {item:id});
-        if (!handled) toast('Beri ' + itemName(id) + ': pakai menu Sosial atau bicara dengan NPC.');
+        if (!handled) toast($t('Beri {0}: pakai menu Sosial atau bicara dengan NPC.', [itemName(id)]));
       });
       row.appendChild(use); row.appendChild(give);
       wrap.appendChild(row);
@@ -1465,33 +1466,33 @@ function useItem(id){
     if (ok){ removeItem(id, 1); return; }
   }
   if (CONSUMABLE[id] && removeItem(id, 1)){ toast(CONSUMABLE[id]); return; }
-  toast(itemName(id) + ' belum bisa dipakai sekarang.');
+  toast($t('{0} belum bisa dipakai sekarang.', [itemName(id)]));
 }
-function roleLabel(r){ return r === 'maling' ? 'MALING' : 'WARGA'; }
+function roleLabel(r){ return r === 'maling' ? $t('MALING') : $t('WARGA'); }
 function openProfile(){
   if (modals.length || tr) return null;
   var wrap = el('div');
-  var f1 = el('label', 'mfield'); f1.appendChild(el('span', null, 'Nama'));
+  var f1 = el('label', 'mfield'); f1.appendChild(el('span', null, $t('Nama')));
   var inp = el('input'); inp.type = 'text'; inp.maxLength = 16; inp.value = state.playerName; inp.autocomplete = 'off'; inp.setAttribute('data-autofocus', ''); inp.id = 'profname';
   f1.appendChild(inp); wrap.appendChild(f1);
-  var f2 = el('div', 'mfield'); f2.appendChild(el('span', null, 'Peran'));
+  var f2 = el('div', 'mfield'); f2.appendChild(el('span', null, $t('Peran')));
   var seg = el('div', 'mseg'); seg.setAttribute('role', 'radiogroup');
-  [['warga', 'Warga'], ['maling', 'Maling']].filter(function(r){ return r[0] !== 'maling' || thiefOn(); }).forEach(function(r){
+  [['warga', $t('Warga')], ['maling', $t('Maling')]].filter(function(r){ return r[0] !== 'maling' || thiefOn(); }).forEach(function(r){
     var lab = el('label'), rb = el('input'); rb.type = 'radio'; rb.name = 'perans'; rb.value = r[0]; rb.checked = state.role === r[0];
     lab.appendChild(rb); lab.appendChild(el('span', null, r[1])); seg.appendChild(lab);
   });
   f2.appendChild(seg); wrap.appendChild(f2);
-  if (thiefOn()) wrap.appendChild(el('p', 'mnote', 'Maling bisa membongkar kunci rumah (butuh obeng), tapi berisiko ketahuan dan reputasi turun.'));
-  wrap.appendChild(el('p', null, 'Reputasi: ' + state.reputation));
-  wrap.appendChild(el('p', null, 'Klan: ' + (state.clan ? '[' + state.clan.tag + '] ' + state.clan.name : '-')));
-  wrap.appendChild(el('p', null, 'Koin: ' + state.coins));
-  var h = modal({ title:'Profil', body:wrap, backdropClose:false, actions:[
-    {label:'Batal'},
-    {label:'Simpan', primary:true, onClick:function(m){
-      var nm = (inp.value || '').trim().slice(0, 16) || 'Kamu';
+  if (thiefOn()) wrap.appendChild(el('p', 'mnote', $t('Maling bisa membongkar kunci rumah (butuh obeng), tapi berisiko ketahuan dan reputasi turun.')));
+  wrap.appendChild(el('p', null, $t('Reputasi: {0}', [state.reputation])));
+  wrap.appendChild(el('p', null, $t('Klan: {0}', [state.clan ? '[' + state.clan.tag + '] ' + state.clan.name : '-'])));
+  wrap.appendChild(el('p', null, $t('Koin: {0}', [state.coins])));
+  var h = modal({ title:$t('Profil'), body:wrap, backdropClose:false, actions:[
+    {label:$t('Batal')},
+    {label:$t('Simpan'), primary:true, onClick:function(m){
+      var nm = (inp.value || '').trim().slice(0, 16) || $t('Kamu');
       state.playerName = nm;
       var sel = seg.querySelector('input:checked'); if (sel) setRole(sel.value);
-      save(); hudDirty = true; toast('Profil disimpan.'); m.close('save');
+      save(); hudDirty = true; toast($t('Profil disimpan.')); m.close('save');
     }}
   ]});
   inp.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); h.btn && h.foot.querySelector('.primary').click(); } });
@@ -1499,14 +1500,14 @@ function openProfile(){
 }
 function openRoleChoice(){
   var wrap = el('div');
-  wrap.appendChild(el('p', null, 'Selamat datang di Genesis Town! Pilih perananmu. Kamu bisa mengubahnya nanti di menu Profil.'));
+  wrap.appendChild(el('p', null, $t('Selamat datang di Genesis Town! Pilih perananmu. Kamu bisa mengubahnya nanti di menu Profil.')));
   var b1 = el('button', 'choice'); b1.type = 'button'; b1.setAttribute('data-autofocus', '');
-  b1.appendChild(el('b', null, 'Warga')); b1.appendChild(document.createTextNode('Hidup normal: belanja, mengobrol, bermain.'));
+  b1.appendChild(el('b', null, $t('Warga'))); b1.appendChild(document.createTextNode($t('Hidup normal: belanja, mengobrol, bermain.')));
   var b2 = el('button', 'choice'); b2.type = 'button';
-  b2.appendChild(el('b', null, 'Maling')); b2.appendChild(document.createTextNode('Bisa membongkar kunci rumah, tapi reputasi berisiko.'));
+  b2.appendChild(el('b', null, $t('Maling'))); b2.appendChild(document.createTextNode($t('Bisa membongkar kunci rumah, tapi reputasi berisiko.')));
   wrap.appendChild(b1); wrap.appendChild(b2);
-  var h = modal({ title:'Pilih peran', body:wrap, closable:false });
-  function pick(r){ setRole(r); state.onboarded = true; save(); h.close('pick'); toast('Peran: ' + roleLabel(r).toLowerCase() + '.'); }
+  var h = modal({ title:$t('Pilih peran'), body:wrap, closable:false });
+  function pick(r){ setRole(r); state.onboarded = true; save(); h.close('pick'); toast($t('Peran: {0}.', [roleLabel(r).toLowerCase()])); }
   b1.addEventListener('click', function(){ pick('warga'); });
   b2.addEventListener('click', function(){ pick('maling'); });
   onboardModal = h;
@@ -1526,28 +1527,28 @@ function shopItems(){
 }
 function openShop(keeper){
   if (modals.length) return null;
-  var h = modal({ title:'Mart Genesis', backdropClose:false, actions:[{label:'Selesai', primary:true}] });
+  var h = modal({ title:$t('Mart Genesis'), backdropClose:false, actions:[{label:$t('Selesai'), primary:true}] });
   function render(){
     var wrap = el('div');
-    wrap.appendChild(el('div', 'mmoney', 'Koin: ' + state.coins));
+    wrap.appendChild(el('div', 'mmoney', $t('Koin: {0}', [state.coins])));
     shopItems().forEach(function(id){
       var it = ITEMS[id], row = el('div', 'mrow');
       row.appendChild(iconEl(it.icon || id, 16));
       var g = el('span', 'grow', it.name); row.appendChild(g);
-      row.appendChild(el('span', 'num', it.price + ' koin'));
-      var b = el('button', 'mbtn', 'Beli'); b.type = 'button'; b.setAttribute('data-id', 'buy-' + id);
+      row.appendChild(el('span', 'num', $t('{0} koin', [it.price])));
+      var b = el('button', 'mbtn', $t('Beli')); b.type = 'button'; b.setAttribute('data-id', 'buy-' + id);
       b.disabled = state.coins < it.price;
       b.addEventListener('click', function(){
-        if (!spendCoins(it.price)){ toast('Koin tidak cukup.'); return; }
+        if (!spendCoins(it.price)){ toast($t('Koin tidak cukup.')); return; }
         addItem(id, 1);
         if (keeper) addAffinity(keeper, 1);
-        toast('Membeli ' + it.name + '.');
+        toast($t('Membeli {0}.', [it.name]));
         render();
       });
       row.appendChild(b); wrap.appendChild(row);
     });
     var have = Object.keys(state.inventory).filter(function(k){ return state.inventory[k] > 0; }).map(function(k){ return itemName(k) + ' x' + state.inventory[k]; });
-    wrap.appendChild(el('p', 'mnote', 'Tasmu: ' + (have.length ? have.join(', ') : 'kosong')));
+    wrap.appendChild(el('p', 'mnote', $t('Tasmu: {0}', [have.length ? have.join(', ') : $t('kosong')])));
     var sc = h.body.scrollTop;
     h.setBody(wrap); h.body.scrollTop = sc;
     // keep keyboard focus on a sensible button after re-render
@@ -1562,9 +1563,9 @@ function openShop(keeper){
 function confirmRegen(){
   if (QA){ doRegen(); return; }
   if (modals.length || tr) return;
-  modal({ title:'Generasi ulang?', body:'Kota baru akan dibuat dengan seed baru. Koin dan isi tasmu tetap dibawa.', actions:[
-    {label:'Batal'},
-    {label:'Ya, buat baru', primary:true, onClick:function(m){ m.close('ok'); doRegen(); }}
+  modal({ title:$t('Generasi ulang?'), body:$t('Kota baru akan dibuat dengan seed baru. Koin dan isi tasmu tetap dibawa.'), actions:[
+    {label:$t('Batal')},
+    {label:$t('Ya, buat baru'), primary:true, onClick:function(m){ m.close('ok'); doRegen(); }}
   ]});
 }
 function doRegen(){
@@ -1592,10 +1593,10 @@ function addHudButton(o){
 }
 function openMenu(){
   if (isUiOpen()) return;
-  var opts = [{label:'Profil (P)', onPick:openProfile}];
+  var opts = [{label:$t('Profil (P)'), onPick:openProfile}];
   hudButtons.forEach(function(hb){ if (hb.secondary) opts.push({label:hb.label + (hb.key ? ' (' + hb.key + ')' : ''), onPick:function(){ if (hb.onClick) hb.onClick(); }}); });
-  opts.push({label:'Peta (M)', onPick:function(){ setMap(true); }});
-  menu('Menu', opts);
+  opts.push({label:$t('Peta (M)'), onPick:function(){ setMap(true); }});
+  menu($t('Menu'), opts);
 }
 
 /* ---------- Dev panel ---------- */
@@ -1619,28 +1620,28 @@ function openDev(){
   if (modals.length || tr || D || mapOpen) return null;
   var wrap = el('div');
   // 1. day length
-  var s1 = el('div', 'dsec'); s1.appendChild(el('h3', null, 'Panjang 1 hari (menit nyata)'));
-  var num = el('input'); num.type = 'number'; num.min = 1; num.max = 60; num.step = 1; num.id = 'dev-daylen'; num.setAttribute('aria-label', 'Panjang 1 hari dalam menit');
-  var rng = el('input'); rng.type = 'range'; rng.min = 1; rng.max = 60; rng.step = 1; rng.id = 'dev-dayrange'; rng.setAttribute('aria-label', 'Panjang 1 hari (slider)');
+  var s1 = el('div', 'dsec'); s1.appendChild(el('h3', null, $t('Panjang 1 hari (menit nyata)')));
+  var num = el('input'); num.type = 'number'; num.min = 1; num.max = 60; num.step = 1; num.id = 'dev-daylen'; num.setAttribute('aria-label', $t('Panjang 1 hari dalam menit'));
+  var rng = el('input'); rng.type = 'range'; rng.min = 1; rng.max = 60; rng.step = 1; rng.id = 'dev-dayrange'; rng.setAttribute('aria-label', $t('Panjang 1 hari (slider)'));
   var info = el('p', 'mnote'); info.id = 'dev-dayinfo';
   function syncDay(from){
     if (from !== num) num.value = String(Math.round(dayLength * 10) / 10);
     if (from !== rng) rng.value = String(Math.round(dayLength));
-    info.textContent = 'Siang \u2248 ' + fmtMin(dayLength * 13 / 24) + ' menit, malam \u2248 ' + fmtMin(dayLength * 11 / 24) + ' menit';
+    info.textContent = $t('Siang ≈ {0} menit, malam ≈ {1} menit', [fmtMin(dayLength * 13 / 24), fmtMin(dayLength * 11 / 24)]);
   }
   function setLen(v, from){ if (!isFinite(v) || v < 1) return; setDayLength(v); syncDay(from); }
   num.addEventListener('input', function(){ var v = parseFloat(num.value); if (isFinite(v)) setLen(Math.min(60, v), num); });
   num.addEventListener('change', function(){ syncDay(null); });
   rng.addEventListener('input', function(){ setLen(+rng.value, rng); });
-  var r1 = el('div', 'mrow'); r1.appendChild(num); r1.appendChild(el('span', 'grow', 'menit = 1 hari (1-60)'));
+  var r1 = el('div', 'mrow'); r1.appendChild(num); r1.appendChild(el('span', 'grow', $t('menit = 1 hari (1-60)')));
   s1.appendChild(r1); s1.appendChild(rng); s1.appendChild(info);
   wrap.appendChild(s1);
   syncDay(null);
   // 2. time
-  var s2 = el('div', 'dsec'); s2.appendChild(el('h3', null, 'Waktu'));
+  var s2 = el('div', 'dsec'); s2.appendChild(el('h3', null, $t('Waktu')));
   var now = el('p', null); now.id = 'dev-now'; s2.appendChild(now);
   var bt = el('div', 'dbtns');
-  [['Pagi 07:00', 7, 'pagi'], ['Siang 12:00', 12, 'siang'], ['Senja 18:00', 18, 'senja'], ['Malam 22:00', 22, 'malam']].forEach(function(p){
+  [[$t('Pagi 07:00'), 7, 'pagi'], [$t('Siang 12:00'), 12, 'siang'], [$t('Senja 18:00'), 18, 'senja'], [$t('Malam 22:00'), 22, 'malam']].forEach(function(p){
     var b = el('button', 'mbtn', p[0]); b.type = 'button'; b.id = 'dev-t-' + p[2];
     b.addEventListener('click', function(){ setTime(p[1], 0); refresh(); });
     bt.appendChild(b);
@@ -1651,23 +1652,23 @@ function openDev(){
   s2.appendChild(bt);
   wrap.appendChild(s2);
   // 3. developer mode
-  var s3 = el('div', 'dsec'); s3.appendChild(el('h3', null, 'Mode developer'));
+  var s3 = el('div', 'dsec'); s3.appendChild(el('h3', null, $t('Mode developer')));
   var lab = el('label', 'dchk'), cb = el('input'); cb.type = 'checkbox'; cb.id = 'dev-mode'; cb.checked = devEnabled;
   cb.addEventListener('change', function(){ GT.dev.enabled = cb.checked; });
-  var tx = el('span'); tx.appendChild(document.createTextNode('Mode developer '));
-  tx.appendChild(el('span', 'mnote', '- Izinkan perintah `#` di chat NPC (mis. `#ikut aku`).'));
+  var tx = el('span'); tx.appendChild(document.createTextNode($t('Mode developer ')));
+  tx.appendChild(el('span', 'mnote', $t('- Izinkan perintah `#` di chat NPC (mis. `#ikut aku`).')));
   lab.appendChild(cb); lab.appendChild(tx); s3.appendChild(lab);
   wrap.appendChild(s3);
   function refresh(){
     var ci = clockInfo();
-    now.textContent = 'Sekarang ' + ci.hhmm + ' (hari ' + ci.day + ', ' + (ci.night ? 'malam' : ci.light < 0.98 ? 'senja/fajar' : 'siang') + ')' + (timePaused ? ' - waktu berhenti' : '');
-    pb.textContent = timePaused ? 'Lanjut waktu' : 'Pause waktu';
+    now.textContent = $t('Sekarang {0} (hari {1}, {2}){3}', [ci.hhmm, ci.day, ci.night ? 'malam' : ci.light < 0.98 ? 'senja/fajar' : 'siang', timePaused ? $t(' - waktu berhenti') : '']);
+    pb.textContent = timePaused ? $t('Lanjut waktu') : $t('Pause waktu');
     if (cb.checked !== devEnabled) cb.checked = devEnabled;
   }
   refresh();
   devSections.forEach(function(rec){ renderDevSection(wrap, rec); });
   var timer = setInterval(function(){ if (devModal && devModal.isOpen()) refresh(); }, 400);
-  var h = modal({ title:'Panel Developer', body:wrap, backdropClose:false, actions:[{label:'Tutup', primary:true}], onClose:function(){ clearInterval(timer); if (devModal === h) devModal = null; } });
+  var h = modal({ title:$t('Panel Developer'), body:wrap, backdropClose:false, actions:[{label:$t('Tutup'), primary:true}], onClose:function(){ clearInterval(timer); if (devModal === h) devModal = null; } });
   h._wrap = wrap; devModal = h;
   return h;
 }
@@ -1780,7 +1781,7 @@ function doorBump(door, ctxIn){
       var c = { mode:'bump', scene:scene, tile:{x:door.dx, y:door.dy}, tileType:'door', npc:null, door:door, building:door, locked:true };
       if (callModsBool('onInteract', [c])) return;
     }
-    openDialog('Rumah ' + door.owner + ' terkunci. Kamu belum diundang.', '');
+    openDialog($t('Rumah {0} terkunci. Kamu belum diundang.', [door.owner]), '');
   }
 }
 function enterBuilding(door){
@@ -1824,8 +1825,8 @@ function interact(mode){
   if (callModsBool('onInteract', [ctx])) return;
   if (tt === 'chair' && !npc && scene.kind !== 'out' && mode !== 'message'){ sitDown(f.x, f.y); return; }
   if (mode === 'message'){
-    if (npc) openDialog('(' + npc.name + ' belum punya jiwa. Pasang di menu Jiwa.)', '', npc);
-    else toast('Hadapi seseorang lalu tekan E untuk kirim pesan.');
+    if (npc) openDialog($t('({0} belum punya jiwa. Pasang di menu Jiwa.)', [npc.name]), '', npc);
+    else toast($t('Hadapi seseorang lalu tekan E untuk kirim pesan.'));
     return;
   }
   if (npc){
@@ -1838,13 +1839,13 @@ function interact(mode){
   }
   if (door){ doorBump(door, ctx); return; }
   if (m.info.has(idx)){ openDialog(m.info.get(idx), ''); return; }
-  if (tt === 'chest'){ openDialog('Peti kayu. Tertutup rapat dan tidak bisa dibuka sekarang.', ''); return; }
+  if (tt === 'chest'){ openDialog($t('Peti kayu. Tertutup rapat dan tidak bisa dibuka sekarang.'), ''); return; }
   if (scene.kind === 'casino' && (tt === 'card_table' || tt === 'dice_table' || tt === 'slot')){
-    openDialog('Meja belum dibuka. (Modul kasino belum terpasang.)', ''); return;
+    openDialog($t('Meja belum dibuka. (Modul kasino belum terpasang.)'), ''); return;
   }
   if (m.bld.has(idx)){
     var b = m.bld.get(idx);
-    var txt = b.kind === 'mart' ? 'Mart Genesis. Pintunya ada di tengah bawah.' : b.kind === 'casino' ? 'Kasino Genesis. Koin permainan saja! Pintunya ada di tengah bawah.' : (b.own ? 'Ini rumahmu. Masuk lewat pintu di tengah.' : 'Rumah ' + b.owner + '.');
+    var txt = b.kind === 'mart' ? $t('Mart Genesis. Pintunya ada di tengah bawah.') : b.kind === 'casino' ? $t('Kasino Genesis. Koin permainan saja! Pintunya ada di tengah bawah.') : (b.own ? $t('Ini rumahmu. Masuk lewat pintu di tengah.') : $t('Rumah {0}.', [b.owner]));
     openDialog(txt, '');
   }
 }
@@ -2208,9 +2209,9 @@ var lastLoc = '', lastSeed = -1, lastCoins = -1, lastClock = '', lastRole = '', 
 function locText(){
   if (scene.kind === 'out') return areaName(P.x, P.y);
   if (scene.house && scene.house.name) return scene.house.name;
-  if (scene.kind === 'mart') return 'Mart Genesis';
-  if (scene.kind === 'casino') return 'Kasino Genesis';
-  return scene.house.own ? 'Rumah Kamu' : 'Rumah ' + scene.house.owner;
+  if (scene.kind === 'mart') return $t('Mart Genesis');
+  if (scene.kind === 'casino') return $t('Kasino Genesis');
+  return scene.house.own ? $t('Rumah Kamu') : $t('Rumah {0}', [scene.house.owner]);
 }
 function pad2(n){ return (n < 10 ? '0' : '') + n; }
 function sstep(t){ t = t < 0 ? 0 : t > 1 ? 1 : t; return t*t*(3 - 2*t); }

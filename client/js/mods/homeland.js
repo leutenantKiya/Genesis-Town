@@ -28,7 +28,7 @@
     e: ['ne', 'c', 'se'], sw: ['w', 's'], s: ['sw', 'c', 'se'], se: ['s', 'e']
   };
   var HOME_KINDS = { townhall: 1, kolam: 1, tambang: 1, restoran: 1, rumah: 1, rumahsakit: 1 };
-  var KIND_NAME = { kolam: 'Kolam Ikan', tambang: 'Tambang', restoran: 'Restoran', rumah: 'Rumah Pekerja', rumahsakit: 'Rumah Sakit' };
+  var KIND_NAME = { kolam: $t('Kolam Ikan'), tambang: $t('Tambang'), restoran: $t('Restoran'), rumah: $t('Rumah Pekerja'), rumahsakit: $t('Rumah Sakit') };
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function btn(label, onClick, cls, disabled) {
@@ -41,19 +41,19 @@
   function isHL(w) { return /^HL-\d+$/.test(w); }
   function inOwnHome() { return !!(H && wid() === H.world); }
   function itemName(t) {
-    if (t === 'coin') return 'Koin';
+    if (t === 'coin') return $t('Koin');
     var c = S() && S().cfg && S().cfg.econ && S().cfg.econ.items[t];
     return c ? c.name : t;
   }
   function have(t) { var b = S() && S().st && S().st.bag && S().st.bag[t]; return b ? b.settled + b.today : 0; }
   function costLine(cost) { return Object.keys(cost || {}).map(function (t) { return cost[t] + ' ' + itemName(t); }).join(' + ') || 'gratis'; }
   function shortOf(cost) { return Object.keys(cost || {}).filter(function (t) { return have(t) < cost[t]; }); }
-  function secsLine(s) { s = Math.round(s || 0); return s >= 60 ? Math.floor(s / 60) + ' mnt' + (s % 60 ? ' ' + (s % 60) + ' dtk' : '') : s + ' dtk'; }
+  function secsLine(s) { s = Math.round(s || 0); return s >= 60 ? $t('{0} mnt{1}', [Math.floor(s / 60), s % 60 ? $t(' {0} dtk', [s % 60]) : '']) : $t('{0} dtk', [s]); }
   function clock(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); }
   function endMs(j) { var v = j.ends_at; if (typeof v === 'string') return Date.parse(v); return v < 1e11 ? v * 1000 : v; }
   function loggedIn() {
-    if (!C || !S() || S().mode === 'offline') { GT.toast('Homeland butuh server game.'); return false; }
-    if (!S().account) { GT.toast('Masuk dulu (tombol Masuk).'); return false; }
+    if (!C || !S() || S().mode === 'offline') { GT.toast($t('Homeland butuh server game.')); return false; }
+    if (!S().account) { GT.toast($t('Masuk dulu (tombol Masuk).')); return false; }
     return true;
   }
   function layoutOf() { return GT.world && GT.world.layout; }
@@ -108,13 +108,13 @@
     }).then(function (lr) {
       var L = layoutFor(lr), ok = false;
       try { ok = GT.switchWorld(lr.world, L); } catch (e) { console.error(e); }
-      if (!ok) throw new Error('Peta Homeland gagal dibuat.');
+      if (!ok) throw new Error($t('Peta Homeland gagal dibuat.'));
       layoutSig = signature(H);
       GT.teleportPlayer('out', L.spawn.x, L.spawn.y, 'down');
       builderSig = ''; placeBuilder();
       if (window.GT_PLAYERS && GT_PLAYERS.refresh) GT_PLAYERS.refresh();
       return C.refresh(true).then(function () { return true; });
-    }).catch(function (e) { GT.toast((e && e.message) || 'Gagal masuk Homeland.'); return false; });
+    }).catch(function (e) { GT.toast((e && e.message) || $t('Gagal masuk Homeland.')); return false; });
   }
   function portalPos() { var w = GT.world; return w && w.portal || null; }
   function nearPortal() {
@@ -123,16 +123,16 @@
   }
   function openPortal() {
     if (travelling || !loggedIn()) return;
-    if (!nearPortal()) { GT.toast('Pergi ke portal dulu.'); return; }
+    if (!nearPortal()) { GT.toast($t('Pergi ke portal dulu.')); return; }
     load(true).then(function () {
       var cur = wid(), opts = [];
-      if (cur !== 'public') opts.push({ label: 'Area Publik (pasar)', onPick: function () { travel('public'); } });
-      if (H && cur !== H.world) opts.push({ label: 'Rumahku', onPick: function () { travel(H.world); } });
+      if (cur !== 'public') opts.push({ label: $t('Area Publik (pasar)'), onPick: function () { travel('public'); } });
+      if (H && cur !== H.world) opts.push({ label: $t('Rumahku'), onPick: function () { travel(H.world); } });
       ((H && H.invited) || []).forEach(function (v) {
         if (cur === v.world) return;
-        opts.push({ label: 'Dunia ' + (v.owner_name || v.world), onPick: function () { travel(v.world); } });
+        opts.push({ label: $t('Dunia {0}', [v.owner_name || v.world]), onPick: function () { travel(v.world); } });
       });
-      GT.menu('Portal · mau ke mana?', opts);
+      GT.menu($t('Portal · mau ke mana?'), opts);
     });
   }
   function travel(to) {
@@ -142,16 +142,16 @@
     if (to === 'public') layoutP = Promise.resolve(null);
     else layoutP = C.api('/homeland/layout?world=' + encodeURIComponent(to)).then(function (r) { return layoutFor(r); });
     layoutP.then(function (L) {
-      GT.toast('Melangkah ke portal…');
+      GT.toast($t('Melangkah ke portal…'));
       return C.act({ action: 'travel', to: to, world: from }, true).catch(function (e) { e.shown = true; throw e; }).then(function (r) {
         var ok = false;
         try { ok = GT.switchWorld(r.world, L); } catch (err) { ok = false; }
         if (!ok) {
           // The server already moved us, so both sides disagree. A fresh page lands on the own Homeland spawn, which the
           // server always accepts (Positions.report), so reloading puts them in step again.
-          GT.toast('Peta gagal dibuat. Memuat ulang agar posisimu kembali sama dengan server…');
+          GT.toast($t('Peta gagal dibuat. Memuat ulang agar posisimu kembali sama dengan server…'));
           setTimeout(function () { location.reload(); }, 1800);
-          var e = new Error('Perjalanan gagal.'); e.shown = true; throw e;
+          var e = new Error($t('Perjalanan gagal.')); e.shown = true; throw e;
         }
         if (H && r.world === H.world && L) layoutSig = signature(H);
         GT.teleportPlayer('out', r.arrive.x, r.arrive.y, 'down');
@@ -160,7 +160,7 @@
         if (window.GT_PLAYERS && GT_PLAYERS.refresh) GT_PLAYERS.refresh();
         return C.refresh(true);
       });
-    }).catch(function (e) { if (!(e && e.shown)) GT.toast((e && e.message) || 'Gagal bepergian.'); }).then(function () { travelling = false; });
+    }).catch(function (e) { if (!(e && e.shown)) GT.toast((e && e.message) || $t('Gagal bepergian.')); }).then(function () { travelling = false; });
   }
 
   /* ------------------------------------------------------------ windows */
@@ -203,13 +203,13 @@
   /* cost line: item chips (the missing ones are marked and named), then the time */
   function costRow(cost, secs) {
     var r = $('div', 'hl-cost'), keys = Object.keys(cost || {}), short = shortOf(cost);
-    r.appendChild($('span', 'hl-k', 'Biaya'));
+    r.appendChild($('span', 'hl-k', $t('Biaya')));
     if (!keys.length) r.appendChild($('span', 'hl-chip', 'gratis'));
     keys.forEach(function (t) {
       var c = $('span', 'hl-chip' + (have(t) < cost[t] ? ' short' : '')); c.appendChild($('b', 'hl-n', String(cost[t]))); c.appendChild(document.createTextNode(' ' + itemName(t))); r.appendChild(c);
     });
-    if (secs != null) { r.appendChild($('span', 'hl-k', 'Waktu')); r.appendChild($('b', 'hl-n', secsLine(secs))); }
-    if (short.length) r.appendChild($('span', 'hl-lack', 'kurang ' + short.map(itemName).join(', ')));
+    if (secs != null) { r.appendChild($('span', 'hl-k', $t('Waktu'))); r.appendChild($('b', 'hl-n', secsLine(secs))); }
+    if (short.length) r.appendChild($('span', 'hl-lack', $t('kurang {0}', [short.map(itemName).join(', ')])));
     return r;
   }
 
@@ -223,55 +223,55 @@
   }
 
   function jobWhat(j) {
-    return j.kind === 'th' ? 'Balai Kota naik level' : j.kind === 'chunk' ? 'Membuka wilayah ' + chunkName(j.target) : j.kind === 'furniture' ? 'Memasang ' + (/:kasur$/.test(j.target) ? 'kasur' : 'hiburan') : j.kind === 'upgrade' ? 'Menaikkan Rumah Sakit' : 'Membangun ' + ((lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target);
+    return j.kind === 'th' ? $t('Balai Kota naik level') : j.kind === 'chunk' ? $t('Membuka wilayah {0}', [chunkName(j.target)]) : j.kind === 'furniture' ? $t('Memasang {0}', [/:kasur$/.test(j.target) ? 'kasur' : 'hiburan']) : j.kind === 'upgrade' ? $t('Menaikkan Rumah Sakit') : $t('Membangun {0}', [(lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target]);
   }
-  function jobLine(j) { return jobWhat(j) + ' · sisa ' + clock(endMs(j) - Date.now()); }
+  function jobLine(j) { return $t('{0} · sisa {1}', [jobWhat(j), clock(endMs(j) - Date.now())]); }
 
   /* ---- Balai Kota ---- */
   function hallBody() {
     var wrap = $('div', 'gt-isl hl');
-    if (!H) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
+    if (!H) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     var owner = inOwnHome();
     var stats = $('div', 'hl-stats');
     function stat(k, v) { var s = $('div', 'hl-stat'); s.appendChild($('span', 'hl-k', k)); s.appendChild($('b', 'hl-n', v)); stats.appendChild(s); }
-    stat('Balai Kota', 'level ' + H.th);
-    stat('Wilayah terbuka', (H.open.length + 1) + ' dari 9');
+    stat($t('Balai Kota'), $t('level {0}', [H.th]));
+    stat($t('Wilayah terbuka'), $t('{0} dari 9', [H.open.length + 1]));
     wrap.appendChild(stats);
-    if (!owner) { wrap.appendChild($('p', 'hl-p', 'Ini Balai Kota milik pemilik dunia ini. Hanya pemiliknya yang bisa membangun.')); return wrap; }
+    if (!owner) { wrap.appendChild($('p', 'hl-p', $t('Ini Balai Kota milik pemilik dunia ini. Hanya pemiliknya yang bisa membangun.'))); return wrap; }
 
-    var bs = cell('Pembangun', H.builders.busy + ' dari ' + H.builders.total + ' sibuk');
+    var bs = cell($t('Pembangun'), $t('{0} dari {1} sibuk', [H.builders.busy, H.builders.total]));
     if (H.jobs.length) H.jobs.forEach(function (j) {
       var r = $('div', 'hl-row'); r.appendChild($('span', 'hl-grow', jobWhat(j))); r.appendChild($('span', 'hl-k', 'sisa')); r.appendChild($('b', 'hl-n hl-time', clock(endMs(j) - Date.now()))); bs.appendChild(r);
     });
-    else bs.appendChild($('p', 'chain-dim', 'Pembangun menganggur. Beri dia pekerjaan.'));
+    else bs.appendChild($('p', 'chain-dim', $t('Pembangun menganggur. Beri dia pekerjaan.')));
     (H.workers || []).forEach(function (w) {
       var sick = w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now(), r = $('div', 'hl-row hl-worker');
       var who = $('span', 'hl-grow'); who.appendChild(document.createTextNode(w.name + ' '));
-      who.appendChild($('span', 'hl-state' + (sick ? ' bad' : ''), sick ? 'sakit' : w.busy ? 'bekerja' : 'menganggur'));
+      who.appendChild($('span', 'hl-state' + (sick ? ' bad' : ''), sick ? $t('sakit') : w.busy ? $t('bekerja') : $t('menganggur')));
       r.appendChild(who);
       var f = Math.round(w.fatigue), pb = bar(f, 100, f >= 70 ? 'bad' : f >= 40 ? 'mid' : 'ok'); pb.setAttribute('aria-label', 'lelah');
       r.appendChild(pb);
-      r.appendChild($('span', 'hl-n hl-sm', 'lelah ' + f + '% · semangat ' + Math.round(w.motivation == null ? 60 : w.motivation) + '%'));
+      r.appendChild($('span', 'hl-n hl-sm', $t('lelah {0}% · semangat {1}%', [f, Math.round(w.motivation == null ? 60 : w.motivation)])));
       bs.appendChild(r);
     });
-    if (H.workers && H.workers.some(function (w) { return w.fatigue >= 40; })) bs.appendChild($('p', 'chain-dim', 'Tukang yang lelah bekerja lebih lambat. Restoran memberi mereka makan dari lemarinya.'));
+    if (H.workers && H.workers.some(function (w) { return w.fatigue >= 40; })) bs.appendChild($('p', 'chain-dim', $t('Tukang yang lelah bekerja lebih lambat. Restoran memberi mereka makan dari lemarinya.')));
     wrap.appendChild(bs);
 
     if (H.forage) {
       var fs = H.forage.stored || {}, tot = 0;
       var parts = Object.keys(fs).map(function (t) { tot += fs[t]; return fs[t] + ' ' + itemName(t); });
-      var fb = cell('Pemburu membawa: ' + parts.join(', ') + ' (maks ' + H.forage.capacity + ')');
-      fb.appendChild($('p', 'chain-dim', 'Mencari ikan dan kayu sendiri. Musim dingin hasilnya dua kali lipat.'));
-      acts(fb).appendChild(btn('Ambil', function () { run({ action: 'forage' }); }, '', tot <= 0 || isBusy()));
+      var fb = cell($t('Pemburu membawa: {0} (maks {1})', [parts.join(', '), H.forage.capacity]));
+      fb.appendChild($('p', 'chain-dim', $t('Mencari ikan dan kayu sendiri. Musim dingin hasilnya dua kali lipat.')));
+      acts(fb).appendChild(btn($t('Ambil'), function () { run({ action: 'forage' }); }, '', tot <= 0 || isBusy()));
       wrap.appendChild(fb);
     }
 
-    var busy = busyJob(), why = busy ? 'Pembangun sedang bekerja.' : null;
+    var busy = busyJob(), why = busy ? $t('Pembangun sedang bekerja.') : null;
     var th = H.next && H.next.th;
-    if (!th) wrap.appendChild(stepBlock('Naikkan Balai Kota', 'Sudah di level tertinggi.', null, false, null, null));
+    if (!th) wrap.appendChild(stepBlock($t('Naikkan Balai Kota'), $t('Sudah di level tertinggi.'), null, false, null, null));
     else {
       var short = shortOf(th.cost), can = !busy && !short.length;
-      wrap.appendChild(stepBlock('Naikkan ke level ' + th.level, 'Level lebih tinggi membuka bangunan baru, petak kebun, dan wilayah.', th, can, why, 'Naikkan ke level ' + th.level, function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
+      wrap.appendChild(stepBlock($t('Naikkan ke level {0}', [th.level]), $t('Level lebih tinggi membuka bangunan baru, petak kebun, dan wilayah.'), th, can, why, $t('Naikkan ke level {0}', [th.level]), function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
     }
 
     // neighbouring locked chunks
@@ -282,45 +282,45 @@
       if (mine[id]) return;
       if (NEIGH[id].some(function (n) { return mine[n]; })) adj.push(id);
     });
-    var ob = cell('Buka wilayah', ch ? 'ke-' + ch.n : null);
-    if (!ch) ob.appendChild($('p', 'chain-dim', adj.length ? 'Semua wilayah yang bisa dibuka sudah terbuka.' : 'Semua wilayah sudah terbuka.'));
+    var ob = cell($t('Buka wilayah'), ch ? 'ke-' + ch.n : null);
+    if (!ch) ob.appendChild($('p', 'chain-dim', adj.length ? $t('Semua wilayah yang bisa dibuka sudah terbuka.') : $t('Semua wilayah sudah terbuka.')));
     else {
       ob.appendChild(costRow(ch.cost, ch.secs));
-      if (H.th < ch.th) ob.appendChild($('p', 'hl-why', 'Terkunci: perlu Balai Kota level ' + ch.th + '.'));
+      if (H.th < ch.th) ob.appendChild($('p', 'hl-why', $t('Terkunci: perlu Balai Kota level {0}.', [ch.th])));
       var okChunk = !busy && H.th >= ch.th && !shortOf(ch.cost).length, ca = acts(ob);
-      adj.forEach(function (id) { ca.appendChild(btn('Buka ' + chunkName(id), function () { run({ action: 'build', kind: 'chunk', target: id }); }, '', !okChunk || isBusy())); });
+      adj.forEach(function (id) { ca.appendChild(btn($t('Buka {0}', [chunkName(id)]), function () { run({ action: 'build', kind: 'chunk', target: id }); }, '', !okChunk || isBusy())); });
     }
     wrap.appendChild(ob);
 
     // Pekerja: worker bots
     var bd = H.beds || { total: 0, used: 0 }, full = bd.used >= bd.total;
-    var pk = cell('Pekerja', 'Kasur ' + bd.used + ' dari ' + bd.total);
-    pk.appendChild($('p', 'chain-dim', 'Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Pemburu mencari ikan dan kayu; Koki mempercepat Restoran memberi makan Tukang; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.'));
-    pk.appendChild($('p', full ? 'hl-warn' : 'chain-dim', 'Kasur terpakai ' + bd.used + ' dari ' + bd.total + (full ? '. Bangun Rumah Pekerja atau tambah kasur.' : '.')));
+    var pk = cell($t('Pekerja'), $t('Kasur {0} dari {1}', [bd.used, bd.total]));
+    pk.appendChild($('p', 'chain-dim', $t('Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Pemburu mencari ikan dan kayu; Koki mempercepat Restoran memberi makan Tukang; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.')));
+    pk.appendChild($('p', full ? 'hl-warn' : 'chain-dim', $t('Kasur terpakai {0} dari {1}{2}', [bd.used, bd.total, full ? $t('. Bangun Rumah Pekerja atau tambah kasur.') : '.'])));
     var hireMap = H.hire || {};
     Object.keys(hireMap).forEach(function (job) {
       var d = hireMap[job], row = $('div', 'hl-row hl-hire'), tx = $('div', 'hl-grow');
       var nm = $('div', 'hl-name'); nm.appendChild(document.createTextNode(d.name + ' '));
-      if (d.rarity === 'rare') nm.appendChild($('span', 'hl-rare', 'Langka'));
+      if (d.rarity === 'rare') nm.appendChild($('span', 'hl-rare', $t('Langka')));
       tx.appendChild(nm);
       tx.appendChild($('div', 'hl-n hl-sm', d.have + '/' + d.max + ' · ' + d.price + ' ' + itemName('coin')));
       if (!d.can && d.why) tx.appendChild($('div', 'hl-why', d.why));
       row.appendChild(tx);
-      row.appendChild(btn('Pekerjakan ' + d.name + ' (' + d.price + ')', function () { run({ action: 'hire', job: job }); }, '', !d.can || isBusy()));
+      row.appendChild(btn($t('Pekerjakan {0} ({1})', [d.name, d.price]), function () { run({ action: 'hire', job: job }); }, '', !d.can || isBusy()));
       pk.appendChild(row);
     });
     wrap.appendChild(pk);
 
     // cosmetics: a hat for the Tukang or a bot; better output, or less fatigue for a Tukang
-    var cat = H.cosmetics || {}, crew = [{ id: 0, name: 'Tukang Balai Kota', cosmetic: (H.workers && H.workers[0] && H.workers[0].cosmetic) || null }];
+    var cat = H.cosmetics || {}, crew = [{ id: 0, name: $t('Tukang Balai Kota'), cosmetic: (H.workers && H.workers[0] && H.workers[0].cosmetic) || null }];
     (H.bots || []).forEach(function (b) { crew.push({ id: b.id, name: b.name + ' ' + b.id, cosmetic: b.cosmetic || null }); });
     if (Object.keys(cat).length) {
-      var pc = cell('Perlengkapan');
-      pc.appendChild($('p', 'chain-dim', 'Topi dan syal: Tukang jadi kurang lelah, pekerja lain lebih rajin. Pakai yang baru menggantikan yang lama, tanpa uang kembali.'));
+      var pc = cell($t('Perlengkapan'));
+      pc.appendChild($('p', 'chain-dim', $t('Topi dan syal: Tukang jadi kurang lelah, pekerja lain lebih rajin. Pakai yang baru menggantikan yang lama, tanpa uang kembali.')));
       crew.forEach(function (c) {
         var cr = $('div', 'hl-crew'), who = $('div', 'hl-name');
         who.appendChild(document.createTextNode(c.name + ' · '));
-        who.appendChild($('span', 'hl-state', c.cosmetic && cat[c.cosmetic] ? cat[c.cosmetic].name : 'polos'));
+        who.appendChild($('span', 'hl-state', c.cosmetic && cat[c.cosmetic] ? cat[c.cosmetic].name : $t('polos')));
         cr.appendChild(who);
         var ca = acts(cr);
         Object.keys(cat).forEach(function (k) {
@@ -333,22 +333,22 @@
     }
 
     // invites
-    var iv = cell('Undang teman');
-    iv.appendChild($('p', 'chain-dim', 'Hanya kamu dan tamu undangan yang boleh datang lewat portal. Tulis nama pemain (seperti di permainan), pisahkan dengan koma. Tamu melihat duniamu di menu portal.'));
-    var input = $('input'); input.type = 'text'; input.maxLength = 400; input.placeholder = 'Ayu, Budi'; var known = {};
-    input.setAttribute('aria-label', 'Nama tamu');
+    var iv = cell($t('Undang teman'));
+    iv.appendChild($('p', 'chain-dim', $t('Hanya kamu dan tamu undangan yang boleh datang lewat portal. Tulis nama pemain (seperti di permainan), pisahkan dengan koma. Tamu melihat duniamu di menu portal.')));
+    var input = $('input'); input.type = 'text'; input.maxLength = 400; input.placeholder = $t('Ayu, Budi'); var known = {};
+    input.setAttribute('aria-label', $t('Nama tamu'));
     (H.guests || []).forEach(function (g) { var nm = typeof g === 'string' ? g : g.name; known[nm] = typeof g === 'string' ? g : g.account; });
     input.value = Object.keys(known).join(', ');
     input.autocomplete = 'off';
     iv.appendChild(input);
-    acts(iv).appendChild(btn('Simpan undangan', function () {
+    acts(iv).appendChild(btn($t('Simpan undangan'), function () {
       var list = String(input.value || '').split(/[,;]+/).map(function (x) { return x.trim(); }).filter(Boolean)
         .map(function (x) { return Object.prototype.hasOwnProperty.call(known, x) ? known[x] : x; });
       C.api('/homeland/invite', { method: 'POST', body: { accounts: list } })
         .then(function (r) {
           var names = (r.invite || []).map(function (g) { if (typeof g === 'string') return g; known[g.name] = g.account; return g.name; });
-          input.value = names.join(', '); GT.toast('Undangan tersimpan (' + names.length + ' tamu).'); return load(true);
-        }, function (e) { GT.toast('Gagal: ' + e.message); });
+          input.value = names.join(', '); GT.toast($t('Undangan tersimpan ({0} tamu).', [names.length])); return load(true);
+        }, function (e) { GT.toast($t('Gagal: {0}', [e.message])); });
     }));
     wrap.appendChild(iv);
     return wrap;
@@ -357,24 +357,24 @@
   /* ---- a lot: build or collect ---- */
   function lotBody(lotId) {
     var wrap = $('div', 'gt-isl hl'), lot = lotById(lotId);
-    if (!H || !lot) { wrap.appendChild($('p', null, H ? 'Lahan ini tidak ada.' : 'Memuat…')); return wrap; }
+    if (!H || !lot) { wrap.appendChild($('p', null, H ? $t('Lahan ini tidak ada.') : $t('Memuat…'))); return wrap; }
     var owner = inOwnHome(), b = builtOf(lotId), name = KIND_NAME[lot.kind] || lot.kind;
     var def = H.next && H.next.buildings && H.next.buildings[lot.kind];
     var stats = $('div', 'hl-stats'), st1 = $('div', 'hl-stat');
     st1.appendChild($('span', 'hl-k', name)); st1.appendChild($('b', 'hl-n', chunkName(lot.chunk))); stats.appendChild(st1);
     wrap.appendChild(stats);
-    if (!owner) { wrap.appendChild($('p', 'hl-p', b ? 'Bangunan milik pemilik dunia ini.' : 'Lahan kosong milik pemilik dunia ini.')); return wrap; }
+    if (!owner) { wrap.appendChild($('p', 'hl-p', b ? $t('Bangunan milik pemilik dunia ini.') : $t('Lahan kosong milik pemilik dunia ini.'))); return wrap; }
     var job = null;
     H.jobs.forEach(function (j) { if (j.kind === 'build' && j.target === lotId) job = j; });
     if (b && def && def.cooks) { wrap.appendChild(restoranBody(lotId)); return wrap; }
     if (b && def && def.furniture) { wrap.appendChild(houseBody(lotId)); return wrap; }
     if (b && def && def.healGameHours) { wrap.appendChild(hospitalBody(lotId)); return wrap; }
     if (b) {
-      var prod = def && def.produces ? itemName(def.produces) : 'hasil';
-      var box = cell(name + ' · menghasilkan ' + prod, b.stored + ' / ' + b.capacity);
+      var prod = def && def.produces ? itemName(def.produces) : $t('hasil');
+      var box = cell($t('{0} · menghasilkan {1}', [name, prod]), b.stored + ' / ' + b.capacity);
       box.appendChild(bar(b.stored, b.capacity, b.stored >= b.capacity ? 'full' : ''));
-      box.appendChild($('p', 'hl-p', 'Tersimpan ' + b.stored + ' dari ' + b.capacity + '. Kalau penuh, hasil berhenti bertambah.'));
-      acts(box).appendChild(btn('Ambil hasil (' + b.stored + ')', function () { collect(lotId); }, 'primary', b.stored <= 0 || isBusy()));
+      box.appendChild($('p', 'hl-p', $t('Tersimpan {0} dari {1}. Kalau penuh, hasil berhenti bertambah.', [b.stored, b.capacity])));
+      acts(box).appendChild(btn($t('Ambil hasil ({0})', [b.stored]), function () { collect(lotId); }, 'primary', b.stored <= 0 || isBusy()));
       wrap.appendChild(box);
       return wrap;
     }
@@ -382,15 +382,15 @@
       var jc = cell(jobWhat(job)); var jr = $('div', 'hl-row'); jr.appendChild($('span', 'hl-grow hl-k', 'sisa')); jr.appendChild($('b', 'hl-n hl-time', clock(endMs(job) - Date.now()))); jc.appendChild(jr);
       wrap.appendChild(jc); return wrap;
     }
-    if (!def) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
+    if (!def) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     // `can`/`why` in the view describe the first lot of this kind; for another lot the server decides when we press the button.
     var sameLot = def.lot === lotId, short = shortOf(def.cost), why = sameLot ? def.why : null;
-    if (!why && busyJob()) why = 'Pembangun sedang bekerja.';
-    if (!why && short.length) why = 'Kurang ' + short.map(itemName).join(', ') + '.';
+    if (!why && busyJob()) why = $t('Pembangun sedang bekerja.');
+    if (!why && short.length) why = $t('Kurang {0}.', [short.map(itemName).join(', ')]);
     var can = !why && (!sameLot || def.can);
-    var blurb = def.furniture ? 'Satu kasur untuk satu pekerja. Tambah kasur supaya lebih banyak pekerja muat, tambah hiburan supaya mereka semangat. Perlu Balai Kota level ' + def.th + '.' : def.healGameHours ? 'Merawat Tukang yang tumbang karena kelelahan, makin tinggi levelnya makin cepat sembuh. Perlu Balai Kota level ' + def.th + '.' : def.cooks ? 'Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level ' + def.th + '.' : 'Menghasilkan ' + itemName(def.produces) + ' terus-menerus, simpan sampai ' + def.capacity + '. Perlu Balai Kota level ' + def.th + '.';
-    wrap.appendChild(stepBlock('Bangun ' + (def.name || name), blurb,
-      def, can, why, 'Bangun · ' + secsLine(def.secs), function () { run({ action: 'build', kind: 'build', target: lotId }); }, true));
+    var blurb = def.furniture ? $t('Satu kasur untuk satu pekerja. Tambah kasur supaya lebih banyak pekerja muat, tambah hiburan supaya mereka semangat. Perlu Balai Kota level {0}.', [def.th]) : def.healGameHours ? $t('Merawat Tukang yang tumbang karena kelelahan, makin tinggi levelnya makin cepat sembuh. Perlu Balai Kota level {0}.', [def.th]) : def.cooks ? $t('Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level {0}.', [def.th]) : $t('Menghasilkan {0} terus-menerus, simpan sampai {1}. Perlu Balai Kota level {2}.', [itemName(def.produces), def.capacity, def.th]);
+    wrap.appendChild(stepBlock($t('Bangun {0}', [def.name || name]), blurb,
+      def, can, why, $t('Bangun · {0}', [secsLine(def.secs)]), function () { run({ action: 'build', kind: 'build', target: lotId }); }, true));
     return wrap;
   }
   /* ---- Rumah Pekerja: beds and entertainment ---- */
@@ -400,53 +400,53 @@
     row.appendChild($('p', 'chain-dim', text));
     if (step) {
       row.appendChild(costRow(step.cost, step.secs));
-      var short = shortOf(step.cost), why = busyJob() ? 'Pembangun sedang bekerja.' : short.length ? 'Kurang ' + short.map(itemName).join(', ') + '.' : null;
+      var short = shortOf(step.cost), why = busyJob() ? $t('Pembangun sedang bekerja.') : short.length ? $t('Kurang {0}.', [short.map(itemName).join(', ')]) : null;
       if (why) row.appendChild($('p', 'hl-why', why));
       acts(row).appendChild(btn(label + ' · ' + secsLine(step.secs), function () { run({ action: 'build', kind: 'furniture', target: target }); }, primary ? 'primary' : '', !!why || isBusy()));
-    } else row.appendChild($('p', 'chain-dim', 'Sudah level tertinggi.'));
+    } else row.appendChild($('p', 'chain-dim', $t('Sudah level tertinggi.')));
     return row;
   }
   function houseBody(lotId) {
     var box = $('div', 'hl'), h = houseView(lotId);
-    if (!h) { box.appendChild($('p', null, 'Memuat…')); return box; }
-    var live = cell('Rumah Pekerja', h.used + ' dari ' + h.beds + ' kasur terisi');
-    var mo = $('div', 'hl-row'); mo.appendChild($('span', 'hl-grow', 'Semangat penghuni')); mo.appendChild($('b', 'hl-n', h.motivation + '%')); live.appendChild(mo);
+    if (!h) { box.appendChild($('p', null, $t('Memuat…'))); return box; }
+    var live = cell($t('Rumah Pekerja'), $t('{0} dari {1} kasur terisi', [h.used, h.beds]));
+    var mo = $('div', 'hl-row'); mo.appendChild($('span', 'hl-grow', $t('Semangat penghuni'))); mo.appendChild($('b', 'hl-n', h.motivation + '%')); live.appendChild(mo);
     live.appendChild(bar(h.motivation, 100, 'ok'));
-    live.appendChild($('p', 'hl-p', (h.hiburanName ? h.hiburanName : 'Belum ada hiburan')));
-    live.appendChild($('p', 'chain-dim', 'Semangat tinggi membuat pekerja lebih cepat. Pekerja baru tinggal di rumah yang punya kasur kosong dan hiburan terbaik.'));
+    live.appendChild($('p', 'hl-p', (h.hiburanName ? h.hiburanName : $t('Belum ada hiburan'))));
+    live.appendChild($('p', 'chain-dim', $t('Semangat tinggi membuat pekerja lebih cepat. Pekerja baru tinggal di rumah yang punya kasur kosong dan hiburan terbaik.')));
     box.appendChild(live);
-    box.appendChild(furnRow('Kasur ' + h.kasur + ' dari ' + h.kasurMax, 'Tiap kasur menambah satu tempat tinggal pekerja.', h.nextKasur, 'Tambah Kasur', lotId + ':kasur', true));
-    box.appendChild(furnRow('Hiburan ' + h.hiburan + ' dari ' + h.hiburanMax, 'Radio, TV, Gamelan: tiap tingkat menambah semangat 20%.', h.nextHiburan, 'Pasang ' + (h.nextHiburan && h.nextHiburan.name || 'Hiburan'), lotId + ':hiburan', false));
+    box.appendChild(furnRow($t('Kasur {0} dari {1}', [h.kasur, h.kasurMax]), $t('Tiap kasur menambah satu tempat tinggal pekerja.'), h.nextKasur, $t('Tambah Kasur'), lotId + ':kasur', true));
+    box.appendChild(furnRow($t('Hiburan {0} dari {1}', [h.hiburan, h.hiburanMax]), $t('Radio, TV, Gamelan: tiap tingkat menambah semangat 20%.'), h.nextHiburan, $t('Pasang {0}', [h.nextHiburan && h.nextHiburan.name || $t('Hiburan')]), lotId + ':hiburan', false));
     return box;
   }
   /* ---- Rumah Sakit ---- */
   function hospitalBody(lotId) {
     var hp = H.hospital;
-    if (!hp) { var l = cell('Rumah Sakit'); l.appendChild($('p', null, 'Memuat…')); return l; }
-    var box = cell('Rumah Sakit', 'level ' + hp.level + ' dari ' + hp.maxLevel);
-    box.appendChild($('p', 'hl-p', 'Tukang yang tumbang sembuh dalam ' + hp.healGameHours + ' jam permainan (tanpa rumah sakit 24 jam).'));
+    if (!hp) { var l = cell($t('Rumah Sakit')); l.appendChild($('p', null, $t('Memuat…'))); return l; }
+    var box = cell($t('Rumah Sakit'), $t('level {0} dari {1}', [hp.level, hp.maxLevel]));
+    box.appendChild($('p', 'hl-p', $t('Tukang yang tumbang sembuh dalam {0} jam permainan (tanpa rumah sakit 24 jam).', [hp.healGameHours])));
     if (hp.next) {
-      var cr = costRow(hp.next.cost, hp.next.secs); box.appendChild($('p', 'hl-k', 'Naik level')); box.appendChild(cr);
-      var short = shortOf(hp.next.cost), why = busyJob() ? 'Pembangun sedang bekerja.' : short.length ? 'Kurang ' + short.map(itemName).join(', ') + '.' : null;
+      var cr = costRow(hp.next.cost, hp.next.secs); box.appendChild($('p', 'hl-k', $t('Naik level'))); box.appendChild(cr);
+      var short = shortOf(hp.next.cost), why = busyJob() ? $t('Pembangun sedang bekerja.') : short.length ? $t('Kurang {0}.', [short.map(itemName).join(', ')]) : null;
       if (why) box.appendChild($('p', 'hl-why', why));
-      acts(box).appendChild(btn('Naikkan Rumah Sakit · ' + secsLine(hp.next.secs), function () { run({ action: 'build', kind: 'upgrade', target: lotId }); }, 'primary', !!why || isBusy()));
-    } else box.appendChild($('p', 'chain-dim', 'Sudah level tertinggi.'));
+      acts(box).appendChild(btn($t('Naikkan Rumah Sakit · {0}', [secsLine(hp.next.secs)]), function () { run({ action: 'build', kind: 'upgrade', target: lotId }); }, 'primary', !!why || isBusy()));
+    } else box.appendChild($('p', 'chain-dim', $t('Sudah level tertinggi.')));
     return box;
   }
   /* ---- Restoran: cook into the pantry, put food in, see the pantry ---- */
   function restoranBody(lotId) {
     var R = H.restoran || { pantry: 0, pantryMax: 0 }, ck = H.cook;
-    var box = cell('Restoran', 'lemari ' + R.pantry + ' dari ' + R.pantryMax);
+    var box = cell($t('Restoran'), $t('lemari {0} dari {1}', [R.pantry, R.pantryMax]));
     box.appendChild(bar(R.pantry, R.pantryMax, ''));
-    box.appendChild($('p', 'chain-dim', 'Makanan di lemari diberikan otomatis ke Tukang yang lelah' + (H.bots && H.bots.some(function (b) { return b.job === 'chef'; }) ? ' (Koki: dua kali lebih cepat)' : '') + '. Makanan di Tasmu tidak dipakai kecuali kamu menaruhnya.'));
-    if (ck) box.appendChild($('p', 'hl-p', 'Resep: ' + Object.keys(ck.recipe.inputs).map(function (t) { return ck.recipe.inputs[t] + ' ' + itemName(t); }).join(' + ') + ' → 1 ' + itemName(ck.recipe.output) + (ck.can ? '' : ' · ' + ck.why)));
+    box.appendChild($('p', 'chain-dim', $t('Makanan di lemari diberikan otomatis ke Tukang yang lelah{0}. Makanan di Tasmu tidak dipakai kecuali kamu menaruhnya.', [H.bots && H.bots.some(function (b) { return b.job === 'chef'; }) ? $t(' (Koki: dua kali lebih cepat)') : ''])));
+    if (ck) box.appendChild($('p', 'hl-p', $t('Resep: {0} → 1 {1}{2}', [Object.keys(ck.recipe.inputs).map(function (t) { return ck.recipe.inputs[t] + ' ' + itemName(t); }).join(' + '), itemName(ck.recipe.output), ck.can ? '' : ' · ' + ck.why])));
     var busy = isBusy();
     var cookRow = $('div', 'hl-acts hl-lead');
-    cookRow.appendChild($('span', 'hl-k', 'Masak'));
+    cookRow.appendChild($('span', 'hl-k', $t('Masak')));
     [1, 5, 10].forEach(function (q) { cookRow.appendChild(btn('x' + q, function () { run({ action: 'cook', qty: q }); }, q === 1 ? 'primary' : '', busy || !ck || R.pantry + q > R.pantryMax)); });
     box.appendChild(cookRow);
     var putRow = $('div', 'hl-acts hl-lead');
-    putRow.appendChild($('span', 'hl-k', 'Taruh makanan dari Tas'));
+    putRow.appendChild($('span', 'hl-k', $t('Taruh makanan dari Tas')));
     ['bread', 'meal'].forEach(function (t) {
       var n = have(t), q = Math.min(n, Math.max(0, R.pantryMax - R.pantry));
       putRow.appendChild(btn(itemName(t) + ' (' + n + ')', function () { run({ action: 'stock', token: t, qty: q }); }, '', busy || q <= 0));
@@ -503,7 +503,7 @@
     var dir = 'down';
     if (f) { var dx = f.fx - x, dy = f.fy - y; dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down'); }
     if (alive) GT.moveNpc(builder, 'out', x, y);
-    else builder = GT.addNpc('out', { name: 'Tukang', pal: 3, x: x, y: y, key: 'homeland:builder', dir: dir, lines: [['Pembangunnya lagi semangat!', 'Beri aku pekerjaan lewat Balai Kota.'], ['Palu, paku, dan kayu. Cukup.']] });
+    else builder = GT.addNpc('out', { name: $t('Tukang'), pal: 3, x: x, y: y, key: 'homeland:builder', dir: dir, lines: [[$t('Pembangunnya lagi semangat!'), $t('Beri aku pekerjaan lewat Balai Kota.')], [$t('Palu, paku, dan kayu. Cukup.')]] });
     if (builder) { builder.dir = dir; builder.working = !!f; var tw = H && H.workers && H.workers[0]; builder.tired = tw ? tw.fatigue / 100 : 0; }
   }
 
@@ -567,7 +567,7 @@
       taken[spot.x + ',' + spot.y] = 1;
       var key = 'homeland:bot:' + b.id, dx = w.x - spot.x, dy = w.y - spot.y;
       var dir = dx === 0 && dy === 0 ? 'down' : Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
-      var npc = GT.addNpc('out', { name: b.name, pal: 2 + (b.id % 4), x: spot.x, y: spot.y, key: key, dir: dir, lines: [['Siap bekerja, Juragan!'], ['Aku ' + b.name + '. Gajiku sudah lunas.']] });
+      var npc = GT.addNpc('out', { name: b.name, pal: 2 + (b.id % 4), x: spot.x, y: spot.y, key: key, dir: dir, lines: [[$t('Siap bekerja, Juragan!')], [$t('Aku {0}. Gajiku sudah lunas.', [b.name])]] });
       if (npc) { npc.working = b.job !== 'builder' && !hl; botNpcs.push({ key: key, npc: npc }); }
     });
   }
@@ -592,15 +592,15 @@
       if (ctx.mode === 'bump' && Date.now() - lastClose < 700) return true; // key still held after closing the window
       if (ctx.mode === 'message') return false;
       if (!loggedIn()) return true;
-      if (d.kind === 'townhall') openWin('hall', 'Balai Kota');
-      else openWin('lot', KIND_NAME[d.kind] || 'Bangunan', d.lot);
+      if (d.kind === 'townhall') openWin('hall', $t('Balai Kota'));
+      else openWin('lot', KIND_NAME[d.kind] || $t('Bangunan'), d.lot);
       return true;
     }
     if (ctx.mode === 'talk') {
       var l = withinLot(t);
       if (l) {
         if (!loggedIn()) return true;
-        openWin('lot', 'Lahan ' + (KIND_NAME[l.kind] || ''), l.id);
+        openWin('lot', $t('Lahan {0}', [KIND_NAME[l.kind] || '']), l.id);
         return true;
       }
     }
@@ -623,7 +623,7 @@
     }
     hintT -= dt; if (hintT > 0) return; hintT = 0.5;
     var n = nearPortal();
-    if (n && !nearHint && !hintShown && S() && S().account && !GT.isUiOpen()) { hintShown = true; GT.toast('Portal: hadap portal lalu tekan ' + (document.documentElement.classList.contains('gt-phone') ? 'A' : 'F') + ' (atau tombol B) untuk bepergian.'); }
+    if (n && !nearHint && !hintShown && S() && S().account && !GT.isUiOpen()) { hintShown = true; GT.toast($t('Portal: hadap portal lalu tekan {0} (atau tombol B) untuk bepergian.', [document.documentElement.classList.contains('gt-phone') ? 'A' : 'F'])); }
     nearHint = n;
   }
   function onWorld() {

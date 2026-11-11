@@ -115,14 +115,14 @@ export class Store {
       const tag = String(10000 + Math.floor(Math.random() * 90000));
       if (!name || !this.accountByNameTag(name, tag)) return tag;
     }
-    throw new HttpError(503, 'Tidak ada tag kosong, coba nama lain');
+    throw new HttpError(503, 'No free tag, try another name');
   }
 
   lookOf(account: string): number {
     return (this.db.prepare('SELECT look FROM names WHERE account = ?').get(account) as { look: number } | undefined)?.look ?? 0;
   }
   setLook(account: string, look: number) {
-    if (!Number.isInteger(look) || look < 0 || look > 7) throw new HttpError(400, 'Penampilan harus 0-7.');
+    if (!Number.isInteger(look) || look < 0 || look > 7) throw new HttpError(400, 'Look must be 0-7.');
     this.db.prepare('INSERT INTO names (account, look) VALUES (?, ?) ON CONFLICT(account) DO UPDATE SET look = excluded.look').run(account, look);
   }
 
@@ -136,7 +136,7 @@ export class Store {
     let use = tag ?? cur?.tag ?? null;
     const holder = use ? this.accountByNameTag(name, use) : null;
     if (holder && holder !== account) {
-      if (tag) throw new HttpError(409, 'Nama itu sudah dipakai pemain lain');
+      if (tag) throw new HttpError(409, 'That name is already taken by another player');
       use = null;
     }
     if (!use) use = this.freeTag(name);

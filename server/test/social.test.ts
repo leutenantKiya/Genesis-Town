@@ -16,7 +16,7 @@ function world() {
 test('names: a default for unnamed accounts, rules on new names, unique ignoring case, one table', () => {
   const { social, store } = world();
   assert.equal(social.nick(A), defaultNick(A));
-  assert.equal(social.nick(A), 'Warga_a1b2');
+  assert.equal(social.nick(A), 'Player_a1b2');
   assert.equal(social.setNick(A, 'Pemancing'), 'Pemancing');
   assert.equal(social.nick(A), 'Pemancing');
   assert.equal(store.nameOf(A), 'Pemancing', 'the Store names table is the only place names live');
@@ -25,9 +25,9 @@ test('names: a default for unnamed accounts, rules on new names, unique ignoring
   assert.throws(() => social.setNick(C, 'ab'), /3–16/);
   assert.throws(() => social.setNick(C, 'x'.repeat(17)), /3–16/);
   assert.throws(() => social.setNick(C, 'a<b>c'), /3–16/);
-  assert.throws(() => social.setNick(C, 'Sari'), /tidak bisa dipakai/);
-  assert.throws(() => social.setNick(C, 'Warga_9999'), /tidak bisa dipakai/);
-  assert.throws(() => social.setNick(C, 'bangsat'), /tidak bisa dipakai/);
+  assert.throws(() => social.setNick(C, 'Sari'), /can't be used/);
+  assert.throws(() => social.setNick(C, 'Player_9999'), /can't be used/);
+  assert.throws(() => social.setNick(C, 'bangsat'), /can't be used/);
   assert.equal(social.accountOf('PEMANCING'), A);
 });
 
@@ -47,10 +47,10 @@ test('chat: per world, /msg only for the two players (any world), rude words mas
   assert.match(forB2[0].fromTag, /^\d{5}$/);
   assert.deepEqual(forC.map((m) => m.text), ['Halo semua!', 'di sini publik'], 'C never sees the private line nor the island');
   assert.equal(social.since(B, P, forB2[1].id).length, 1, 'since returns only newer lines');
-  assert.throws(() => social.say(A, P, '/msg'), /Cara pakai/);
-  assert.throws(() => social.say(A, P, '/msg Nobody hi'), /Tidak ada pemain/);
-  assert.throws(() => social.say(A, P, '/msg Ani hi'), /namamu sendiri/);
-  assert.throws(() => social.say(A, P, '/dance'), /Perintah/);
+  assert.throws(() => social.say(A, P, '/msg'), /Usage/);
+  assert.throws(() => social.say(A, P, '/msg Nobody hi'), /No player named/);
+  assert.throws(() => social.say(A, P, '/msg Ani hi'), /your own name/);
+  assert.throws(() => social.say(A, P, '/dance'), /Commands/);
   assert.throws(() => social.say(A, 'bogus', 'hi'), /bad world/);
   assert.equal(cleanText('a\u0007b\n\nc'), 'a b c');
   assert.equal(cleanText('<img src=x onerror=alert(1)>'), '<img src=x onerror=alert(1)>', 'kept verbatim: clients render it as text only');
@@ -60,12 +60,12 @@ test('chat: names with spaces can be messaged; 80 characters; one line per 2 sec
   const { social, tick } = world();
   social.setNick(A, 'Ani'); social.setNick(B, 'Budi Santoso');
   assert.equal(social.say(A, P, '/msg Budi Santoso halo kamu').text, 'halo kamu');
-  assert.throws(() => social.say(A, P, 'lagi'), /terlalu cepat/);
+  assert.throws(() => social.say(A, P, 'lagi'), /too fast/);
   tick(2001);
   assert.equal(social.say(A, P, 'x'.repeat(80)).text.length, 80);
   tick(2001);
-  assert.throws(() => social.say(A, P, 'x'.repeat(81)), /maks 80/);
-  assert.throws(() => social.say(A, P, '   '), /kosong/i);
+  assert.throws(() => social.say(A, P, 'x'.repeat(81)), /max 80/);
+  assert.throws(() => social.say(A, P, '   '), /Empty/i);
   tick(2001);
   social.say(B, P, 'akun lain tidak dibatasi oleh A');
 });
@@ -143,6 +143,6 @@ test('/msg to a merchant from a Homeland answers 409 and asks nobody', () => {
   social.setNpcs(NPCS);
   let called = 0;
   social.onNpcMsg = () => { called++; };
-  assert.throws(() => social.say(A, 'HL-1', '/msg Sari harga ikan?'), (e: any) => e.status === 409 && /Pedagang ada di area publik\./.test(e.message));
+  assert.throws(() => social.say(A, 'HL-1', '/msg Sari harga ikan?'), (e: any) => e.status === 409 && /Merchants are in the public area\./.test(e.message));
   assert.equal(called, 0);
 });

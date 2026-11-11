@@ -8,7 +8,7 @@ import { Homelands } from '../src/game/homeland.ts';
 import type { Pos } from '../src/game/worldmap.ts';
 
 const TOWN = 'town.gt.test', P = 'p1.players.test', Q = 'p2.players.test';
-const NO_BED = 'Tidak ada kasur kosong. Bangun Rumah Pekerja atau tambah kasur.';
+const NO_BED = "No empty bed. Build a Workers' House or add beds.";
 
 async function setup() {
   const econ = loadEcon();
@@ -78,9 +78,9 @@ test('house gives one bed, kasur adds beds', async () => {
   const wood = gs.balance(P, 'wood'), coin = gs.balance(P, 'coin');
   assert.equal(wood, 200 - 15 - 10 - 20 - 30 - 40);
   assert.equal(coin, 500 - 20 - 40 - 80);
-  fails(() => H.start(P, 'furniture', 'rumah-c:kasur', 1), 409, /sudah level tertinggi/);
+  fails(() => H.start(P, 'furniture', 'rumah-c:kasur', 1), 409, /already at the highest level/);
   assert.equal(gs.balance(P, 'wood'), wood); assert.equal(gs.balance(P, 'coin'), coin);
-  fails(() => H.start(P, 'build', 'rumah-zz', 1), 409, 'Lahan itu tidak ada.');
+  fails(() => H.start(P, 'build', 'rumah-zz', 1), 409, 'That lot does not exist.');
 });
 
 test('furniture jobs are timed with fatigue and need the player at the house', async () => {
@@ -88,13 +88,13 @@ test('furniture jobs are timed with fatigue and need the player at the house', a
   const { H } = w;
   w.give(P, 'wood', 100); w.give(P, 'coin', 200);
   w.house(P);
-  fails(() => w.act(P, { action: 'build', kind: 'furniture', target: 'rumah-c:kasur' }, w.hall(P)), 409, /dekat lahan/);
+  fails(() => w.act(P, { action: 'build', kind: 'furniture', target: 'rumah-c:kasur' }, w.hall(P)), 409, /near that lot/);
   assert.equal(w.gs.balance(P, 'wood'), 100);
   w.prime(P, { 0: 50 });
   const t0 = w.now();
   const r = H.start(P, 'furniture', 'rumah-c:kasur', 1); // 30 s x 1.5 / 1.05
   assert.equal(r.ends_at - t0, Math.ceil(30 * 1.5 / 1.05) * 1000);
-  fails(() => H.start(P, 'furniture', 'rumah-c:kasur', 1), 409, 'Builder sedang bekerja.');
+  fails(() => H.start(P, 'furniture', 'rumah-c:kasur', 1), 409, 'The builder is busy.');
 });
 
 test('hire without a free bed answers 409 and charges nothing', async () => {
@@ -218,7 +218,7 @@ test('sick contractor takes no job, another does', async () => {
   assert.equal(w.view(P).workers.find((x) => x.slot === 1)!.busy, true);
   sick(1);
   const wood = gs.balance(P, 'wood');
-  fails(() => H.start(P, 'chunk', 'n', 1), 409, /sakit/);
+  fails(() => H.start(P, 'chunk', 'n', 1), 409, /sick/);
   assert.equal(gs.balance(P, 'wood'), wood); // nothing charged
 });
 
@@ -249,9 +249,9 @@ test('rumah sakit needs Balai Kota level 2 and upgrades to heal faster', async (
   const { H, gs } = w;
   w.give(P, 'wood', 500); w.give(P, 'ore', 100); w.give(P, 'coin', 1000);
   assert.equal(w.view(P).hospital, null);
-  fails(() => w.act(P, { action: 'build', kind: 'build', target: 'rumahsakit-c' }, w.doorOf(P, 'rumahsakit-c')), 409, 'Balai Kota perlu level 2.');
+  fails(() => w.act(P, { action: 'build', kind: 'build', target: 'rumahsakit-c' }, w.doorOf(P, 'rumahsakit-c')), 409, 'Town Hall needs level 2.');
   gs.setHomelandTh(P, 2);
-  fails(() => H.start(P, 'upgrade', 'rumahsakit-c', 1), 409, 'Bangun Rumah Sakit dulu.');
+  fails(() => H.start(P, 'upgrade', 'rumahsakit-c', 1), 409, 'Build the Hospital first.');
   w.act(P, { action: 'build', kind: 'build', target: 'rumahsakit-c' }, w.doorOf(P, 'rumahsakit-c'));
   assert.deepEqual([gs.balance(P, 'wood'), gs.balance(P, 'ore'), gs.balance(P, 'coin')], [470, 90, 940]);
   w.adv(180_000);
@@ -266,7 +266,7 @@ test('rumah sakit needs Balai Kota level 2 and upgrades to heal faster', async (
   }
   assert.equal(hos().next, null);
   assert.deepEqual([gs.balance(P, 'wood'), gs.balance(P, 'ore'), gs.balance(P, 'coin')], [470 - 30 - 50, 90 - 15 - 30, 940 - 100 - 200]);
-  fails(() => H.start(P, 'upgrade', 'rumahsakit-c', 1), 409, 'Rumah Sakit sudah level tertinggi.');
+  fails(() => H.start(P, 'upgrade', 'rumahsakit-c', 1), 409, 'The Hospital is already at the highest level.');
   assert.equal(gs.homelandBuildings(P).length, 1); // an upgrade is not a second building
 });
 
@@ -278,11 +278,11 @@ test('request names like constructor and __proto__ are 400 for furniture and job
   const before = () => [gs.balance(P, 'wood'), gs.balance(P, 'coin'), gs.homelandJobs(P).length].join();
   const b0 = before();
   for (const n of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'kasur:x', '']) {
-    fails(() => H.start(P, 'furniture', `rumah-c:${n}`, 1), 400, /Perabot tidak dikenal/);
-    fails(() => w.act(P, { action: 'build', kind: 'furniture', target: `rumah-c:${n}` }, w.doorOf(P, 'rumah-c')), 400, /Perabot tidak dikenal/);
+    fails(() => H.start(P, 'furniture', `rumah-c:${n}`, 1), 400, /Unknown furniture/);
+    fails(() => w.act(P, { action: 'build', kind: 'furniture', target: `rumah-c:${n}` }, w.doorOf(P, 'rumah-c')), 400, /Unknown furniture/);
   }
-  for (const t of ['constructor', '__proto__', 'rumah-c', 'rumah-c:kasur:1']) fails(() => H.start(P, 'furniture', t, 1), 400, /Perabot tidak dikenal/);
-  for (const k of ['constructor', '__proto__', 'toString']) fails(() => H.start(P, k as any, 'rumah-c', 1), 400, /Jenis bangunan tidak dikenal/);
-  for (const j of ['constructor', '__proto__', 'toString']) fails(() => w.hire(P, j), 400, /Pekerja tidak dikenal/);
+  for (const t of ['constructor', '__proto__', 'rumah-c', 'rumah-c:kasur:1']) fails(() => H.start(P, 'furniture', t, 1), 400, /Unknown furniture/);
+  for (const k of ['constructor', '__proto__', 'toString']) fails(() => H.start(P, k as any, 'rumah-c', 1), 400, /Unknown building type/);
+  for (const j of ['constructor', '__proto__', 'toString']) fails(() => w.hire(P, j), 400, /Unknown worker/);
   assert.equal(before(), b0);
 });

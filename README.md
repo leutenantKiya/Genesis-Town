@@ -1,6 +1,7 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **English by default** (2026-11-11): all in-game text is English; Bahasa Indonesia is one click away in Settings (Language / Bahasa, it reloads the page) or with `?lang=id`. NPC names follow the language (villagers, the four merchants Sarah, Ben, Wendy and Jack / Sari, Budi, Wati and Joko, Mbok Darmi / Granny Daisy), and merchants answer in the player's language. How it works: `client/js/i18n.js` gives `$t('Indonesian source text', [vars])`, the English entries are in `client/js/lang/en.js`; the server speaks English and translates its answers to Indonesian when the client sends `X-GT-Lang: id` (`server/src/lang.ts`, table in `server/src/i18n-id.ts`). Item and merchant display names come from `economy/config.json` (English), token ids are unchanged. The prototype mods that are switched off by default (casino, combat, thief, police, curfew, gossip, social) are still Indonesian only.
 > - M2 (Checkpoint 3): off-chain play (gathering, energy, crafting, farm plot, shipping, trading with four merchants
 >   priced by `economy/pricing.ts`), a daily settlement on NEAR testnet with the ledger's Merkle root, and shop
 >   bankruptcy and restoration with shares, all in an end-to-end testnet run;

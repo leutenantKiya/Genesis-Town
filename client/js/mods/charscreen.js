@@ -52,17 +52,17 @@
   function open() {
     if (root || !active()) return;
     var c = C(), look = 0;
-    root = el('div', 'gt-cs'); root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Karakter');
+    root = el('div', 'gt-cs'); root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', $t('Karakter'));
     // the game must not see these keys or clicks while the screen is up
     ['keydown', 'keyup', 'keypress'].forEach(function (t) { root.addEventListener(t, function (e) { e.stopPropagation(); }); });
     var screen = document.getElementById('screen') || document.body;
     screen.appendChild(root);
-    root.appendChild(el('p', 'gt-cs-load', 'Memuat karakter…'));
+    root.appendChild(el('p', 'gt-cs-load', $t('Memuat karakter…')));
     c.api('/name', { method: 'POST', body: {} }).then(function (r) {
       mine = { name: r.named ? r.name : null, tag: r.tag, look: r.look | 0, named: !!r.named };
       look = mine.look;
       if (root) build(look);
-    }, function (e) { if (root) { root.textContent = ''; var p = el('p', 'gt-cs-load', (e && e.message) || 'Gagal memuat karakter.'); var b = el('button', 'gt-cs-go', 'Coba lagi'); b.type = 'button'; b.onclick = function () { close(); open(); }; root.appendChild(p); root.appendChild(b); } });
+    }, function (e) { if (root) { root.textContent = ''; var p = el('p', 'gt-cs-load', (e && e.message) || $t('Gagal memuat karakter.')); var b = el('button', 'gt-cs-go', $t('Coba lagi')); b.type = 'button'; b.onclick = function () { close(); open(); }; root.appendChild(p); root.appendChild(b); } });
   }
   function close() { if (root && root.parentNode) root.parentNode.removeChild(root); root = null; busy = false; }
 
@@ -76,8 +76,8 @@
     var left = el('div', 'gt-cs-left');
     var nameRow = el('div', 'gt-cs-namerow');
     var input = el('input', 'gt-cs-name'); input.type = 'text'; input.maxLength = 16; input.autocomplete = 'off'; input.spellcheck = false;
-    input.placeholder = 'Namamu'; input.value = mine.name || ''; input.setAttribute('aria-label', 'Nama'); input.setAttribute('data-autofocus', '');
-    var tag = el('span', 'gt-cs-tag', '#' + mine.tag); tag.title = 'Tag tetapmu: membedakanmu dari pemain bernama sama';
+    input.placeholder = $t('Namamu'); input.value = mine.name || ''; input.setAttribute('aria-label', $t('Nama')); input.setAttribute('data-autofocus', '');
+    var tag = el('span', 'gt-cs-tag', '#' + mine.tag); tag.title = $t('Tag tetapmu: membedakanmu dari pemain bernama sama');
     nameRow.appendChild(input); nameRow.appendChild(tag);
     var stage = el('div', 'gt-cs-stage');
     var prev = pixelCanvas(); prev.className = 'gt-cs-prev'; prev.setAttribute('aria-hidden', 'true');
@@ -86,11 +86,11 @@
 
     // right: look swatches + Mulai
     var right = el('div', 'gt-cs-right');
-    right.appendChild(el('h2', 'gt-cs-h', 'Pilih penampilan'));
-    var grid = el('div', 'gt-cs-grid'); grid.setAttribute('role', 'radiogroup'); grid.setAttribute('aria-label', 'Penampilan');
+    right.appendChild(el('h2', 'gt-cs-h', $t('Pilih penampilan')));
+    var grid = el('div', 'gt-cs-grid'); grid.setAttribute('role', 'radiogroup'); grid.setAttribute('aria-label', $t('Penampilan'));
     var sw = [];
     for (var i = 0; i < LOOKS; i++) (function (i) {
-      var b = el('button', 'gt-cs-sw'); b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-label', 'Penampilan ' + (i + 1));
+      var b = el('button', 'gt-cs-sw'); b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-label', $t('Penampilan {0}', [i + 1]));
       var cv = pixelCanvas(); paint(cv, i, 'down', 0); b.appendChild(cv);
       b.addEventListener('click', function () { pick(i); });
       grid.appendChild(b); sw.push(b);
@@ -98,7 +98,7 @@
     function pick(i) { look = i; sw.forEach(function (b, k) { b.setAttribute('aria-checked', k === i ? 'true' : 'false'); b.classList.toggle('on', k === i); }); }
     pick(look);
     var msg = el('p', 'gt-cs-msg'); msg.setAttribute('role', 'status');
-    var go = el('button', 'gt-cs-go', 'Mulai'); go.type = 'button';
+    var go = el('button', 'gt-cs-go', $t('Mulai')); go.type = 'button';
     right.appendChild(grid); right.appendChild(msg); right.appendChild(go);
     card.appendChild(left); card.appendChild(right);
 
@@ -116,7 +116,7 @@
     function start() {
       if (busy) return;
       var v = String(input.value || '').trim().replace(/ {2,}/g, ' ');
-      if (!NAME_RE.test(v)) { msg.textContent = 'Nama 3-16 karakter: huruf, angka, spasi, _ atau -.'; input.focus(); return; }
+      if (!NAME_RE.test(v)) { msg.textContent = $t('Nama 3-16 karakter: huruf, angka, spasi, _ atau -.'); input.focus(); return; }
       busy = true; go.disabled = true; msg.textContent = '';
       var body = { look: look };
       if (v !== mine.name) body.name = v;
@@ -126,14 +126,14 @@
         clearInterval(idle);
         // Seamless: move to the Homeland while this screen still covers the view, then throw the player in there,
         // landing on the real sprite (which stays hidden until the landing). No village first, no jump after.
-        msg.style.color = 'inherit'; msg.textContent = 'Menuju Homeland…';
+        msg.style.color = 'inherit'; msg.textContent = $t('Menuju Homeland…');
         var going = window.GT_HOME && GT_HOME.enter ? GT_HOME.enter() : Promise.resolve(false);
         going.then(null, function () { return false; }).then(function () {
           if (!root) return;
           if (GT.setPlayerHidden) GT.setPlayerHidden(true);
           requestAnimationFrame(function () { play(look, root, finish); }); // one frame so the new world and camera are drawn
         });
-      }, function (e) { fail((e && e.message) || 'Gagal menyimpan.'); });
+      }, function (e) { fail((e && e.message) || $t('Gagal menyimpan.')); });
     }
     go.addEventListener('click', start);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); start(); } });

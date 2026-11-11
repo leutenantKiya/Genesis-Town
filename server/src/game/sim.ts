@@ -164,13 +164,13 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     await game.step();
     if (game.settlement.settledThrough() !== settled) {
       settled = game.settlement.settledThrough();
-      events.push({ hour: h, day: t.day, kind: 'settled', text: `Settlement hari ${settled}` });
+      events.push({ hour: h, day: t.day, kind: 'settled', text: `Settlement day ${settled}` });
       await game.settlement.refresh(players.map((p) => p.id));
       await investors(t.day);
     }
     const closed = game.market.closed;
-    for (const acct of closed) if (!wasClosed.has(acct)) events.push({ hour: h, day: t.day, kind: 'closed', merchant: acct.split('.')[0], text: `${econ.merchants[acct.split('.')[0]].name} bangkrut (TUTUP)` });
-    for (const acct of wasClosed) if (!closed.has(acct)) events.push({ hour: h, day: t.day, kind: 'reopened', merchant: acct.split('.')[0], text: `${econ.merchants[acct.split('.')[0]].name} buka lagi berkat investor` });
+    for (const acct of closed) if (!wasClosed.has(acct)) events.push({ hour: h, day: t.day, kind: 'closed', merchant: acct.split('.')[0], text: `${econ.merchants[acct.split('.')[0]].name} went bankrupt (CLOSED)` });
+    for (const acct of wasClosed) if (!closed.has(acct)) events.push({ hour: h, day: t.day, kind: 'reopened', merchant: acct.split('.')[0], text: `${econ.merchants[acct.split('.')[0]].name} reopened thanks to investors` });
     wasClosed = new Set(closed);
     const prices: Record<string, number> = {};
     for (const token of Object.keys(econ.items).filter((x) => x !== 'coin')) {

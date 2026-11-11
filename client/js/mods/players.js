@@ -99,7 +99,7 @@
       var at = GT.at(cx, curY(o, now)); // in 2.5D this follows the head at any camera turn
       var x = GT.snap(at.x + T / 2), y = GT.snap(at.y - 3 - (o.npc && Math.round(cx) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
       ctx.font = '7px "Pixelify Sans", sans-serif';
-      var text = o.nick + (!o.npc && o.title && o.title !== 'Pedagang baru' ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
+      var text = o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
       tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.npc ? 'accent' : 'dark', k: key(o.nick, o.tag) });
     });
     tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
@@ -136,11 +136,11 @@
   function build() {
     var screen = document.getElementById('screen');
     if (!screen || box) return;
-    box = el('section', 'gt-chat'); box.setAttribute('aria-label', 'Obrolan');
+    box = el('section', 'gt-chat'); box.setAttribute('aria-label', $t('Obrolan'));
     head = el('div', 'gt-chat-head');
     list = el('div', 'gt-chat-list'); list.setAttribute('role', 'log'); list.setAttribute('aria-live', 'polite');
     var form = el('form', 'gt-chat-form');
-    input = el('input', 'gt-chat-input'); input.type = 'text'; input.maxLength = 120; input.placeholder = 'Ketik pesan · /msg nama pesan · /help'; input.setAttribute('aria-label', 'Pesan');
+    input = el('input', 'gt-chat-input'); input.type = 'text'; input.maxLength = 120; input.placeholder = $t('Ketik pesan · /msg nama pesan · /help'); input.setAttribute('aria-label', $t('Pesan'));
     input.autocomplete = 'off'; input.spellcheck = false;
     form.appendChild(input);
     box.appendChild(head); box.appendChild(list); box.appendChild(form);
@@ -156,7 +156,7 @@
   }
   function renderHead() {
     if (!head) return;
-    head.textContent = (me ? 'Kamu: ' + me : 'Obrolan') + (online ? ' · ' + online + ' online' : '');
+    head.textContent = (me ? $t('Kamu: {0}', [me]) : $t('Obrolan')) + (online ? $t(' · {0} online', [online]) : '');
   }
   function addLine(m) {
     if (!m.note && isBlocked(m.from, m.fromTag)) return;
@@ -176,7 +176,7 @@
       if (m.note) row.textContent = m.text;
       else {
         var from = m.from + (m.fromTag ? '#' + m.fromTag : ''), to = m.to ? m.to + (m.toTag ? '#' + m.toTag : '') : '';
-        var who = m.to ? (key(m.from, m.fromTag) === mine ? 'kamu → ' + to : from + ' → kamu') : from;
+        var who = m.to ? (key(m.from, m.fromTag) === mine ? $t('kamu → {0}', [to]) : $t('{0} → kamu', [from])) : from;
         row.appendChild(el('b', null, who + ': '));
         row.appendChild(document.createTextNode(m.text));
       }
@@ -191,14 +191,14 @@
     [].forEach.call(list.children, function (r) { r.classList.toggle('old', !open && now - (+r.dataset.t || 0) > 12000); });
   }
   function openChat(prefill) {
-    if (!active()) { if (C()) GT.toast('Masuk dulu untuk mengobrol.'); return; }
+    if (!active()) { if (C()) GT.toast($t('Masuk dulu untuk mengobrol.')); return; }
     build();
     box.classList.add('open');
     document.documentElement.classList.add('gt-chatting');
     if (prefill != null) input.value = prefill;
     fade();
     setTimeout(function () { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 0);
-    if (!named && window.GT_CHARSCREEN) { GT.toast('Pilih namamu dulu di layar karakter.'); window.GT_CHARSCREEN.open(); }
+    if (!named && window.GT_CHARSCREEN) { GT.toast($t('Pilih namamu dulu di layar karakter.')); window.GT_CHARSCREEN.open(); }
   }
   function closeChat() {
     if (!box) return;
@@ -211,22 +211,22 @@
     var text = String(raw || '').trim();
     if (!text) { closeChat(); return; }
     var m;
-    if (/^\/help$/i.test(text)) { note('Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama'); input.value = ''; return; }
+    if (/^\/help$/i.test(text)) { note($t('Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama')); input.value = ''; return; }
     if ((m = /^\/(block|unblock)\s+(.+)$/i.exec(text))) {
       var target = m[2].trim(), tm = /^(.+)#(\d{5})$/.exec(target), tk;
       if (tm) tk = key(tm[1], tm[2]);
       else {
         var ts = tagsOfName(target);
-        if (ts.length !== 1) { note(ts.length ? 'Ada beberapa pemain bernama ' + target + '. Pakai nama#tag.' : 'Pemain ' + target + ' belum terlihat. Pakai nama#tag.'); input.value = ''; return; }
+        if (ts.length !== 1) { note(ts.length ? $t('Ada beberapa pemain bernama {0}. Pakai nama#tag.', [target]) : $t('Pemain {0} belum terlihat. Pakai nama#tag.', [target])); input.value = ''; return; }
         tk = key(target, ts[0]);
       }
       var b = blocked().filter(function (n) { return n !== tk; });
       if (m[1].toLowerCase() === 'block') b.push(tk);
-      setBlocked(b); note(m[1].toLowerCase() === 'block' ? target + ' disembunyikan di browser ini.' : target + ' terlihat lagi.');
+      setBlocked(b); note(m[1].toLowerCase() === 'block' ? $t('{0} disembunyikan di browser ini.', [target]) : $t('{0} terlihat lagi.', [target]));
       input.value = ''; return;
     }
-    if ((m = /^\/(nama|nick)\s+(.+)$/i.exec(text))) {
-      C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; meTag = r.tag || meTag; named = r.named !== false; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note('Namamu sekarang ' + r.name + '#' + r.tag + '.'); }, function (e) { note(e.message); });
+    if ((m = /^\/(nama|name|nick)\s+(.+)$/i.exec(text))) {
+      C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; meTag = r.tag || meTag; named = r.named !== false; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note($t('Namamu sekarang {0}#{1}.', [r.name, r.tag])); }, function (e) { note(e.message); });
       input.value = ''; return;
     }
     input.value = '';
@@ -243,20 +243,20 @@
   function card(o) {
     var body = el('div', 'gt-pcard');
     if (o.npc) {
-      body.appendChild(el('p', 'gt-pcard-title', o.title || 'Pedagang'));
-      body.appendChild(el('p', 'chain-dim', 'Pedagang desa. Tanyakan harga lewat obrolan, atau lihat dagangannya.'));
+      body.appendChild(el('p', 'gt-pcard-title', o.title || $t('Pedagang')));
+      body.appendChild(el('p', 'chain-dim', $t('Pedagang desa. Tanyakan harga lewat obrolan, atau lihat dagangannya.')));
       GT.modal({ title: o.nick + '#' + (o.tag || 'NPC'), body: body, actions: [
-        { label: 'Lihat dagangan', primary: true, onClick: function (h) { h.close('ok'); var c = C(); if (c && o.merchant) c.open('shop', o.merchant); return true; } },
-        { label: 'Tanya', onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + ' '); return true; } }
+        { label: $t('Lihat dagangan'), primary: true, onClick: function (h) { h.close('ok'); var c = C(); if (c && o.merchant) c.open('shop', o.merchant); return true; } },
+        { label: $t('Tanya'), onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + ' '); return true; } }
       ] });
       return;
     }
-    body.appendChild(el('p', 'gt-pcard-title', o.title || 'Pedagang baru'));
-    body.appendChild(el('p', 'chain-dim', 'Warga desa yang sedang jalan-jalan.'));
+    body.appendChild(el('p', 'gt-pcard-title', o.title || $t('Pedagang baru')));
+    body.appendChild(el('p', 'chain-dim', $t('Warga desa yang sedang jalan-jalan.')));
     var extra = cardActions.map(function (f) { try { return f(o); } catch (e) { return null; } }).filter(Boolean);
     GT.modal({ title: o.nick + (o.tag ? '#' + o.tag : ''), body: body, actions: [
-      { label: 'Kirim pesan', primary: true, onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + (o.tag ? '#' + o.tag : '') + ' '); return true; } },
-      { label: 'Lihat lapaknya', onClick: function (h) { h.close('ok'); var c = C(); c.state.marketSeller = { account: o.account, nick: o.nick }; c.state.marketTab = 'lapak'; c.open('market'); return true; } }
+      { label: $t('Kirim pesan'), primary: true, onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + (o.tag ? '#' + o.tag : '') + ' '); return true; } },
+      { label: $t('Lihat lapaknya'), onClick: function (h) { h.close('ok'); var c = C(); c.state.marketSeller = { account: o.account, nick: o.nick }; c.state.marketTab = 'lapak'; c.open('market'); return true; } }
     ].concat(extra) });
   }
 

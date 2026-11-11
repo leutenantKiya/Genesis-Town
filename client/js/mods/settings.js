@@ -10,20 +10,20 @@
   var LS = 'gt.settings';
   // action -> canonical engine key (what we translate to), label, default keys (max 2)
   var ACTIONS = [
-    { id: 'up', canon: 'ArrowUp', label: 'Jalan ke atas', keys: ['KeyW', 'ArrowUp'] },
-    { id: 'down', canon: 'ArrowDown', label: 'Jalan ke bawah', keys: ['KeyS', 'ArrowDown'] },
-    { id: 'left', canon: 'ArrowLeft', label: 'Jalan ke kiri', keys: ['KeyA', 'ArrowLeft'] },
-    { id: 'right', canon: 'ArrowRight', label: 'Jalan ke kanan', keys: ['KeyD', 'ArrowRight'] },
-    { id: 'talk', canon: 'Space', label: 'Interaksi (bicara, kumpulkan, kebun)', keys: ['KeyF', 'Space'] },
-    { id: 'message', canon: 'KeyE', label: 'Pesan ke NPC', keys: ['KeyT'] },
-    { id: 'bag', canon: 'KeyI', label: 'Buka tas', keys: ['KeyE', 'KeyI'] },
-    { id: 'history', canon: 'KeyH', label: 'Riwayat', keys: ['KeyH'] },
-    { id: 'market', canon: 'KeyK', label: 'Pasar Pemain', keys: ['KeyK'] },
-    { id: 'chat', canon: 'KeyC', label: 'Chat dengan pemain lain', keys: ['KeyC'] },
-    { id: 'map', canon: 'KeyM', label: 'Peta', keys: ['KeyM'] },
-    { id: 'profile', canon: 'KeyP', label: 'Profil', keys: ['KeyP'] },
-    { id: 'fullscreen', canon: 'KeyF', label: 'Layar penuh', keys: ['KeyL'] },
-    { id: 'settings', canon: 'KeyO', label: 'Pengaturan', keys: ['KeyO'] }
+    { id: 'up', canon: 'ArrowUp', label: $t('Jalan ke atas'), keys: ['KeyW', 'ArrowUp'] },
+    { id: 'down', canon: 'ArrowDown', label: $t('Jalan ke bawah'), keys: ['KeyS', 'ArrowDown'] },
+    { id: 'left', canon: 'ArrowLeft', label: $t('Jalan ke kiri'), keys: ['KeyA', 'ArrowLeft'] },
+    { id: 'right', canon: 'ArrowRight', label: $t('Jalan ke kanan'), keys: ['KeyD', 'ArrowRight'] },
+    { id: 'talk', canon: 'Space', label: $t('Interaksi (bicara, kumpulkan, kebun)'), keys: ['KeyF', 'Space'] },
+    { id: 'message', canon: 'KeyE', label: $t('Pesan ke NPC'), keys: ['KeyT'] },
+    { id: 'bag', canon: 'KeyI', label: $t('Buka tas'), keys: ['KeyE', 'KeyI'] },
+    { id: 'history', canon: 'KeyH', label: $t('Riwayat'), keys: ['KeyH'] },
+    { id: 'market', canon: 'KeyK', label: $t('Pasar Pemain'), keys: ['KeyK'] },
+    { id: 'chat', canon: 'KeyC', label: $t('Chat dengan pemain lain'), keys: ['KeyC'] },
+    { id: 'map', canon: 'KeyM', label: $t('Peta'), keys: ['KeyM'] },
+    { id: 'profile', canon: 'KeyP', label: $t('Profil'), keys: ['KeyP'] },
+    { id: 'fullscreen', canon: 'KeyF', label: $t('Layar penuh'), keys: ['KeyL'] },
+    { id: 'settings', canon: 'KeyO', label: $t('Pengaturan'), keys: ['KeyO'] }
   ];
   // Engine keys that must not fire on their own once rebound (the engine also listens to KeyZ for interact).
   var ENGINE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'Enter', 'KeyZ', 'KeyE', 'KeyM', 'KeyI', 'KeyP', 'KeyN', 'KeyH', 'KeyK', 'KeyF', 'KeyO', 'KeyC'];
@@ -56,7 +56,7 @@
 
   function renderHelp() {
     var help = document.querySelector('.help');
-    if (help) help.textContent = first('up') + first('left') + first('down') + first('right') + ' jalan · ' + first('talk') + ' interaksi · ' + first('bag') + ' tas · ' + first('history') + ' riwayat · ' + first('map') + ' peta · ' + first('fullscreen') + ' layar penuh · ' + first('settings') + ' pengaturan';
+    if (help) help.textContent = $t('{0} jalan · {1} interaksi · {2} tas · {3} riwayat · {4} peta · {5} layar penuh · {6} pengaturan', [first('up') + first('left') + first('down') + first('right'), first('talk'), first('bag'), first('history'), first('map'), first('fullscreen'), first('settings')]);
   }
 
   function rebuild() {
@@ -68,11 +68,11 @@
 
   function keyName(code) {
     if (!code) return '—';
-    var names = { Space: 'Spasi', Enter: 'Enter', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', ShiftLeft: 'Shift', ShiftRight: 'Shift kanan', Tab: 'Tab', Backspace: 'Backspace' };
+    var names = { Space: $t('Spasi'), Enter: 'Enter', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', ShiftLeft: 'Shift', ShiftRight: $t('Shift kanan'), Tab: 'Tab', Backspace: 'Backspace' };
     if (names[code]) return names[code];
     if (/^Key[A-Z]$/.test(code)) return code.slice(3);
     if (/^Digit\d$/.test(code)) return code.slice(5);
-    if (/^Numpad/.test(code)) return 'Num ' + code.slice(6);
+    if (/^Numpad/.test(code)) return $t('Num {0}', [code.slice(6)]);
     return code;
   }
   function label(actionId) {
@@ -151,10 +151,10 @@
       return;
     }
     var el = document.documentElement;
-    if (el.requestFullscreen) el.requestFullscreen().catch(function () { GT.toast('Browser menolak layar penuh. Coba tekan F11.'); });
+    if (el.requestFullscreen) el.requestFullscreen().catch(function () { GT.toast($t('Browser menolak layar penuh. Coba tekan F11.')); });
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    else if (window.GT_PWA && GT_PWA.iphone()) GT.toast('Di iPhone: ketuk Bagikan lalu "Tambah ke Layar Utama" untuk layar penuh.');
-    else GT.toast('Browser ini tidak mendukung layar penuh. Coba tekan F11.');
+    else if (window.GT_PWA && GT_PWA.iphone()) GT.toast($t('Di iPhone: ketuk Bagikan lalu "Tambah ke Layar Utama" untuk layar penuh.'));
+    else GT.toast($t('Browser ini tidak mendukung layar penuh. Coba tekan F11.'));
   }
   function onFsChange() { applyLayout(); redraw(); setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 60); }
   document.addEventListener('fullscreenchange', onFsChange);
@@ -167,24 +167,24 @@
   function press(id) { var b = document.getElementById(id); if (b) b.click(); }
   function moreSheet() {
     var opts = [];
-    if (document.getElementById('simbtn')) opts.push({ label: 'Simulasi 1 minggu', onPick: function () { press('simbtn'); } });
-    opts.push({ label: 'Pengaturan', onPick: openSettings });
-    if (GT.openProfile) opts.push({ label: 'Profil', onPick: function () { GT.openProfile(); } });
-    if (document.getElementById('btnJiwa')) opts.push({ label: 'Jiwa', onPick: function () { press('btnJiwa'); } });
-    if (GT.interact) opts.push({ label: 'Pesan ke NPC di depanmu', onPick: function () { GT.interact('message'); } });
+    if (document.getElementById('simbtn')) opts.push({ label: $t('Simulasi 1 minggu'), onPick: function () { press('simbtn'); } });
+    opts.push({ label: $t('Pengaturan'), onPick: openSettings });
+    if (GT.openProfile) opts.push({ label: $t('Profil'), onPick: function () { GT.openProfile(); } });
+    if (document.getElementById('btnJiwa')) opts.push({ label: $t('Jiwa'), onPick: function () { press('btnJiwa'); } });
+    if (GT.interact) opts.push({ label: $t('Pesan ke NPC di depanmu'), onPick: function () { GT.interact('message'); } });
     if (document.getElementById('devbtn')) opts.push({ label: 'Dev', onPick: function () { press('devbtn'); } });
-    GT.menu('Lainnya', opts);
+    GT.menu($t('Lainnya'), opts);
   }
   function buildTabbar() {
     if (tabbar) return;
     var shell = document.querySelector('.shell');
     if (!shell) return;
-    tabbar = $('nav', 'gt-tabbar'); tabbar.setAttribute('aria-label', 'Menu utama');
-    [['tab-bag', 'Tas', function () { press('chainbtn'); }],
-     ['tab-market', 'Pasar', function () { press('pasarbtn'); }],
-     ['tab-map', 'Peta', function () { press('mapbtn'); }],
-     ['tab-chat', 'Chat', function () { if (window.GT_PLAYERS) GT_PLAYERS.openChat(''); }],
-     ['tab-more', 'Lainnya', moreSheet]].forEach(function (t) {
+    tabbar = $('nav', 'gt-tabbar'); tabbar.setAttribute('aria-label', $t('Menu utama'));
+    [['tab-bag', $t('Tas'), function () { press('chainbtn'); }],
+     ['tab-market', $t('Pasar'), function () { press('pasarbtn'); }],
+     ['tab-map', $t('Peta'), function () { press('mapbtn'); }],
+     ['tab-chat', $t('Chat'), function () { if (window.GT_PLAYERS) GT_PLAYERS.openChat(''); }],
+     ['tab-more', $t('Lainnya'), moreSheet]].forEach(function (t) {
       var b = $('button', 'gt-tab', t[1]); b.type = 'button'; b.id = t[0];
       b.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) t[2](); });
       tabbar.appendChild(b);
@@ -192,7 +192,7 @@
     shell.appendChild(tabbar);
     // the first tab says Masuk until the player is signed in, like the HUD button it presses
     var first = tabbar.firstChild;
-    function sync() { var acc = document.getElementById('chainbtn'); var t = acc && acc.textContent === 'Masuk' ? 'Masuk' : 'Tas'; if (first.textContent !== t) first.textContent = t; }
+    function sync() { var acc = document.getElementById('chainbtn'); var t = acc && acc.textContent === $t('Masuk') ? $t('Masuk') : $t('Tas'); if (first.textContent !== t) first.textContent = t; }
     setInterval(sync, 700); // the account button is created later by chain.js and changes on sign-in
     sync();
   }
@@ -203,10 +203,20 @@
 
   function body() {
     var wrap = $('div', 'gt-settings');
+    // language first: shown in both languages so it can always be found (switching reloads the page)
+    wrap.appendChild($('h3', null, 'Language / Bahasa'));
+    var lg = $('div', 'mseg');
+    [['en', 'English'], ['id', 'Bahasa Indonesia']].forEach(function (o) {
+      var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-lang'; inp.value = o[0]; inp.checked = window.GT_LANG === o[0];
+      inp.addEventListener('change', function () { if (window.GT_I18N && window.GT_LANG !== o[0]) GT_I18N.setLang(o[0]); });
+      lab.appendChild(inp); lab.appendChild($('span', null, o[1])); lg.appendChild(lab);
+    });
+    wrap.appendChild(lg);
+
     // text size first: the setting most players look for
-    wrap.appendChild($('h3', null, 'Ukuran teks'));
+    wrap.appendChild($('h3', null, $t('Ukuran teks')));
     var ts = $('div', 'mseg');
-    [[1, 'Normal'], [1.15, 'Besar'], [1.3, 'Lebih besar']].forEach(function (o) {
+    [[1, $t('Normal')], [1.15, $t('Besar')], [1.3, $t('Lebih besar')]].forEach(function (o) {
       var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-ts'; inp.value = String(o[0]); inp.checked = (st.textSize || 1) === o[0];
       inp.addEventListener('change', function () { st.textSize = o[0]; save(); applyText(); });
       lab.appendChild(inp); lab.appendChild($('span', null, o[1])); ts.appendChild(lab);
@@ -214,9 +224,9 @@
     wrap.appendChild(ts);
 
 
-    wrap.appendChild($('h3', null, 'Layar'));
+    wrap.appendChild($('h3', null, $t('Layar')));
     var seg = $('div', 'mseg');
-    [['auto', 'Otomatis'], ['full', 'Penuh jendela'], ['boxed', 'Kotak (klasik)']].forEach(function (o) {
+    [['auto', $t('Otomatis')], ['full', $t('Penuh jendela')], ['boxed', $t('Kotak (klasik)')]].forEach(function (o) {
       var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-layout'; inp.value = o[0]; inp.checked = st.layout === o[0];
       inp.addEventListener('change', function () { st.layout = o[0]; save(); applyLayout(); window.dispatchEvent(new Event('resize')); });
       lab.appendChild(inp); lab.appendChild($('span', null, o[1])); seg.appendChild(lab);
@@ -224,9 +234,9 @@
     wrap.appendChild(seg);
     var v3 = window.GT_VIEW3D;
     if (v3) {
-      wrap.appendChild($('h3', null, 'Tampilan'));
+      wrap.appendChild($('h3', null, $t('Tampilan')));
       var vs = $('div', 'mseg');
-      [['3d', '2.5D'], ['2d', '2D (ringan)']].forEach(function (o) {
+      [['3d', '2.5D'], ['2d', $t('2D (ringan)')]].forEach(function (o) {
         var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-view'; inp.value = o[0]; inp.checked = v3.get() === o[0];
         inp.addEventListener('change', function () { v3.set(o[0]); });
         lab.appendChild(inp); lab.appendChild($('span', null, o[1])); vs.appendChild(lab);
@@ -236,26 +246,26 @@
     var pwa = window.GT_PWA;
     var fs = $('div', 'dbtns');
     if (fsSupported()) {
-      var fsb = $('button', 'mbtn primary', fsElement() ? 'Keluar layar penuh' : 'Layar penuh (' + label('fullscreen') + ')'); fsb.type = 'button';
+      var fsb = $('button', 'mbtn primary', fsElement() ? $t('Keluar layar penuh') : $t('Layar penuh ({0})', [label('fullscreen')])); fsb.type = 'button';
       fsb.addEventListener('click', function () { toggleFullscreen(); });
       fs.appendChild(fsb);
     }
     if (pwa && pwa.canInstall()) {
-      var inst = $('button', 'mbtn', 'Pasang aplikasi'); inst.type = 'button';
+      var inst = $('button', 'mbtn', $t('Pasang aplikasi')); inst.type = 'button';
       inst.addEventListener('click', function () { pwa.install().then(function () { redraw(); }); });
       fs.appendChild(inst);
     }
     if (fs.firstChild) wrap.appendChild(fs);
-    if (pwa && pwa.standalone()) wrap.appendChild($('p', 'mnote', 'Sudah terpasang sebagai aplikasi.'));
-    else if (pwa && pwa.iphone()) wrap.appendChild($('p', 'mnote', 'Di iPhone: ketuk Bagikan lalu "Tambah ke Layar Utama" untuk layar penuh.'));
+    if (pwa && pwa.standalone()) wrap.appendChild($('p', 'mnote', $t('Sudah terpasang sebagai aplikasi.')));
+    else if (pwa && pwa.iphone()) wrap.appendChild($('p', 'mnote', $t('Di iPhone: ketuk Bagikan lalu "Tambah ke Layar Utama" untuk layar penuh.')));
 
-    wrap.appendChild($('h3', null, 'Kota'));
+    wrap.appendChild($('h3', null, $t('Kota')));
     var shared = window.GT_CHAIN && GT_CHAIN.state.mode !== 'offline' && GT_CHAIN.state.cfg && GT_CHAIN.state.cfg.world;
     if (shared) {
       // with a server, every player shares one world made from the server's seed
-      wrap.appendChild($('p', 'mnote', 'Peta kota dibuat dari seed dunia ' + GT_CHAIN.state.cfg.world.seed + ' milik server, sama untuk semua pemain.'));
+      wrap.appendChild($('p', 'mnote', $t('Peta kota dibuat dari seed dunia {0} milik server, sama untuk semua pemain.', [GT_CHAIN.state.cfg.world.seed])));
     } else {
-      var regen = $('button', 'mbtn', 'Buat kota baru (peta acak)'); regen.type = 'button';
+      var regen = $('button', 'mbtn', $t('Buat kota baru (peta acak)')); regen.type = 'button';
       regen.addEventListener('click', function () { if (modal) modal.close('regen'); var r = document.getElementById('regen'); if (r) setTimeout(function () { r.click(); }, 50); });
       var rr = $('div', 'dbtns'); rr.appendChild(regen); wrap.appendChild(rr);
     }
@@ -263,17 +273,17 @@
     var rm = $('label', 'dchk'); var cb = $('input'); cb.type = 'checkbox';
     cb.checked = document.documentElement.classList.contains('gt-reduced-motion');
     cb.addEventListener('change', function () { st.reducedMotion = cb.checked; save(); applyLayout(); });
-    rm.appendChild(cb); rm.appendChild($('span', null, 'Kurangi animasi'));
+    rm.appendChild(cb); rm.appendChild($('span', null, $t('Kurangi animasi')));
     wrap.appendChild(rm);
     if (window.GT_CONCERT) { // the night concert on the square's stage (mods/concert.js)
       var mu = $('label', 'dchk'), mc = $('input'); mc.type = 'checkbox'; mc.checked = GT_CONCERT.on();
       mc.addEventListener('change', function () { GT_CONCERT.setOn(mc.checked); });
-      mu.appendChild(mc); mu.appendChild($('span', null, 'Musik konser (malam, di panggung alun-alun)'));
+      mu.appendChild(mc); mu.appendChild($('span', null, $t('Musik konser (malam, di panggung alun-alun)')));
       wrap.appendChild(mu);
     }
     var keys = $('div');
-    var h = $('h3', null, 'Tombol'); keys.appendChild(h);
-    keys.appendChild($('p', 'mnote', 'Klik sebuah kotak lalu tekan tombol baru. Esc membatalkan. Tombol yang sudah dipakai aksi lain akan dipindahkan.'));
+    var h = $('h3', null, $t('Tombol')); keys.appendChild(h);
+    keys.appendChild($('p', 'mnote', $t('Klik sebuah kotak lalu tekan tombol baru. Esc membatalkan. Tombol yang sudah dipakai aksi lain akan dipindahkan.')));
     ACTIONS.forEach(function (a) {
       var row = $('div', 'mrow');
       row.appendChild($('span', 'grow', a.label));
@@ -281,7 +291,7 @@
         (function (slot) {
           var b = $('button', 'mbtn gt-key', keyName(st.binds[a.id][slot]));
           b.type = 'button';
-          b.setAttribute('aria-label', a.label + ', tombol ' + (slot + 1) + ': ' + keyName(st.binds[a.id][slot]));
+          b.setAttribute('aria-label', $t('{0}, tombol {1}: {2}', [a.label, slot + 1, keyName(st.binds[a.id][slot])]));
           b.addEventListener('click', function () { startCapture(a.id, slot, b); });
           row.appendChild(b);
         })(slot);
@@ -289,8 +299,8 @@
       keys.appendChild(row);
     });
     var r = $('div', 'dbtns');
-    var reset = $('button', 'mbtn', 'Reset ke bawaan'); reset.type = 'button';
-    reset.addEventListener('click', function () { ACTIONS.forEach(function (a) { st.binds[a.id] = a.keys.slice(); }); save(); rebuild(); redraw(); GT.toast('Tombol dikembalikan ke bawaan.'); });
+    var reset = $('button', 'mbtn', $t('Reset ke bawaan')); reset.type = 'button';
+    reset.addEventListener('click', function () { ACTIONS.forEach(function (a) { st.binds[a.id] = a.keys.slice(); }); save(); rebuild(); redraw(); GT.toast($t('Tombol dikembalikan ke bawaan.')); });
     r.appendChild(reset); keys.appendChild(r);
     if (!document.documentElement.classList.contains('gt-phone') && !window.matchMedia('(pointer: coarse)').matches) wrap.appendChild(keys);
     return wrap;
@@ -298,13 +308,13 @@
 
   function startCapture(action, slot, el) {
     capturing = { action: action, slot: slot, el: el };
-    el.textContent = 'tekan…'; el.classList.add('gt-capturing');
+    el.textContent = $t('tekan…'); el.classList.add('gt-capturing');
   }
   function finishCapture(code) {
     var c = capturing; capturing = null;
     if (code && c) {
       ACTIONS.forEach(function (a) {
-        st.binds[a.id] = st.binds[a.id].map(function (k) { if (k === code && !(a.id === c.action)) { GT.toast(keyName(code) + ' dipindah dari "' + a.label + '".'); return null; } return k; });
+        st.binds[a.id] = st.binds[a.id].map(function (k) { if (k === code && !(a.id === c.action)) { GT.toast($t('{0} dipindah dari "{1}".', [keyName(code), a.label])); return null; } return k; });
       });
       st.binds[c.action][c.slot] = code;
       save(); rebuild();
@@ -315,7 +325,7 @@
 
   function openSettings() {
     if (modal && modal.isOpen()) return;
-    modal = GT.modal({ title: 'Pengaturan', wide: true, body: body(), onClose: function () { capturing = null; } });
+    modal = GT.modal({ title: $t('Pengaturan'), wide: true, body: body(), onClose: function () { capturing = null; } });
   }
 
   rebuild();
@@ -327,10 +337,10 @@
   GT.register({
     id: 'settings',
     init: function () {
-      GT.addHudButton({ id: 'setbtn', label: 'Atur', onClick: openSettings, secondary: false });
+      GT.addHudButton({ id: 'setbtn', label: $t('Atur'), onClick: openSettings, secondary: false });
       // A calmer HUD: Tas, Pasar, Peta and Simulasi stay in view; everything else lives in Lainnya
       // (css/phone.css hides the rest). Their keyboard shortcuts still work.
-      GT.addHudButton({ id: 'gt-morebtn', label: 'Lainnya', onClick: moreSheet, secondary: false });
+      GT.addHudButton({ id: 'gt-morebtn', label: $t('Lainnya'), onClick: moreSheet, secondary: false });
       renderHelp();
       applyLayout();
     }

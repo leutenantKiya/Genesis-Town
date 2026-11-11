@@ -39,13 +39,13 @@ async function world() {
 test('by day the forest is quiet; at night a boar can block a gather, and beating it gives the wood plus one', async () => {
   const w = await world();
   w.advanceTo(12);
-  assert.match(w.gather().toast, /Kayu/, 'daytime gather works');
+  assert.match(w.gather().toast, /Wood/, 'daytime gather works');
   w.advanceTo(21);
   w.rolls([0.1, 0.1, 0.1]); // encounter (0.1 < 0.15), then two hits (0.1 < 0.7)
   const r = w.gather() as { toast: string; state: { encounter: { name: string } | null } };
-  assert.match(r.toast, /Babi hutan menghadang/);
-  assert.equal(r.state.encounter?.name, 'Babi hutan');
-  assert.throws(() => w.act('eat'), /menghadang/, 'nothing else until the boar is dealt with');
+  assert.match(r.toast, /Wild Boar blocks your way/);
+  assert.equal(r.state.encounter?.name, 'Wild Boar');
+  assert.throws(() => w.act('eat'), /blocks your way/, 'nothing else until the boar is dealt with');
   const wood0 = w.game.gs.balance(P, 'wood');
   w.act('fight');
   const won = w.act('fight') as { toast: string; won?: boolean };
@@ -62,7 +62,7 @@ test('running out of energy in a fight knocks the player out until 06:00; nothin
   let r: { ko?: boolean } = {};
   for (let i = 0; i < 20 && !r.ko; i++) r = w.act('fight') as { ko?: boolean };
   assert.equal(r.ko, true);
-  assert.throws(() => w.act('eat'), /pingsan/);
+  assert.throws(() => w.act('eat'), /passed out/);
   assert.equal(w.game.gs.balance(P, 'coin'), coin0); assert.equal(w.game.gs.balance(P, 'bread'), bread0);
   w.advanceTo(6);
   w.nowAdd(1000);
@@ -76,7 +76,7 @@ test('fleeing costs a little energy and gathers nothing; a finished Pos Ronda ke
   w.rolls([0.1]);
   w.gather();
   const wood0 = w.game.gs.balance(P, 'wood');
-  assert.match(w.act('flee').toast, /lari/);
+  assert.match(w.act('flee').toast, /ran away/);
   assert.equal(w.game.gs.balance(P, 'wood'), wood0);
   // the town builds Pos Ronda on chain
   await w.game.devSettle();
@@ -89,7 +89,7 @@ test('fleeing costs a little energy and gathers nothing; a finished Pos Ronda ke
   assert.equal(w.game.state(P).night?.guarded, true);
   // this roll (0.1) would be an encounter; with the guard post it is just a gather
   w.rolls([0.1]);
-  assert.match(w.gather().toast, /Kayu/);
+  assert.match(w.gather().toast, /Wood/);
 });
 
 test('roaming monsters: walking into one starts a fight, beating it drops wood or ore; far away nothing happens', async () => {
@@ -108,16 +108,16 @@ test('roaming monsters: walking into one starts a fight, beating it drops wood o
   assert.ok(near);
   w.rolls([0.1, 0.1]);
   const r = w.game.act(P, { action: 'engage', monster: at.id, pos: stand }) as { toast: string };
-  assert.match(r.toast, /Babi hutan menyerang/);
+  assert.match(r.toast, /Wild Boar attacks/);
   const wood0 = w.game.gs.balance(P, 'wood');
   w.game.act(P, { action: 'fight', pos: stand });
   const won = w.game.act(P, { action: 'fight', pos: stand }) as { won?: boolean; toast: string };
   assert.equal(won.won, true);
-  assert.match(won.toast, /menjatuhkan 1 Kayu/);
+  assert.match(won.toast, /dropped 1 Wood/);
   assert.equal(w.game.gs.balance(P, 'wood'), wood0 + 1);
   // a monster that is not next to you cannot be engaged
   const far = w.game.monsters!.roaming().find((m) => Math.abs(m.x - stand.x) + Math.abs(m.y - stand.y) > 2);
-  if (far) assert.throws(() => w.game.act(P, { action: 'engage', monster: far.id, pos: stand }), /Tidak ada apa-apa/);
+  if (far) assert.throws(() => w.game.act(P, { action: 'engage', monster: far.id, pos: stand }), /nothing here/);
 });
 
 test('rain waters planted plots by itself, once per rainy day', async () => {
@@ -137,7 +137,7 @@ test('rain waters planted plots by itself, once per rainy day', async () => {
   while (!w.game.weather()!.wet && guard++ < 200) w.nowAdd(w.econ.time.realMsPerGameHour * 24);
   assert.ok(w.game.weather()!.wet, 'a rainy day came');
   const s1 = w.game.state(P) as { plots: Array<{ grown: number; wateredToday: boolean }>; weather: { label: string } };
-  assert.equal(s1.weather.label, 'Hujan');
+  assert.equal(s1.weather.label, 'Rain');
   assert.equal(s1.plots[0].wateredToday, true);
   const g = s1.plots[0].grown;
   assert.equal((w.game.state(P) as { plots: Array<{ grown: number }> }).plots[0].grown, g, 'only once per day');

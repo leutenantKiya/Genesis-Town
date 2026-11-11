@@ -57,7 +57,7 @@ export class Monsters {
     return until;
   }
   checkAwake(account: string) {
-    if (this.koUntil(account) !== null) throw new HttpError(409, 'Kamu pingsan di hutan. Warga membawamu pulang; istirahat sampai pukul 06:00.');
+    if (this.koUntil(account) !== null) throw new HttpError(409, 'You passed out in the forest. Townsfolk carried you home; rest until 06:00.');
   }
 
   /** Called before a gather: maybe a monster blocks it. `map` is the world the player gathers in; `home` = a Homeland. */
@@ -84,7 +84,7 @@ export class Monsters {
     if (this.pending.has(account)) return this.pending.get(account)!;
     const h = this.clock.hours();
     const m = [...this.roaming(map, home, h), ...this.roaming(map, home, h - 1)].find((q) => q.id === id && Math.abs(q.x - pos.x) + Math.abs(q.y - pos.y) <= this.cfg.reach);
-    if (!m) throw new HttpError(409, 'Tidak ada apa-apa di sini.');
+    if (!m) throw new HttpError(409, 'There\'s nothing here.');
     const d = this.cfg.kinds[m.kind];
     const e = { kind: m.kind, name: d.name, hp: d.hp, maxHp: d.hp, tile: null, x: m.x, y: m.y, id: m.id };
     this.pending.set(account, e);
@@ -112,15 +112,15 @@ export class Monsters {
 
   fight(account: string) {
     const e = this.pending.get(account);
-    if (!e) throw new HttpError(409, 'Tidak ada yang perlu dilawan.');
+    if (!e) throw new HttpError(409, 'There\'s nothing to fight.');
     const d = this.cfg.kinds[e.kind];
-    if (!this.spend(account, this.cfg.fightEnergy)) { this.knockOut(account); return { toast: `Kamu kehabisan tenaga melawan ${e.name}. Pingsan sampai pagi.`, ko: true }; }
+    if (!this.spend(account, this.cfg.fightEnergy)) { this.knockOut(account); return { toast: `You ran out of strength fighting ${e.name}. Passed out until morning.`, ko: true }; }
     const hit = this.rng() < this.cfg.hitChance;
     if (hit) e.hp -= 1;
     if (e.hp <= 0) {
       this.pending.delete(account);
       // the way is clear: gather as usual, plus one for the trouble
-      let toast = `${e.name} kabur!`;
+      let toast = `${e.name} ran away!`;
       const day = this.clock.time().settleDay; // the open ledger day, like every other write
       if (e.tile) {
         try {
@@ -130,7 +130,7 @@ export class Monsters {
             this.world.checkGain(account, this.econ.gather.tiles[e.tile], 1);
             this.gs.add(day, account, this.econ.gather.tiles[e.tile], 1, 'monster_bonus', e.kind);
             toast += ' +1 bonus.';
-          } catch { toast += ' Bonus hilang: batas harian tercapai.'; }
+          } catch { toast += ' Bonus lost: daily limit reached.'; }
         } catch (err) {
           toast += ' ' + (err as Error).message;
         }
@@ -140,20 +140,20 @@ export class Monsters {
         try {
           this.world.checkGain(account, drop, 1);
           this.gs.add(day, account, drop, 1, 'monster_drop', e.kind);
-          toast += ` Ia menjatuhkan 1 ${this.econ.items[drop]?.name ?? drop}.`;
-        } catch { toast += ' Ia menjatuhkan sesuatu, tapi batas harianmu sudah penuh.'; }
+          toast += ` It dropped 1 ${this.econ.items[drop]?.name ?? drop}.`;
+        } catch { toast += ' It dropped something, but your daily limit is full.'; }
       }
       return { toast, won: true };
     }
-    if (!this.spend(account, d.hit)) { this.knockOut(account); return { toast: `${e.name} menjatuhkanmu. Pingsan sampai pagi.`, ko: true }; }
-    return { toast: hit ? `Kena! ${e.name} masih melawan (${e.hp}/${e.maxHp}).` : `Meleset! ${e.name} menyerang balik.`, encounter: e };
+    if (!this.spend(account, d.hit)) { this.knockOut(account); return { toast: `${e.name} knocked you down. Passed out until morning.`, ko: true }; }
+    return { toast: hit ? `Hit! ${e.name} is still fighting (${e.hp}/${e.maxHp}).` : `Missed! ${e.name} strikes back.`, encounter: e };
   }
 
   flee(account: string) {
     const e = this.pending.get(account);
-    if (!e) throw new HttpError(409, 'Tidak ada yang perlu dihindari.');
+    if (!e) throw new HttpError(409, 'There\'s nothing to dodge.');
     this.pending.delete(account);
-    if (!this.spend(account, this.cfg.fleeEnergy)) { this.knockOut(account); return { toast: 'Kamu terlalu lelah untuk lari. Pingsan sampai pagi.', ko: true }; }
-    return { toast: `Kamu lari dari ${e.name}. Tidak dapat apa-apa kali ini.` };
+    if (!this.spend(account, this.cfg.fleeEnergy)) { this.knockOut(account); return { toast: 'You\'re too tired to run. Passed out until morning.', ko: true }; }
+    return { toast: `You ran away from ${e.name}. Nothing gained this time.` };
   }
 }

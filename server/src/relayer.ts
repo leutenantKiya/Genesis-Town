@@ -104,15 +104,15 @@ export function summarize(method: string, raw: unknown, n: (t: unknown) => strin
 }
 
 const SUMMARY: Record<string, (a: Record<string, unknown>, n: (t: unknown) => string) => string> = {
-  send_item: (a, n) => `Kirim ${a.amount} ${n(a.token_id)} ke ${a.receiver_id}`,
-  restore_contribute: (a, n) => `Sumbang ke papan pemulihan ${String(a.merchant).split('.')[0]}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${n(l.token_id)}`).join(', ')}`,
-  restore_withdraw: (a) => `Tarik sumbangan dari ${String(a.merchant).split('.')[0]}`,
-  claim_dividends: (a) => `Ambil dividen dari ${String(a.merchant).split('.')[0]}`,
-  list_item: (a, n) => `Pasang ${a.amount} ${n(a.token_id)} di Pasar Pemain, ${a.price_each} koin/buah`,
-  buy_listing: (a) => `Beli ${a.amount} dari lapak #${a.listing_id} (maks ${a.max_price_each} koin/buah)`,
-  cancel_listing: (a) => `Tarik lapak #${a.listing_id} dari Pasar Pemain`,
-  project_contribute: (a, n) => `Sumbang ke proyek desa ${a.id}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${n(l.token_id)}`).join(', ')}`,
-  project_withdraw: (a) => `Tarik sumbangan dari proyek desa ${a.id}`,
+  send_item: (a, n) => `Send ${a.amount} ${n(a.token_id)} to ${a.receiver_id}`,
+  restore_contribute: (a, n) => `Donate to recovery board ${String(a.merchant).split('.')[0]}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${n(l.token_id)}`).join(', ')}`,
+  restore_withdraw: (a) => `Withdraw donation from ${String(a.merchant).split('.')[0]}`,
+  claim_dividends: (a) => `Collect dividends from ${String(a.merchant).split('.')[0]}`,
+  list_item: (a, n) => `List ${a.amount} ${n(a.token_id)} on the Player Market, ${a.price_each} coins each`,
+  buy_listing: (a) => `Buy ${a.amount} from stall #${a.listing_id} (max ${a.max_price_each} coins each)`,
+  cancel_listing: (a) => `Withdraw stall #${a.listing_id} from the Player Market`,
+  project_contribute: (a, n) => `Donate to village project ${a.id}: ${((a.contribution as Array<{ token_id: string; amount: string }>) ?? []).map((l) => `${l.amount} ${n(l.token_id)}`).join(', ')}`,
+  project_withdraw: (a) => `Withdraw donation from village project ${a.id}`,
 };
 
 /** Items a relayed method is about (buy_listing doesn't say which item; it only moves coin). */
@@ -174,7 +174,7 @@ async function relayLocked(deps: RelayDeps, sd: ReturnType<typeof decodeSignedDe
   const ahead = BigInt(da.maxBlockHeight) - height;
   if (ahead <= 0n) throw new HttpError(400, 'delegate expired');
   if (ahead > BigInt(deps.cfg.relay.maxBlocksAhead)) throw new HttpError(400, 'delegate expiry too far ahead');
-  if (!deps.limiter.take(da.senderId)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
+  if (!deps.limiter.take(da.senderId)) throw new HttpError(429, 'Slow down… too many actions');
 
   let args: Record<string, unknown> = {};
   try { args = sanitizeArgs(JSON.parse(Buffer.from(fc.args).toString('utf8'))); } catch { /* summary falls back below */ }

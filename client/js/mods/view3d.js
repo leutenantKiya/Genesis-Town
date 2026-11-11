@@ -51,16 +51,16 @@
   }
   function start() {
     if (ok || failed) return;
-    loadKit().then(setup, function () { fail('Tampilan 2.5D gagal dimuat. Kembali ke 2D.'); });
+    loadKit().then(setup, function () { fail($t('Tampilan 2.5D gagal dimuat. Kembali ke 2D.')); });
   }
   function setup() {
-    if (ok || !window.GT3) return fail('Tampilan 2.5D gagal dimuat. Kembali ke 2D.');
+    if (ok || !window.GT3) return fail($t('Tampilan 2.5D gagal dimuat. Kembali ke 2D.'));
     THREE = window.THREE;
-    try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch (e) { return fail('Perangkat ini tidak mendukung WebGL. Tampilan kembali ke 2D.'); }
+    try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch (e) { return fail($t('Perangkat ini tidak mendukung WebGL. Tampilan kembali ke 2D.')); }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
     cv = renderer.domElement; cv.className = 'gt3d'; cv.setAttribute('aria-hidden', 'true');
-    cv.addEventListener('webglcontextlost', function (e) { e.preventDefault(); fail('Tampilan 2.5D berhenti (grafis penuh). Kembali ke 2D.'); });
+    cv.addEventListener('webglcontextlost', function (e) { e.preventDefault(); fail($t('Tampilan 2.5D berhenti (grafis penuh). Kembali ke 2D.')); });
     var scr = document.getElementById('screen'); scr.insertBefore(cv, scr.firstChild);
     scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(28, 1, 1, 160);
     sky = GT3.Sky(scene, renderer); rig = GT3.Rig(camera); // the lab's camera, unchanged
@@ -83,17 +83,17 @@
     var scr = document.getElementById('screen'), c2 = document.getElementById('cv');
     if (!scr || !c2) return;
     ui = { bar: el('div', 'gt3d-bar'), hint: el('div', 'gt3d-hint'), stick: el('div', 'gt3d-stick') };
-    var t1 = el('div', 'gt3d-tray'); t1.setAttribute('role', 'group'); t1.setAttribute('aria-label', 'Dunia');
-    ui.desa = button('Desa', null, function () { goWorld('public'); });
-    ui.home = button('Homeland', null, function () { goWorld('home'); });
+    var t1 = el('div', 'gt3d-tray'); t1.setAttribute('role', 'group'); t1.setAttribute('aria-label', $t('Dunia'));
+    ui.desa = button($t('Desa'), null, function () { goWorld('public'); });
+    ui.home = button($t('Homeland'), null, function () { goWorld('home'); });
     t1.appendChild(ui.desa); t1.appendChild(ui.home);
-    var t2 = el('div', 'gt3d-tray'); t2.setAttribute('role', 'group'); t2.setAttribute('aria-label', 'Kamera');
-    t2.appendChild(button('+', 'Perbesar', function () { zoom = rig.zoom(zoom * 1.2); }));
-    t2.appendChild(button('-', 'Perkecil', function () { zoom = rig.zoom(zoom / 1.2); }));
-    t2.appendChild(button('↺', 'Putar kamera ke kiri', function () { turn(1); })); // Q
-    t2.appendChild(button('↻', 'Putar kamera ke kanan', function () { turn(-1); })); // E
+    var t2 = el('div', 'gt3d-tray'); t2.setAttribute('role', 'group'); t2.setAttribute('aria-label', $t('Kamera'));
+    t2.appendChild(button('+', $t('Perbesar'), function () { zoom = rig.zoom(zoom * 1.2); }));
+    t2.appendChild(button('-', $t('Perkecil'), function () { zoom = rig.zoom(zoom / 1.2); }));
+    t2.appendChild(button('↺', $t('Putar kamera ke kiri'), function () { turn(1); })); // Q
+    t2.appendChild(button('↻', $t('Putar kamera ke kanan'), function () { turn(-1); })); // E
     ui.bar.appendChild(t1); ui.bar.appendChild(t2);
-    ui.hint.innerHTML = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> atau seret jalan · <kbd>Q</kbd><kbd>E</kbd> putar kamera · scroll zoom';
+    ui.hint.innerHTML = $t('<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> atau seret jalan · <kbd>Q</kbd><kbd>E</kbd> putar kamera · scroll zoom');
     ui.stick.setAttribute('aria-hidden', 'true'); ui.stick.appendChild(el('i'));
     scr.appendChild(ui.bar); scr.appendChild(ui.hint); document.body.appendChild(ui.stick);
     // a drag on the world walks: past a small dead zone it is an analog stick (any direction, diagonals too), as in the lab
@@ -138,13 +138,13 @@
   function goWorld(kind) {
     var H = window.GT_HOME && GT_HOME.state ? GT_HOME.state() : null;
     var to = kind === 'public' ? 'public' : H && H.world;
-    if (!to) { GT.toast('Masuk dulu untuk ke Homeland.'); return; }
+    if (!to) { GT.toast($t('Masuk dulu untuk ke Homeland.')); return; }
     if (GT.worldId() === to || GT.isUiOpen()) return;
     var p = GT.world && GT.world.portal, me = GT.player;
     if (!p) return;
     if (Math.abs(me.x - p.x) + Math.abs(me.y - p.y) <= 2) { GT_HOME.travel(to); return; }
-    if (!(window.GT_MOUSE && GT_MOUSE.goNear(p, function () { GT_HOME.travel(to); }))) { GT.toast('Tidak ada jalan ke portal.'); return; }
-    GT.toast('Berjalan ke portal…');
+    if (!(window.GT_MOUSE && GT_MOUSE.goNear(p, function () { GT_HOME.travel(to); }))) { GT.toast($t('Tidak ada jalan ke portal.')); return; }
+    GT.toast($t('Berjalan ke portal…'));
   }
 
   /* ---------------------------------------------------------------- the world of the current outdoor map */

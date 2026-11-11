@@ -131,7 +131,7 @@ export class Settlement {
       const storage = Math.floor(over * (econ.shops.storageFeePerUnit ?? 0));
       const due = econ.shops.rent + storage;
       const pay = Math.min(due, cash);
-      if (pay > 0) gs.add(day, acct, 'coin', -pay, 'rent', storage ? `rent ${econ.shops.rent} + gudang ${storage}` : null);
+      if (pay > 0) gs.add(day, acct, 'coin', -pay, 'rent', storage ? `rent ${econ.shops.rent} + storage ${storage}` : null);
       if (cash < due) toClose.push(acct);
     }
     gs.setMeta(`settle.close.${day}`, JSON.stringify(toClose));
@@ -277,7 +277,7 @@ export class Settlement {
       for (const a of [...new Set(entries.map((e) => e.account_id))].filter((x) => x.includes('.players.'))) {
         const tx = txByAccount.get(a) || null;
         store.settleOffchain(a, status, tx);
-        store.addHistory(a, 'settle', `Settlement hari ${day}: ${entries.filter((e) => e.account_id === a).map((e) => `${Number(e.delta) > 0 ? '+' : ''}${e.delta} ${this.d.econ.items[e.token_id]?.name ?? e.token_id}`).join(', ')}`, status, tx, null, [...new Set(entries.filter((e) => e.account_id === a).map((e) => e.token_id))]);
+        store.addHistory(a, 'settle', `Settlement day ${day}: ${entries.filter((e) => e.account_id === a).map((e) => `${Number(e.delta) > 0 ? '+' : ''}${e.delta} ${this.d.econ.items[e.token_id]?.name ?? e.token_id}`).join(', ')}`, status, tx, null, [...new Set(entries.filter((e) => e.account_id === a).map((e) => e.token_id))]);
       }
       gs.setMeta(`settle.hist.${day}`, '1');
     }

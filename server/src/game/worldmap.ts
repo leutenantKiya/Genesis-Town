@@ -97,9 +97,9 @@ export class WorldMap implements GameMap, MonsterMap {
   checkGather(tile: string, x: number, y: number) {
     const t = this.tileAt(x, y);
     if (t === null) throw new HttpError(400, 'bad tile');
-    if (t !== tile) throw new HttpError(409, 'Tidak ada yang bisa dikumpulkan di sini.');
+    if (t !== tile) throw new HttpError(409, 'Nothing to gather here.');
     const c = this.chunkAt(x, y);
-    if (!c.open) throw new HttpError(409, `${c.name} belum dibuka.`);
+    if (!c.open) throw new HttpError(409, `${c.name} isn't open yet.`);
   }
   weather(day: number, season: string): Weather { return Village.weather(this.seed, day, season); }
   monstersAt(hour: number, counts?: Record<string, number>): MonsterSpot[] { return Village.monstersAt(this.layout, hour, counts); }
@@ -133,9 +133,9 @@ export class HomelandMap implements GameMap, MonsterMap {
   checkGather(tile: string, x: number, y: number) {
     const t = this.tileAt(x, y);
     if (t === null) throw new HttpError(400, 'bad tile');
-    if (t !== tile) throw new HttpError(409, 'Tidak ada yang bisa dikumpulkan di sini.');
+    if (t !== tile) throw new HttpError(409, 'Nothing to gather here.');
     const c = this.chunkAt(x, y);
-    if (!c.open) throw new HttpError(409, `${c.name} belum dibuka.`);
+    if (!c.open) throw new HttpError(409, `${c.name} isn't open yet.`);
   }
   portal(): Pos { return this.layout.portal; }
   /** Night monsters: open forest chunks have boars, open rock chunks bats; the centre around the Town Hall is safe. */
@@ -175,20 +175,20 @@ export class Positions {
   report(account: string, raw: unknown, now: number, world = 'public', map: GameMap = this.map, home?: { world: string; spawn: Pos }): Pos {
     const r = raw as { x?: unknown; y?: unknown } | null;
     const p = { x: Number(r?.x), y: Number(r?.y) };
-    if (!r || !Number.isInteger(p.x) || !Number.isInteger(p.y)) throw new HttpError(400, 'posisi pemain tidak ada');
+    if (!r || !Number.isInteger(p.x) || !Number.isInteger(p.y)) throw new HttpError(400, 'player position missing');
     if (world !== this.worldOf(account)) {
       const pub = this.map.layout.spawn;
       if (world === 'public' && p.x === pub.x && p.y === pub.y) { this.worlds.delete(account); this.last.delete(account); }
       // a reload (or Start) puts the client on its own Homeland spawn: always believed, wherever the server had the player
       else if (home && world === home.world && p.x === home.spawn.x && p.y === home.spawn.y) { this.worlds.set(account, world); this.last.delete(account); }
-      else throw new HttpError(409, 'Pindah dunia lewat portal.');
+      else throw new HttpError(409, 'Change worlds through the portal.');
     }
-    if (!map.walkable(p.x, p.y)) throw new HttpError(409, 'Posisi tidak valid.');
+    if (!map.walkable(p.x, p.y)) throw new HttpError(409, 'Invalid position.');
     const prev = this.last.get(account);
     const sp = map.layout.spawn;
     if (prev && !(p.x === sp.x && p.y === sp.y)) {
       const allowed = ((now - prev.t) / 1000) * TILES_PER_SEC + SLACK;
-      if (dist(prev, p) > allowed) throw new HttpError(409, 'Posisi melompat terlalu jauh. Muat ulang halaman.');
+      if (dist(prev, p) > allowed) throw new HttpError(409, 'Position jumped too far. Reload the page.');
     }
     this.last.set(account, { ...p, t: now });
     return p;

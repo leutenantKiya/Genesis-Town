@@ -47,7 +47,7 @@
   function build() {
     var screen = document.getElementById('screen');
     if (!screen || bar) return;
-    bar = $('div', 'gt-hotbar'); bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'Barang di tas');
+    bar = $('div', 'gt-hotbar'); bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', $t('Barang di tas'));
     SLOTS.forEach(function (id, i) {
       var b = $('button', 'gt-slot'); b.type = 'button'; b.dataset.item = id;
       b.appendChild(icon(id, 24));
@@ -58,8 +58,8 @@
       b.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); toggle(i); });
       bar.appendChild(b);
     });
-    var open = $('button', 'gt-slot gt-slot-bag', 'Tas'); open.type = 'button';
-    open.setAttribute('aria-label', 'Buka tas (E)');
+    var open = $('button', 'gt-slot gt-slot-bag', $t('Tas')); open.type = 'button';
+    open.setAttribute('aria-label', $t('Buka tas (E)'));
     open.addEventListener('click', function (e) { e.stopPropagation(); e.currentTarget.blur(); closePop(); openBag(); });
     bar.appendChild(open);
     label = $('div', 'gt-held');
@@ -85,19 +85,19 @@
       el.classList.toggle('sel', i === held);
       el.classList.toggle('menu', i === selected);
       var nm = (names[id] && names[id].name) || id;
-      el.setAttribute('aria-label', nm + ': ' + n + (it.today ? ' (' + (it.today > 0 ? '+' : '') + it.today + ' hari ini)' : ''));
+      el.setAttribute('aria-label', nm + ': ' + n + (it.today ? $t(' ({0}{1} hari ini)', [it.today > 0 ? '+' : '', it.today]) : ''));
       el.title = nm;
     });
     if (label && on) {
       var hid = SLOTS[held], hn = (names[hid] && names[hid].name) || hid, hit = b[hid] || { settled: 0, today: 0 };
-      var how = document.documentElement.classList.contains('gt-phone') ? 'ketuk lagi' : 'klik kanan / R';
-      label.textContent = 'Di tangan: ' + hn + ' (' + (hit.settled + hit.today) + ') · ' + how + ': ' + useVerb(hid);
+      var how = document.documentElement.classList.contains('gt-phone') ? $t('ketuk lagi') : $t('klik kanan / R');
+      label.textContent = $t('Di tangan: {0} ({1}) · {2}: {3}', [hn, hit.settled + hit.today, how, useVerb(hid)]);
     }
     if (pop && selected >= 0) fillPop();
   }
 
   function openBag() { var c = chain(); if (c) c.open('bag'); }
-  function useVerb(id) { return id === 'bread' || id === 'meal' ? 'makan' : id === 'wheat' ? 'tanam di petak' : id === 'tool' ? 'dipakai saat menambang' : 'kirim atau jual'; }
+  function useVerb(id) { return id === 'bread' || id === 'meal' ? $t('makan') : id === 'wheat' ? $t('tanam di petak') : id === 'tool' ? $t('dipakai saat menambang') : $t('kirim atau jual'); }
   /** Use the item in your hand. `tile` is where the player right-clicked (optional). */
   function useHeld(tile) {
     var c = chain(), b = bag(), id = SLOTS[held];
@@ -105,7 +105,7 @@
     var econ = (c.state.cfg && c.state.cfg.econ && c.state.cfg.econ.items[id]) || {}, it = b[id] || { settled: 0, today: 0 }, n = it.settled + it.today;
     closePop();
     if (econ.energy) {
-      if (n <= 0) return GT.toast('Tidak ada ' + (econ.name || id) + ' di tas.');
+      if (n <= 0) return GT.toast($t('Tidak ada {0} di tas.', [econ.name || id]));
       c.act({ action: 'eat', token: id }).catch(function () {});
       return;
     }
@@ -114,12 +114,12 @@
       var p = GT.player, d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[p.dir] || [0, 1];
       var t = tile && Math.abs(tile.x - p.x) + Math.abs(tile.y - p.y) === 1 ? tile : { x: p.x + d[0], y: p.y + d[1] };
       var pi = GT.scene && GT.scene.kind === 'out' ? c.plotAt(t.x, t.y) : -1, plot = pi >= 0 && c.state.st.plots[pi];
-      if (!plot) return GT.toast('Pegang Gandum, berdiri di sebelah petak kebun yang sudah dicangkul, lalu klik kanan petaknya.');
-      if (plot.state !== 'tilled') return GT.toast(plot.state === 'empty' ? 'Cangkul dulu petaknya (klik atau F).' : 'Petak ini sudah ditanami.');
+      if (!plot) return GT.toast($t('Pegang Gandum, berdiri di sebelah petak kebun yang sudah dicangkul, lalu klik kanan petaknya.'));
+      if (plot.state !== 'tilled') return GT.toast(plot.state === 'empty' ? $t('Cangkul dulu petaknya (klik atau F).') : $t('Petak ini sudah ditanami.'));
       c.act({ action: 'farm', op: 'plant', plot: pi }).catch(function () {});
       return;
     }
-    if (id === 'tool') return GT.toast('Alat dipakai otomatis saat menambang batu.');
+    if (id === 'tool') return GT.toast($t('Alat dipakai otomatis saat menambang batu.'));
     toggle(held); // raw goods: what you can do with them (send, sell)
   }
 
@@ -137,20 +137,20 @@
     var can = c.spendable(id);
     pop.textContent = '';
     pop.appendChild($('b', null, (it.name || econ.name || id) + ' · ' + (it.settled + it.today)));
-    pop.appendChild($('p', null, it.today ? it.settled + ' tercatat di NEAR, ' + (it.today > 0 ? '+' : '') + it.today + ' hari ini (masuk pukul 06:00).' : it.settled > 0 ? 'Semua sudah tercatat di NEAR.' : 'Belum punya. ' + hintFor(id)));
+    pop.appendChild($('p', null, it.today ? $t('{0} tercatat di NEAR, {1}{2} hari ini (masuk pukul 06:00).', [it.settled, it.today > 0 ? '+' : '', it.today]) : it.settled > 0 ? $t('Semua sudah tercatat di NEAR.') : $t('Belum punya. {0}', [hintFor(id)])));
     var row = $('div', 'gt-slotpop-acts');
     function act(label, fn, primary) { var x = $('button', 'mbtn' + (primary ? ' primary' : ''), label); x.type = 'button'; x.addEventListener('click', function () { closePop(); fn(); }); row.appendChild(x); }
-    if (econ.energy && it.settled + it.today > 0) act('Makan (+' + econ.energy + ' energi)', function () { c.act({ action: 'eat', token: id }).catch(function () {}); }, true);
-    if (can > 0) act('Kirim', function () { c.askSend(id); });
-    if (can > 0) act('Jual ke pemain', function () { c.askList(id, can); });
-    act('Buka tas', openBag);
+    if (econ.energy && it.settled + it.today > 0) act($t('Makan (+{0} energi)', [econ.energy]), function () { c.act({ action: 'eat', token: id }).catch(function () {}); }, true);
+    if (can > 0) act($t('Kirim'), function () { c.askSend(id); });
+    if (can > 0) act($t('Jual ke pemain'), function () { c.askList(id, can); });
+    act($t('Buka tas'), openBag);
     pop.appendChild(row);
     // sit above the chosen slot
     var slot = bar.children[selected], sr = document.getElementById('screen').getBoundingClientRect(), r = slot.getBoundingClientRect();
     pop.style.left = Math.max(6, Math.min(sr.width - 230, r.left - sr.left - 90)) + 'px';
   }
   function hintFor(id) {
-    return { fish: 'Mancing di kolam atau sungai.', wood: 'Tebang pohon.', ore: 'Nambang di batu Tambang Utara (butuh Alat).', wheat: 'Tanam dan panen di kebunmu.', bread: 'Buat di Meja Kerja (2 Gandum) atau beli di Wati.', meal: 'Buat di Meja Kerja (Ikan + Kayu) atau beli di Sari.', tool: 'Buat di Meja Kerja (2 Bijih + Kayu) atau beli di Budi.' }[id] || '';
+    return { fish: $t('Mancing di kolam atau sungai.'), wood: $t('Tebang pohon.'), ore: $t('Nambang di batu Tambang Utara (butuh Alat).'), wheat: $t('Tanam dan panen di kebunmu.'), bread: $t('Buat di Meja Kerja (2 Gandum) atau beli di Wati.'), meal: $t('Buat di Meja Kerja (Ikan + Kayu) atau beli di Sari.'), tool: $t('Buat di Meja Kerja (2 Bijih + Kayu) atau beli di Budi.') }[id] || '';
   }
 
   function onKey(e) {
@@ -166,7 +166,7 @@
     build();
     // the round E button on phones opens the bag (the NPC message lives in Lainnya and on T)
     var pad = document.getElementById('pad'), be = document.getElementById('btnE');
-    if (be) be.setAttribute('aria-label', 'Tombol E, buka tas');
+    if (be) be.setAttribute('aria-label', $t('Tombol E, buka tas'));
     if (pad && be) pad.addEventListener('pointerdown', function (e) {
       if (e.target !== be && !be.contains(e.target)) return;
       e.preventDefault(); e.stopPropagation();

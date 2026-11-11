@@ -20,6 +20,39 @@
  */
 (function (root) {
   'use strict';
+  // Text: in the browser $t is the i18n layer (js/i18n.js); on the server (no window) these keys fall back to English.
+  var EN_TEXT = {
+    "Bukit Barat Laut": "Northwest Hills",
+    "Hutan Utara": "North Forest",
+    "Hutan Timur": "East Forest",
+    "Ladang Barat": "West Fields",
+    "Desa Genesis": "Genesis Village",
+    "Dusun Seberang": "Far Bank Hamlet",
+    "Rawa Selatan": "South Marsh",
+    "Padang Selatan": "South Meadow",
+    "Danau Tenggara": "Southeast Lake",
+    "Jembatan ke Dusun Seberang": "Bridge to Far Bank Hamlet",
+    "Balai Desa": "Town Hall",
+    "Kantor Makelar": "Broker's Office",
+    "Kantor Pos": "Post Office",
+    "Warung Kopi": "Coffee Shop",
+    "Lapak pemain. Pasang daganganmu lewat Pasar.": "Player stall. List your goods through the Market.",
+    "Air mancur Pasar Genesis. Airnya jernih dan dingin.": "Genesis Market fountain. The water is clear and cold.",
+    "Pasar Genesis. Pedagang berjualan di sini setiap hari.": "Genesis Market. Merchants sell here every day.",
+    "Panggung Genesis. Konser tiap malam, dari jam 19.00.": "Genesis Stage. A concert every night, from 19:00.",
+    "Komedi putar. Kudanya berputar pelan, siang dan malam.": "Carousel. The horses turn slowly, day and night.",
+    "Kolam teratai. Katak-katak suka duduk di lumpurnya.": "Lotus pond. Frogs like to sit in its mud.",
+    "Meja teras Warung Kopi. Duduk santai sambil ngopi.": "Coffee Shop terrace table. Sit back and enjoy a coffee.",
+    "Tambang Utara. Bijih di bebatuan; bawa Alat.": "North Mine. Ore in the rocks; bring a Tool.",
+    " belum bisa dicapai: jembatannya belum ada. Bahan untuk {0} dikumpulkan di Balai Desa.": " can't be reached yet: the bridge isn't built. Materials for {0} are collected at the Town Hall.",
+    " belum dibuka.": " isn't open yet.",
+    "Cerah": "Clear",
+    "Berawan": "Cloudy",
+    "Hujan": "Rain",
+    "Terik": "Scorching",
+    "Salju": "Snow"
+  };
+  var $t = root.$t || function (k, v) { var s = EN_TEXT[k] || k; return v ? s.replace(/\{(\d+)\}/g, function (m, i) { return v[i]; }) : s; };
 
   var CH = 32, NC = 3, W = CH * NC, H = CH * NC, VERSION = 2;
 
@@ -43,20 +76,20 @@
 
   /* ---------------------------------------------------------------- chunks */
   var CHUNKS = [
-    { cx: 0, cy: 0, id: 'bukit', name: 'Bukit Barat Laut', biome: 'forest', open: false },
-    { cx: 1, cy: 0, id: 'hutan', name: 'Hutan Utara', biome: 'forest', open: true },
-    { cx: 2, cy: 0, id: 'hutan-timur', name: 'Hutan Timur', biome: 'forest', open: false },
-    { cx: 0, cy: 1, id: 'ladang', name: 'Ladang Barat', biome: 'fields', open: true },
-    { cx: 1, cy: 1, id: 'desa', name: 'Desa Genesis', biome: 'village', open: true },
-    { cx: 2, cy: 1, id: 'seberang', name: 'Dusun Seberang', biome: 'hamlet', open: false, project: 'jembatan-timur' },
-    { cx: 0, cy: 2, id: 'rawa', name: 'Rawa Selatan', biome: 'meadow', open: false },
-    { cx: 1, cy: 2, id: 'padang', name: 'Padang Selatan', biome: 'meadow', open: false },
-    { cx: 2, cy: 2, id: 'danau', name: 'Danau Tenggara', biome: 'lake', open: false }
+    { cx: 0, cy: 0, id: 'bukit', name: $t('Bukit Barat Laut'), biome: 'forest', open: false },
+    { cx: 1, cy: 0, id: 'hutan', name: $t('Hutan Utara'), biome: 'forest', open: true },
+    { cx: 2, cy: 0, id: 'hutan-timur', name: $t('Hutan Timur'), biome: 'forest', open: false },
+    { cx: 0, cy: 1, id: 'ladang', name: $t('Ladang Barat'), biome: 'fields', open: true },
+    { cx: 1, cy: 1, id: 'desa', name: $t('Desa Genesis'), biome: 'village', open: true },
+    { cx: 2, cy: 1, id: 'seberang', name: $t('Dusun Seberang'), biome: 'hamlet', open: false, project: 'jembatan-timur' },
+    { cx: 0, cy: 2, id: 'rawa', name: $t('Rawa Selatan'), biome: 'meadow', open: false },
+    { cx: 1, cy: 2, id: 'padang', name: $t('Padang Selatan'), biome: 'meadow', open: false },
+    { cx: 2, cy: 2, id: 'danau', name: $t('Danau Tenggara'), biome: 'lake', open: false }
   ];
   // Town projects that open a chunk when completed. What they need lives in economy/config.json and on chain
   // (create_project); here only the name, for the map's signs.
   var PROJECTS = {
-    'jembatan-timur': { chunk: 'seberang', name: 'Jembatan ke Dusun Seberang' }
+    'jembatan-timur': { chunk: 'seberang', name: $t('Jembatan ke Dusun Seberang') }
   };
 
   // Tiles that block walking (must match the engine's SOLID set for the tiles this generator uses).
@@ -184,10 +217,10 @@
 
     // landmarks, most important first
     var core = ['desa'];
-    if (!place('hall', 'Balai Desa', 5, 4, core, near(px, py, 8))) return null;
-    if (!place('broker', 'Kantor Makelar', 4, 3, core, near(px, py, 7))) return null;
-    if (!place('post', 'Kantor Pos', 4, 3, core, near(px, py, 9))) return null;
-    var warung = place('warung', 'Warung Kopi', 4, 3, core, near(px, ry, 6));
+    if (!place('hall', $t('Balai Desa'), 5, 4, core, near(px, py, 8))) return null;
+    if (!place('broker', $t('Kantor Makelar'), 4, 3, core, near(px, py, 7))) return null;
+    if (!place('post', $t('Kantor Pos'), 4, 3, core, near(px, py, 9))) return null;
+    var warung = place('warung', $t('Warung Kopi'), 4, 3, core, near(px, ry, 6));
     if (!warung) return null;
 
     // the player's house with the farm next to it, in Ladang Barat near the main road
@@ -232,15 +265,15 @@
       var sx = [plaza.x0 + 3, plaza.x0 + 5, plaza.x0 + 11, plaza.x0 + 13][k];
       tiles[I(sx, plaza.y1 - 1)] = 'stall';
       market.lapak.push({ x: sx, y: plaza.y1 - 1, color: c });
-      info[I(sx, plaza.y1 - 1)] = 'Lapak pemain. Pasang daganganmu lewat Pasar.';
+      info[I(sx, plaza.y1 - 1)] = $t('Lapak pemain. Pasang daganganmu lewat Pasar.');
     });
     var fountain = { x: px, y: py };
     for (y = py - 1; y <= py + 1; y++) for (x = px - 1; x <= px + 1; x++) tiles[I(x, y)] = 'fountain';
-    info[I(px, py + 1)] = 'Air mancur Pasar Genesis. Airnya jernih dan dingin.';
+    info[I(px, py + 1)] = $t('Air mancur Pasar Genesis. Airnya jernih dan dingin.');
     var benches = [];
     [[px - 3, py], [px + 3, py], [px - 1, py + 3], [px + 1, py + 3], [px - 1, py - 3], [px + 1, py - 3]].forEach(function (b) { tiles[I(b[0], b[1])] = 'bench'; benches.push({ x: b[0], y: b[1] }); });
     [[plaza.x0, plaza.y0], [plaza.x1, plaza.y0], [plaza.x0, plaza.y1], [plaza.x1, plaza.y1]].forEach(function (l) { tiles[I(l[0], l[1])] = 'lamp'; });
-    info[I(plaza.x0 + 8, plaza.y0)] = 'Pasar Genesis. Pedagang berjualan di sini setiap hari.';
+    info[I(plaza.x0 + 8, plaza.y0)] = $t('Pasar Genesis. Pedagang berjualan di sini setiap hari.');
 
     /* --- the fun side of town (version 2): a stage with a concert every night, a carousel, a lily pond with a muddy bank
        where the frogs sit, and a terrace in front of the warung. Each is a free patch of ground near the square. */
@@ -267,7 +300,7 @@
     if (!stage) return null;
     for (y = stage.y0; y <= stage.y1; y++) for (x = stage.x0; x <= stage.x1; x++) tiles[I(x, y)] = y < stage.y0 + 2 ? 'stage' : 'plaza';
     [stage.x0 + 1, stage.x0 + 3, stage.x0 + 5].forEach(function (bx) { tiles[I(bx, stage.y0 + 4)] = 'bench'; benches.push({ x: bx, y: stage.y0 + 4 }); });
-    info[I(stage.x0 + 3, stage.y0 + 2)] = 'Panggung Genesis. Konser tiap malam, dari jam 19.00.';
+    info[I(stage.x0 + 3, stage.y0 + 2)] = $t('Panggung Genesis. Konser tiap malam, dari jam 19.00.');
     linkToRoad(stage.x0 + 3, stage.y1 + 1);
     // carousel: a round ride on a 3 x 3 base, with a paved ring to stand round it
     var carousel = area(5, 5, fun, near(px + 10, ry + 3, 4));
@@ -277,7 +310,7 @@
       tiles[I(x, y)] = inner ? 'carousel' : 'plaza';
     }
     carousel = { x: carousel.x0 + 2, y: carousel.y0 + 2, x0: carousel.x0, y0: carousel.y0, x1: carousel.x1, y1: carousel.y1 };
-    info[I(carousel.x, carousel.y1)] = 'Komedi putar. Kudanya berputar pelan, siang dan malam.';
+    info[I(carousel.x, carousel.y1)] = $t('Komedi putar. Kudanya berputar pelan, siang dan malam.');
     linkToRoad(carousel.x, carousel.y1 + 1);
     // the frog pond: an oval of water with lily pads, a muddy bank on its south and west edges, reeds round it
     var pond = area(8, 6, fun, near(px - 14, py + 2, 4));
@@ -290,7 +323,7 @@
       else if (pd <= 2.3) tiles[I(x, y)] = 'tallgrass';
     }
     pond = { x0: pond.x0, y0: pond.y0, x1: pond.x1, y1: pond.y1 };
-    info[I(Math.round(pcx), pond.y1)] = 'Kolam teratai. Katak-katak suka duduk di lumpurnya.';
+    info[I(Math.round(pcx), pond.y1)] = $t('Kolam teratai. Katak-katak suka duduk di lumpurnya.');
     linkToRoad(Math.round(pcx), pond.y1 + 1);
     // the warung terrace: two tables with a bench each on the free ground beside its door
     var terrace = [];
@@ -299,7 +332,7 @@
       var tx = warung.dx + o[0], ty = warung.dy + o[1];
       if (!free(tx, ty) || !free(tx, ty + 1)) return;
       tiles[I(tx, ty)] = 'table'; tiles[I(tx, ty + 1)] = 'bench'; res[I(tx, ty)] = 1; res[I(tx, ty + 1)] = 1;
-      info[I(tx, ty)] = 'Meja teras Warung Kopi. Duduk santai sambil ngopi.';
+      info[I(tx, ty)] = $t('Meja teras Warung Kopi. Duduk santai sambil ngopi.');
       terrace.push({ x: tx, y: ty }); benches.push({ x: tx, y: ty + 1 });
     });
 
@@ -333,7 +366,7 @@
       }
       if (best) line(mx, my + 3, best.x, best.y, false);
       var sx = mx + 1, sy = my + 4;
-      if (free(sx, sy)) { set(sx, sy, 'sign'); info[I(sx, sy)] = 'Tambang Utara. Bijih di bebatuan; bawa Alat.'; res[I(sx, sy)] = 1; }
+      if (free(sx, sy)) { set(sx, sy, 'sign'); info[I(sx, sy)] = $t('Tambang Utara. Bijih di bebatuan; bawa Alat.'); res[I(sx, sy)] = 1; }
     })();
     // the pond in Ladang Barat with a sandy shore
     (function () {
@@ -407,7 +440,7 @@
 
     signs.forEach(function (s) {
       var lc = CHUNKS.filter(function (c) { return c.id === s.chunk; })[0], pj = lc.project && PROJECTS[lc.project];
-      info[I(s.x, s.y)] = lc.name + (pj ? ' belum bisa dicapai: jembatannya belum ada. Bahan untuk ' + pj.name + ' dikumpulkan di Balai Desa.' : ' belum dibuka.');
+      info[I(s.x, s.y)] = lc.name + (pj ? $t(' belum bisa dicapai: jembatannya belum ada. Bahan untuk {0} dikumpulkan di Balai Desa.', [pj.name]) : $t(' belum dibuka.'));
     });
 
     var houseN = 0;
@@ -465,7 +498,7 @@
     gugur:  [['berawan', 0.35], ['hujan', 0.40], ['cerah', 0.25]],
     dingin: [['salju', 0.55], ['berawan', 0.25], ['cerah', 0.20]]
   };
-  var WEATHER_LABEL = { cerah: 'Cerah', berawan: 'Berawan', hujan: 'Hujan', terik: 'Terik', salju: 'Salju' };
+  var WEATHER_LABEL = { cerah: $t('Cerah'), berawan: $t('Berawan'), hujan: $t('Hujan'), terik: $t('Terik'), salju: $t('Salju') };
   function weather(seed, day, season) {
     var table = WEATHER[season] || WEATHER.semi, r = hash3(seed | 0, day | 0, 0x3ea7), acc = 0;
     for (var i = 0; i < table.length; i++) { acc += table[i][1]; if (r < acc) break; }

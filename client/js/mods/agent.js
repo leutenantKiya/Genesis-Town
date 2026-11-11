@@ -30,7 +30,7 @@ function clampStr(s, n){ return String(s == null ? '' : s).slice(0, n); }
 function hash(s){ var h = 2166136261; s = String(s); for (var i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function escRe(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function norm(t){ return ' ' + String(t == null ? '' : t).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim() + ' '; }
-function playerName(){ return clampStr((GT.state && GT.state.playerName) || 'Kamu', 16); }
+function playerName(){ return clampStr((GT.state && GT.state.playerName) || $t('Kamu'), 16); }
 function now(){ try { return GT.time.total; } catch(e){ return 0; } }
 function key(npc){ return GT.npcKey(npc); }
 function W(){ return GT.world; }
@@ -171,21 +171,21 @@ function temper(npc){ try { if (GT.combat && typeof GT.combat.temperament === 'f
 function isKO(ch){ try { return !!(GT.combat && GT.combat.isKO && GT.combat.isKO(ch)); } catch(e){ return false; } }
 function cfx(ch, kind){ try { if (GT.combat && GT.combat.fx) GT.combat.fx(ch, kind); } catch(e){} }
 function dist1(a, b){ return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
-var THREATS = ['Awas kamu ya!', 'Jangan macam-macam denganku!', 'Mau cari gara-gara?', 'Kuhajar kamu nanti!', 'Sini, kalau berani!'];
-var CALM = ['Sudahlah, kita baikan saja.', 'Maaf ya, aku terbawa emosi.', 'Yuk damai.', 'Ayo kita lupakan.'];
+var THREATS = [$t('Awas kamu ya!'), $t('Jangan macam-macam denganku!'), $t('Mau cari gara-gara?'), $t('Kuhajar kamu nanti!'), $t('Sini, kalau berani!')];
+var CALM = [$t('Sudahlah, kita baikan saja.'), $t('Maaf ya, aku terbawa emosi.'), $t('Yuk damai.'), $t('Ayo kita lupakan.')];
 function pickOf(a){ return a[Math.floor(r01() * a.length) % a.length]; }
 // target string -> karakter yang boleh diserang; {err} bila tidak
 function combatTarget(npc, a){
   var c = resolveChar(a.target || '', npc);
-  if (!c) return { err:'tidak tahu siapa "' + clampStr(a.target, 20) + '"' };
-  if (c.kind === 'npc' && c.key === key(npc)) return { err:'tidak bisa pada diri sendiri' };
-  if (c.kind === 'npc' && isWorkerKey(c.key)) return { err:c.name + ' sedang bertugas' };
+  if (!c) return { err:$t('tidak tahu siapa "{0}"', [clampStr(a.target, 20)]) };
+  if (c.kind === 'npc' && c.key === key(npc)) return { err:$t('tidak bisa pada diri sendiri') };
+  if (c.kind === 'npc' && isWorkerKey(c.key)) return { err:$t('{0} sedang bertugas', [c.name]) };
   return { c:c };
 }
 // penolakan karena suka (relasi >= 20 / affinity pemain >= 60); null bila boleh
 function likeGate(npc, c){
-  if (c.kind === 'player') return GT.getAffinity(npc) >= 60 ? { reply:'Aku nggak tega menyakiti ' + playerName() + '.' } : null;
-  return relation(npc, c.key) >= 20 ? { reply:'Aku nggak mau menyakiti ' + c.name + ', dia temanku.' } : null;
+  if (c.kind === 'player') return GT.getAffinity(npc) >= 60 ? { reply:$t('Aku nggak tega menyakiti {0}.', [playerName()]) } : null;
+  return relation(npc, c.key) >= 20 ? { reply:$t('Aku nggak mau menyakiti {0}, dia temanku.', [c.name]) } : null;
 }
 function combatGate(npc, plan){
   for (var i = 0; i < plan.length; i++){
@@ -239,7 +239,7 @@ function normStep(o, notes){
   var s = {};
   Object.keys(o).forEach(function(k){ var lk = String(k).toLowerCase(), ak = ALIASKEY[lk] || lk; if (!(ak in s) || lk === ak) s[ak] = o[k]; });
   var nm = String(s['do'] == null ? '' : s['do']).trim().toLowerCase().replace(/\s+/g, '_');
-  if (!actions[nm]){ if (notes && nm) notes.push('aksi tak dikenal: ' + clampStr(nm, 24)); return null; }
+  if (!actions[nm]){ if (notes && nm) notes.push($t('aksi tak dikenal: {0}', [clampStr(nm, 24)])); return null; }
   var out = { 'do':nm };
   var ps = actions[nm].params || {};
   Object.keys(ps).forEach(function(p){
@@ -262,7 +262,7 @@ function normalizePlan(plan){
     var s = normStep(plan[i], notes);
     if (s) steps.push(s);
   }
-  if (plan.length > MAX_STEPS) notes.push('rencana dipotong ' + MAX_STEPS + ' langkah');
+  if (plan.length > MAX_STEPS) notes.push($t('rencana dipotong {0} langkah', [MAX_STEPS]));
   return { steps:steps, notes:notes };
 }
 function stepLabel(s){
@@ -352,7 +352,7 @@ async function walkTiles(npc, sc, tilesFn, ctx){
   var tries = 0;
   while (tries < 4){
     chk(ctx);
-    if (npcSc(npc) !== sc) return fail('berpindah tempat');
+    if (npcSc(npc) !== sc) return fail($t('berpindah tempat'));
     var tiles = tilesFn();
     if (!tiles || !tiles.length) return fail('tak_ada_jalan');
     var here = tiles.some(function(t){ return t.x === npc.x && t.y === npc.y; });
@@ -375,13 +375,13 @@ async function walkTiles(npc, sc, tilesFn, ctx){
 }
 async function leaveBuilding(npc, ctx){
   var sc = npcSc(npc);
-  if (!sc || sc === outS()) return okr('di luar');
+  if (!sc || sc === outS()) return okr($t('di luar'));
   var m = sc.map, e = m.entry || m.mat;
   if (e && !(npc.x === e.x && npc.y === e.y)){
     var p = route(sc, { x:npc.x, y:npc.y }, e, npc);
     if (p && p.length){ await walkPath(npc, p, ctx); chk(ctx); }
   }
-  if (npcSc(npc) !== sc) return okr('di luar');
+  if (npcSc(npc) !== sc) return okr($t('di luar'));
   var f = GT.doorFront(sc.house);
   GT.moveNpc(npc, 'out', f.x, f.y);
   npc.wait = 0.6;
@@ -394,10 +394,10 @@ function enterAllowed(npc, b){
   return b.kind === 'mart' || b.kind === 'casino' || !!b.invited || isHomeOf(npc, b);
 }
 async function goBuilding(npc, b, ctx){
-  if (!b) return fail('tempat tak ditemukan');
+  if (!b) return fail($t('tempat tak ditemukan'));
   var cur = npcSc(npc);
-  if (cur && cur.house === b) return okr('sudah di sana');
-  if (!enterAllowed(npc, b)) return fail('terkunci: Rumah ' + (b.owner || '?'));
+  if (cur && cur.house === b) return okr($t('sudah di sana'));
+  if (!enterAllowed(npc, b)) return fail($t('terkunci: Rumah {0}', [b.owner || '?']));
   if (cur && cur !== outS()){ var lv = await leaveBuilding(npc, ctx); if (!lv.ok) return lv; }
   chk(ctx);
   var wk = await walkTiles(npc, outS(), function(){ return doorFrontTiles(b, npc); }, ctx);
@@ -405,7 +405,7 @@ async function goBuilding(npc, b, ctx){
   var f = GT.doorFront(b);
   if (Math.abs(npc.x - f.x) + Math.abs(npc.y - f.y) > 2) return fail('jalan_terhalang');
   var sc = GT.getScene(b);
-  if (!sc) return fail('tempat tak ditemukan');
+  if (!sc) return fail($t('tempat tak ditemukan'));
   chk(ctx);
   var en = sc.map.entry || { x:1, y:1 };
   GT.moveNpc(npc, sc, en.x, en.y);
@@ -484,7 +484,7 @@ function homeDest(npc){
   }
   return { t:'spot', x:npc._home0.x, y:npc._home0.y, label:'rumah' };
 }
-function playerHouse(){ var o = W().own; return o ? { t:'bld', b:o, label:'rumah ' + playerName() } : null; }
+function playerHouse(){ var o = W().own; return o ? { t:'bld', b:o, label:$t('rumah {0}', [playerName()]) } : null; }
 function npcByKey(k){
   var n = GT.findNpc(k);
   if (n) return n;
@@ -498,14 +498,14 @@ function knownChars(self){
     name = String(name || '').trim(); if (!name || k === sk) return;
     out.push({ name:name, lname:name.toLowerCase(), key:k, house:extra || null });
   }
-  if (w.own) add('Ibu', 'house:' + w.own.id + ':0', w.own);
+  if (w.own) add($t('Ibu'), 'house:' + w.own.id + ':0', w.own);
   (w.houses || []).forEach(function(h){
     if (h.own) return;
     var first = String(h.owner || '').split(' ')[0];
     add(first, 'house:' + h.id + ':0', h);
   });
   outS().npcs.forEach(function(n){ if (n.key) add(n.name, n.key); });
-  add('Bandar', 'casino:dealer');
+  add($t('Bandar'), 'casino:dealer');
   out.sort(function(a, b){ return b.lname.length - a.lname.length; });
   return out;
 }
@@ -526,18 +526,18 @@ function resolvePlace(text, npc){
   var s = norm(text), w = W();
   if (!s.trim()) return null;
   var m = /\bblok\s+(\d+)\s+(\d+)\b/.exec(s);
-  if (m) return { t:'tile', x:+m[1], y:+m[2], label:'blok ' + m[1] + ',' + m[2] };
+  if (m) return { t:'tile', x:+m[1], y:+m[2], label:$t('blok {0},{1}', [m[1], m[2]]) };
   if (/\brumah\w*\b|\bpulang\b|\bkamar\b/.test(s)){
     if (/\brumahku\b|\brumah\s+(aku|saya|ku|gue|gw|pemain|player|ibu|kamu|mu)\b|\brumahmu\b/.test(s) || (playerName().toLowerCase() !== 'kamu' && new RegExp('\\brumah\\s+' + escRe(playerName().toLowerCase()) + '\\b').test(s))) return playerHouse();
     var hs = (w.houses || []).filter(function(h){ return !h.own && h.owner; });
     for (var i = 0; i < hs.length; i++){
       var first = String(hs[i].owner).split(' ')[0].toLowerCase();
-      if (first && new RegExp('\\b' + escRe(first) + '\\b').test(s)) return { t:'bld', b:hs[i], label:'Rumah ' + hs[i].owner };
+      if (first && new RegExp('\\b' + escRe(first) + '\\b').test(s)) return { t:'bld', b:hs[i], label:$t('Rumah {0}', [hs[i].owner]) };
     }
     return homeDest(npc);
   }
-  if (/\b(mart|minimarket|supermarket|toko|warung|belanja)\b/.test(s)){ var mt = nearestMart(npc); return mt ? { t:'bld', b:mt, label:'Mart' } : null; }
-  if (/\b(kasino|casino|judi)\b/.test(s)) return w.casino ? { t:'bld', b:w.casino, label:'Kasino' } : null;
+  if (/\b(mart|minimarket|supermarket|toko|warung|belanja)\b/.test(s)){ var mt = nearestMart(npc); return mt ? { t:'bld', b:mt, label:$t('Mart') } : null; }
+  if (/\b(kasino|casino|judi)\b/.test(s)) return w.casino ? { t:'bld', b:w.casino, label:$t('Kasino') } : null;
   if (/\b(taman|park|kebun)\b/.test(s)) return { t:'park', label:'taman' };
   var c = resolveChar(text, npc);
   if (c) return { t:'char', who:c, label:c.name };
@@ -562,17 +562,17 @@ function charPos(c){
   return { sc:sc, x:n.x, y:n.y, npc:n };
 }
 async function goChar(npc, c, ctx){
-  if (c.kind === 'npc' && c.key === key(npc)) return okr('sudah di sana');
+  if (c.kind === 'npc' && c.key === key(npc)) return okr($t('sudah di sana'));
   for (var attempt = 0; attempt < 7; attempt++){
     chk(ctx);
     var tp = charPos(c);
-    if (!tp) return fail('tidak menemukan ' + c.name);
+    if (!tp) return fail($t('tidak menemukan {0}', [c.name]));
     var sc = npcSc(npc);
     if (sc === tp.sc){
       var d = Math.abs(npc.x - tp.x) + Math.abs(npc.y - tp.y);
-      if (d <= 2 && (d <= 1 || attempt >= 1 || true)) return okr('dekat ' + c.name);
+      if (d <= 2 && (d <= 1 || attempt >= 1 || true)) return okr($t('dekat {0}', [c.name]));
       var wk = await walkTiles(npc, sc, function(){ var t2 = charPos(c); return t2 && t2.sc === sc ? neighborTiles(sc, t2, npc, 2) : []; }, ctx);
-      if (!wk.ok && wk.note === 'tak_ada_jalan') return fail('tidak bisa menjangkau ' + c.name);
+      if (!wk.ok && wk.note === 'tak_ada_jalan') return fail($t('tidak bisa menjangkau {0}', [c.name]));
       continue;
     }
     if (tp.sc === outS()){
@@ -582,10 +582,10 @@ async function goChar(npc, c, ctx){
     var gb = await goBuilding(npc, tp.sc.house, ctx);
     if (!gb.ok) return gb;
   }
-  return fail('tidak berhasil mendekati ' + c.name);
+  return fail($t('tidak berhasil mendekati {0}', [c.name]));
 }
 async function goDest(npc, d, ctx){
-  if (!d) return fail('tujuan tidak dikenal');
+  if (!d) return fail($t('tujuan tidak dikenal'));
   if (npc.follow) GT.npcFollow(npc, false);
   if (d.t === 'bld') return goBuilding(npc, d.b, ctx);
   if (d.t === 'char') return goChar(npc, d.who, ctx);
@@ -601,7 +601,7 @@ async function goDest(npc, d, ctx){
       return out;
     }, ctx);
   }
-  return fail('tujuan tidak dikenal');
+  return fail($t('tujuan tidak dikenal'));
 }
 
 /* ------------------------------------------------------------------ log, event */
@@ -642,11 +642,11 @@ function setThought(npc, on, text){
 function run(npc, plan, opts){
   opts = opts || {};
   var np = normalizePlan(plan);
-  if (!npc || !np.steps.length) return Promise.resolve({ ok:false, done:[], note:'rencana kosong', dropped:np.notes });
+  if (!npc || !np.steps.length) return Promise.resolve({ ok:false, done:[], note:$t('rencana kosong'), dropped:np.notes });
   var k = key(npc), cur = runs[k];
   try { homeDest(npc); } catch(e){}
   if (cur){
-    if (opts.source === 'auto' && cur.source !== 'auto') return Promise.resolve({ ok:false, done:[], busy:true, note:'sedang sibuk' });
+    if (opts.source === 'auto' && cur.source !== 'auto') return Promise.resolve({ ok:false, done:[], busy:true, note:$t('sedang sibuk') });
     cancel(npc, 'baru');
   }
   var r = { id:++runSeq, key:k, npc:npc, ctl:new AbortController(), steps:np.steps, states:np.steps.map(function(){ return { state:'wait', note:'' }; }), i:0,
@@ -670,11 +670,11 @@ async function exec(r, opts){
     var out;
     try {
       var p = a.run(npc, st, ctx);
-      if (a.timeout) p = Promise.race([p, new Promise(function(resv){ setTimeout(function(){ resv({ ok:false, note:'waktu habis' }); }, a.timeout); })]);
+      if (a.timeout) p = Promise.race([p, new Promise(function(resv){ setTimeout(function(){ resv({ ok:false, note:$t('waktu habis') }); }, a.timeout); })]);
       out = await p;
     } catch(e){
       if (e && e.aborted) out = { ok:false, note:'dibatalkan', cancelled:true };
-      else out = { ok:false, note:'galat: ' + clampStr(e && e.message, 60) };
+      else out = { ok:false, note:$t('galat: {0}', [clampStr(e && e.message, 60)]) };
     }
     if (!out || typeof out !== 'object') out = { ok:true, note:'' };
     if (r.ctl.signal.aborted){ res.ok = false; res.cancelled = true; r.states[i] = { state:'cancel', note:'dibatalkan' }; emit('step', { npc:npc, key:r.key, i:i, state:'cancel', label:stepLabel(st), note:'dibatalkan' }); break; }
@@ -733,27 +733,27 @@ function startFollowNpc(npc, c){
 
 /* ------------------------------------------------------------------ aksi bawaan */
 function describeThing(a){
-  if (a.item === 'koin' || (!a.item && a.n && /koin/.test(String(a.item)))) return (a.n || 0) + ' koin';
+  if (a.item === 'koin' || (!a.item && a.n && /koin/.test(String(a.item)))) return $t('{0} koin', [a.n || 0]);
   var id = itemId(a.item); return itemName(id || a.item) + ' x' + (a.n || 1);
 }
 function clampN(v, lo, hi, def){ v = Math.floor(+v); if (!isFinite(v)) v = def; return Math.max(lo, Math.min(hi, v)); }
 function localTime(){ try { return GT.time; } catch(e){ return { h:12, m:0, total:0, day:1 }; } }
 
 registerAction('pergi', {
-  desc: 'Berjalan ke suatu tempat/orang. tujuan: rumah (rumahmu sendiri), rumah aku (rumah pemain), rumah <nama pemilik>, mart, kasino, taman, aku (pemain), <nama orang>, blok x,y. Bisa masuk bangunan yang terbuka.',
-  params: { tujuan:'string: tempat atau orang tujuan' },
-  label: function(a){ return 'Pergi ke ' + (a.tujuan || '?'); },
+  desc: $t('Berjalan ke suatu tempat/orang. tujuan: rumah (rumahmu sendiri), rumah aku (rumah pemain), rumah <nama pemilik>, mart, kasino, taman, aku (pemain), <nama orang>, blok x,y. Bisa masuk bangunan yang terbuka.'),
+  params: { tujuan:$t('string: tempat atau orang tujuan') },
+  label: function(a){ return $t('Pergi ke {0}', [a.tujuan || '?']); },
   run: async function(npc, a, ctx){
     var d = resolvePlace(a.tujuan, npc);
-    if (!d) return fail('tidak tahu tempat "' + clampStr(a.tujuan, 24) + '"');
+    if (!d) return fail($t('tidak tahu tempat "{0}"', [clampStr(a.tujuan, 24)]));
     var r = await goDest(npc, d, ctx);
-    return r.ok ? okr('sampai di ' + d.label) : fail(r.note);
+    return r.ok ? okr($t('sampai di {0}', [d.label])) : fail(r.note);
   }
 });
 registerAction('ikuti', {
-  desc: 'Mengikuti pemain atau karakter lain terus-menerus sampai "berhenti".',
-  params: { target:'string: aku (pemain) atau nama orang' },
-  label: function(a){ return 'Ikuti ' + (a.target || 'aku'); },
+  desc: $t('Mengikuti pemain atau karakter lain terus-menerus sampai "berhenti".'),
+  params: { target:$t('string: aku (pemain) atau nama orang') },
+  label: function(a){ return $t('Ikuti {0}', [a.target || 'aku']); },
   run: async function(npc, a, ctx){
     var c = resolveChar(a.target || 'aku', npc) || { kind:'player', name:playerName() };
     stopFollow(key(npc));
@@ -765,13 +765,13 @@ registerAction('ikuti', {
       var g2 = await goChar(npc, c, ctx); if (!g2.ok) return g2;
       startFollowNpc(npc, c);
     }
-    return okr(c.kind === 'player' ? 'Ikut denganmu' : 'ikut ' + c.name);
+    return okr(c.kind === 'player' ? $t('Ikut denganmu') : $t('ikut {0}', [c.name]));
   }
 });
 registerAction('berhenti', {
-  desc: 'Berhenti mengikuti dan diam di tempat.',
+  desc: $t('Berhenti mengikuti dan diam di tempat.'),
   params: {},
-  label: function(){ return 'Berhenti'; },
+  label: function(){ return $t('Berhenti'); },
   run: async function(npc){
     stopFollow(key(npc));
     try { if (npc.script) GT.npcGo(npc, []); GT.npcFollow(npc, false); } catch(e){}
@@ -779,71 +779,71 @@ registerAction('berhenti', {
   }
 });
 registerAction('beli', {
-  desc: 'Membeli barang di Mart dengan uang sendiri (otomatis ke Mart dulu). Harga mengikuti harga toko.',
-  params: { item:'string: roti|apel|susu|bunga|kue|permen|obeng', n:'number: jumlah (default 1)' },
-  label: function(a){ return 'Beli ' + itemName(itemId(a.item) || a.item) + ' x' + (a.n || 1); },
+  desc: $t('Membeli barang di Mart dengan uang sendiri (otomatis ke Mart dulu). Harga mengikuti harga toko.'),
+  params: { item:'string: roti|apel|susu|bunga|kue|permen|obeng', n:$t('number: jumlah (default 1)') },
+  label: function(a){ return $t('Beli {0} x{1}', [itemName(itemId(a.item) || a.item), a.n || 1]); },
   run: async function(npc, a, ctx){
-    var id = itemId(a.item); if (!id) return fail('barang tidak dikenal: ' + clampStr(a.item, 20));
+    var id = itemId(a.item); if (!id) return fail($t('barang tidak dikenal: {0}', [clampStr(a.item, 20)]));
     var n = clampN(a.n, 1, 20, 1), price = Math.floor(GT.ITEMS[id].price) || 0;
-    if (!(price > 0)) return fail(itemName(id) + ' tidak dijual');
+    if (!(price > 0)) return fail($t('{0} tidak dijual', [itemName(id)]));
     var total = price * n;
-    if (wallet(npc) < total) return fail('uang kurang untuk ' + itemName(id) + ' x' + n + ' (butuh ' + total + ', punya ' + wallet(npc) + ')');
+    if (wallet(npc) < total) return fail($t('uang kurang untuk {0} x{1} (butuh {2}, punya {3})', [itemName(id), n, total, wallet(npc)]));
     var sc = npcSc(npc);
     if (!sc || sc.kind !== 'mart'){
-      var m = nearestMart(npc); if (!m) return fail('tidak ada Mart');
+      var m = nearestMart(npc); if (!m) return fail($t('tidak ada Mart'));
       var g = await goBuilding(npc, m, ctx); if (!g.ok) return fail(g.note);
     }
     await sleep(DELAY.shop, ctx.signal);
-    if (!spendW(npc, total)) return fail('uang kurang');
+    if (!spendW(npc, total)) return fail($t('uang kurang'));
     addB(npc, id, n);
-    ctx.say('Beli ' + itemName(id) + ' dulu.');
-    return okr('beli ' + itemName(id) + ' x' + n + ' (−' + total + ' koin)');
+    ctx.say($t('Beli {0} dulu.', [itemName(id)]));
+    return okr($t('beli {0} x{1} (−{2} koin)', [itemName(id), n, total]));
   }
 });
 function holdings(npc, a){
   // -> {kind:'koin'|'item', id, n} | {err}
   var isCoin = a.item === 'koin' || a.item === 'coin' || a.item === 'uang';
-  if (isCoin){ var n = clampN(a.n, 1, 100000, 0); if (!n) return { err:'jumlah koin kosong' }; return { kind:'koin', n:n }; }
+  if (isCoin){ var n = clampN(a.n, 1, 100000, 0); if (!n) return { err:$t('jumlah koin kosong') }; return { kind:'koin', n:n }; }
   if (String(a.item || '').toLowerCase() === 'semua'){
     var b = bag(npc), ids = Object.keys(b);
-    if (!ids.length) return { err:'tas kosong' };
+    if (!ids.length) return { err:$t('tas kosong') };
     return { kind:'all', ids:ids };
   }
-  var id = itemId(a.item); if (!id) return { err:'barang tidak dikenal: ' + clampStr(a.item, 20) };
+  var id = itemId(a.item); if (!id) return { err:$t('barang tidak dikenal: {0}', [clampStr(a.item, 20)]) };
   return { kind:'item', id:id, n:clampN(a.n, 1, 99, 1) };
 }
 registerAction('beri', {
-  desc: 'Memberikan barang atau koin milikmu (dari tas/dompet NPC) kepada pemain atau NPC lain. Berjalan ke orangnya dulu.',
-  params: { item:'string: nama barang, "koin", atau "semua"', n:'number: jumlah', kepada:'string: aku (pemain) atau nama orang' },
-  label: function(a){ return 'Beri ' + (a.item === 'koin' ? (a.n || 0) + ' koin' : itemName(itemId(a.item) || a.item) + ' x' + (a.n || 1)) + ' ke ' + (a.kepada || 'aku'); },
+  desc: $t('Memberikan barang atau koin milikmu (dari tas/dompet NPC) kepada pemain atau NPC lain. Berjalan ke orangnya dulu.'),
+  params: { item:$t('string: nama barang, "koin", atau "semua"'), n:$t('number: jumlah'), kepada:$t('string: aku (pemain) atau nama orang') },
+  label: function(a){ return $t('Beri {0} ke {1}', [a.item === 'koin' ? $t('{0} koin', [a.n || 0]) : itemName(itemId(a.item) || a.item) + ' x' + (a.n || 1), a.kepada || 'aku']); },
   run: async function(npc, a, ctx){
-    var c = resolveChar(a.kepada || 'aku', npc); if (!c) return fail('tidak tahu siapa "' + clampStr(a.kepada, 20) + '"');
+    var c = resolveChar(a.kepada || 'aku', npc); if (!c) return fail($t('tidak tahu siapa "{0}"', [clampStr(a.kepada, 20)]));
     var h = holdings(npc, a); if (h.err) return fail(h.err);
-    if (h.kind === 'koin' && wallet(npc) < h.n) return fail('uang tidak cukup (' + wallet(npc) + ' < ' + h.n + ')');
-    if (h.kind === 'item' && (bag(npc)[h.id] || 0) < h.n) return fail('tidak punya ' + itemName(h.id) + ' x' + h.n);
+    if (h.kind === 'koin' && wallet(npc) < h.n) return fail($t('uang tidak cukup ({0} < {1})', [wallet(npc), h.n]));
+    if (h.kind === 'item' && (bag(npc)[h.id] || 0) < h.n) return fail($t('tidak punya {0} x{1}', [itemName(h.id), h.n]));
     var g = await goChar(npc, c, ctx); if (!g.ok) return fail(g.note);
     chk(ctx);
     await sleep(DELAY.give, ctx.signal);
     var tn = c.kind === 'npc' ? npcByKey(c.key) : null;
     if (h.kind === 'koin'){
-      if (!spendW(npc, h.n)) return fail('uang tidak cukup');
-      if (c.kind === 'player') GT.addCoins(h.n); else if (tn) addW(tn, h.n); else { addW(npc, h.n); return fail('penerima hilang'); }
-      if (c.kind === 'player') GT.toast(npc.name + ' memberimu ' + h.n + ' koin.'); else if (tn) addRelation(tn, npc, 10);
-      ctx.say('Ini ' + h.n + ' koin.');
-      return okr('beri ' + h.n + ' koin ke ' + c.name);
+      if (!spendW(npc, h.n)) return fail($t('uang tidak cukup'));
+      if (c.kind === 'player') GT.addCoins(h.n); else if (tn) addW(tn, h.n); else { addW(npc, h.n); return fail($t('penerima hilang')); }
+      if (c.kind === 'player') GT.toast($t('{0} memberimu {1} koin.', [npc.name, h.n])); else if (tn) addRelation(tn, npc, 10);
+      ctx.say($t('Ini {0} koin.', [h.n]));
+      return okr($t('beri {0} koin ke {1}', [h.n, c.name]));
     }
     var ids = h.kind === 'all' ? h.ids : [h.id], parts = [];
     for (var i = 0; i < ids.length; i++){
       var n = h.kind === 'all' ? (bag(npc)[ids[i]] || 0) : h.n;
-      if (!takeB(npc, ids[i], n)) { if (h.kind === 'all') continue; return fail('tidak punya ' + itemName(ids[i])); }
-      if (c.kind === 'player') GT.addItem(ids[i], n); else if (tn) addB(tn, ids[i], n); else { addB(npc, ids[i], n); return fail('penerima hilang'); }
+      if (!takeB(npc, ids[i], n)) { if (h.kind === 'all') continue; return fail($t('tidak punya {0}', [itemName(ids[i])])); }
+      if (c.kind === 'player') GT.addItem(ids[i], n); else if (tn) addB(tn, ids[i], n); else { addB(npc, ids[i], n); return fail($t('penerima hilang')); }
       parts.push(itemName(ids[i]) + ' x' + n);
     }
-    if (!parts.length) return fail('tidak ada yang bisa diberikan');
-    if (c.kind === 'player') GT.toast(npc.name + ' memberimu ' + parts.join(', ') + '.');
+    if (!parts.length) return fail($t('tidak ada yang bisa diberikan'));
+    if (c.kind === 'player') GT.toast($t('{0} memberimu {1}.', [npc.name, parts.join(', ')]));
     else if (tn) addRelation(tn, npc, 10);
-    ctx.say('Ini buatmu: ' + parts.join(', ') + '.');
-    return okr('beri ' + parts.join(', ') + ' ke ' + c.name);
+    ctx.say($t('Ini buatmu: {0}.', [parts.join(', ')]));
+    return okr($t('beri {0} ke {1}', [parts.join(', '), c.name]));
   }
 });
 function askPlayer(npc, thing, signal){
@@ -854,10 +854,10 @@ function askPlayer(npc, thing, signal){
     if (signal){ if (signal.aborted) return res(false); signal.addEventListener('abort', ab, { once:true }); }
     var open = function(){
       if (done) return;
-      var p = document.createElement('p'); p.textContent = npc.name + ' meminta ' + thing + ' darimu. Beri?';
-      h = GT.modal({ title:'Permintaan', body:p, closable:true, actions:[
-        { id:'ya', label:'Beri', primary:true, onClick:function(){ fin(true); return true; } },
-        { id:'tidak', label:'Tolak', onClick:function(){ fin(false); return true; } }
+      var p = document.createElement('p'); p.textContent = $t('{0} meminta {1} darimu. Beri?', [npc.name, thing]);
+      h = GT.modal({ title:$t('Permintaan'), body:p, closable:true, actions:[
+        { id:'ya', label:$t('Beri'), primary:true, onClick:function(){ fin(true); return true; } },
+        { id:'tidak', label:$t('Tolak'), onClick:function(){ fin(false); return true; } }
       ], onClose:function(){ fin(false); } });
     };
     var tries = 0;
@@ -866,42 +866,42 @@ function askPlayer(npc, thing, signal){
   });
 }
 registerAction('minta', {
-  desc: 'Meminta barang atau koin dari pemain atau NPC lain. Pemain akan ditanya; NPC memutuskan sendiri berdasarkan kedekatan.',
-  params: { item:'string: nama barang atau "koin"', n:'number: jumlah', dari:'string: aku (pemain) atau nama orang' },
-  label: function(a){ return 'Minta ' + (a.item === 'koin' ? (a.n || 0) + ' koin' : itemName(itemId(a.item) || a.item) + ' x' + (a.n || 1)) + ' dari ' + (a.dari || 'aku'); },
+  desc: $t('Meminta barang atau koin dari pemain atau NPC lain. Pemain akan ditanya; NPC memutuskan sendiri berdasarkan kedekatan.'),
+  params: { item:$t('string: nama barang atau "koin"'), n:$t('number: jumlah'), dari:$t('string: aku (pemain) atau nama orang') },
+  label: function(a){ return $t('Minta {0} dari {1}', [a.item === 'koin' ? $t('{0} koin', [a.n || 0]) : itemName(itemId(a.item) || a.item) + ' x' + (a.n || 1), a.dari || 'aku']); },
   run: async function(npc, a, ctx){
-    var c = resolveChar(a.dari || 'aku', npc); if (!c) return fail('tidak tahu siapa "' + clampStr(a.dari, 20) + '"');
+    var c = resolveChar(a.dari || 'aku', npc); if (!c) return fail($t('tidak tahu siapa "{0}"', [clampStr(a.dari, 20)]));
     var isCoin = a.item === 'koin' || a.item === 'uang', id = isCoin ? null : itemId(a.item);
-    if (!isCoin && !id) return fail('barang tidak dikenal');
+    if (!isCoin && !id) return fail($t('barang tidak dikenal'));
     var n = clampN(a.n, 1, isCoin ? 10000 : 99, 1);
     var g = await goChar(npc, c, ctx); if (!g.ok) return fail(g.note);
     chk(ctx);
-    var thing = isCoin ? n + ' koin' : itemName(id) + ' x' + n;
-    ctx.say('Boleh minta ' + thing + '?');
+    var thing = isCoin ? $t('{0} koin', [n]) : itemName(id) + ' x' + n;
+    ctx.say($t('Boleh minta {0}?', [thing]));
     await sleep(DELAY.talk, ctx.signal);
     if (c.kind === 'player'){
       var yes = await askPlayer(npc, thing, ctx.signal); chk(ctx);
-      if (!yes) return fail(playerName() + ' menolak');
-      if (isCoin){ if (!GT.spendCoins(n)) return fail('koinmu tidak cukup'); addW(npc, n); }
-      else { if (!GT.removeItem(id, n)) return fail('kamu tidak punya ' + itemName(id)); addB(npc, id, n); }
-      return okr('dapat ' + thing + ' dari ' + c.name);
+      if (!yes) return fail($t('{0} menolak', [playerName()]));
+      if (isCoin){ if (!GT.spendCoins(n)) return fail($t('koinmu tidak cukup')); addW(npc, n); }
+      else { if (!GT.removeItem(id, n)) return fail($t('kamu tidak punya {0}', [itemName(id)])); addB(npc, id, n); }
+      return okr($t('dapat {0} dari {1}', [thing, c.name]));
     }
-    var tn = npcByKey(c.key); if (!tn) return fail(c.name + ' tidak ada');
+    var tn = npcByKey(c.key); if (!tn) return fail($t('{0} tidak ada', [c.name]));
     var aff = 20 + (hash(key(npc) + '>' + c.key) % 60);
-    if (aff < 50) { GT.npcSay(tn, 'Maaf, lagi nggak bisa.'); return fail(c.name + ' menolak'); }
-    if (isCoin){ if (!spendW(tn, n)) { GT.npcSay(tn, 'Uangku kurang.'); return fail(c.name + ' tidak punya cukup koin'); } addW(npc, n); }
-    else { if (!takeB(tn, id, n)) { GT.npcSay(tn, 'Aku tidak punya itu.'); return fail(c.name + ' tidak punya ' + itemName(id)); } addB(npc, id, n); }
-    GT.npcSay(tn, 'Nih, ambil.');
-    return okr('dapat ' + thing + ' dari ' + c.name);
+    if (aff < 50) { GT.npcSay(tn, $t('Maaf, lagi nggak bisa.')); return fail($t('{0} menolak', [c.name])); }
+    if (isCoin){ if (!spendW(tn, n)) { GT.npcSay(tn, $t('Uangku kurang.')); return fail($t('{0} tidak punya cukup koin', [c.name])); } addW(npc, n); }
+    else { if (!takeB(tn, id, n)) { GT.npcSay(tn, $t('Aku tidak punya itu.')); return fail($t('{0} tidak punya {1}', [c.name, itemName(id)])); } addB(npc, id, n); }
+    GT.npcSay(tn, $t('Nih, ambil.'));
+    return okr($t('dapat {0} dari {1}', [thing, c.name]));
   }
 });
 registerAction('bicara', {
-  desc: 'Berjalan ke seseorang lalu mengatakan sesuatu. Jika lawan bicara NPC berjiwa, ia membalas dengan otaknya sendiri.',
-  params: { kepada:'string: aku (pemain) atau nama orang', pesan:'string: kalimat singkat' },
-  label: function(a){ return 'Bicara ke ' + (a.kepada || 'aku'); },
+  desc: $t('Berjalan ke seseorang lalu mengatakan sesuatu. Jika lawan bicara NPC berjiwa, ia membalas dengan otaknya sendiri.'),
+  params: { kepada:$t('string: aku (pemain) atau nama orang'), pesan:$t('string: kalimat singkat') },
+  label: function(a){ return $t('Bicara ke {0}', [a.kepada || 'aku']); },
   run: async function(npc, a, ctx){
-    var c = resolveChar(a.kepada || 'aku', npc); if (!c) return fail('tidak tahu siapa "' + clampStr(a.kepada, 20) + '"');
-    var msg = clampStr(a.pesan || 'Halo!', 140);
+    var c = resolveChar(a.kepada || 'aku', npc); if (!c) return fail($t('tidak tahu siapa "{0}"', [clampStr(a.kepada, 20)]));
+    var msg = clampStr(a.pesan || $t('Halo!'), 140);
     var g = await goChar(npc, c, ctx); if (!g.ok) return fail(g.note);
     chk(ctx);
     ctx.say(msg);
@@ -911,26 +911,26 @@ registerAction('bicara', {
     if (tn){
       try { if (GT.soul && typeof GT.soul._replyTo === 'function') reply = await GT.soul._replyTo(tn, npc.name, msg, ctx.signal); } catch(e){ reply = ''; }
       chk(ctx);
-      if (!reply) reply = ['Oh, begitu.', 'Iya, halo juga!', 'Hmm, boleh juga.', 'Oke, makasih ya.'][hash(c.key + msg) % 4];
+      if (!reply) reply = [$t('Oh, begitu.'), $t('Iya, halo juga!'), $t('Hmm, boleh juga.'), $t('Oke, makasih ya.')][hash(c.key + msg) % 4];
       GT.npcSay(tn, reply);
       ctx.log(c.name + ': ' + reply);
-      remember(tn, npc.name + ' bilang: ' + msg);
+      remember(tn, $t('{0} bilang: {1}', [npc.name, msg]));
       await sleep(DELAY.talk, ctx.signal);
     }
-    remember(npc, 'Bicara ke ' + c.name + ': ' + msg);
-    return okr('bicara ke ' + c.name);
+    remember(npc, $t('Bicara ke {0}: {1}', [c.name, msg]));
+    return okr($t('bicara ke {0}', [c.name]));
   }
 });
 registerAction('main_kasino', {
-  desc: 'Pergi ke Kasino lalu bermain dengan uang sendiri (koin permainan). permainan: dadu atau slot.',
-  params: { permainan:'string: dadu|slot', taruhan:'number: koin per ronde (10-100)', ronde:'number: jumlah ronde (default 3)' },
-  label: function(a){ return 'Main ' + (a.permainan || 'dadu') + ' di kasino'; },
+  desc: $t('Pergi ke Kasino lalu bermain dengan uang sendiri (koin permainan). permainan: dadu atau slot.'),
+  params: { permainan:'string: dadu|slot', taruhan:$t('number: koin per ronde (10-100)'), ronde:$t('number: jumlah ronde (default 3)') },
+  label: function(a){ return $t('Main {0} di kasino', [a.permainan || 'dadu']); },
   run: async function(npc, a, ctx){
-    var C = GT.casino; if (!C || typeof C.rollDice !== 'function') return fail('kasino belum tersedia');
+    var C = GT.casino; if (!C || typeof C.rollDice !== 'function') return fail($t('kasino belum tersedia'));
     var game = /slot/i.test(a.permainan || '') ? 'slot' : 'dadu';
     var bet = clampN(a.taruhan, C.MIN_BET || 10, 100, 10), rounds = clampN(a.ronde, 1, 6, 3);
-    if (wallet(npc) < bet) return fail('uang kurang untuk taruhan ' + bet);
-    var cas = W().casino; if (!cas) return fail('tidak ada Kasino');
+    if (wallet(npc) < bet) return fail($t('uang kurang untuk taruhan {0}', [bet]));
+    var cas = W().casino; if (!cas) return fail($t('tidak ada Kasino'));
     var g = await goBuilding(npc, cas, ctx); if (!g.ok) return fail(g.note);
     var net = 0, played = 0;
     for (var i = 0; i < rounds; i++){
@@ -945,55 +945,55 @@ registerAction('main_kasino', {
       } else { var res = C.spinSlot(); pay = C.slotPayout(res, bet); }
       if (pay > 0) addW(npc, pay);
       net += pay - bet; played++;
-      ctx.say(pay > bet ? 'Menang!' : pay === bet ? 'Imbang.' : 'Yah, kalah.');
+      ctx.say(pay > bet ? $t('Menang!') : pay === bet ? $t('Imbang.') : $t('Yah, kalah.'));
     }
-    if (!played) return fail('tidak sempat bermain');
-    remember(npc, 'Main ' + game + ' di kasino: ' + (net >= 0 ? '+' : '') + net + ' koin');
-    return okr('main ' + game + ' ' + played + 'x (' + (net >= 0 ? '+' : '−') + Math.abs(net) + ' koin)');
+    if (!played) return fail($t('tidak sempat bermain'));
+    remember(npc, $t('Main {0} di kasino: {1}{2} koin', [game, net >= 0 ? '+' : '', net]));
+    return okr($t('main {0} {1}x ({2}{3} koin)', [game, played, net >= 0 ? '+' : '−', Math.abs(net)]));
   }
 });
 registerAction('tunggu', {
-  desc: 'Menunggu beberapa menit waktu permainan di tempat sekarang.',
-  params: { menit:'number: menit waktu game (1-720)' },
-  label: function(a){ return 'Tunggu ' + (a.menit || 15) + ' menit'; },
+  desc: $t('Menunggu beberapa menit waktu permainan di tempat sekarang.'),
+  params: { menit:$t('number: menit waktu game (1-720)') },
+  label: function(a){ return $t('Tunggu {0} menit', [a.menit || 15]); },
   timeout: 0,
   run: async function(npc, a, ctx){
     var m = clampN(a.menit, 1, 720, 15), t0 = now();
     await waitUntil(function(){ return now() - t0 >= m; }, ctx.signal, 0);
-    return okr('menunggu ' + m + ' menit');
+    return okr($t('menunggu {0} menit', [m]));
   }
 });
 registerAction('pulang', {
-  desc: 'Pulang ke rumah sendiri.',
+  desc: $t('Pulang ke rumah sendiri.'),
   params: {},
-  label: function(){ return 'Pulang'; },
+  label: function(){ return $t('Pulang'); },
   run: async function(npc, a, ctx){
     var d = homeDest(npc);
     var r = await goDest(npc, d, ctx);
-    return r.ok ? okr('sudah di rumah') : fail(r.note);
+    return r.ok ? okr($t('sudah di rumah')) : fail(r.note);
   }
 });
 registerAction('tidur', {
-  desc: 'Pulang lalu tidur sampai pukul 06:00.',
+  desc: $t('Pulang lalu tidur sampai pukul 06:00.'),
   params: {},
-  label: function(){ return 'Tidur'; },
+  label: function(){ return $t('Tidur'); },
   timeout: 0,
   run: async function(npc, a, ctx){
     var r = await goDest(npc, homeDest(npc), ctx);
     if (!r.ok) return fail(r.note);
     var t = localTime(), mins = t.h * 60 + t.m, target = t.total - mins + (mins < 360 ? 360 : 1440 + 360);
-    ctx.say('Zzz...');
+    ctx.say($t('Zzz...'));
     await waitUntil(function(){ return now() >= target; }, ctx.signal, 0);
-    return okr('bangun pukul 06:00');
+    return okr($t('bangun pukul 06:00'));
   }
 });
 registerAction('kerja', {
-  desc: 'Kembali ke pos kerja (penjaga Mart, bandar kasino). Warga biasa: tidak ada efek.',
+  desc: $t('Kembali ke pos kerja (penjaga Mart, bandar kasino). Warga biasa: tidak ada efek.'),
   params: {},
-  label: function(){ return 'Kembali kerja'; },
+  label: function(){ return $t('Kembali kerja'); },
   run: async function(npc, a, ctx){
     var p = npc._post;
-    if (!p || !p.sc) return okr('tidak punya pos');
+    if (!p || !p.sc) return okr($t('tidak punya pos'));
     var sc = npcSc(npc);
     if (sc !== p.sc){
       if (sc && sc !== outS()){ var lv = await leaveBuilding(npc, ctx); if (!lv.ok) return lv; }
@@ -1010,77 +1010,77 @@ registerAction('kerja', {
     npc.hidden = false; npc.wander = p.wander; npc.leash = p.leash; npc.turns = p.turns; npc.follow = false;
     npc.home = { x:p.x, y:p.y }; npc.dir = p.dir; npc.wait = 1;
     p.returned = true; npc._post = null;
-    return okr('kembali ke pos');
+    return okr($t('kembali ke pos'));
   }
 });
 registerAction('ingat', {
-  desc: 'Mencatat sesuatu ke ingatanmu (dibaca lagi di observasi berikutnya).',
-  params: { catatan:'string: catatan singkat' },
-  label: function(a){ return 'Ingat: ' + clampStr(a.catatan, 40); },
+  desc: $t('Mencatat sesuatu ke ingatanmu (dibaca lagi di observasi berikutnya).'),
+  params: { catatan:$t('string: catatan singkat') },
+  label: function(a){ return $t('Ingat: {0}', [clampStr(a.catatan, 40)]); },
   quiet: true,
-  run: async function(npc, a){ return remember(npc, a.catatan) ? okr('mengingat: ' + clampStr(a.catatan, 60)) : fail('catatan kosong'); }
+  run: async function(npc, a){ return remember(npc, a.catatan) ? okr($t('mengingat: {0}', [clampStr(a.catatan, 60)])) : fail($t('catatan kosong')); }
 });
 registerAction('ajari', {
-  desc: 'Menyimpan keterampilan baru: nama + daftar langkah (aksi) yang bisa dijalankan lagi dengan "lakukan".',
-  params: { nama:'string: nama keterampilan', langkah:'array: daftar langkah [{do:...}]' },
-  label: function(a){ return 'Pelajari "' + clampStr(a.nama, 20) + '"'; },
+  desc: $t('Menyimpan keterampilan baru: nama + daftar langkah (aksi) yang bisa dijalankan lagi dengan "lakukan".'),
+  params: { nama:$t('string: nama keterampilan'), langkah:$t('array: daftar langkah [{do:...}]') },
+  label: function(a){ return $t('Pelajari "{0}"', [clampStr(a.nama, 20)]); },
   quiet: true,
   run: async function(npc, a){
     var r = skills.teach(a.nama, a.langkah);
-    return r.ok ? okr('belajar "' + r.name + '" (' + r.steps + ' langkah)') : fail(r.note);
+    return r.ok ? okr($t('belajar "{0}" ({1} langkah)', [r.name, r.steps])) : fail(r.note);
   }
 });
 registerAction('lakukan', {
-  desc: 'Menjalankan keterampilan yang pernah diajarkan.',
-  params: { nama:'string: nama keterampilan' },
-  label: function(a){ return 'Lakukan "' + clampStr(a.nama, 20) + '"'; },
+  desc: $t('Menjalankan keterampilan yang pernah diajarkan.'),
+  params: { nama:$t('string: nama keterampilan') },
+  label: function(a){ return $t('Lakukan "{0}"', [clampStr(a.nama, 20)]); },
   timeout: 0,
   run: async function(npc, a, ctx){
     var nm = String(a.nama || '').trim().toLowerCase(), pl = skillStore[nm];
-    if (!pl) return fail('belum bisa "' + clampStr(nm, 20) + '"');
-    if ((ctx.depth || 0) >= 2) return fail('terlalu dalam');
+    if (!pl) return fail($t('belum bisa "{0}"', [clampStr(nm, 20)]));
+    if ((ctx.depth || 0) >= 2) return fail($t('terlalu dalam'));
     var steps = normalizePlan(pl).steps, n = 0;
     for (var i = 0; i < steps.length; i++){
       chk(ctx);
       var act = actions[steps[i]['do']];
-      if (steps[i]['do'] === 'lakukan' && (ctx.depth || 0) >= 1) return fail('terlalu dalam');
+      if (steps[i]['do'] === 'lakukan' && (ctx.depth || 0) >= 1) return fail($t('terlalu dalam'));
       var sub = Object.create(ctx); sub.depth = (ctx.depth || 0) + 1;
       var out;
       try { out = await act.run(npc, steps[i], sub); } catch(e){ if (e && e.aborted) throw e; out = fail('galat'); }
-      if (!out || !out.ok){ return fail('"' + nm + '" gagal di langkah ' + (i + 1) + ': ' + clampStr(out && out.note, 60)); }
+      if (!out || !out.ok){ return fail($t('"{0}" gagal di langkah {1}: {2}', [nm, i + 1, clampStr(out && out.note, 60)])); }
       n++;
       ctx.log('  ✓ ' + (out.note || stepLabel(steps[i])));
     }
-    return okr('selesai "' + nm + '" (' + n + ' langkah)');
+    return okr($t('selesai "{0}" ({1} langkah)', [nm, n]));
   }
 });
 registerAction('lapor', {
-  desc: 'Menyampaikan pesan kepada pemain (toast + catatan obrolan). Cocok di akhir rencana.',
-  params: { pesan:'string: laporan singkat' },
-  label: function(){ return 'Lapor'; },
+  desc: $t('Menyampaikan pesan kepada pemain (toast + catatan obrolan). Cocok di akhir rencana.'),
+  params: { pesan:$t('string: laporan singkat') },
+  label: function(){ return $t('Lapor'); },
   quiet: true,
   run: async function(npc, a, ctx){
-    var msg = clampStr(a.pesan || 'Sudah beres.', 140);
+    var msg = clampStr(a.pesan || $t('Sudah beres.'), 140);
     GT.toast(npc.name + ': ' + msg); ctx.say(msg);
     emit('report', { npc:npc, key:key(npc), text:msg });
-    return okr('lapor: ' + msg);
+    return okr($t('lapor: {0}', [msg]));
   }
 });
 registerAction('hadiah', {
-  desc: 'Memberi pemain hadiah kecil gratis (maksimal sekali sehari).',
+  desc: $t('Memberi pemain hadiah kecil gratis (maksimal sekali sehari).'),
   params: {},
-  label: function(){ return 'Beri hadiah'; },
+  label: function(){ return $t('Beri hadiah'); },
   run: async function(npc, a, ctx){
     var d = dat(key(npc)), day = localTime().day;
-    if (d.g === day) return fail('Hari ini sudah kuberi hadiah, besok lagi ya.');
+    if (d.g === day) return fail($t('Hari ini sudah kuberi hadiah, besok lagi ya.'));
     var ids = Object.keys(GT.ITEMS || {}).filter(function(id){ var p = GT.ITEMS[id].price; return p > 0 && p <= 15; });
-    if (!ids.length) return fail('Aku lagi tidak punya apa-apa.');
+    if (!ids.length) return fail($t('Aku lagi tidak punya apa-apa.'));
     var id = ids[Math.floor(r01() * ids.length) % ids.length];
     d.g = day; scheduleSave(); npc._lastGift = id;
     GT.addItem(id, 1);
-    GT.toast(npc.name + ' memberimu ' + itemName(id) + '.');
-    ctx.say('Nih, buatmu!');
-    return { ok:true, note:'hadiah ' + itemName(id), item:id };
+    GT.toast($t('{0} memberimu {1}.', [npc.name, itemName(id)]));
+    ctx.say($t('Nih, buatmu!'));
+    return { ok:true, note:$t('hadiah {0}', [itemName(id)]), item:id };
   }
 });
 
@@ -1091,17 +1091,17 @@ function hpRatio(n){ try { var m = GT.combat.maxHp(n); return m > 0 ? GT.combat.
 async function approach(npc, c, ctx, maxD){
   for (var t = 0; t < 6; t++){
     chk(ctx);
-    var tp = charPos(c); if (!tp) return fail('tidak menemukan ' + c.name);
+    var tp = charPos(c); if (!tp) return fail($t('tidak menemukan {0}', [c.name]));
     var sc = npcSc(npc);
     if (sc === tp.sc){
-      if (dist1(npc, tp) <= maxD) return okr('dekat ' + c.name);
+      if (dist1(npc, tp) <= maxD) return okr($t('dekat {0}', [c.name]));
       var wk = await walkTiles(npc, sc, function(){ var t2 = charPos(c); return t2 && t2.sc === sc ? neighborTiles(sc, t2, npc, 1) : []; }, ctx);
-      if (!wk.ok && wk.note === 'tak_ada_jalan') return fail('tidak bisa menjangkau ' + c.name);
+      if (!wk.ok && wk.note === 'tak_ada_jalan') return fail($t('tidak bisa menjangkau {0}', [c.name]));
       continue;
     }
     var g = await goChar(npc, c, ctx); if (!g.ok) return fail(g.note);
   }
-  return fail('tidak berhasil mendekati ' + c.name);
+  return fail($t('tidak berhasil mendekati {0}', [c.name]));
 }
 function fleeFrom(n, from){
   try {
@@ -1130,9 +1130,9 @@ function startFight(a, b, why){
   [a, b].forEach(function(n){ if (runs[key(n)]) cancel(n, 'berkelahi'); stopFollow(key(n)); });
   fight = { a:a, b:b, sc:sc, n:0, turn:0, fail:0, stuck:0, t0:Date.now(), iv:0, why:why || '' };
   cfx(a, 'threat'); cfx(b, 'threat');
-  GT.npcSay(a, pickOf(THREATS)); GT.npcSay(b, 'Ayo maju!');
+  GT.npcSay(a, pickOf(THREATS)); GT.npcSay(b, $t('Ayo maju!'));
   fight.iv = setInterval(fightTick, 800);
-  remember(a, 'Berkelahi dengan ' + b.name); remember(b, 'Berkelahi dengan ' + a.name);
+  remember(a, $t('Berkelahi dengan {0}', [b.name])); remember(b, $t('Berkelahi dengan {0}', [a.name]));
   emit('fight', { a:a, b:b, state:'start' });
   // v2.4: polisi melerai perkelahian (siang atau malam)
   try { if (GT.police && GT.police.respond) GT.police.respond({ x:a.x, y:a.y, scene:(sc === outS() ? 'out' : sc), reason:'fight', parties:[a, b] }); } catch(e){}
@@ -1144,7 +1144,7 @@ function endFight(why, loser){
   [f.a, f.b].forEach(function(n){ n.wait = 1.5; });
   if (loser && !isKO(loser)){
     var win = loser === f.a ? f.b : f.a;
-    GT.npcSay(loser, 'Sudah, aku menyerah!'); fleeFrom(loser, win);
+    GT.npcSay(loser, $t('Sudah, aku menyerah!')); fleeFrom(loser, win);
     addRelation(loser, win, -5);
   }
   emit('fight', { a:f.a, b:f.b, state:'end', why:why });
@@ -1178,22 +1178,22 @@ function threatEffects(npc, c){
   var line = pickOf(THREATS), tobj = c.kind === 'player' ? 'player' : npcByKey(c.key);
   if (GT.combat && typeof GT.combat.threat === 'function'){ try { GT.combat.threat(npc, tobj || 'player', line); } catch(e){ cfx(npc, 'threat'); GT.npcSay(npc, line); } }
   else { cfx(npc, 'threat'); GT.npcSay(npc, line); }
-  if (c.kind === 'player'){ try { GT.toast(npc.name + ' mengancammu!'); GT.addAffinity(npc, -3); } catch(e){} return 'none'; }
+  if (c.kind === 'player'){ try { GT.toast($t('{0} mengancammu!', [npc.name])); GT.addAffinity(npc, -3); } catch(e){} return 'none'; }
   var tn = npcByKey(c.key); if (!tn) return 'none';
   addRelation(tn, npc, -10);
-  remember(tn, npc.name + ' mengancamku');
-  if (isWorkerKey(c.key)){ GT.npcSay(tn, 'Tolong! Jangan ganggu aku!'); return 'none'; }
+  remember(tn, $t('{0} mengancamku', [npc.name]));
+  if (isWorkerKey(c.key)){ GT.npcSay(tn, $t('Tolong! Jangan ganggu aku!')); return 'none'; }
   var tm = temper(tn);
   if (tm === 'penakut'){
     var coins = Math.min(10, wallet(tn));
-    if (coins >= 3 && r01() < 0.5){ spendW(tn, coins); addW(npc, coins); GT.npcSay(tn, 'Ini ' + coins + ' koin, jangan pukul aku!'); return 'give'; }
-    GT.npcSay(tn, 'Hii! Jangan!'); fleeFrom(tn, npc); return 'flee';
+    if (coins >= 3 && r01() < 0.5){ spendW(tn, coins); addW(npc, coins); GT.npcSay(tn, $t('Ini {0} koin, jangan pukul aku!', [coins])); return 'give'; }
+    GT.npcSay(tn, $t('Hii! Jangan!')); fleeFrom(tn, npc); return 'flee';
   }
   if (tm === 'pemberani' && (relation(tn, npc) < -45 || r01() < 0.5)){
-    GT.npcSay(tn, 'Kamu yang cari gara-gara!');
+    GT.npcSay(tn, $t('Kamu yang cari gara-gara!'));
     return startFight(tn, npc, 'balas') ? 'fight' : 'none';
   }
-  GT.npcSay(tn, tm === 'pemberani' ? 'Coba saja kalau berani.' : 'Hei, apa maksudmu?');
+  GT.npcSay(tn, tm === 'pemberani' ? $t('Coba saja kalau berani.') : $t('Hei, apa maksudmu?'));
   return 'none';
 }
 function fightScan(){
@@ -1218,39 +1218,39 @@ function fightScan(){
 }
 
 registerAction('ancam', {
-  desc: 'Mengancam seseorang (berjalan ke dekatnya, menggertak). Yang penakut bisa kabur atau memberi koin, yang pemberani bisa membalas dan berkelahi. Hubungannya dengan korban memburuk. Tidak mau pada orang yang disukai.',
-  params: { target:'string: nama orang atau aku (pemain)' },
-  label: function(a){ return 'Ancam ' + (a.target || '?'); },
+  desc: $t('Mengancam seseorang (berjalan ke dekatnya, menggertak). Yang penakut bisa kabur atau memberi koin, yang pemberani bisa membalas dan berkelahi. Hubungannya dengan korban memburuk. Tidak mau pada orang yang disukai.'),
+  params: { target:$t('string: nama orang atau aku (pemain)') },
+  label: function(a){ return $t('Ancam {0}', [a.target || '?']); },
   run: async function(npc, a, ctx){
     var t = combatTarget(npc, a); if (t.err) return fail(t.err);
     var c = t.c;
-    if (!ctx.forced){ var g = likeGate(npc, c); if (g){ ctx.say(g.reply); return fail('menolak: ' + c.name + ' disukai'); } }
+    if (!ctx.forced){ var g = likeGate(npc, c); if (g){ ctx.say(g.reply); return fail($t('menolak: {0} disukai', [c.name])); } }
     var ap = await approach(npc, c, ctx, 2); if (!ap.ok) return fail(ap.note);
     chk(ctx);
     var out = threatEffects(npc, c);
     await sleep(DELAY.talk, ctx.signal);
-    remember(npc, 'Mengancam ' + c.name);
-    return okr('ancam ' + c.name + (out === 'flee' ? ' (kabur)' : out === 'give' ? ' (memberi koin)' : out === 'fight' ? ' (membalas)' : ''));
+    remember(npc, $t('Mengancam {0}', [c.name]));
+    return okr($t('ancam {0}{1}', [c.name, out === 'flee' ? $t(' (kabur)') : out === 'give' ? $t(' (memberi koin)') : out === 'fight' ? $t(' (membalas)') : '']));
   }
 });
 registerAction('pukul', {
-  desc: 'Memukul seseorang (berjalan sampai bersebelahan, lalu memukul beberapa kali sampai lawan pingsan/kabur). Tidak mau pada orang yang disukai. target boleh pemain (aku).',
-  params: { target:'string: nama orang atau aku (pemain)', kali:'number: jumlah pukulan (default 3)' },
-  label: function(a){ return 'Pukul ' + (a.target || '?') + (a.kali ? ' x' + a.kali : ''); },
+  desc: $t('Memukul seseorang (berjalan sampai bersebelahan, lalu memukul beberapa kali sampai lawan pingsan/kabur). Tidak mau pada orang yang disukai. target boleh pemain (aku).'),
+  params: { target:$t('string: nama orang atau aku (pemain)'), kali:$t('number: jumlah pukulan (default 3)') },
+  label: function(a){ return $t('Pukul {0}{1}', [a.target || '?', a.kali ? ' x' + a.kali : '']); },
   run: async function(npc, a, ctx){
-    if (!combat()) return fail('belum bisa memukul');
+    if (!combat()) return fail($t('belum bisa memukul'));
     var t = combatTarget(npc, a); if (t.err) return fail(t.err);
     var c = t.c;
-    if (!ctx.forced){ var g = likeGate(npc, c); if (g){ ctx.say(g.reply); return fail('menolak: ' + c.name + ' disukai'); } }
+    if (!ctx.forced){ var g = likeGate(npc, c); if (g){ ctx.say(g.reply); return fail($t('menolak: {0} disukai', [c.name])); } }
     var kali = clampN(a.kali, 1, 10, 3), hits = 0, total = 0, ko = false, bad = 0, why = '';
     activeCombat++;
     try {
-      ctx.say('Rasakan ini!');
+      ctx.say($t('Rasakan ini!'));
       while (hits < kali && bad < 6){
         var ap = await approach(npc, c, ctx, 1);
         if (!ap.ok){ why = ap.note; break; }
         var tgt = c.kind === 'player' ? 'player' : npcByKey(c.key);
-        if (!tgt){ why = c.name + ' hilang'; break; }
+        if (!tgt){ why = $t('{0} hilang', [c.name]); break; }
         if (isKO(tgt)){ ko = true; break; }
         var tp = charPos(c); if (tp) npc.dir = tp.x > npc.x ? 'right' : tp.x < npc.x ? 'left' : tp.y > npc.y ? 'down' : 'up';
         var r = doHit(npc, tgt);
@@ -1258,18 +1258,18 @@ registerAction('pukul', {
         await sleep(800, ctx.signal);
       }
     } finally { activeCombat--; }
-    if (!hits) return fail(why ? 'tidak bisa memukul ' + c.name + ' (' + clampStr(why, 30) + ')' : 'tidak memukul');
-    remember(npc, 'Memukul ' + c.name + ' ' + hits + 'x');
-    return okr('pukul ' + c.name + ' ' + hits + 'x (−' + total + ' HP)' + (ko ? ', pingsan' : ''));
+    if (!hits) return fail(why ? $t('tidak bisa memukul {0} ({1})', [c.name, clampStr(why, 30)]) : $t('tidak memukul'));
+    remember(npc, $t('Memukul {0} {1}x', [c.name, hits]));
+    return okr($t('pukul {0} {1}x (−{2} HP){3}', [c.name, hits, total, ko ? $t(', pingsan') : '']));
   }
 });
 registerAction('damai', {
-  desc: 'Berdamai dengan seseorang (berjalan ke dekatnya, meminta maaf). Hubungan membaik dan perkelahian di antara mereka berhenti.',
-  params: { target:'string: nama orang atau aku (pemain)' },
-  label: function(a){ return 'Berdamai dengan ' + (a.target || '?'); },
+  desc: $t('Berdamai dengan seseorang (berjalan ke dekatnya, meminta maaf). Hubungan membaik dan perkelahian di antara mereka berhenti.'),
+  params: { target:$t('string: nama orang atau aku (pemain)') },
+  label: function(a){ return $t('Berdamai dengan {0}', [a.target || '?']); },
   run: async function(npc, a, ctx){
-    var c = resolveChar(a.target || '', npc); if (!c) return fail('tidak tahu siapa "' + clampStr(a.target, 20) + '"');
-    if (c.kind === 'npc' && c.key === key(npc)) return fail('tidak bisa pada diri sendiri');
+    var c = resolveChar(a.target || '', npc); if (!c) return fail($t('tidak tahu siapa "{0}"', [clampStr(a.target, 20)]));
+    if (c.kind === 'npc' && c.key === key(npc)) return fail($t('tidak bisa pada diri sendiri'));
     var ap = await approach(npc, c, ctx, 2); if (!ap.ok) return fail(ap.note);
     chk(ctx);
     ctx.say(pickOf(CALM));
@@ -1281,11 +1281,11 @@ registerAction('damai', {
         addRelation(npc, tn, 15); addRelation(tn, npc, 15);
         if (fight && ((fight.a === npc && fight.b === tn) || (fight.a === tn && fight.b === npc))) endFight('damai');
         await sleep(DELAY.talk, ctx.signal);
-        GT.npcSay(tn, 'Iya, sudah. Maaf juga.');
+        GT.npcSay(tn, $t('Iya, sudah. Maaf juga.'));
       }
     }
-    remember(npc, 'Berdamai dengan ' + c.name);
-    return okr('berdamai dengan ' + c.name);
+    remember(npc, $t('Berdamai dengan {0}', [c.name]));
+    return okr($t('berdamai dengan {0}', [c.name]));
   }
 });
 GT.on('hit', function(e){
@@ -1300,10 +1300,10 @@ GT.on('hit', function(e){
 /* ------------------------------------------------------------------ keterampilan */
 function teach(name, steps){
   name = clampStr(String(name || '').trim().toLowerCase().replace(/\s+/g, ' '), 24);
-  if (!name) return { ok:false, note:'nama keterampilan kosong' };
+  if (!name) return { ok:false, note:$t('nama keterampilan kosong') };
   var np = normalizePlan(steps);
-  if (!np.steps.length) return { ok:false, note:'langkah kosong' };
-  if (Object.keys(skillStore).length >= 20 && !skillStore[name]) return { ok:false, note:'terlalu banyak keterampilan' };
+  if (!np.steps.length) return { ok:false, note:$t('langkah kosong') };
+  if (Object.keys(skillStore).length >= 20 && !skillStore[name]) return { ok:false, note:$t('terlalu banyak keterampilan') };
   skillStore[name] = np.steps; scheduleSave();
   return { ok:true, name:name, steps:np.steps.length };
 }
@@ -1321,22 +1321,22 @@ function syncSkillView(){
 
 /* ------------------------------------------------------------------ observasi */
 function sceneLabel(sc){
-  if (!sc || sc === outS()) return 'di luar';
-  if (sc.kind === 'mart') return 'di Mart';
-  if (sc.kind === 'casino') return 'di Kasino';
-  return sc.house ? (sc.house.own ? 'di rumah ' + playerName() : 'di rumah ' + sc.house.owner) : 'di dalam';
+  if (!sc || sc === outS()) return $t('di luar');
+  if (sc.kind === 'mart') return $t('di Mart');
+  if (sc.kind === 'casino') return $t('di Kasino');
+  return sc.house ? (sc.house.own ? $t('di rumah {0}', [playerName()]) : $t('di rumah {0}', [sc.house.owner])) : $t('di dalam');
 }
 function observe(npc){
   var k = key(npc), d = dat(k), t = localTime(), sc = npcSc(npc), w = W();
   var near = [];
   if (sc){
     sc.npcs.forEach(function(n){ if (n === npc || n.hidden) return; var dist = Math.abs(n.x - npc.x) + Math.abs(n.y - npc.y); if (dist <= 10) near.push({ nama:n.name, jarak:dist }); });
-    if (sc === GT.scene){ var p = GT.player, dp = Math.abs(p.x - npc.x) + Math.abs(p.y - npc.y); near.push({ nama:playerName() + ' (pemain)', jarak:dp }); }
+    if (sc === GT.scene){ var p = GT.player, dp = Math.abs(p.x - npc.x) + Math.abs(p.y - npc.y); near.push({ nama:$t('{0} (pemain)', [playerName()]), jarak:dp }); }
   }
   near.sort(function(a, b){ return a.jarak - b.jarak; });
-  var ps = GT.scene === outS() ? 'di luar' : sceneLabel(GT.scene);
+  var ps = GT.scene === outS() ? $t('di luar') : sceneLabel(GT.scene);
   var places = ['rumah (rumahmu)', 'rumah aku (rumah ' + playerName() + ')', 'mart', 'kasino', 'taman'];
-  (w.houses || []).forEach(function(h){ if (!h.own && h.invited && h.owner) places.push('rumah ' + String(h.owner).split(' ')[0]); });
+  (w.houses || []).forEach(function(h){ if (!h.own && h.invited && h.owner) places.push($t('rumah {0}', [String(h.owner).split(' ')[0]])); });
   var r = runs[k];
   return {
     nama:npc.name, waktu:t.hhmm || (t.h + ':' + t.m), hari:t.day, malam:!!t.night,
@@ -1384,11 +1384,11 @@ function placeToken(d, npc){
     if (d.b.own) return 'rumah aku';
     var h = homeDest(npc);
     if (h && h.t === 'bld' && h.b === d.b) return 'rumah';
-    return 'rumah ' + String(d.b.owner || '').split(' ')[0];
+    return $t('rumah {0}', [String(d.b.owner || '').split(' ')[0]]);
   }
   if (d.t === 'park') return 'taman';
   if (d.t === 'spot') return 'rumah';
-  if (d.t === 'tile') return 'blok ' + d.x + ',' + d.y;
+  if (d.t === 'tile') return $t('blok {0},{1}', [d.x, d.y]);
   return null;
 }
 function parseText(text, c){
@@ -1441,7 +1441,7 @@ function parseText(text, c){
       var pesan = s.replace(/\b(bilang|katakan|sampaikan|ngomong|bicara|ngobrol|sapa\w*|tanya\w*|ke|kepada|sama|dengan|pada)\b/g, ' ');
       if (tgt){ if (tgt.kind === 'player') pesan = pesan.replace(PLAYER_WORDS, ' '); else pesan = pesan.replace(new RegExp('\\b' + escRe(tgt.name.toLowerCase()) + '\\b'), ' '); }
       pesan = pesan.replace(/\s+/g, ' ').trim();
-      push({ 'do':'bicara', kepada:tgt ? (tgt.kind === 'player' ? 'aku' : tgt.name) : 'aku', pesan:pesan || 'Halo!' }); return;
+      push({ 'do':'bicara', kepada:tgt ? (tgt.kind === 'player' ? 'aku' : tgt.name) : 'aku', pesan:pesan || $t('Halo!') }); return;
     }
     if (/\b(ambilkan|ambilin|belikan|beliin|bawakan|bawain|carikan|cariin|mintakan)\b/.test(s) && its.length){
       its.forEach(function(it){ bought.push({ id:it.id, n:qtyOf(s, it) }); });
@@ -1518,7 +1518,7 @@ function routinePlan(npc){
   var aff = GT.getAffinity(npc);
   // hadiah untuk pemain
   if (aff >= 60 && d.g !== t.day && rnd() < 0.3 && h >= 8 && h < 21){
-    if (Object.keys(inv).length) return [{ 'do':'pergi', tujuan:'aku' }, { 'do':'beri', item:Object.keys(inv)[0], n:1, kepada:'aku' }, { 'do':'lapor', pesan:'Ini sedikit hadiah buatmu.' }];
+    if (Object.keys(inv).length) return [{ 'do':'pergi', tujuan:'aku' }, { 'do':'beri', item:Object.keys(inv)[0], n:1, kepada:'aku' }, { 'do':'lapor', pesan:$t('Ini sedikit hadiah buatmu.') }];
     if (d.w >= 30) return [{ 'do':'pergi', tujuan:'mart' }, { 'do':'beli', item:'apel', n:1 }, { 'do':'pergi', tujuan:'aku' }, { 'do':'beri', item:'apel', n:1, kepada:'aku' }];
   }
   if (curfewNow() || h >= 22 || h < 5) return [{ 'do':'tidur' }];
@@ -1531,11 +1531,11 @@ function routinePlan(npc){
     var friends = (W().houses || []).filter(function(x){ return !x.own && x.invited && x.owner; });
     if (trait === 1 && friends.length && r < 0.6){
       var f = friends[Math.floor(rnd() * friends.length) % friends.length], nm = String(f.owner).split(' ')[0];
-      return [{ 'do':'pergi', tujuan:'rumah ' + nm }, { 'do':'bicara', kepada:nm, pesan:'Halo ' + nm + ', main ke sini nih!' }, { 'do':'pulang' }];
+      return [{ 'do':'pergi', tujuan:$t('rumah {0}', [nm]) }, { 'do':'bicara', kepada:nm, pesan:$t('Halo {0}, main ke sini nih!', [nm]) }, { 'do':'pulang' }];
     }
     if (r < 0.5) return [{ 'do':'pergi', tujuan:'taman' }, { 'do':'tunggu', menit:45 }];
     var cs = knownChars(npc).filter(function(c){ return c.key.indexOf('out:') === 0 || /^house:/.test(c.key); });
-    if (cs.length && r < 0.8){ var c2 = cs[Math.floor(rnd() * cs.length) % cs.length]; return [{ 'do':'bicara', kepada:c2.name, pesan:'Halo, apa kabar?' }]; }
+    if (cs.length && r < 0.8){ var c2 = cs[Math.floor(rnd() * cs.length) % cs.length]; return [{ 'do':'bicara', kepada:c2.name, pesan:$t('Halo, apa kabar?') }]; }
     return [{ 'do':'pergi', tujuan:'taman' }, { 'do':'pulang' }];
   }
   if (h < 18){

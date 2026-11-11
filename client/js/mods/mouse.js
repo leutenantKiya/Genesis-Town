@@ -65,7 +65,7 @@
       // a building: walk to the tile in front of its door and step in
       var front = { x: b.dx, y: b.dy + 1 };
       var path = front.x === p.x && front.y === p.y ? [] : GT.findPath(sc, p, front);
-      if (!path) return GT.toast('Tidak ada jalan ke sana.');
+      if (!path) return GT.toast($t('Tidak ada jalan ke sana.'));
       go(path, function () { key('keydown', 'up'); setTimeout(function () { key('keyup', 'up'); }, 160); });
       return;
     }
@@ -73,14 +73,14 @@
     if (!thing) {
       if (t.x === p.x && t.y === p.y) return;
       var p2 = GT.findPath(sc, p, t);
-      if (!p2) return GT.toast('Tidak ada jalan ke sana.');
+      if (!p2) return GT.toast($t('Tidak ada jalan ke sana.'));
       go(p2, null);
       return;
     }
     // something to use (a tree, water, rock, stall, plot, table, chest, person): stand next to it, face it, act
     if (Math.abs(t.x - p.x) + Math.abs(t.y - p.y) === 1) { cancel(); faceThen(t, function () { GT.interact('talk'); }); return; }
     var a = approach(sc, t);
-    if (!a) return GT.toast('Tidak ada jalan ke sana.');
+    if (!a) return GT.toast($t('Tidak ada jalan ke sana.'));
     go(a.path, function () { faceThen(t, function () { GT.interact('talk'); }); });
   }
 

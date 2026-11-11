@@ -9,7 +9,7 @@
 //   ask = ceil(mid * (1 + spread/2))     bid = max(1, floor(mid * (1 - spread/2) * fc), floor(minBidMult * base))
 // A personality may set minBidMult (never bid below that share of base value: a generous merchant who overpays)
 // and buyCapMult (daily buy cap = buyCapMult x target stock; default from config.pricing).
-// Every tick produces a one-sentence reason (Indonesian) for the tooltip.
+// Every tick produces a one-sentence reason (English; the client maps it back to Indonesian) for the tooltip.
 
 export interface PricingConfig {
   demandWeight: number; demandDamping: number;
@@ -22,7 +22,7 @@ export interface Personality { spread: number; elasticity: number; cashSensitivi
 
 export interface MarketInputs {
   item: string;          // token id, e.g. "fish"
-  itemName: string;      // UI name, e.g. "Ikan"
+  itemName: string;      // UI name, e.g. "Fish"
   base: number;          // base value in coins
   stock: number;         // merchant's current stock (settled + today)
   target: number;        // merchant's target stock
@@ -92,8 +92,8 @@ export function lotUnitPrice(side: 'merchant_buys' | 'merchant_sells', qty: numb
 
 export function explain(prevMid: number, mid: number, fs: number, fd: number, fc: number, clamped: boolean, m: MarketInputs): Reason {
   const changePct = prevMid > 0 ? Math.round(((mid - prevMid) / prevMid) * 100) : 0;
-  const dir = changePct > 0 ? `Harga naik ${changePct}%` : changePct < 0 ? `Harga turun ${-changePct}%` : 'Harga tetap';
-  const tail = clamped ? ' (dibatasi 10% per jam)' : '';
+  const dir = changePct > 0 ? `Price up ${changePct}%` : changePct < 0 ? `Price down ${-changePct}%` : 'Price steady';
+  const tail = clamped ? ' (capped at 10% per hour)' : '';
   const n = m.itemName.toLowerCase();
   const stockEffect = Math.abs(Math.log(fs));
   const demandEffect = Math.abs(Math.log(fd));
@@ -101,21 +101,21 @@ export function explain(prevMid: number, mid: number, fs: number, fd: number, fc
   let why: string;
   if (stockEffect < 0.03 && demandEffect < 0.03 && changePct === 0) {
     code = 'steady';
-    why = `Stok ${n} saya pas (${Math.round(m.stock)}, target ${m.target}).`;
+    why = `My ${n} stock is just right (${Math.round(m.stock)}, target ${m.target}).`;
   } else if (stockEffect >= demandEffect) {
     code = fs < 1 ? 'stock_high' : 'stock_low';
     why = fs < 1
-      ? `Stok ${n} saya ${Math.round(m.stock)}, targetnya ${m.target}.`
-      : `Stok ${n} saya tinggal ${Math.round(m.stock)}, targetnya ${m.target}.`;
+      ? `My ${n} stock is ${Math.round(m.stock)}, target ${m.target}.`
+      : `My ${n} stock is down to ${Math.round(m.stock)}, target ${m.target}.`;
   } else {
     code = fd > 1 ? 'demand_up' : 'demand_down';
-    why = fd > 1 ? `Banyak yang beli ${n} akhir-akhir ini.` : `Banyak yang jual ${n} ke saya akhir-akhir ini.`;
+    why = fd > 1 ? `Lots of people have been buying ${n} lately.` : `Lots of people have been selling ${n} to me lately.`;
   }
   // Short on cash only lowers what the merchant pays, so it is mentioned (after the item's own reason) only for items
   // the merchant buys. Every item then still says something about itself.
   if (fc < 0.95 && m.buys !== false) {
     if (changePct <= 0) code = 'cash_low';
-    why += ` Kas saya tipis (${Math.round(m.cash)} koin), jadi tawaran beli saya rendah.`;
+    why += ` My cash is thin (${Math.round(m.cash)} coins), so my buying offers are low.`;
   }
   return { code, text: `${why} ${dir}${tail}.`, changePct, clamped };
 }

@@ -4,8 +4,8 @@ import { Dialogue, resolveProvider } from '../src/dialogue.ts';
 import type { MerchantView } from '../src/game/market.ts';
 
 const sari: MerchantView = {
-  id: 'sari', account: 'sari.gt.test', name: 'Sari', shop: 'Lapak Ikan Sari', open: true, cash: 600, rent: 40,
-  items: [{ token: 'fish', name: 'Ikan', stock: 50, target: 20, ask: 9, bid: 6, mid: 7.5, changePct: -10, reason: 'Stok ikan saya 50, targetnya 20.' }],
+  id: 'sari', account: 'sari.gt.test', name: 'Sarah', shop: "Sarah's Fish Stall", open: true, cash: 600, rent: 40,
+  items: [{ token: 'fish', name: 'Fish', stock: 50, target: 20, ask: 9, bid: 6, mid: 7.5, changePct: -10, reason: 'Stok ikan saya 50, targetnya 20.' }],
 };
 const base = { baseUrl: 'https://example.invalid/v1', timeoutMs: 1000 };
 const cfg = { ...base, provider: 'anthropic', anthropicKey: 'sk-test-key' };
@@ -38,7 +38,7 @@ test('anthropic provider sends model claude-sonnet-5-5 at low effort and returns
   assert.equal(seen[0].body.model, 'claude-sonnet-5-5');
   assert.deepEqual(seen[0].body.output_config, { effort: 'low' });
   assert.ok(seen[0].body.max_tokens <= 300);
-  assert.match(seen[0].body.system, /Ikan: stok 50\/20/);
+  assert.match(seen[0].body.system, /Fish: stock 50\/20/);
   assert.deepEqual(seen[0].body.messages, [{ role: 'user', content: 'harga ikan?' }]);
   assert.equal('temperature' in seen[0].body, false);
 });
@@ -62,7 +62,7 @@ test('anthropic error, refusal, empty text or timeout falls back to a local line
   for (const f of cases) {
     const r = await new Dialogue({ ...cfg, timeoutMs: 50 }, f).reply(sari, 'fair', 'ikan?');
     assert.equal(r.source, 'local');
-    assert.match(r.line, /^Ikan:/);
+    assert.match(r.line, /^Fish:/);
   }
 });
 

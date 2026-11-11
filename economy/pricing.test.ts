@@ -9,7 +9,7 @@ const fair: Personality = cfg.personalities.fair;
 const generous: Personality = cfg.personalities.generous;
 
 const fish = (o: Partial<MarketInputs> = {}): MarketInputs => ({
-  item: 'fish', itemName: 'Ikan', base: 8, stock: 20, target: 20, bought: 0, sold: 0, cash: 600, rent: 40, ...o,
+  item: 'fish', itemName: 'Fish', base: 8, stock: 20, target: 20, bought: 0, sold: 0, cash: 600, rent: 40, ...o,
 });
 
 test('worked example from docs/economy.md: flooding Sari with fish', () => {
@@ -21,7 +21,7 @@ test('worked example from docs/economy.md: flooding Sari with fish', () => {
   const r = tick(8, m, fair, C);
   assert.equal(r.ask, 8); assert.equal(r.bid, 6);
   assert.equal(r.reason.code, 'stock_high');
-  assert.match(r.reason.text, /Stok ikan saya 50, targetnya 20\. Harga turun 10% \(dibatasi 10% per jam\)\./);
+  assert.match(r.reason.text, /My fish stock is 50, target 20\. Price down 10% \(capped at 10% per hour\)\./);
 });
 
 test('price is monotonic (non-increasing) in stock', () => {
@@ -68,7 +68,7 @@ test('scarcity and buying pressure raise the price with a matching reason', () =
   assert.equal(low.reason.code, 'stock_low');
   const hot = tick(8, fish({ sold: 40, bought: 0 }), fair, C);
   assert.equal(hot.reason.code, 'demand_up');
-  assert.match(hot.reason.text, /Harga naik/);
+  assert.match(hot.reason.text, /Price up/);
 });
 
 test('volumes halve after the configured half-life', () => {

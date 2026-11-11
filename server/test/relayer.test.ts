@@ -39,7 +39,7 @@ test('relays a valid delegate once, records history, and dedupes a resend', asyn
   assert.deepEqual(await w.chain.balances('p2.players.test', ['fish']), ['1']);
   const h = w.store.history('p1.players.test');
   assert.equal(h.length, 1);
-  assert.match(h[0].summary, /Kirim 1 fish/);
+  assert.match(h[0].summary, /Send 1 fish/);
 });
 
 const rejects: Array<[string, Parameters<typeof signedDelegateB64>[0] | 'unknown-key', number]> = [

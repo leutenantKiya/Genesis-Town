@@ -74,6 +74,6 @@ export async function addDeviceKey(d: NewDeviceDeps, body: { idToken?: unknown; 
   const r = await d.chain.relay(sd, player.account_id);
   if (!r.ok) throw new HttpError(502, 'adding the key failed: ' + r.error);
   d.store.addSessionKey(newKey, player.account_id);
-  d.store.addHistory(player.account_id, 'device', 'Perangkat baru: kunci sesi game ditambahkan (ditandatangani dengan NEAR Auth)', d.chain.mode === 'mock' ? 'mock' : 'ok', r.txHash);
+  d.store.addHistory(player.account_id, 'device', 'New device: game session key added (signed with NEAR Auth)', d.chain.mode === 'mock' ? 'mock' : 'ok', r.txHash);
   return { accountId: player.account_id, txHash: r.txHash, signTxHash: signed.txHash };
 }

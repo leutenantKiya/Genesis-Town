@@ -27,7 +27,7 @@ export function worldIdOk(w: unknown): w is string { return typeof w === 'string
 
 const NICK_RE = /^[A-Za-z0-9 _-]{3,16}$/;
 // names that would confuse players: the merchants, the town and staff words
-const RESERVED = new Set(['sari', 'budi', 'wati', 'joko', 'town', 'desa', 'admin', 'server', 'system', 'sistem', 'moderator', 'mod', 'genesis']);
+const RESERVED = new Set(['sari', 'budi', 'wati', 'joko', 'sarah', 'ben', 'wendy', 'jack', 'town', 'desa', 'admin', 'server', 'system', 'sistem', 'moderator', 'mod', 'genesis']);
 // a short list of strong insults (Indonesian, Javanese, English); matched as whole words and masked, not blocked
 const ROUGH = ['anjing', 'anjir', 'bangsat', 'bajingan', 'kontol', 'memek', 'ngentot', 'ngewe', 'jancok', 'jancuk', 'asu', 'goblok', 'tolol', 'pepek', 'kampret',
   'fuck', 'fucking', 'shit', 'bitch', 'cunt', 'asshole', 'dick', 'pussy'];
@@ -40,7 +40,7 @@ export function cleanText(s: string) {
 }
 function strip(m: Stored): ChatMsg { return { id: m.id, t: m.t, from: m.from, fromTag: m.fromTag, to: m.to, toTag: m.toTag, text: m.text }; }
 /** What an account without a chosen name is shown as. */
-export function defaultNick(account: string) { return 'Warga_' + account.replace(/^p/, '').slice(0, 4); }
+export function defaultNick(account: string) { return `Player_${account.replace(/^p/, '').slice(0, 4)}`; }
 
 export class Social {
   seen = new Map<string, Seen>();
@@ -86,7 +86,7 @@ export class Social {
   }
   isAmbiguous(nick: string): boolean { return !/#\d{5}$/.test(nick) && this.names.accountsByName(nick).length > 1; }
   setLook(account: string, raw: unknown) {
-    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0 || raw > 7) throw new HttpError(400, 'Penampilan harus 0-7.');
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0 || raw > 7) throw new HttpError(400, 'Look must be 0-7.');
     this.names.setLook(account, raw);
     const s = this.seen.get(account); if (s) s.look = raw;
     return raw;
@@ -94,15 +94,15 @@ export class Social {
   /** Display name rule: 3-16 characters, letters, digits, space, underscore, hyphen. Returns the trimmed name. */
   static validName(raw: unknown): string {
     const n = typeof raw === 'string' ? raw.trim().replace(/ {2,}/g, ' ') : '';
-    if (!NICK_RE.test(n)) throw new HttpError(400, 'Nama 3–16 karakter: huruf, angka, spasi, _ atau -.');
-    if (RESERVED.has(n.toLowerCase()) || /^warga_/i.test(n) || cleanText(n) !== n) throw new HttpError(400, 'Nama itu tidak bisa dipakai.');
+    if (!NICK_RE.test(n)) throw new HttpError(400, 'Name 3–16 characters: letters, digits, spaces, _ or -.');
+    if (RESERVED.has(n.toLowerCase()) || /^(warga|player)_/i.test(n) || cleanText(n) !== n) throw new HttpError(400, 'That name can\'t be used.');
     return n;
   }
   setNick(account: string, raw: unknown) {
     const nick = Social.validName(raw);
     if (this.names.nameOf(account) === nick) return nick; // unchanged
     // names may repeat: the 5-digit tag tells players apart. Only real changes count toward the limit, so a typo does not lock the player out
-    if (!this.nickLimiter.take(account, this.now())) throw new HttpError(429, 'Terlalu sering ganti nama. Coba lagi nanti.');
+    if (!this.nickLimiter.take(account, this.now())) throw new HttpError(429, 'You changed your name too often. Try again later.');
     this.names.setName(account, nick);
     const s = this.seen.get(account); if (s) { s.nick = nick; s.tag = this.tag(account); }
     return nick;
@@ -139,9 +139,9 @@ export class Social {
 
   /** A chat line: "/msg name text" (or /w) is private (to one player, any world), anything else is for everyone in `world`. */
   say(account: string, world: string, raw: unknown): ChatMsg {
-    if (typeof raw !== 'string') throw new HttpError(400, 'Pesan kosong.');
+    if (typeof raw !== 'string') throw new HttpError(400, 'Empty message.');
     if (!worldIdOk(world)) throw new HttpError(400, 'bad world');
-    if (raw.length > 400) throw new HttpError(400, `Pesan terlalu panjang (maks ${CHAT_MAX} huruf).`);
+    if (raw.length > 400) throw new HttpError(400, `Message too long (max ${CHAT_MAX} characters).`);
     let text = cleanText(raw), to: string | null = null, toTag: string | null = null, toAcc: string | null = null, toNpc: Npc | null = null;
     const pm = /^\/(msg|w|pm)\b\s*([\s\S]*)$/i.exec(text);
     if (pm) {
@@ -152,7 +152,7 @@ export class Social {
         if (n) { toNpc = n; text = words.slice(k).join(' '); }
       }
       if (toNpc) {
-        if (world !== 'public') throw new HttpError(409, 'Pedagang ada di area publik.');
+        if (world !== 'public') throw new HttpError(409, 'Merchants are in the public area.');
         to = toNpc.name; toTag = NPC_TAG;
       } else {
         for (let k = Math.min(words.length - 1, 4); k >= 1 && !toAcc; k--) {
@@ -160,19 +160,19 @@ export class Social {
           if (t) { toAcc = t; text = words.slice(k).join(' '); }
         }
         if (!toAcc) {
-          for (let k = Math.min(words.length - 1, 4); k >= 1; k--) if (this.isAmbiguous(words.slice(0, k).join(' '))) throw new HttpError(409, `Ada beberapa pemain bernama ${words.slice(0, k).join(' ')}. Pakai nama#tag.`);
-          if (words.length < 2) throw new HttpError(400, 'Cara pakai: /msg nama pesan');
-          throw new HttpError(404, `Tidak ada pemain bernama ${words[0]}.`);
+          for (let k = Math.min(words.length - 1, 4); k >= 1; k--) if (this.isAmbiguous(words.slice(0, k).join(' '))) throw new HttpError(409, `Several players are named ${words.slice(0, k).join(' ')}. Use name#tag.`);
+          if (words.length < 2) throw new HttpError(400, 'Usage: /msg name message');
+          throw new HttpError(404, `No player named ${words[0]}.`);
         }
-        if (toAcc === account) throw new HttpError(400, 'Itu namamu sendiri.');
+        if (toAcc === account) throw new HttpError(400, 'That\'s your own name.');
         to = this.nick(toAcc); toTag = this.tag(toAcc);
       }
-    } else if (text.startsWith('/')) throw new HttpError(400, 'Perintah: /msg nama pesan · /block nama · /unblock nama · /nama NamaBaru · /help');
-    if (!text) throw new HttpError(400, 'Pesan kosong.');
-    if (Array.from(text).length > CHAT_MAX) throw new HttpError(400, `Pesan terlalu panjang (maks ${CHAT_MAX} huruf).`);
+    } else if (text.startsWith('/')) throw new HttpError(400, 'Commands: /msg name message · /block name · /unblock name · /name NewName · /help');
+    if (!text) throw new HttpError(400, 'Empty message.');
+    if (Array.from(text).length > CHAT_MAX) throw new HttpError(400, `Message too long (max ${CHAT_MAX} characters).`);
     const now = this.now(), last = this.lastSay.get(account);
-    if (last !== undefined && now - last < CHAT_GAP_MS) throw new HttpError(429, 'Pelan-pelan, terlalu cepat.');
-    if (!this.chatLimiter.take(account, now)) throw new HttpError(429, 'Pelan-pelan, terlalu banyak pesan.');
+    if (last !== undefined && now - last < CHAT_GAP_MS) throw new HttpError(429, 'Slow down, too fast.');
+    if (!this.chatLimiter.take(account, now)) throw new HttpError(429, 'Slow down, too many messages.');
     this.lastSay.set(account, now);
     if (this.lastSay.size > 5000) for (const [a, t] of this.lastSay) if (now - t > CHAT_GAP_MS) this.lastSay.delete(a);
     if (toNpc) this.onNpcMsg?.(toNpc, account, text); // may throw 429 before anything is stored

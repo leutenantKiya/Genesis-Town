@@ -39,13 +39,13 @@ export class World {
   }
 
   private spendEnergy(p: PlayerState, cost: number) {
-    if (p.energy < cost) throw new HttpError(409, 'Energi habis. Makan Roti atau Ikan Bakar, atau istirahat.');
+    if (p.energy < cost) throw new HttpError(409, 'Out of energy. Eat Bread or Grilled Fish, or rest.');
     p.energy -= cost;
   }
 
   private need(account: string, token: string, n: number) {
     const have = this.gs.balance(account, token);
-    if (have < n) throw new HttpError(409, `${this.name(token)} kurang (punya ${have}, perlu ${n}).`);
+    if (have < n) throw new HttpError(409, `Not enough ${this.name(token)} (have ${have}, need ${n}).`);
   }
 
   /** Net amount of `token` the account has gained on this ledger day (the contract caps this per day at settlement). */
@@ -61,7 +61,7 @@ export class World {
     const cap = token === 'coin' ? (caps.dailyCoinGain ?? 5000) : caps.dailyGainPerItem;
     const day = this.clock.time().settleDay;
     if (this.dayNet(account, token, day) + amount > cap) {
-      throw new HttpError(409, `Batas harian ${this.name(token)} tercapai (${cap} per hari). Lanjut besok.`);
+      throw new HttpError(409, `Daily limit for ${this.name(token)} reached (${cap} per day). Continue tomorrow.`);
     }
   }
 
@@ -85,7 +85,7 @@ export class World {
   gather(account: string, tile: string, x: number, y: number, nodePrefix = '', bonus = 0): ActionResult {
     const g = this.econ.gather;
     const token = g.tiles[tile];
-    if (!token) throw new HttpError(400, 'Tidak ada yang bisa dikumpulkan di sini.');
+    if (!token) throw new HttpError(400, 'Nothing to gather here.');
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 999 || y > 999) throw new HttpError(400, 'bad tile');
     const def = this.econ.items[token];
     if (def.needsTool) this.need(account, 'tool', 1);
@@ -98,7 +98,7 @@ export class World {
     const refillHour = (fresh) ? t.totalHours + g.respawnGameHours : (node?.refill_hour ?? t.totalHours + g.respawnGameHours);
     if (charges <= 0) {
       const wait = refillHour - t.totalHours;
-      throw new HttpError(409, `Sudah habis. Kembali sekitar ${wait} jam lagi.`);
+      throw new HttpError(409, `Depleted. Come back in about ${wait} hours.`);
     }
     const p = this.state(account);
     this.spendEnergy(p, g.energyCost); // in memory only: nothing is saved if the gain cap refuses below
@@ -110,13 +110,13 @@ export class World {
     this.gs.saveNode(key, charges, charges === 0 ? t.totalHours + g.respawnGameHours : refillHour);
 
     if (amount > 0) this.gs.add(t.settleDay, account, token, amount, 'gather', key);
-    let toast = amount > 0 ? `+${amount} ${def.name}` : `Tidak dapat ${def.name.toLowerCase()} kali ini.`;
+    let toast = amount > 0 ? `+${amount} ${def.name}` : `You didn't get any ${def.name.toLowerCase()} this time.`;
     if (def.needsTool) {
       p.tool_uses += 1;
       if (p.tool_uses >= (this.econ.items.tool.durability ?? 20)) {
         this.gs.add(t.settleDay, account, 'tool', -1, 'tool_break');
         p.tool_uses = 0;
-        toast += ' · Alatmu patah!';
+        toast += ' · Your Tool broke!';
       }
     }
     this.gs.savePlayer(p);
@@ -125,13 +125,13 @@ export class World {
 
   craft(account: string, recipeId: string): ActionResult {
     const r = this.econ.recipes[recipeId];
-    if (!r) throw new HttpError(400, 'Resep tidak dikenal.');
+    if (!r) throw new HttpError(400, 'Unknown recipe.');
     for (const [t, n] of Object.entries(r.inputs)) this.need(account, t, n);
     if (r.fee > 0) this.need(account, 'coin', r.fee);
     this.checkGain(account, r.output, 1);
     const p = r.energy ? this.state(account) : null;
     if (p && r.energy) {
-      if (p.energy < r.energy) throw new HttpError(409, `Energi kurang (punya ${Math.floor(p.energy)}, perlu ${r.energy}). Makan dulu atau istirahat.`);
+      if (p.energy < r.energy) throw new HttpError(409, `Not enough energy (have ${Math.floor(p.energy)}, need ${r.energy}). Eat first or rest.`);
       p.energy -= r.energy;
     }
     const day = this.clock.time().settleDay;
@@ -139,20 +139,20 @@ export class World {
     this.gs.add(day, account, r.output, 1, 'craft', recipeId);
     if (r.fee > 0) this.gs.add(day, account, 'coin', -r.fee, 'fee', recipeId);
     if (p) this.gs.savePlayer(p);
-    const cost = r.energy ? `−${r.energy} energi` : `biaya ${r.fee} koin`;
+    const cost = r.energy ? `−${r.energy} energy` : `cost ${r.fee} coins`;
     return { toast: `+1 ${this.name(r.output)} (${cost})`, gained: { [r.output]: 1 } };
   }
 
   eat(account: string, token: string): ActionResult {
     const e = this.econ.items[token]?.energy;
-    if (!e) throw new HttpError(400, 'Itu tidak bisa dimakan.');
+    if (!e) throw new HttpError(400, 'That can\'t be eaten.');
     this.need(account, token, 1);
     const p = this.state(account);
-    if (p.energy >= this.econ.gather.energyMax) throw new HttpError(409, 'Energimu sudah penuh.');
+    if (p.energy >= this.econ.gather.energyMax) throw new HttpError(409, 'Your energy is already full.');
     this.gs.add(this.clock.time().settleDay, account, token, -1, 'eat');
     p.energy = Math.min(this.econ.gather.energyMax, p.energy + e);
     this.gs.savePlayer(p);
-    return { toast: `Nyam! Energi +${e}.` };
+    return { toast: `Yum! Energy +${e}.` };
   }
 
   plots(account: string, count = this.econ.farm.plots): Plot[] {
@@ -183,19 +183,19 @@ export class World {
   /** `field` replaces the village farm with an island's: its own plot rows, plot count, growth days and extra yield. */
   farm(account: string, op: string, idx: number, field?: { plotAccount: string; count: number; growDays: number; yieldBonus: number }): ActionResult {
     const f = { ...this.econ.farm, plots: field?.count ?? this.econ.farm.plots, growDays: field?.growDays ?? this.econ.farm.growDays };
-    if (!Number.isInteger(idx) || idx < 0 || idx >= f.plots) throw new HttpError(400, 'Petak tidak ada.');
+    if (!Number.isInteger(idx) || idx < 0 || idx >= f.plots) throw new HttpError(400, 'No such plot.');
     const plot = this.plots(field?.plotAccount ?? account, f.plots)[idx];
     const t = this.clock.time();
     const p = this.state(account);
     let toast: string;
     if (op === 'till') {
-      if (plot.state !== 'empty') throw new HttpError(409, 'Petak ini sudah dicangkul.');
+      if (plot.state !== 'empty') throw new HttpError(409, 'This plot is already hoed.');
       this.spendEnergy(p, f.energyCost);
       plot.state = 'tilled';
-      toast = 'Tanah dicangkul.';
+      toast = 'The soil is hoed.';
     } else if (op === 'plant') {
-      if (plot.state !== 'tilled') throw new HttpError(409, 'Cangkul dulu petaknya.');
-      if (f.noGrowthSeasons.includes(t.season)) throw new HttpError(409, 'Gandum tidak tumbuh di musim dingin.');
+      if (plot.state !== 'tilled') throw new HttpError(409, 'Hoe the plot first.');
+      if (f.noGrowthSeasons.includes(t.season)) throw new HttpError(409, 'Wheat does not grow in winter.');
       // Seeds can't run out for good: with no Gandum left, the village hands out a few seeds a day (net zero on
       // chain, since the seed goes straight into the ground). Otherwise a town whose bakery is closed can't farm.
       let gift = false;
@@ -204,27 +204,27 @@ export class World {
         this.gs.add(t.settleDay, account, f.seed, 1, 'village-seed');
         gift = true;
       }
-      if (this.gs.balance(account, f.seed) < 1) throw new HttpError(409, `Kamu tidak punya benih Gandum, dan benih desa hari ini sudah habis (${seeds} per hari). Coba lagi besok, atau beli Gandum.`);
+      if (this.gs.balance(account, f.seed) < 1) throw new HttpError(409, `You have no Wheat seed, and today's village seeds are used up (${seeds} per day). Try again tomorrow, or buy Wheat.`);
       this.gs.add(t.settleDay, account, f.seed, -1, 'plant');
       Object.assign(plot, { state: 'planted', planted_day: t.day, grown: 0, watered_day: -1 });
-      toast = gift ? 'Desa memberimu 1 benih gandum, dan langsung ditanam. Siram setiap hari.' : 'Benih gandum ditanam. Siram setiap hari.';
+      toast = gift ? 'The village gives you 1 wheat seed, planted right away. Water it every day.' : 'Wheat seed planted. Water it every day.';
     } else if (op === 'water') {
-      if (plot.state !== 'planted') throw new HttpError(409, 'Tidak ada yang perlu disiram.');
-      if (plot.watered_day === t.day) throw new HttpError(409, 'Sudah disiram hari ini.');
+      if (plot.state !== 'planted') throw new HttpError(409, 'Nothing needs watering.');
+      if (plot.watered_day === t.day) throw new HttpError(409, 'Already watered today.');
       this.spendEnergy(p, f.energyCost);
       plot.watered_day = t.day;
       if (!f.noGrowthSeasons.includes(t.season)) plot.grown += 1;
       if (plot.grown >= f.growDays) plot.state = 'ready';
-      toast = plot.state === 'ready' ? 'Gandum siap dipanen!' : `Disiram (${plot.grown}/${f.growDays} hari).`;
+      toast = plot.state === 'ready' ? 'The wheat is ready to harvest!' : `Watered (${plot.grown}/${f.growDays} days).`;
     } else if (op === 'harvest') {
-      if (plot.state !== 'ready') throw new HttpError(409, 'Belum siap dipanen.');
+      if (plot.state !== 'ready') throw new HttpError(409, 'Not ready to harvest yet.');
       const n = f.harvest + (this.econ.seasons[t.season]?.harvestBonus ?? 0) + (field?.yieldBonus ?? 0);
       this.checkGain(account, f.seed, n);
       this.gs.add(t.settleDay, account, f.seed, n, 'harvest');
       Object.assign(plot, { state: 'tilled', grown: 0, watered_day: -1 });
-      toast = `+${n} Gandum`;
+      toast = `+${n} Wheat`;
     } else {
-      throw new HttpError(400, 'Aksi kebun tidak dikenal.');
+      throw new HttpError(400, 'Unknown garden action.');
     }
     this.gs.savePlayer(p);
     this.gs.savePlot(plot);
@@ -234,11 +234,11 @@ export class World {
   /** Shipping box: items leave now; the town pays (70% of base) at the next settlement. */
   ship(account: string, token: string, qty: number): ActionResult {
     const def = this.econ.items[token];
-    if (!def || token === 'coin') throw new HttpError(400, 'Barang tidak dikenal.');
-    if (!Number.isInteger(qty) || qty < 1 || qty > 50) throw new HttpError(400, 'Jumlah 1-50.');
+    if (!def || token === 'coin') throw new HttpError(400, 'Unknown item.');
+    if (!Number.isInteger(qty) || qty < 1 || qty > 50) throw new HttpError(400, 'Amount 1-50.');
     this.need(account, token, qty);
     this.gs.add(this.clock.time().settleDay, account, token, -qty, 'ship', String(qty));
     const pay = Math.floor(def.base * this.econ.town.shippingBoxMult * qty);
-    return { toast: `${qty} ${def.name} masuk Kotak Kirim. Dibayar sekitar ${pay} koin pukul 06:00.` };
+    return { toast: `${qty} ${def.name} went into the Shipping Box. Paid about ${pay} coins at 06:00.` };
   }
 }

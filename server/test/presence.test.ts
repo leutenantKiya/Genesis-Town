@@ -67,16 +67,16 @@ test('chat needs a name and shows up in presence polls of the same world only', 
     assert.equal(poll2.status, 200);
     assert.deepEqual(poll2.json.players.filter((p: any) => !p.npc).map((p: any) => p.nick), ['Ayu']);
     const npcs = poll2.json.players.filter((p: any) => p.npc);
-    assert.deepEqual(npcs.map((p: any) => [p.nick, p.tag, p.dir]), [['Sari', 'NPC', 'down'], ['Budi', 'NPC', 'down'], ['Wati', 'NPC', 'down'], ['Joko', 'NPC', 'down']]);
+    assert.deepEqual(npcs.map((p: any) => [p.nick, p.tag, p.dir]), [['Sarah', 'NPC', 'down'], ['Ben', 'NPC', 'down'], ['Wendy', 'NPC', 'down'], ['Jack', 'NPC', 'down']]);
     // a private question to a merchant is answered (local line without an AI key) as a private line to the asker only
-    assert.equal((await r.post(P2, '/api/chat', { world: 'public', text: '/msg Sari harga ikan?' })).status, 200);
+    assert.equal((await r.post(P2, '/api/chat', { world: 'public', text: '/msg Sarah harga ikan?' })).status, 200);
     await new Promise((res) => setTimeout(res, 50));
     const asked = await r.post(P2, '/api/presence', at);
-    assert.ok(asked.json.chat.some((m: any) => m.from === 'Sari' && m.fromTag === 'NPC' && m.to === 'Bude'), 'Sari answers');
+    assert.ok(asked.json.chat.some((m: any) => m.from === 'Sarah' && m.fromTag === 'NPC' && m.to === 'Bude'), 'Sari answers');
     const other = await r.post(P1, '/api/presence', at);
-    assert.ok(!other.json.chat.some((m: any) => m.from === 'Sari'), 'nobody else sees it');
+    assert.ok(!other.json.chat.some((m: any) => m.from === 'Sarah'), 'nobody else sees it');
     assert.equal((await r.post(P1, '/api/chat', { world: 'public', text: 'halo semua' })).status, 200);
-    assert.equal((await r.post(P1, '/api/chat', { world: 'public', text: 'terlalu cepat' })).status, 429, '1 message / 2 s');
+    assert.equal((await r.post(P1, '/api/chat', { world: 'public', text: 'too fast' })).status, 429, '1 message / 2 s');
     assert.equal((await r.post(P2, '/api/chat', { world: 'public', text: 'x'.repeat(81) })).status, 400, '80 characters');
     const got = await r.post(P2, '/api/presence', at);
     assert.deepEqual(got.json.chat.filter((m: any) => !m.to).map((m: any) => [m.from, m.text]), [['Ayu', 'halo semua']]);

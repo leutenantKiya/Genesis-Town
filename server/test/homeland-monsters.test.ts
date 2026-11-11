@@ -77,8 +77,8 @@ test('at night a gather in the open forest can be blocked by a boar; beating it 
   w.advanceTo(21);
   w.rolls([0.1, 0.1, 0.1]); // encounter (0.1 < 0.15), then two hits (0.1 < 0.7)
   const r = w.act({ action: 'gather', tile: 'tree', x: tree.at.x, y: tree.at.y, pos: tree.stand }) as { toast: string; state: { encounter: { name: string } | null } };
-  assert.match(r.toast, /Babi hutan menghadang/);
-  assert.equal(r.state.encounter?.name, 'Babi hutan');
+  assert.match(r.toast, /Wild Boar blocks your way/);
+  assert.equal(r.state.encounter?.name, 'Wild Boar');
   const wood0 = w.game.gs.balance(P, 'wood');
   w.act({ action: 'fight', pos: tree.stand });
   const won = w.act({ action: 'fight', pos: tree.stand }) as { won?: boolean };
@@ -95,16 +95,16 @@ test('walking into a roaming monster in the Homeland makes it attack; the public
   const m = w.map();
   const stand = [[0, 1], [0, -1], [1, 0], [-1, 0]].map(([dx, dy]) => ({ x: boar.x + dx, y: boar.y + dy })).find((p) => m.walkable(p.x, p.y))!;
   const r = w.act({ action: 'engage', monster: boar.id, pos: stand }) as { toast: string; state: { encounter: { name: string } | null } };
-  assert.match(r.toast, /menyerang/);
-  assert.equal(r.state.encounter?.name, 'Babi hutan');
+  assert.match(r.toast, /attacks/);
+  assert.equal(r.state.encounter?.name, 'Wild Boar');
   w.act({ action: 'flee', pos: stand });
-  assert.throws(() => w.game.act(P, { action: 'engage', monster: boar.id, world: 'public', pos: w.game.map!.layout.spawn }), /Area publik hanya untuk berdagang/);
+  assert.throws(() => w.game.act(P, { action: 'engage', monster: boar.id, world: 'public', pos: w.game.map!.layout.spawn }), /public area is for trading only/);
 });
 
 test('Pos Ronda is retired: new pledges are refused with the reason, other projects are not', async () => {
   const { spendGuard } = await import('../src/spend.ts');
   const w = await world();
   const guard = spendGuard(w.game.chain, w.game);
-  await assert.rejects(guard(P, 'project_contribute', { id: 'pos-ronda', contribution: [{ token_id: 'wood', amount: '1' }] }), (e: any) => e.status === 409 && /dihentikan/.test(e.message) && /bisa ditarik/.test(e.message));
-  await assert.rejects(guard(P, 'project_contribute', { id: 'jembatan-timur', contribution: [{ token_id: 'wood', amount: '999' }] }), (e: any) => !/dihentikan/.test(e.message), 'the bridge is still open (this one fails only for lack of wood)');
+  await assert.rejects(guard(P, 'project_contribute', { id: 'pos-ronda', contribution: [{ token_id: 'wood', amount: '1' }] }), (e: any) => e.status === 409 && /halted/.test(e.message) && /can be withdrawn/.test(e.message));
+  await assert.rejects(guard(P, 'project_contribute', { id: 'jembatan-timur', contribution: [{ token_id: 'wood', amount: '999' }] }), (e: any) => !/halted/.test(e.message), 'the bridge is still open (this one fails only for lack of wood)');
 });

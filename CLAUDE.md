@@ -8,8 +8,7 @@ top block of `README.md`.
 Browser pixel-art market-town life sim for NEAR HACKATHON (Nov 1–14, 2026), track "Games With Real Economies".
 Players gather (fish, ore, wood, wheat), craft (bread, meal, tool), trade with 4 AI merchants (sari, budi, wati,
 joko) whose prices react to stock/demand/cash. Items + `coin` are NEP-245 tokens in one NEAR contract. Login via
-NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play. In-game UI text is Indonesian
-(Tas = bag, Pasar = market, Riwayat = history, Balai Desa, Puskesmas, ...).
+NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play. In-game text is English by default and Bahasa Indonesia is selectable (Settings > Language, `?lang=id`, saved in localStorage `gt.lang`). The code's source strings are the Indonesian originals and act as translation KEYS: `$t('Tas')` gives 'Bag' (`client/js/i18n.js`, English table `client/js/lang/en.js`, `{0}` placeholders). Server text is English; `X-GT-Lang: id` makes `server/src/lang.ts` translate responses (`server/src/i18n-id.ts`). Config display names are English in `economy/config.json`.
 
 ## Layout
 
@@ -17,6 +16,7 @@ NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play
 | --- | --- |
 | `client/` | Plain JS, no build step for game code. `index.html` loads scripts in order: `pwa, flags, sprites, art, buildings, world/village, engine, mods/*` |
 | `client/js/engine.js` | Engine + plugin API `window.GT`. Header comment documents the whole mod contract (`GT.register`, `GT.modal`, `GT.menu`, hooks `onFrame/onInteract/onKey/onDraw`) |
+| `client/js/i18n.js`, `client/js/lang/en.js` | Language layer loaded first: `GT_LANG`, `$t(key, vars)`, `GT_I18N.dom()` for static HTML. New player-visible client text: wrap it in `$t('Indonesian text')` and add the English line to `lang/en.js` |
 | `client/js/mods/chain.js` | Everything economy/chain on the client: login, session key, `/api/*` calls, Tas, shops, Pasar, Riwayat |
 | `client/js/mods/*.js` | One feature each (the Dev panel, `?flags=`, `?musim=`, `?cuaca=` only work on localhost, `GT_DEV_HOST` in `flags.js`): `fishing`, `actfx` (axe swing), `hotbar`, `mouse`, `combat`, `curfew`, `settings`, `sim`, `concert` (night music by the square's stage), and prototype mods (`casino`, `thief`, `police`, `gossip`, `agent`, `soul`, `social`) |
 | `client/js/world/village.js` | Seeded village generator, run by BOTH browser and server (same map for everyone, `WORLD_SEED`) |

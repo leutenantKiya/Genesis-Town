@@ -14,7 +14,7 @@ import { signedDelegateB64 } from './helpers.ts';
 const TOWN = 'town.gt.test';
 const P = 'p1.players.test';
 const Q = 'p2.players.test';
-const FROZEN = /Akun ini dibekukan karena saldo on-chain tidak cocok dengan permainan\. Hubungi pengelola\./;
+const FROZEN = /This account is frozen because the on-chain balance does not match the game\. Contact the operators\./;
 
 async function world(opts: { seed?: number; rng?: () => number } = {}) {
   const econ = loadEcon();
@@ -192,13 +192,13 @@ test('monster_drop_respects_the_daily_gain_cap', async () => {
   const drop = w.econ.monsters.kinds.boar.drop;
   const day = w.game.clock.time().settleDay;
   w.game.gs.add(day, P, drop, (w.econ.caps as { dailyGainPerItem: number }).dailyGainPerItem, 'gather');
-  m.pending.set(P, { kind: 'boar', name: 'Babi hutan', hp: 1, maxHp: 1, tile: null, x: 1, y: 1 });
+  m.pending.set(P, { kind: 'boar', name: 'Wild Boar', hp: 1, maxHp: 1, tile: null, x: 1, y: 1 });
   const before = w.game.gs.balance(P, drop);
   const r = m.fight(P) as { toast: string; won?: boolean };
   assert.equal(r.won, true, 'the fight still ends in a win');
   assert.equal(w.game.gs.balance(P, drop), before, 'no drop above the cap');
   assert.equal(w.game.gs.dayRows(day).filter((x) => x.kind === 'monster_drop').length, 0);
-  assert.match(r.toast, /batas/i);
+  assert.match(r.toast, /limit/i);
 });
 
 test('cap_clamp_in_preflight_is_recorded_without_freezing', async () => {

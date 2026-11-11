@@ -18,7 +18,7 @@ test('Lapak sales earn popularity; Pasar Gelap listings hide the seller and earn
   assert.equal(v[1].seller, null, 'seller hidden in the game');
   assert.equal(v[1].sellerTag, sellerTag(budi), 'but the seller can recognise it');
   assert.deepEqual(b.top().map((r) => r.account), [ana]);
-  assert.equal(titleFor(0), 'Pedagang baru'); assert.equal(titleFor(12), 'Dikenal'); assert.equal(titleFor(150), 'Legenda Pasar');
+  assert.equal(titleFor(0), 'New merchant'); assert.equal(titleFor(12), 'Known'); assert.equal(titleFor(150), 'Market Legend');
   // a second identical listing by the same seller is told apart by its id
   assert.equal(b.recordListing([L(1, ana), L(3, ana)], ana, { token_id: 'wood', amount: '3', price_each: '10' }, true), 3);
   assert.equal(b.isAnonymous(3), true);

@@ -138,29 +138,29 @@ test('empty pantry serves nothing', async () => {
 test('cook fills the pantry not the bag, 409 without ingredients', async () => {
   const w = await setup();
   w.H.ensure(P);
-  fails(() => w.cook(P, 1), 409, 'Bangun Restoran dulu.');
+  fails(() => w.cook(P, 1), 409, 'Build the Restaurant first.');
   w.build(P); w.give(P, 'fish', 5); w.give(P, 'wood', 5); w.give(P, 'bread', 2);
   const r = w.cook(P, 3);
   assert.equal(w.gs.balance(P, 'meal'), 0);
   assert.equal(w.gs.balance(P, 'fish'), 2);
   assert.equal(r.state.homeland.restoran.pantry, 3);
   assert.deepEqual(r.state.homeland.cook.recipe, { inputs: { fish: 1, wood: 1 }, output: 'meal' });
-  fails(() => w.cook(P, 3), 409, 'Bahan kurang (perlu 3 Ikan, 3 Kayu).');
+  fails(() => w.cook(P, 3), 409, 'Not enough materials (need 3 Fish, 3 Wood).');
   assert.equal(w.gs.balance(P, 'fish'), 2);
   assert.equal(w.H.view(P).restoran!.pantry, 3);
-  for (const q of [0, 11, 1.5, -1, 'x']) fails(() => w.cook(P, q), 400, /1 sampai 10/);
-  fails(() => w.cook(P, 1, w.hall(P)), 409, 'Berdiri di dekat pintu Restoran.');
-  fails(() => w.cook(Q, 1), 409, 'Bangun Restoran dulu.');
+  for (const q of [0, 11, 1.5, -1, 'x']) fails(() => w.cook(P, q), 400, /1 to 10/);
+  fails(() => w.cook(P, 1, w.hall(P)), 409, 'Stand near the Restaurant door.');
+  fails(() => w.cook(Q, 1), 409, 'Build the Restaurant first.');
   // stock moves bread/meal from the bag
   w.stock(P, 'bread', 2);
   assert.equal(w.gs.balance(P, 'bread'), 0);
   assert.equal(w.H.view(P).restoran!.pantry, 5);
-  fails(() => w.stock(P, 'bread', 1), 409, /kurang/);
+  fails(() => w.stock(P, 'bread', 1), 409, /Not enough/);
   // only bread and meal, never inherited keys
-  for (const t of ['constructor', '__proto__', 'fish', 'coin']) fails(() => w.stock(P, t, 1), 400, /roti/);
+  for (const t of ['constructor', '__proto__', 'fish', 'coin']) fails(() => w.stock(P, t, 1), 400, /bread/);
   // the pantry has a limit
   w.give(P, 'meal', 30);
-  fails(() => w.stock(P, 'meal', 16), 409, /penuh/);
+  fails(() => w.stock(P, 'meal', 16), 409, /full/);
   assert.equal(w.gs.balance(P, 'meal'), 30);
   w.stock(P, 'meal', 15);
   assert.equal(w.H.view(P).restoran!.pantry, 20);
@@ -171,17 +171,17 @@ test('pemburu forages and doubles in winter', async () => {
   const { gs, game, H, ms } = w, T = w.econ.time;
   const sum = (a: string) => Object.values(H.view(a).forage!.stored).reduce((x, y) => x + y, 0);
   gs.setHomelandTh(P, 3); w.give(P, 'coin', 400);
-  fails(() => w.forage(P), 409, 'Kamu belum punya Pemburu.');
+  fails(() => w.forage(P), 409, "You don't have a Hunter yet.");
   w.hire(P, 'hunter');
   assert.deepEqual(H.view(P).forage, { stored: { fish: 0, wood: 0 }, capacity: 6 });
-  fails(() => w.forage(P), 409, 'Pemburu belum membawa apa-apa.');
+  fails(() => w.forage(P), 409, "The Hunter isn't carrying anything.");
   w.adv(3 * ms);
   assert.deepEqual(H.view(P).forage!.stored, { fish: 2, wood: 1 });
   const r = w.forage(P);
   assert.deepEqual(r.gained, { fish: 2, wood: 1 });
   assert.equal(gs.balance(P, 'fish'), 2);
   w.build(P);
-  fails(() => w.forage(P, w.doorOf(P, 'restoran-c')), 409, 'Berdiri di depan Balai Kota.');
+  fails(() => w.forage(P, w.doorOf(P, 'restoran-c')), 409, 'Stand in front of the Town Hall.');
   w.adv(100 * ms);
   assert.equal(sum(P), 6); // capacity
   assert.equal(H.view(Q).forage, null);
@@ -234,7 +234,7 @@ test('collapse: the job in progress finishes, then the contractor is sick and an
   assert.equal(v.fatigue, 100);
   assert.ok(v.sick_until > w.now());
   const wood = w.gs.balance(P, 'wood');
-  fails(() => w.H.start(P, 'chunk', 'e', 1), 409, /sakit/);
+  fails(() => w.H.start(P, 'chunk', 'e', 1), 409, /sick/);
   assert.equal(w.gs.balance(P, 'wood'), wood); // nothing charged by the refused start
   w.hire(P, 'builder');
   w.H.start(P, 'chunk', 'e', 1);
@@ -248,7 +248,7 @@ test('collapse: the job in progress finishes, then the contractor is sick and an
 test('request names like constructor and __proto__ are 400 and charge nothing', async () => {
   const w = await setup();
   w.give(P, 'coin', 100); w.build(P);
-  for (const job of ['constructor', '__proto__', 'toString']) fails(() => w.hire(P, job), 400, /tidak dikenal/);
-  for (const t of ['constructor', '__proto__']) fails(() => w.stock(P, t, 1), 400, /roti/);
+  for (const job of ['constructor', '__proto__', 'toString']) fails(() => w.hire(P, job), 400, /Unknown/);
+  for (const t of ['constructor', '__proto__']) fails(() => w.stock(P, t, 1), 400, /bread/);
   assert.equal(w.gs.balance(P, 'coin'), 100);
 });

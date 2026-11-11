@@ -79,7 +79,7 @@ test('one builder: a second start answers 409 Builder sedang bekerja', () => {
   hl.ensure(A);
   give(gs, A, 'wood', 30);
   hl.start(A, 'build', 'kolam-c', DAY);
-  fails(() => hl.start(A, 'chunk', 'n', DAY), 409, 'Builder sedang bekerja.');
+  fails(() => hl.start(A, 'chunk', 'n', DAY), 409, 'The builder is busy.');
   assert.equal(gs.balance(A, 'wood'), 25); // nothing charged for the refused start
 });
 
@@ -104,24 +104,24 @@ test('chunk n=1 needs 10 wood and an adjacent chunk', () => {
   const { hl, gs, advance } = setup();
   hl.ensure(A);
   give(gs, A, 'wood', 9);
-  fails(() => hl.start(A, 'chunk', 'n', DAY), 409, 'Kayu kurang (punya 9, perlu 10).');
+  fails(() => hl.start(A, 'chunk', 'n', DAY), 409, 'Not enough Wood (have 9, need 10).');
   give(gs, A, 'wood', 1);
-  fails(() => hl.start(A, 'chunk', 'nw', DAY), 409, 'Chunk itu tidak bersebelahan dengan wilayahmu.');
-  fails(() => hl.start(A, 'chunk', 'c', DAY), 409, 'Sudah dibangun.');
+  fails(() => hl.start(A, 'chunk', 'nw', DAY), 409, 'That chunk is not next to your territory.');
+  fails(() => hl.start(A, 'chunk', 'c', DAY), 409, 'Already built.');
   hl.start(A, 'chunk', 'n', DAY);
   assert.equal(gs.balance(A, 'wood'), 0);
   advance(30_000);
   assert.deepEqual(hl.view(A).open, ['n']);
   // n is open now, so nw and ne touch it; step 2 needs Town Hall 2
   give(gs, A, 'wood', 100); give(gs, A, 'coin', 100);
-  fails(() => hl.start(A, 'chunk', 'nw', DAY), 409, 'Balai Kota perlu level 2.');
+  fails(() => hl.start(A, 'chunk', 'nw', DAY), 409, 'Town Hall needs level 2.');
 });
 
 test('th upgrade needs coin, coin goes to the town', () => {
   const { hl, gs, advance } = setup();
   hl.ensure(A);
   give(gs, A, 'wood', 30); give(gs, A, 'ore', 5); give(gs, A, 'coin', 49);
-  fails(() => hl.start(A, 'th', 'th', DAY), 409, 'Koin kurang (punya 49, perlu 50).');
+  fails(() => hl.start(A, 'th', 'th', DAY), 409, 'Not enough Coin (have 49, need 50).');
   give(gs, A, 'coin', 1);
   const town0 = gs.balance(TOWN, 'coin');
   hl.start(A, 'th', 'th', DAY);
@@ -141,7 +141,7 @@ test('collect: 60 s gives 2 fish, capacity 6 caps 10 min', () => {
   give(gs, A, 'wood', 5);
   hl.start(A, 'build', 'kolam-c', DAY);
   advance(45_000);
-  fails(() => hl.collect(A, 'kolam-c', DAY, () => {}), 409, 'Belum ada hasil.');
+  fails(() => hl.collect(A, 'kolam-c', DAY, () => {}), 409, 'No output yet.');
   advance(60_000);
   assert.equal(hl.view(A).built[0].stored, 2);
   const r = hl.collect(A, 'kolam-c', DAY, () => {});
@@ -157,7 +157,7 @@ test('collect: 60 s gives 2 fish, capacity 6 caps 10 min', () => {
   hl.collect(A, 'kolam-c', DAY, () => {});
   assert.equal(gs.balance(A, 'fish'), 8);
   assert.equal(hl.view(A).built[0].stored, 0); // a full building restarts from now
-  fails(() => hl.collect(A, 'restoran-c', DAY, () => {}), 409, 'Belum ada bangunan di sini.');
+  fails(() => hl.collect(A, 'restoran-c', DAY, () => {}), 409, "There's no building here yet.");
 });
 
 test('collect over the daily cap: 409 and stored unchanged', () => {
@@ -166,8 +166,8 @@ test('collect over the daily cap: 409 and stored unchanged', () => {
   give(gs, A, 'wood', 5);
   hl.start(A, 'build', 'kolam-c', DAY);
   advance(45_000 + 60_000);
-  const cap = () => { throw new HttpError(409, 'Batas harian Ikan tercapai (200 per hari). Lanjut besok.'); };
-  fails(() => hl.collect(A, 'kolam-c', DAY, cap), 409, /Batas harian/);
+  const cap = () => { throw new HttpError(409, 'Daily limit reached (200 per day). Continue tomorrow.'); };
+  fails(() => hl.collect(A, 'kolam-c', DAY, cap), 409, /Daily limit/);
   assert.equal(gs.balance(A, 'fish'), 0);
   assert.equal(hl.view(A).built[0].stored, 2);
   hl.collect(A, 'kolam-c', DAY, () => {});
@@ -185,14 +185,14 @@ test('guest access: invited 200, stranger 409', () => {
   const row = hl.ensure(A);
   hl.ensure(B);
   assert.equal(hl.access(A, row.id).owner, true);
-  fails(() => hl.access(B, row.id), 409, 'Kamu tidak diundang ke dunia ini.');
+  fails(() => hl.access(B, row.id), 409, 'You are not invited to this world.');
   fails(() => hl.access(B, 99), 404, /./);
   assert.deepEqual(hl.setInvites(A, ['Budi#22222', A, 'budi#22222']), [B]);
   const g = hl.access(B, row.id);
   assert.equal(g.owner, false);
   assert.deepEqual(hl.view(A).guests, [{ account: B, name: 'Budi', tag: '22222' }]);
   assert.deepEqual(hl.invitedTo(B), [{ id: row.id, world: 'HL-1', owner_name: 'Andi', owner_tag: '11111' }]);
-  fails(() => hl.setInvites(A, ['Budi']), 400, 'Tulis nama#tag pemain (contoh: Budi#12345).');
-  fails(() => hl.setInvites(A, ['Budi#99999']), 400, /Pemain tidak ditemukan/);
+  fails(() => hl.setInvites(A, ['Budi']), 400, 'Write the player\'s name#tag (example: Ann#12345).');
+  fails(() => hl.setInvites(A, ['Budi#99999']), 400, /Player not found/);
   assert.deepEqual(hl.setInvites(A, [B]), [B], 'an exact account id still works');
 });

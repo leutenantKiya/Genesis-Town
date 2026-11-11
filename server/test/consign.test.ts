@@ -52,14 +52,14 @@ test('consign needs the stall, the items and respects the per-item cap', async (
   const w = await world();
   w.give(P, 'fish', 100);
   w.stand(P, 'board', 9);
-  fails(() => w.game.consign.deposit(P, 'fish', 1, 1), 409, /Titip Jual/);
+  fails(() => w.game.consign.deposit(P, 'fish', 1, 1), 409, /Consignment/);
   w.stand(P, 'consign');
-  fails(() => w.game.consign.deposit(P, 'fish', 51, 1), 409, /maks/i);
+  fails(() => w.game.consign.deposit(P, 'fish', 51, 1), 409, /max/i);
   fails(() => w.game.consign.deposit(P, 'coin', 1, 1), 400, /./);
   fails(() => w.game.consign.deposit(P, 'fish', 1, 0), 400, /./);
   fails(() => w.game.consign.deposit(P, 'fish', 500, 1), 409, /./);
   w.game.consign.deposit(P, 'fish', 50, 1);
-  fails(() => w.game.consign.deposit(P, 'fish', 1, 1), 409, /maks/i);
+  fails(() => w.game.consign.deposit(P, 'fish', 1, 1), 409, /max/i);
 });
 
 test('consign sales use up the merchants daily buy cap and stop at it', async () => {
@@ -77,7 +77,7 @@ test('consign sales use up the merchants daily buy cap and stop at it', async ()
   assert.equal(w.game.consign.lots(P)[0].sold, buyers.length);
   for (const id of buyers) {
     assert.equal(w.game.market.buyRoom(id, 'fish'), 0);
-    assert.throws(() => w.game.market.sell(P, id, 'fish', 1), (e: any) => e.status === 409 && /sudah cukup membeli/.test(e.message));
+    assert.throws(() => w.game.market.sell(P, id, 'fish', 1), (e: any) => e.status === 409 && /has bought enough/.test(e.message));
   }
 });
 
@@ -88,6 +88,6 @@ test('withdraw answers 409 when returning the items would pass the daily gain ca
   w.game.consign.deposit(P, 'fish', 50, 100000);
   w.adv(25 * 60 * 1000); // next game day: the deposit no longer offsets today's gains
   w.give(P, 'fish', 180);
-  fails(() => w.game.consign.withdraw(P, 'fish'), 409, /Batas harian Ikan tercapai\. Ambil sisanya besok\./);
+  fails(() => w.game.consign.withdraw(P, 'fish'), 409, /Daily limit Fish reached\. Collect the rest tomorrow\./);
   assert.equal(w.game.consign.lots(P)[0].qty, 50);
 });

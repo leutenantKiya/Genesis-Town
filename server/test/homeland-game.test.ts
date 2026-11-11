@@ -47,7 +47,7 @@ test('reload lands at own spawn', async () => {
   assert.equal(w.game.state(P).worldId, wid);
   // the same through an action, with the server believing something else (it restarted)
   w.game.positions!.reset(P);
-  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: wid, pos: home.layout.spawn }), 409, /Energimu sudah penuh/); // past the position check
+  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: wid, pos: home.layout.spawn }), 409, /energy is already full/); // past the position check
   assert.equal(w.game.positions!.worldOf(P), wid);
   // someone else's spawn is not believed
   const other = w.hl(Q), oid = `HL-${w.game.homelands.ensure(Q).id}`;
@@ -59,7 +59,7 @@ test('gather in public answers 409 Area publik hanya untuk berdagang', async () 
   const w = await world();
   const pos = w.game.map!.layout.spawn;
   for (const body of [{ action: 'gather', tile: 'tree', x: pos.x + 1, y: pos.y }, { action: 'farm', op: 'till', plot: 0 }, { action: 'engage', monster: 'x' }]) {
-    fails(() => w.game.act(P, { ...body, pos }), 409, 'Area publik hanya untuk berdagang.');
+    fails(() => w.game.act(P, { ...body, pos }), 409, 'The public area is for trading only.');
   }
 });
 
@@ -67,8 +67,8 @@ test('ship in a Homeland is refused; build needs standing at the door', async ()
   const w = await world();
   const home = w.hl(P), wid = `HL-${w.game.homelands.ensure(P).id}`;
   const sp = home.layout.spawn;
-  fails(() => w.game.act(P, { action: 'ship', token: 'bread', qty: 1, world: wid, pos: sp }), 409, 'Kotak Kirim hanya ada di area publik.');
-  fails(() => w.game.act(P, { action: 'build', kind: 'build', target: 'kolam-c', world: wid, pos: sp }), 409, /dekat lahan/);
+  fails(() => w.game.act(P, { action: 'ship', token: 'bread', qty: 1, world: wid, pos: sp }), 409, 'The Shipping Box is only in the public area.');
+  fails(() => w.game.act(P, { action: 'build', kind: 'build', target: 'kolam-c', world: wid, pos: sp }), 409, /near that lot/);
   fails(() => w.game.act(P, { action: 'build', kind: 'th', target: 'th', world: 'public', pos: w.game.map!.layout.spawn }), 409, /Homeland/);
 });
 
@@ -76,7 +76,7 @@ test('travel needs the portal', async () => {
   const w = await world();
   const home = w.hl(P), wid = `HL-${w.game.homelands.ensure(P).id}`;
   const sp = home.layout.spawn;
-  fails(() => w.game.act(P, { action: 'travel', to: 'public', world: wid, pos: sp }), 409, 'Pergi ke portal dulu.');
+  fails(() => w.game.act(P, { action: 'travel', to: 'public', world: wid, pos: sp }), 409, 'Go to the portal first.');
   w.adv(60_000);
   const near = standNear(home, home.portal(), 2);
   const r = w.game.act(P, { action: 'travel', to: 'public', world: wid, pos: near }) as any;
@@ -96,14 +96,14 @@ test('stranger cannot enter HL-<other>', async () => {
   w.hl(P);
   w.adv(60_000);
   const near = standNear(w.game.map!, w.game.map!.portal(), 2);
-  fails(() => w.game.act(P, { action: 'travel', to: oid, world: 'public', pos: near }), 409, 'Kamu tidak diundang ke dunia ini.');
-  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: oid, pos: w.hl(Q).layout.spawn }), 409, /diundang/);
+  fails(() => w.game.act(P, { action: 'travel', to: oid, world: 'public', pos: near }), 409, 'You are not invited to this world.');
+  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: oid, pos: w.hl(Q).layout.spawn }), 409, /not invited/);
   // an invited guest may enter, but not act
   w.game.homelands.setInvites(Q, [P]);
   const r = w.game.act(P, { action: 'travel', to: oid, world: 'public', pos: near }) as any;
   assert.equal(r.world, oid);
   w.adv(1000);
-  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: oid, pos: w.hl(Q).layout.spawn }), 409, /bukan Homeland-mu/);
+  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: oid, pos: w.hl(Q).layout.spawn }), 409, /isn't your Homeland/);
 });
 
 test('demo path: gather wood at home x5, build kolam, advance 45 s, collect after 30 s gives fish, travel to public, sell fish at a stall gives coin', async () => {

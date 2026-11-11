@@ -51,16 +51,16 @@ test('hire charges coin to the town', async () => {
   const r = w.hire(P, 'builder');
   assert.equal(w.gs.balance(P, 'coin'), 50);
   assert.equal(w.gs.balance(TOWN, 'coin'), town0 + 150);
-  assert.match(r.toast, /Tukang/);
+  assert.match(r.toast, /Builder/);
   assert.deepEqual(r.state.homeland.bots.map((b: any) => b.job), ['builder']);
   assert.equal(r.state.homeland.hire.builder.have, 1);
   assert.equal(r.state.homeland.hire.builder.max, 3);
   assert.equal(r.state.homeland.builders.total, 2);
-  fails(() => w.hire(P, 'builder'), 409, /Koin kurang \(punya 50, perlu 150\)/);
-  fails(() => w.hire(P, 'petani'), 409, 'Balai Kota perlu level 2.');
+  fails(() => w.hire(P, 'builder'), 409, /Not enough coins \(have 50, need 150\)/);
+  fails(() => w.hire(P, 'petani'), 409, 'Town Hall needs level 2.');
   fails(() => w.hire(P, 'nope'), 400, /./);
   // inherited object keys are not jobs: no NaN coin rows
-  for (const job of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) fails(() => w.hire(P, job), 400, /Pekerja tidak dikenal/);
+  for (const job of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) fails(() => w.hire(P, job), 400, /Unknown worker/);
   assert.equal(w.gs.balance(P, 'coin'), 50);
 });
 
@@ -73,13 +73,13 @@ test('second builder runs two jobs at once', async () => {
   w.gs.setHomelandTh(P, 2);
   w.gs.setHomelandTh(Q, 2); w.give(Q, 'wood', 100); w.give(Q, 'coin', 500);
   H.start(Q, 'chunk', 'n', 1);
-  fails(() => H.start(Q, 'chunk', 'e', 1), 409, 'Builder sedang bekerja.'); // one default builder
+  fails(() => H.start(Q, 'chunk', 'e', 1), 409, 'The builder is busy.'); // one default builder
   w.hire(P, 'builder');
   H.start(P, 'chunk', 'n', 1);
   H.start(P, 'chunk', 'e', 1);
   assert.equal(H.view(P).jobs.length, 2);
   assert.deepEqual(H.view(P).builders, { total: 2, busy: 2 });
-  fails(() => H.start(P, 'chunk', 's', 1), 409, 'Builder sedang bekerja.');
+  fails(() => H.start(P, 'chunk', 's', 1), 409, 'The builder is busy.');
 });
 
 test('max per job answers 409', async () => {
@@ -88,7 +88,7 @@ test('max per job answers 409', async () => {
   w.give(P, 'coin', 1000);
   for (let i = 0; i < 3; i++) w.hire(P, 'builder');
   assert.equal(w.game.homelands.bots(P).length, 3);
-  fails(() => w.hire(P, 'builder'), 409, 'Pekerja Tukang sudah penuh (maks 3).');
+  fails(() => w.hire(P, 'builder'), 409, 'Builder workers are full (max 3).');
   assert.equal(w.gs.balance(P, 'coin'), 1000 - 450); // the refused hire cost nothing
   assert.equal(w.game.homelands.view(P).hire.builder.can, false);
 });
@@ -99,10 +99,10 @@ test('hire outside own homeland answers 409', async () => {
   w.give(P, 'coin', 500);
   fails(() => w.hire(P, 'builder', w.game.map!.layout.spawn, 'public'), 409, /Homeland/);
   const L = w.hl(P).layout, far = [...Array(L.h * L.w).keys()].map((i) => ({ x: i % L.w, y: Math.floor(i / L.w) })).find((p) => w.hl(P).walkable(p.x, p.y) && Math.abs(p.x - L.spawn.x) + Math.abs(p.y - L.spawn.y) === 3)!;
-  fails(() => w.hire(P, 'builder', far), 409, /Balai Kota/); // not at the Town Hall
-  fails(() => w.hire(P, 'builder', w.hall(Q), w.wid(Q)), 409, /diundang/); // somebody else's Homeland
+  fails(() => w.hire(P, 'builder', far), 409, /Town Hall/); // not at the Town Hall
+  fails(() => w.hire(P, 'builder', w.hall(Q), w.wid(Q)), 409, /not invited/); // somebody else's Homeland
   w.game.homelands.setInvites(Q, [P]);
-  fails(() => w.hire(P, 'builder', w.hall(Q), w.wid(Q)), 409, /bukan Homeland-mu/); // a guest cannot hire either
+  fails(() => w.hire(P, 'builder', w.hall(Q), w.wid(Q)), 409, /isn't your Homeland/); // a guest cannot hire either
   assert.equal(w.gs.balance(P, 'coin'), 500);
   assert.equal(w.game.homelands.bots(P).length, 0);
 });
@@ -163,5 +163,5 @@ test('penebang adds wood per tree at home only', async () => {
   assert.equal(doGather(P), 2);
   // bots belong to their owner: Q still gets 1, and nobody gathers in the public area at all
   assert.equal(doGather(Q), 1);
-  fails(() => game.act(P, { action: 'gather', tile: 'tree', x: 1, y: 1, world: 'public', pos: game.map!.layout.spawn }), 409, 'Area publik hanya untuk berdagang.');
+  fails(() => game.act(P, { action: 'gather', tile: 'tree', x: 1, y: 1, world: 'public', pos: game.map!.layout.spawn }), 409, 'The public area is for trading only.');
 });

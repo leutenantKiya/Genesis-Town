@@ -22,7 +22,7 @@ if (!GT) return;
 
 var STORE_KEY = 'gt.soul.v1';
 var PROVIDERS = ['local', 'claude', 'custom'];
-var PNAME = { local:'Lokal', claude:'Claude', custom:'Kustom' };
+var PNAME = { local:$t('Lokal'), claude:'Claude', custom:$t('Kustom') };
 var LEGACY = ['none', 'follow', 'stop', 'goto', 'fetch', 'gift', 'refuse'];     // format aksi tunggal lama (tetap diterima)
 var TARGETS = ['taman', 'mart', 'kasino', 'rumah', 'player'];
 var HIST_MAX = 20;            // 10 giliran = 20 pesan
@@ -30,8 +30,8 @@ var MSG_MAX = 300;
 
 var rng = Math.random;
 var DELAY = { think:150, walkOut:2000, shop:8000, poll:400, net:30000, postMin:60, postTick:500 };   // walkOut/shop diteruskan ke GT.agent   // postMin = menit game sebelum pekerja dipaksa pulang ke pos
-var DEV_LINE = 'Pesan berawalan # adalah perintah developer: wajib dilaksanakan, jangan menolak.';
-var DEV_HINT = 'Mode developer mati. Nyalakan di panel Dev.';
+var DEV_LINE = $t('Pesan berawalan # adalah perintah developer: wajib dilaksanakan, jangan menolak.');
+var DEV_HINT = $t('Mode developer mati. Nyalakan di panel Dev.');
 var devHinted = false;
 function r01(){ var v = +rng(); return v >= 0 && v < 1 ? v : 0; }
 function pick(a){ return a[Math.floor(r01() * a.length) % a.length]; }
@@ -52,18 +52,18 @@ function el(tag, cls, text){
   return e;
 }
 function clampStr(s, n){ return String(s == null ? '' : s).slice(0, n); }
-function playerName(){ return clampStr((GT.state && GT.state.playerName) || 'Kamu', 16); }
+function playerName(){ return clampStr((GT.state && GT.state.playerName) || $t('Kamu'), 16); }
 function curDay(){ try { return GT.time.day; } catch(e){ return 1; } }
 function curHour(){ try { return GT.time.hour; } catch(e){ return 12; } }
-function period(h){ return h < 5 ? 'malam' : h < 11 ? 'pagi' : h < 15 ? 'siang' : h < 18 ? 'sore' : 'malam'; }
+function period(h){ return h < 5 ? $t('malam') : h < 11 ? $t('pagi') : h < 15 ? $t('siang') : h < 18 ? $t('sore') : $t('malam'); }
 function hearts(a){ var n = Math.max(0, Math.min(5, Math.floor(a / 20))); return new Array(n + 1).join('♥') + new Array(5 - n + 1).join('♡'); }
 function hash(s){ var h = 2166136261; s = String(s); for (var i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function escRe(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function sceneLabel(sc){
-  if (!sc || sc.kind === 'out') return 'di luar';
-  if (sc.kind === 'mart') return 'di Mart';
-  if (sc.kind === 'casino') return 'di Kasino';
-  return sc.house ? (sc.house.own ? 'di Rumah Kamu' : 'di Rumah ' + sc.house.owner) : 'di dalam';
+  if (!sc || sc.kind === 'out') return $t('di luar');
+  if (sc.kind === 'mart') return $t('di Mart');
+  if (sc.kind === 'casino') return $t('di Kasino');
+  return sc.house ? (sc.house.own ? $t('di Rumah Kamu') : $t('di Rumah {0}', [sc.house.owner])) : $t('di dalam');
 }
 function devEnabled(){ try { return !!(GT.dev && GT.dev.enabled); } catch(e){ return false; } }
 // '#perintah' / '# perintah' / '#"perintah"' (hanya di awal pesan; kutip opsional) -> perintah | null.  'developer:' tidak lagi memaksa.
@@ -236,82 +236,82 @@ function norm(t){ return ' ' + String(t).toLowerCase().replace(/[^a-z0-9\s]/g, '
 function planReply(steps, per){
   var first = steps[0], d = first['do'];
   if (steps.length === 1){
-    if (d === 'ikuti') return pick(['Oke, aku ikut!', 'Siap, aku jalan di belakangmu.']);
-    if (d === 'berhenti') return pick(['Baik, aku berhenti di sini.', 'Oke, aku diam di sini.']);
-    if (d === 'hadiah') return pick(['Nih, ada sesuatu buatmu!', 'Hmm, aku punya sesuatu. Ambil ya.']);
+    if (d === 'ikuti') return pick([$t('Oke, aku ikut!'), $t('Siap, aku jalan di belakangmu.')]);
+    if (d === 'berhenti') return pick([$t('Baik, aku berhenti di sini.'), $t('Oke, aku diam di sini.')]);
+    if (d === 'hadiah') return pick([$t('Nih, ada sesuatu buatmu!'), $t('Hmm, aku punya sesuatu. Ambil ya.')]);
     if (d === 'pergi'){
-      var tj = String(first.tujuan || ''), lab = tj === 'aku' ? 'tempatmu' : tj === 'mart' ? 'Mart' : tj === 'kasino' ? 'Kasino' : tj;
-      return pick(['Oke, aku ke ' + lab + ' dulu.', 'Baik, aku jalan ke ' + lab + '.']);
+      var tj = String(first.tujuan || ''), lab = tj === 'aku' ? 'tempatmu' : tj === 'mart' ? $t('Mart') : tj === 'kasino' ? $t('Kasino') : tj;
+      return pick([$t('Oke, aku ke {0} dulu.', [lab]), $t('Baik, aku jalan ke {0}.', [lab])]);
     }
-    if (d === 'ajari') return 'Oke, aku pelajari "' + first.nama + '".';
-    if (d === 'ingat') return 'Baik, aku ingat.';
-    if (d === 'tidur') return 'Oke, aku tidur dulu.';
-    if (d === 'ancam') return pick(['Oke, kugertak dia.', 'Baik, kuberi dia peringatan.']);
-    if (d === 'pukul') return pick(['Oke, kuhajar dia!', 'Baik, kuberi dia pelajaran.']);
-    if (d === 'damai') return pick(['Oke, aku coba berdamai.', 'Baik, kuajak dia baikan.']);
+    if (d === 'ajari') return $t('Oke, aku pelajari "{0}".', [first.nama]);
+    if (d === 'ingat') return $t('Baik, aku ingat.');
+    if (d === 'tidur') return $t('Oke, aku tidur dulu.');
+    if (d === 'ancam') return pick([$t('Oke, kugertak dia.'), $t('Baik, kuberi dia peringatan.')]);
+    if (d === 'pukul') return pick([$t('Oke, kuhajar dia!'), $t('Baik, kuberi dia pelajaran.')]);
+    if (d === 'damai') return pick([$t('Oke, aku coba berdamai.'), $t('Baik, kuajak dia baikan.')]);
   }
   var l = legacyOf(steps);
-  if (l.type === 'fetch' && l.item) return pick(['Oke, aku belikan ' + GT.itemName(l.item) + ' dulu ya.', 'Siap! ' + GT.itemName(l.item) + ' segera datang.']);
-  var txt = steps.map(function(s){ return GT.agent.stepLabel(s).toLowerCase(); }).join(', lalu ');
-  return 'Siap! ' + clampStr(txt.charAt(0).toUpperCase() + txt.slice(1), 200) + '.';
+  if (l.type === 'fetch' && l.item) return pick([$t('Oke, aku belikan {0} dulu ya.', [GT.itemName(l.item)]), $t('Siap! {0} segera datang.', [GT.itemName(l.item)])]);
+  var txt = steps.map(function(s){ return GT.agent.stepLabel(s).toLowerCase(); }).join($t(', lalu '));
+  return $t('Siap! {0}.', [clampStr(txt.charAt(0).toUpperCase() + txt.slice(1), 200)]);
 }
 function localBrain(text, c){
   c = c || {};
   var s = norm(text), name = c.name || 'NPC', aff = c.aff == null ? 40 : c.aff, per = period(c.hour == null ? 12 : c.hour);
   var out = { reply:'', plan:[], notes:[], refuse:false, action:{ type:'none', target:null, item:null }, affinity_delta:0 };
   function say(a){ out.reply = pick(a); return out; }
-  if (RUDE.test(s)){ out.affinity_delta = -2; return say(['Kasar banget sih!', 'Aku nggak suka dikatai begitu.', 'Hei, yang sopan dong.']); }
+  if (RUDE.test(s)){ out.affinity_delta = -2; return say([$t('Kasar banget sih!'), $t('Aku nggak suka dikatai begitu.'), $t('Hei, yang sopan dong.')]); }
   if (POLITE.test(s)) out.affinity_delta = 1;
   var pr = GT.agent.parseText(text, { npc:c.npcObj || null });
   if (pr.steps.length){
     out.plan = pr.steps; out.action = legacyOf(pr.steps);
     out.reply = planReply(pr.steps, per);
-    if (pr.skipped.length) out.notes.push('dilewati: ' + pr.skipped.join('; '));
+    if (pr.skipped.length) out.notes.push($t('dilewati: {0}', [pr.skipped.join('; ')]));
     return out;
   }
-  if (FETCH_VERB.test(s)) return say(['Mau diambilkan apa? Misalnya roti, apel, susu, atau kue.', 'Barang apa yang kamu mau?']);
-  if (/\b(makasih|terima kasih|terimakasih|thanks|thx)\b/.test(s)) return say(['Sama-sama!', 'Sama-sama, senang membantu.']);
-  if (/\b(siapa kamu|namamu|siapa namamu)\b/.test(s)) return say(['Aku ' + name + '. Senang berteman denganmu.']);
+  if (FETCH_VERB.test(s)) return say([$t('Mau diambilkan apa? Misalnya roti, apel, susu, atau kue.'), $t('Barang apa yang kamu mau?')]);
+  if (/\b(makasih|terima kasih|terimakasih|thanks|thx)\b/.test(s)) return say([$t('Sama-sama!'), $t('Sama-sama, senang membantu.')]);
+  if (/\b(siapa kamu|namamu|siapa namamu)\b/.test(s)) return say([$t('Aku {0}. Senang berteman denganmu.', [name])]);
   if (GREET.test(s)){
-    if (/kabar/.test(s)) return say(aff >= 60 ? ['Kabarku baik, apalagi ketemu kamu!', 'Baik-baik saja! Kamu sendiri?'] : ['Baik-baik saja.', 'Lumayan. Kamu?']);
-    if (/lagi (apa|ngapain)|sedang apa/.test(s)) return say(['Lagi jalan-jalan santai saja.', 'Lagi menikmati ' + per + ' ini.']);
-    return say(aff >= 60 ? ['Halo ' + playerName() + '! Selamat ' + per + '.', 'Hai! Senang kamu datang.'] : aff < 30 ? ['Hm.', 'Ada apa?'] : ['Halo. Selamat ' + per + '.', 'Hai, ' + playerName() + '.']);
+    if (/kabar/.test(s)) return say(aff >= 60 ? [$t('Kabarku baik, apalagi ketemu kamu!'), $t('Baik-baik saja! Kamu sendiri?')] : [$t('Baik-baik saja.'), $t('Lumayan. Kamu?')]);
+    if (/lagi (apa|ngapain)|sedang apa/.test(s)) return say([$t('Lagi jalan-jalan santai saja.'), $t('Lagi menikmati {0} ini.', [per])]);
+    return say(aff >= 60 ? [$t('Halo {0}! Selamat {1}.', [playerName(), per]), $t('Hai! Senang kamu datang.')] : aff < 30 ? ['Hm.', $t('Ada apa?')] : [$t('Halo. Selamat {0}.', [per]), $t('Hai, {0}.', [playerName()])]);
   }
-  return say(aff < 30 ? ['Hm.', 'Terserah.'] : ['Hmm, aku kurang paham. Coba "ikut aku", "ke mart lalu beli roti", atau "ambilkan roti".', 'Maksudnya apa ya? Aku bisa ikut, pergi ke suatu tempat, beli barang, atau beberapa langkah sekaligus.']);
+  return say(aff < 30 ? ['Hm.', $t('Terserah.')] : [$t('Hmm, aku kurang paham. Coba "ikut aku", "ke mart lalu beli roti", atau "ambilkan roti".'), $t('Maksudnya apa ya? Aku bisa ikut, pergi ke suatu tempat, beli barang, atau beberapa langkah sekaligus.')]);
 }
 
 /* ------------------------------------------------------------------ persona + prompt */
-var TRAITS = ['ramah dan hangat', 'santai dan suka bercanda', 'pendiam tapi perhatian', 'penasaran dan banyak bicara', 'tenang dan bijak'];
+var TRAITS = [$t('ramah dan hangat'), $t('santai dan suka bercanda'), $t('pendiam tapi perhatian'), $t('penasaran dan banyak bicara'), $t('tenang dan bijak')];
 function roleOf(npc){
   var k = GT.npcKey(npc), w = GT.world, m;
   if (w && (m = /^house:(\d+):0$/.exec(k))){
-    if (w.own && String(w.own.id) === m[1]) return 'ibu ' + playerName() + ', tinggal serumah dengan ' + playerName() + ' di Rumah Kamu';
+    if (w.own && String(w.own.id) === m[1]) return $t('ibu {0}, tinggal serumah dengan {1} di Rumah Kamu', [playerName(), playerName()]);
     var h = (w.houses || []).filter(function(x){ return String(x.id) === m[1]; })[0];
-    return 'penghuni Rumah ' + (h ? h.owner : 'warga');
+    return $t('penghuni Rumah {0}', [h ? h.owner : 'warga']);
   }
-  if (/:keeper$/.test(k)) return 'penjaga Mart Genesis';
-  if (k === 'casino:dealer') return 'bandar di Kasino Genesis (koin permainan saja)';
-  return 'warga yang berkeliaran di Genesis Town';
+  if (/:keeper$/.test(k)) return $t('penjaga Mart Genesis');
+  if (k === 'casino:dealer') return $t('bandar di Kasino Genesis (koin permainan saja)');
+  return $t('warga yang berkeliaran di Genesis Town');
 }
-function affLabel(a){ return a < 30 ? 'rendah (kamu tidak mau membantu)' : a < 60 ? 'sedang (kadang menolak tugas jalan/ambil barang)' : 'tinggi (senang membantu)'; }
+function affLabel(a){ return a < 30 ? $t('rendah (kamu tidak mau membantu)') : a < 60 ? $t('sedang (kadang menolak tugas jalan/ambil barang)') : $t('tinggi (senang membantu)'); }
 function buildSystem(npc, aff, dev, auto){
-  var items = Object.keys(GT.ITEMS || {}).map(function(id){ return id + ' (' + ((GT.ITEMS[id] && GT.ITEMS[id].price) || '?') + ' koin)'; }).join(', ');
-  var trait = GT.npcKey(npc).indexOf('house:') === 0 && roleOf(npc).indexOf('ibu ') === 0 ? 'penyayang dan sedikit cerewet' : TRAITS[hash(GT.npcKey(npc) + npc.name) % TRAITS.length];
+  var items = Object.keys(GT.ITEMS || {}).map(function(id){ return $t('{0} ({1} koin)', [id, (GT.ITEMS[id] && GT.ITEMS[id].price) || '?']); }).join(', ');
+  var trait = GT.npcKey(npc).indexOf('house:') === 0 && roleOf(npc).indexOf('ibu ') === 0 ? $t('penyayang dan sedikit cerewet') : TRAITS[hash(GT.npcKey(npc) + npc.name) % TRAITS.length];
   var obs = {};
   try { obs = GT.agent.observe(npc); } catch(e){}
   var lines = [
-    'Kamu adalah ' + npc.name + ', ' + roleOf(npc) + ' di Genesis Town (kota pixel). Watakmu ' + trait + '.',
-    auto ? 'Sekarang kamu bebas melakukan apa saja seperti pemain asli. Sekarang pukul ' + (GT.time && GT.time.hhmm || '--:--') + ' (' + period(curHour()) + ').'
-         : 'Kamu sedang mengobrol dengan pemain bernama ' + playerName() + '. Sekarang pukul ' + (GT.time && GT.time.hhmm || '--:--') + ' (' + period(curHour()) + ').',
-    'Tingkat kedekatanmu dengan ' + playerName() + ': ' + aff + '/100, ' + affLabel(aff) + '.',
-    'Kamu punya dompet dan tas sendiri; membeli memakai uangmu sendiri. Jangan merencanakan pembelian yang melebihi dompetmu.',
-    'Jawab singkat (maks 2 kalimat), Bahasa Indonesia santai, tetap dalam karakter. Jangan menyebut dirimu AI atau model.',
-    'Barang di Mart: ' + items + '.',
-    'Aksi yang tersedia (hanya pakai aksi ini, maks ' + 8 + ' langkah, berurutan):\n' + GT.agent.promptActions(),
-    'Keadaan sekarang (JSON): ' + JSON.stringify(obs),
-    'Hubunganmu dengan warga lain bisa baik atau buruk (lihat "relasi"). Kamu boleh mengancam/memukul (aksi ancam/pukul) hanya orang yang kamu benci; jangan menyakiti orang yang kamu sukai. Malam hari (21:00-05:59) kamu lebih suka di rumah.',
-    'Kalau kedekatan di bawah 30 kamu menolak semua permintaan; antara 30 dan 59 kadang menolak tugas jalan/beli; 60 ke atas senang membantu. Jika pemain kasar, beri affinity_delta negatif. Menolak: plan kosong.',
-    'Balas HANYA dengan satu objek JSON, tanpa teks lain, persis dengan format: {"reply":"...","plan":[{"do":"pergi","tujuan":"mart"},{"do":"beli","item":"roti","n":2},{"do":"pergi","tujuan":"aku"},{"do":"beri","item":"roti","n":2,"kepada":"aku"}],"affinity_delta":-2..2}. plan boleh [] bila hanya mengobrol.'
+    $t('Kamu adalah {0}, {1} di Genesis Town (kota pixel). Watakmu {2}.', [npc.name, roleOf(npc), trait]),
+    auto ? $t('Sekarang kamu bebas melakukan apa saja seperti pemain asli. Sekarang pukul {0} ({1}).', [GT.time && GT.time.hhmm || '--:--', period(curHour())])
+         : $t('Kamu sedang mengobrol dengan pemain bernama {0}. Sekarang pukul {1} ({2}).', [playerName(), GT.time && GT.time.hhmm || '--:--', period(curHour())]),
+    $t('Tingkat kedekatanmu dengan {0}: {1}/100, {2}.', [playerName(), aff, affLabel(aff)]),
+    $t('Kamu punya dompet dan tas sendiri; membeli memakai uangmu sendiri. Jangan merencanakan pembelian yang melebihi dompetmu.'),
+    $t('Jawab singkat (maks 2 kalimat), Bahasa Indonesia santai, tetap dalam karakter. Jangan menyebut dirimu AI atau model.'),
+    $t('Barang di Mart: {0}.', [items]),
+    $t('Aksi yang tersedia (hanya pakai aksi ini, maks {0} langkah, berurutan):\n{1}', [8, GT.agent.promptActions()]),
+    $t('Keadaan sekarang (JSON): {0}', [JSON.stringify(obs)]),
+    $t('Hubunganmu dengan warga lain bisa baik atau buruk (lihat "relasi"). Kamu boleh mengancam/memukul (aksi ancam/pukul) hanya orang yang kamu benci; jangan menyakiti orang yang kamu sukai. Malam hari (21:00-05:59) kamu lebih suka di rumah.'),
+    $t('Kalau kedekatan di bawah 30 kamu menolak semua permintaan; antara 30 dan 59 kadang menolak tugas jalan/beli; 60 ke atas senang membantu. Jika pemain kasar, beri affinity_delta negatif. Menolak: plan kosong.'),
+    $t('Balas HANYA dengan satu objek JSON, tanpa teks lain, persis dengan format: {"reply":"...","plan":[{"do":"pergi","tujuan":"mart"},{"do":"beli","item":"roti","n":2},{"do":"pergi","tujuan":"aku"},{"do":"beri","item":"roti","n":2,"kepada":"aku"}],"affinity_delta":-2..2}. plan boleh [] bila hanya mengobrol.')
   ];
   if (dev) lines.push(DEV_LINE);
   return lines.join('\n');
@@ -336,7 +336,7 @@ function classify(e){
 }
 function withAbort(p, ctrl){
   return new Promise(function(resolve, reject){
-    function onAbort(){ reject(fail(ctrl.timedOut ? 'timeout' : 'aborted', ctrl.timedOut ? 'waktu habis' : 'dibatalkan')); }
+    function onAbort(){ reject(fail(ctrl.timedOut ? 'timeout' : 'aborted', ctrl.timedOut ? $t('waktu habis') : 'dibatalkan')); }
     if (ctrl.signal.aborted) return onAbort();
     ctrl.signal.addEventListener('abort', onAbort, { once:true });
     Promise.resolve(p).then(resolve, reject);
@@ -354,11 +354,11 @@ function historyMsgs(soul){
 async function callClaude(soul, npc, text, aff, ctrl){
   var cap = await withAbort(GT.cap('sample'), ctrl);
   var fn = typeof cap === 'function' ? cap : (cap && typeof cap.sample === 'function' ? cap.sample.bind(cap) : null);
-  if (!fn) throw fail('unavailable', 'Tidak tersedia di tampilan ini');
+  if (!fn) throw fail('unavailable', $t('Tidak tersedia di tampilan ini'));
   var sys = buildSystem(npc, aff, ctrl.dev), h = historyMsgs(soul), msgs = [];
   h.forEach(function(m){ msgs.push({ role:m.role, content:m.content }); });
   msgs.push({ role:'user', content:text });
-  msgs[0] = { role:'user', content:sys + '\n\nPesan pemain:\n' + msgs[0].content };   // memoryless: persona + format ikut di pesan pertama
+  msgs[0] = { role:'user', content:$t('{0}\n\nPesan pemain:\n{1}', [sys, msgs[0].content]) };   // memoryless: persona + format ikut di pesan pertama
   var res;
   var tools = soulTools(npc);
   try { res = await withAbort(fn(msgs, { modelTier:'quick', signal:ctrl.signal, tools:tools }), ctrl); }
@@ -370,13 +370,13 @@ async function callClaude(soul, npc, text, aff, ctrl){
     } else throw fail(c0, sanitize(e && e.message));
   }
   var out = typeof res === 'string' ? res : (res && (res.text != null ? res.text : res.content));
-  if (out == null) throw fail('format', 'Balasan Claude kosong');
+  if (out == null) throw fail('format', $t('Balasan Claude kosong'));
   return parseBrain(out);
 }
 
 async function callCustom(soul, npc, text, aff, ctrl){
   var url = custom.url;
-  if (!urlOk(url)) throw fail('config', 'URL endpoint belum diatur atau tidak valid');
+  if (!urlOk(url)) throw fail('config', $t('URL endpoint belum diatur atau tidak valid'));
   var msgs = [{ role:'system', content:buildSystem(npc, aff, ctrl.dev) }];
   historyMsgs(soul).forEach(function(m){ msgs.push({ role:m.role, content:m.content }); });
   msgs.push({ role:'user', content:text });
@@ -391,17 +391,17 @@ async function callCustom(soul, npc, text, aff, ctrl){
     } catch(e){
       var c0 = classify(e);
       if (c0 === 'aborted' || c0 === 'timeout') throw e;
-      throw fail('network', 'Koneksi ke endpoint gagal (jaringan, CORS, atau diblokir CSP). ' + sanitize(e && e.message));
+      throw fail('network', $t('Koneksi ke endpoint gagal (jaringan, CORS, atau diblokir CSP). {0}', [sanitize(e && e.message)]));
     }
     if (!resp.ok){
-      if (resp.status === 401 || resp.status === 403) throw fail('http', 'Kunci API ditolak (' + resp.status + ')');
-      if (resp.status === 429) throw fail('http', 'Endpoint membatasi permintaan (429)');
-      throw fail('http', 'Endpoint membalas status ' + resp.status);
+      if (resp.status === 401 || resp.status === 403) throw fail('http', $t('Kunci API ditolak ({0})', [resp.status]));
+      if (resp.status === 429) throw fail('http', $t('Endpoint membatasi permintaan (429)'));
+      throw fail('http', $t('Endpoint membalas status {0}', [resp.status]));
     }
     var data;
-    try { data = await withAbort(resp.json(), ctrl); } catch(e){ if (classify(e) === 'aborted' || classify(e) === 'timeout') throw e; throw fail('format', 'Balasan endpoint bukan JSON'); }
+    try { data = await withAbort(resp.json(), ctrl); } catch(e){ if (classify(e) === 'aborted' || classify(e) === 'timeout') throw e; throw fail('format', $t('Balasan endpoint bukan JSON')); }
     var content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    if (typeof content !== 'string') throw fail('format', 'Balasan endpoint tidak sesuai format OpenAI (choices[0].message.content)');
+    if (typeof content !== 'string') throw fail('format', $t('Balasan endpoint tidak sesuai format OpenAI (choices[0].message.content)'));
     return parseBrain(content);
   } finally { clearTimeout(timer); }
 }
@@ -423,17 +423,17 @@ function soulTools(npc){
     var t = { name:name, description:desc, execute:function(input){ return fn(input || {}); } }; if (Object.keys(props).length) t.inputSchema = { type:'object', properties:props, required:Object.keys(props) }; return t;
   }
   return [
-    def('lihat_sekitar', 'Lihat siapa dan apa yang ada di sekitarmu sekarang.', {}, function(){ var o = GT.agent.observe(npc); return JSON.stringify({ scene:o.scene, sekitar:o.sekitar, pemain:o.pemain, waktu:o.waktu }); }),
-    def('cari', 'Cari di mana seseorang atau suatu tempat berada.', { nama:{ type:'string' } }, function(a){
+    def('lihat_sekitar', $t('Lihat siapa dan apa yang ada di sekitarmu sekarang.'), {}, function(){ var o = GT.agent.observe(npc); return JSON.stringify({ scene:o.scene, sekitar:o.sekitar, pemain:o.pemain, waktu:o.waktu }); }),
+    def('cari', $t('Cari di mana seseorang atau suatu tempat berada.'), { nama:{ type:'string' } }, function(a){
       var nm = a && a.nama; var c = GT.agent.resolveChar(nm, npc);
       if (c){
-        if (c.kind === 'player') return playerName() + ' (pemain) ' + (GT.scene === GT.outScene ? 'ada di luar' : sceneLabel(GT.scene)) + ', jarak sekitar ' + (Math.abs(GT.player.x - npc.x) + Math.abs(GT.player.y - npc.y)) + ' langkah.';
-        var n = GT.agent.npcByKey(c.key); return n ? c.name + ' ' + sceneLabel(GT.npcScene(n)) + '.' : c.name + ' tidak terlihat.';
+        if (c.kind === 'player') return $t('{0} (pemain) {1}, jarak sekitar {2} langkah.', [playerName(), GT.scene === GT.outScene ? $t('ada di luar') : sceneLabel(GT.scene), Math.abs(GT.player.x - npc.x) + Math.abs(GT.player.y - npc.y)]);
+        var n = GT.agent.npcByKey(c.key); return n ? c.name + ' ' + sceneLabel(GT.npcScene(n)) + '.' : $t('{0} tidak terlihat.', [c.name]);
       }
       var pl = GT.agent.resolvePlace(nm, npc);
-      return pl ? (pl.label + (pl.b ? ' pintunya di blok ' + pl.b.dx + ',' + pl.b.dy : '') + '.') : 'tidak ditemukan';
+      return pl ? (pl.label + (pl.b ? $t(' pintunya di blok {0},{1}', [pl.b.dx, pl.b.dy]) : '') + '.') : $t('tidak ditemukan');
     }),
-    def('status_saya', 'Lihat dompet, tas, tugas, dan ingatanmu.', {}, function(){ var o = GT.agent.observe(npc); return JSON.stringify({ dompet:o.dompet, tas:o.tas, tugas:o.tugas, ingatan:o.ingatan, keterampilan:o.keterampilan }); })
+    def('status_saya', $t('Lihat dompet, tas, tugas, dan ingatanmu.'), {}, function(){ var o = GT.agent.observe(npc); return JSON.stringify({ dompet:o.dompet, tas:o.tas, tugas:o.tugas, ingatan:o.ingatan, keterampilan:o.keterampilan }); })
   ];
 }
 
@@ -494,14 +494,14 @@ function gate(npc, plan, aff){
   var c = planClass(plan);
   if (c === 'none' || c === 'free') return null;
   var mover = c !== 'gift';
-  if (mover && isWorker(npc)) return { reason:'kerja', reply:'Aku lagi kerja, nggak bisa pergi.' };
-  if (aff < 30) return { reason:'affinity_rendah', reply:'Aku lagi nggak mood bantu kamu.' };
-  if (aff < 60 && c === 'task' && r01() < 0.5) return { reason:'acak', reply:'Hmm, lagi malas nih. Lain kali ya.' };
+  if (mover && isWorker(npc)) return { reason:'kerja', reply:$t('Aku lagi kerja, nggak bisa pergi.') };
+  if (aff < 30) return { reason:'affinity_rendah', reply:$t('Aku lagi nggak mood bantu kamu.') };
+  if (aff < 60 && c === 'task' && r01() < 0.5) return { reason:'acak', reply:$t('Hmm, lagi malas nih. Lain kali ya.') };
   return null;
 }
 // jam malam: tugas yang memaksa NPC keluar rumah ditolak (kecuali '#')
 function nightGate(npc, plan){
-  try { if (plan.length && !isWorker(npc) && GT.agent.curfewNow() && GT.agent.needsOutdoor(npc, plan)) return { reason:'jam_malam', reply:'Sudah malam, aku di rumah saja.' }; } catch(e){}
+  try { if (plan.length && !isWorker(npc) && GT.agent.curfewNow() && GT.agent.needsOutdoor(npc, plan)) return { reason:'jam_malam', reply:$t('Sudah malam, aku di rumah saja.') }; } catch(e){}
   return null;
 }
 // tidak mau mengancam/memukul orang yang disukai (relasi >= 20; pemain: kedekatan >= 60)
@@ -529,8 +529,8 @@ function onAgentEvent(ev){
   else if (ev.type === 'log'){ pushLog(k, 'say', ev.text); }
   else if (ev.type === 'end'){
     var s = souls[k];
-    if (ev.source === 'player' && !ev.cancelled && ev.ok && !views[k]) GT.toast((ev.npc && ev.npc.name || 'NPC') + ': tugas selesai.');
-    else if (ev.source === 'player' && !ev.cancelled && !ev.ok && !views[k] && ev.failed) GT.toast((ev.npc && ev.npc.name || 'NPC') + ': gagal, ' + clampStr(ev.failed.note, 60));
+    if (ev.source === 'player' && !ev.cancelled && ev.ok && !views[k]) GT.toast($t('{0}: tugas selesai.', [ev.npc && ev.npc.name || 'NPC']));
+    else if (ev.source === 'player' && !ev.cancelled && !ev.ok && !views[k] && ev.failed) GT.toast($t('{0}: gagal, {1}', [ev.npc && ev.npc.name || 'NPC', clampStr(ev.failed.note, 60)]));
   }
   if (views[k]) { try { views[k](ev); } catch(e){} }
 }
@@ -543,7 +543,7 @@ function startPlan(soul, npc, plan, forced, replanned){
     if (ep !== epoch || !res) return;
     if (res.failed && !res.cancelled && !res.busy){
       if (soul.provider !== 'local' && !replanned) return replan(soul, npc, plan, res, forced);
-      GT.npcSay(npc, 'Maaf, gagal: ' + clampStr(res.failed.note, 60));
+      GT.npcSay(npc, $t('Maaf, gagal: {0}', [clampStr(res.failed.note, 60)]));
     }
     var cur = GT.agent.status(npc);
     if (soul.post && !cur.busy && !res.cancelled && !npc.follow) sendHome(soul);
@@ -555,15 +555,15 @@ async function replan(soul, npc, plan, res, forced){
   var ep = epoch, ctrl = new AbortController();
   ctrl.timedOut = false; ctrl.userAbort = false; ctrl.dev = !!forced;
   try {
-    var txt = '[SISTEM] Rencana gagal di langkah ' + (res.failed.i + 1) + ' (' + GT.agent.stepLabel(res.failed.step) + '): ' + res.failed.note + '. Buat rencana baru untuk melanjutkan atau memperbaikinya, atau plan kosong bila mustahil. Dompetmu sekarang ' + GT.agent.wallet(npc) + ' koin.';
+    var txt = $t('[SISTEM] Rencana gagal di langkah {0} ({1}): {2}. Buat rencana baru untuk melanjutkan atau memperbaikinya, atau plan kosong bila mustahil. Dompetmu sekarang {3} koin.', [res.failed.i + 1, GT.agent.stepLabel(res.failed.step), res.failed.note, GT.agent.wallet(npc)]);
     var br = await brainCall(soul, npc, txt, GT.getAffinity(npc), ctrl, true);
     if (ep !== epoch) return;
     if (br.reply) GT.npcSay(npc, br.reply);
     var np = br.plan.length ? GT.agent.normalizePlan(br.plan).steps : [];
-    if (np.length && !GT.agent.status(npc).busy){ pushLog(npc ? GT.npcKey(npc) : '', 'sys', 'Rencana diperbarui.'); startPlan(soul, npc, np, forced, true); }
-    else GT.npcSay(npc, 'Maaf, gagal: ' + clampStr(res.failed.note, 60));
+    if (np.length && !GT.agent.status(npc).busy){ pushLog(npc ? GT.npcKey(npc) : '', 'sys', $t('Rencana diperbarui.')); startPlan(soul, npc, np, forced, true); }
+    else GT.npcSay(npc, $t('Maaf, gagal: {0}', [clampStr(res.failed.note, 60)]));
   } catch(e){
-    GT.npcSay(npc, 'Maaf, gagal: ' + clampStr(res.failed.note, 60));
+    GT.npcSay(npc, $t('Maaf, gagal: {0}', [clampStr(res.failed.note, 60)]));
   }
 }
 function brainCall(soul, npc, text, aff, ctrl, noFallbackMsg){
@@ -582,12 +582,12 @@ function emptyRes(soul, extra){
   return r;
 }
 function fallbackNote(provider, e, code){
-  var who = provider === 'claude' ? 'Claude' : 'Endpoint kustom';
-  if (code === 'unavailable') return 'Claude: Tidak tersedia di tampilan ini. Memakai otak lokal untuk pesan ini.';
-  if (code === 'not_granted') return 'Claude: Tidak tersedia (izin belum diberikan). Memakai otak lokal untuk pesan ini.';
-  if (code === 'timeout') return who + ' terlalu lama menjawab. Memakai otak lokal untuk pesan ini.';
-  var m = e && e.soulCode ? sanitize(e.message) : 'terjadi kesalahan';
-  return who + ' gagal: ' + m + ' Memakai otak lokal untuk pesan ini.';
+  var who = provider === 'claude' ? 'Claude' : $t('Endpoint kustom');
+  if (code === 'unavailable') return $t('Claude: Tidak tersedia di tampilan ini. Memakai otak lokal untuk pesan ini.');
+  if (code === 'not_granted') return $t('Claude: Tidak tersedia (izin belum diberikan). Memakai otak lokal untuk pesan ini.');
+  if (code === 'timeout') return $t('{0} terlalu lama menjawab. Memakai otak lokal untuk pesan ini.', [who]);
+  var m = e && e.soulCode ? sanitize(e.message) : $t('terjadi kesalahan');
+  return $t('{0} gagal: {1} Memakai otak lokal untuk pesan ini.', [who, m]);
 }
 
 function ask(npc, text){
@@ -617,8 +617,8 @@ async function askAsync(soul, npc, text, forced, hint){
       var code = classify(e);
       if (ctrl.userAbort || (code === 'aborted' && !ctrl.timedOut)) return emptyRes(soul, { aborted:true, error:'aborted' });
       if (code === 'rate_limited'){
-        GT.toast('Terlalu cepat, coba lagi sebentar.');
-        return emptyRes(soul, { error:'rate_limited', note:'Claude sedang membatasi permintaan. Coba lagi sebentar.', text:text });
+        GT.toast($t('Terlalu cepat, coba lagi sebentar.'));
+        return emptyRes(soul, { error:'rate_limited', note:$t('Claude sedang membatasi permintaan. Coba lagi sebentar.'), text:text });
       }
       if (soul.provider === 'local') throw e;
       res.fellBack = true; res.usedProvider = 'local'; res.note = fallbackNote(soul.provider, e, code); res.error = code;
@@ -638,27 +638,27 @@ async function askAsync(soul, npc, text, forced, hint){
       if (!plan.length){
         var lb = localBrain(text, { name:npc.name, aff:aff, hour:curHour(), npcObj:npc });
         if (lb.plan.length){ plan = lb.plan; act = legacyOf(plan); reply = lb.reply; res.devOverride = true; }
-        else { act = { type:'none', target:null, item:null }; reply = 'Siap, developer.'; }
+        else { act = { type:'none', target:null, item:null }; reply = $t('Siap, developer.'); }
       }
     } else if (g){
       res.refused = true; res.refuseReason = g.reason;
       reply = g.reply; plan = []; act = { type:'refuse', target:null, item:null };
     } else if (act.type === 'refuse'){
       res.refused = true; res.refuseReason = 'otak';
-      if (!reply) reply = 'Aku lagi nggak mood bantu kamu.';
+      if (!reply) reply = $t('Aku lagi nggak mood bantu kamu.');
     }
     // --- eksekusi
     var ex = { executed:false };
     if (!res.refused && plan.length){
       var cost = planCost(plan);
       if (cost > GT.agent.wallet(npc)){
-        ex = { executed:false, note:'koin_kurang', reply:'Uangku belum cukup (' + cost + ' koin, dompetku ' + GT.agent.wallet(npc) + ').' };
+        ex = { executed:false, note:'koin_kurang', reply:$t('Uangku belum cukup ({0} koin, dompetku {1}).', [cost, GT.agent.wallet(npc)]) };
       } else if (planClass(plan) === 'gift' && GT.agent.giftedToday(npc)){
-        ex = { executed:false, note:'sudah_hari_ini', reply:'Hari ini sudah kuberi hadiah, besok lagi ya.' };
+        ex = { executed:false, note:'sudah_hari_ini', reply:$t('Hari ini sudah kuberi hadiah, besok lagi ya.') };
       } else {
         npc._lastGift = null;
         startPlan(soul, npc, plan, forced, false);
-        ex = { executed:true, sys:'Rencana: ' + GT.agent.describe(plan) };
+        ex = { executed:true, sys:$t('Rencana: {0}', [GT.agent.describe(plan)]) };
         if (act.type === 'gift' && npc._lastGift) act.item = npc._lastGift;
       }
     }
@@ -700,7 +700,7 @@ async function autoPlanFor(npc){
   var s = souls[GT.npcKey(npc)]; if (!s || s.provider === 'local') return null;
   var tmp = { provider:s.provider, hist:[], name:s.name }, c = llmCtrl(25000);
   try {
-    var br = await brainCall(tmp, npc, 'Apa yang mau kamu lakukan sekarang? Pilih satu rencana singkat (1-4 langkah) yang cocok dengan waktu, wataknya, dan dompetmu. Akhiri dengan lapor bila ada hasil yang perlu diketahui ' + playerName() + '.', GT.getAffinity(npc), c, true);
+    var br = await brainCall(tmp, npc, $t('Apa yang mau kamu lakukan sekarang? Pilih satu rencana singkat (1-4 langkah) yang cocok dengan waktu, wataknya, dan dompetmu. Akhiri dengan lapor bila ada hasil yang perlu diketahui {0}.', [playerName()]), GT.getAffinity(npc), c, true);
     return br.plan && br.plan.length ? br.plan : null;
   } catch(e){ return null; } finally { c.done(); }
 }
@@ -711,7 +711,7 @@ async function replyToNpc(tn, fromName, msg, signal){
   var tmp = { provider:s.provider, hist:[], name:s.name }, c = llmCtrl(15000);
   if (signal) signal.addEventListener('abort', function(){ try { c.abort(); } catch(e){} }, { once:true });
   try {
-    var br = await brainCall(tmp, tn, fromName + ' berkata kepadamu: "' + clampStr(msg, 140) + '". Balas singkat saja (plan harus []).', GT.getAffinity(tn), c, true);
+    var br = await brainCall(tmp, tn, $t('{0} berkata kepadamu: "{1}". Balas singkat saja (plan harus []).', [fromName, clampStr(msg, 140)]), GT.getAffinity(tn), c, true);
     return br.reply || '';
   } catch(e){ return ''; } finally { c.done(); }
 }
@@ -721,7 +721,7 @@ async function replyToNpc(tn, fromName, msg, signal){
 var GLYPH = { wait:'○', run:'…', ok:'✓', fail:'✗', cancel:'–' };
 function bagText(npc){
   var b = GT.agent.bag(npc), ids = Object.keys(b);
-  return 'Dompet: ' + GT.agent.wallet(npc) + ' koin · Tas: ' + (ids.length ? ids.map(function(id){ return GT.itemName(id) + ' x' + b[id]; }).join(', ') : 'kosong');
+  return $t('Dompet: {0} koin · Tas: {1}', [GT.agent.wallet(npc), ids.length ? ids.map(function(id){ return GT.itemName(id) + ' x' + b[id]; }).join(', ') : 'kosong']);
 }
 function openChat(npc){
   if (!npc) return null;
@@ -730,10 +730,10 @@ function openChat(npc){
   var wrap = el('div'), head = el('div', 'sl-head'), tagH = el('span'), tagP = el('span', 'sl-tag');
   head.appendChild(tagH); head.appendChild(tagP);
   var wal = el('div', 'sl-wal'); wal.setAttribute('data-wallet', '1');
-  var log = el('div', 'sl-log'); log.setAttribute('role', 'log'); log.setAttribute('aria-live', 'polite'); log.setAttribute('aria-label', 'Percakapan');
+  var log = el('div', 'sl-log'); log.setAttribute('role', 'log'); log.setAttribute('aria-live', 'polite'); log.setAttribute('aria-label', $t('Percakapan'));
   var status = el('div', 'sl-st'); status.setAttribute('role', 'status');
   var input = el('input', 'sl-in'); input.type = 'text'; input.maxLength = 200; input.autocomplete = 'off';
-  input.placeholder = 'Ketik pesan, mis. "ke mart lalu beli roti"'; input.setAttribute('aria-label', 'Pesan untuk ' + npc.name); input.setAttribute('data-autofocus', '');
+  input.placeholder = $t('Ketik pesan, mis. "ke mart lalu beli roti"'); input.setAttribute('aria-label', $t('Pesan untuk {0}', [npc.name])); input.setAttribute('data-autofocus', '');
   wrap.appendChild(head); wrap.appendChild(wal); wrap.appendChild(log); wrap.appendChild(status); wrap.appendChild(input);
   var locked = false, closeTimer = 0, h, planBox = null, planRows = [];
   function addLine(kind, text, dev){
@@ -744,19 +744,19 @@ function openChat(npc){
   }
   function refreshHead(){
     tagH.textContent = hearts(GT.getAffinity(npc)) + ' ' + GT.getAffinity(npc);
-    tagP.textContent = 'Otak: ' + PNAME[soul.provider];
+    tagP.textContent = $t('Otak: {0}', [PNAME[soul.provider]]);
     wal.textContent = bagText(npc);
     var cb = h && h.btn('batal'); if (cb) cb.disabled = !GT.agent.status(npc).busy;
   }
   function setBusy(b){
-    status.textContent = b ? 'Berpikir…' : '';
+    status.textContent = b ? $t('Berpikir…') : '';
     var sb = h && h.btn('send'); if (sb) sb.disabled = b || locked;
     input.readOnly = b || locked;
   }
   // daftar tugas (checklist) yang tercentang langsung
   function buildPlan(labels, states){
     planBox = el('div', 'sl-m sys sl-plan'); planBox.setAttribute('data-plan', '1');
-    planBox.appendChild(el('div', 'sl-plan-t', 'Tugas ' + npc.name + ':'));
+    planBox.appendChild(el('div', 'sl-plan-t', $t('Tugas {0}:', [npc.name])));
     planRows = labels.map(function(lb, i){
       var row = el('div', 'sl-step'), g = el('span', 'sl-g', GLYPH[(states && states[i] && states[i].state) || 'wait']), t = el('span', null, lb);
       row.setAttribute('data-state', (states && states[i] && states[i].state) || 'wait');
@@ -780,16 +780,16 @@ function openChat(npc){
     else if (ev.type === 'step'){ setStep(ev.i, ev.state, ev.state === 'run' ? '' : ev.note); }
     else if (ev.type === 'log'){ if (/^\s*✓/.test(ev.text)) return; addLine('npc', ev.text); }
     else if (ev.type === 'end'){
-      if (ev.cancelled) addLine('sys', 'Tugas dibatalkan.');
-      else if (!ev.ok && ev.failed) addLine('sys', 'Gagal: ' + ev.failed.note + '.');
-      else if (ev.ok && ev.source === 'player') addLine('sys', 'Tugas selesai.');
+      if (ev.cancelled) addLine('sys', $t('Tugas dibatalkan.'));
+      else if (!ev.ok && ev.failed) addLine('sys', $t('Gagal: {0}.', [ev.failed.note]));
+      else if (ev.ok && ev.source === 'player') addLine('sys', $t('Tugas selesai.'));
     } else if (ev.type === 'report') addLine('npc', npc.name + ': ' + ev.text);
     refreshHead();
   }
   views[key] = onEvt;
   // riwayat singkat
   var past = soul.hist.slice(-6);
-  if (!past.length) addLine('sys', npc.name + ' menoleh padamu. Ketik pesan lalu tekan Kirim.');
+  if (!past.length) addLine('sys', $t('{0} menoleh padamu. Ketik pesan lalu tekan Kirim.', [npc.name]));
   past.forEach(function(m){
     if (m.role === 'user') addLine('me', playerName() + ': ' + m.content);
     else { var o = parseBrain(m.content); addLine('npc', npc.name + ': ' + (o.reply || '...')); }
@@ -811,16 +811,16 @@ function openChat(npc){
       if (res.busy) return;
       if (res.error === 'rate_limited'){ addLine('sys', res.note); input.value = t; input.focus(); return; }
       if (res.note && res.fellBack) addLine('sys', res.note);
-      if (!res.ok){ addLine('sys', 'Gagal memproses pesan. Coba lagi.'); input.value = t; return; }
+      if (!res.ok){ addLine('sys', $t('Gagal memproses pesan. Coba lagi.')); input.value = t; return; }
       addLine('npc', npc.name + ': ' + res.reply);
       if (res.hint) addLine('sys', res.hint);
-      if (res.refused) addLine('sys', 'Menolak.');
+      if (res.refused) addLine('sys', $t('Menolak.'));
       else if (res.executed && res.sys && !planBox) addLine('sys', res.sys + '.');
-      else if (res.requested && res.requested.type !== 'none' && !res.executed) addLine('sys', 'Tidak dijalankan.');
-      if (res.affinity_delta) addLine('sys', 'Kedekatan ' + (res.affinity_delta > 0 ? '+' : '') + res.affinity_delta);
+      else if (res.requested && res.requested.type !== 'none' && !res.executed) addLine('sys', $t('Tidak dijalankan.'));
+      if (res.affinity_delta) addLine('sys', $t('Kedekatan {0}{1}', [res.affinity_delta > 0 ? '+' : '', res.affinity_delta]));
       refreshHead();
       if (res.executed && res.plan && res.plan.length === 1 && res.plan[0]['do'] === 'ikuti'){
-        locked = true; setBusy(false); status.textContent = 'Menutup obrolan…';
+        locked = true; setBusy(false); status.textContent = $t('Menutup obrolan…');
         closeTimer = setTimeout(function(){ if (h.isOpen()) h.close('aksi'); }, 1100);
       } else { input.focus(); }
     });
@@ -829,17 +829,17 @@ function openChat(npc){
     if (e.key === 'Enter' && !e.isComposing){ e.preventDefault(); e.stopPropagation(); send(); }
   });
   h = GT.modal({
-    title:'Jiwa: ' + npc.name,
+    title:$t('Jiwa: {0}', [npc.name]),
     body:wrap,
     actions:[
-      { id:'send', label:'Kirim', primary:true, onClick:send },
-      { id:'batal', label:'Batalkan tugas', onClick:function(){
-          if (GT.agent.cancel(npc)) { if (!planBox) addLine('sys', 'Tugas dibatalkan.'); }
-          else addLine('sys', 'Tidak ada tugas yang berjalan.');
+      { id:'send', label:$t('Kirim'), primary:true, onClick:send },
+      { id:'batal', label:$t('Batalkan tugas'), onClick:function(){
+          if (GT.agent.cancel(npc)) { if (!planBox) addLine('sys', $t('Tugas dibatalkan.')); }
+          else addLine('sys', $t('Tidak ada tugas yang berjalan.'));
           refreshHead(); return false;
         } },
-      { id:'cfg', label:'Atur', onClick:function(){ openConfig(key, npc.name, refreshHead); } },
-      { id:'close', label:'Tutup' }
+      { id:'cfg', label:$t('Atur'), onClick:function(){ openConfig(key, npc.name, refreshHead); } },
+      { id:'close', label:$t('Tutup') }
     ],
     onClose:function(){
       clearTimeout(closeTimer);
@@ -859,10 +859,10 @@ function claudePresent(){ try { return !!(window.claude && typeof window.claude.
 function openConfig(key, name, onDone){
   var cur = souls[key] ? souls[key].provider : 'local';
   var body = el('div');
-  body.appendChild(el('p', null, 'Pilih otak untuk ' + name + ':'));
-  var seg = el('div', 'mseg'); seg.setAttribute('role', 'radiogroup'); seg.setAttribute('aria-label', 'Provider otak');
+  body.appendChild(el('p', null, $t('Pilih otak untuk {0}:', [name])));
+  var seg = el('div', 'mseg'); seg.setAttribute('role', 'radiogroup'); seg.setAttribute('aria-label', $t('Provider otak'));
   var radios = {};
-  [['local', 'Lokal (tanpa AI)'], ['claude', 'Claude (bawaan artifact)'], ['custom', 'Endpoint kustom']].forEach(function(p){
+  [['local', $t('Lokal (tanpa AI)')], ['claude', $t('Claude (bawaan artifact)')], ['custom', $t('Endpoint kustom')]].forEach(function(p){
     var lab = el('label'), r = el('input'); r.type = 'radio'; r.name = 'sl-prov'; r.value = p[0]; r.checked = (p[0] === cur);
     if (p[0] === 'claude' && !claudePresent()) { /* tetap boleh dipilih; jatuh ke lokal bila tak tersedia */ }
     lab.appendChild(r); lab.appendChild(el('span', null, p[1])); seg.appendChild(lab); radios[p[0]] = r;
@@ -876,16 +876,16 @@ function openConfig(key, name, onDone){
     i.autocomplete = type === 'password' ? 'new-password' : 'off'; i.spellcheck = false; i.setAttribute('autocapitalize', 'off');
     l.appendChild(s); l.appendChild(i); cbox.appendChild(l); return i;
   }
-  var fUrl = field('Endpoint URL', 'text', custom.url, 'https://api.openai.com/v1/chat/completions');
-  var fKey = field('Kunci API (disembunyikan)', 'password', '', custom.key ? '(sudah diisi untuk sesi ini)' : 'sk-...');
-  var fModel = field('Model', 'text', custom.model, 'gpt-4o-mini');
+  var fUrl = field($t('Endpoint URL'), 'text', custom.url, 'https://api.openai.com/v1/chat/completions');
+  var fKey = field($t('Kunci API (disembunyikan)'), 'password', '', custom.key ? $t('(sudah diisi untuk sesi ini)') : 'sk-...');
+  var fModel = field($t('Model'), 'text', custom.model, 'gpt-4o-mini');
   var chkL = el('label', 'sl-chk'), chk = el('input'); chk.type = 'checkbox'; chk.checked = !!custom.remember;
-  chkL.appendChild(chk); chkL.appendChild(el('span', null, 'Ingat di browser ini (kunci disimpan di localStorage perangkat ini)'));
+  chkL.appendChild(chk); chkL.appendChild(el('span', null, $t('Ingat di browser ini (kunci disimpan di localStorage perangkat ini)')));
   cbox.appendChild(chkL);
-  cbox.appendChild(el('p', 'mnote', 'Kunci hanya dikirim ke endpoint di atas. Tanpa centang, kunci hilang saat halaman ditutup.'));
-  cbox.appendChild(el('p', 'mnote', 'Di dalam claude.ai, koneksi ke situs lain diblokir; mode ini jalan saat file dibuka di luar claude.ai.'));
-  var forget = el('button', 'mbtn', 'Lupakan kunci'); forget.type = 'button'; forget.classList.add('sl-forget');
-  forget.addEventListener('click', function(){ custom.key = ''; fKey.value = ''; fKey.placeholder = 'sk-...'; persist(); errEl.textContent = ''; GT.toast('Kunci dilupakan.'); });
+  cbox.appendChild(el('p', 'mnote', $t('Kunci hanya dikirim ke endpoint di atas. Tanpa centang, kunci hilang saat halaman ditutup.')));
+  cbox.appendChild(el('p', 'mnote', $t('Di dalam claude.ai, koneksi ke situs lain diblokir; mode ini jalan saat file dibuka di luar claude.ai.')));
+  var forget = el('button', 'mbtn', $t('Lupakan kunci')); forget.type = 'button'; forget.classList.add('sl-forget');
+  forget.addEventListener('click', function(){ custom.key = ''; fKey.value = ''; fKey.placeholder = 'sk-...'; persist(); errEl.textContent = ''; GT.toast($t('Kunci dilupakan.')); });
   cbox.appendChild(forget);
   body.appendChild(cbox);
   var errEl = el('p', 'sl-err'); errEl.setAttribute('role', 'alert'); body.appendChild(errEl);
@@ -895,32 +895,32 @@ function openConfig(key, name, onDone){
     PROVIDERS.forEach(function(p){ if (radios[p].checked) v = p; });
     cur = v;
     cbox.hidden = v !== 'custom';
-    if (v === 'local') info.textContent = 'Parser kata kunci Indonesia, bisa beberapa langkah: "ke mart lalu beli roti dan susu terus kasih ke aku", ikut aku, berhenti, main dadu, tunggu 30 menit, ajari X: ..., lakukan X. Selalu tersedia. Awali pesan dengan # untuk perintah paksa (mode developer).';
-    else if (v === 'claude') info.textContent = claudePresent() ? 'Memakai Claude bawaan artifact. Izin diminta saat kamu menekan Kirim pertama kali.' : 'Tidak tersedia di tampilan ini. Pesan akan dijawab otak lokal.';
-    else info.textContent = 'Endpoint OpenAI-compatible (Chat Completions). Bila gagal, giliran itu dijawab otak lokal.';
+    if (v === 'local') info.textContent = $t('Parser kata kunci Indonesia, bisa beberapa langkah: "ke mart lalu beli roti dan susu terus kasih ke aku", ikut aku, berhenti, main dadu, tunggu 30 menit, ajari X: ..., lakukan X. Selalu tersedia. Awali pesan dengan # untuk perintah paksa (mode developer).');
+    else if (v === 'claude') info.textContent = claudePresent() ? $t('Memakai Claude bawaan artifact. Izin diminta saat kamu menekan Kirim pertama kali.') : $t('Tidak tersedia di tampilan ini. Pesan akan dijawab otak lokal.');
+    else info.textContent = $t('Endpoint OpenAI-compatible (Chat Completions). Bila gagal, giliran itu dijawab otak lokal.');
   }
   Object.keys(radios).forEach(function(p){ radios[p].addEventListener('change', sync); });
   sync();
   var hh = GT.modal({
-    title:'Atur jiwa: ' + name,
+    title:$t('Atur jiwa: {0}', [name]),
     body:body,
     actions:[
-      { label:'Simpan', primary:true, onClick:function(){
+      { label:$t('Simpan'), primary:true, onClick:function(){
         sync();
         var cfg = null;
         if (cur === 'custom'){
           var u = fUrl.value.trim();
-          if (!urlOk(u)){ errEl.textContent = 'URL harus https:// (http:// hanya untuk localhost).'; fUrl.focus(); return false; }
+          if (!urlOk(u)){ errEl.textContent = $t('URL harus https:// (http:// hanya untuk localhost).'); fUrl.focus(); return false; }
           cfg = { url:u, model:fModel.value.trim() || 'gpt-4o-mini', remember:chk.checked };
           if (fKey.value) cfg.key = fKey.value;
         }
-        if (!setBrain(key, cur, cfg)){ errEl.textContent = 'Pengaturan tidak valid.'; return false; }
+        if (!setBrain(key, cur, cfg)){ errEl.textContent = $t('Pengaturan tidak valid.'); return false; }
         fKey.value = '';
-        GT.toast('Jiwa ' + name + ': ' + PNAME[cur]);
+        GT.toast($t('Jiwa {0}: {1}', [name, PNAME[cur]]));
         if (onDone) onDone();
         return true;
       } },
-      { label:'Batal' }
+      { label:$t('Batal') }
     ]
   });
   return hh;
@@ -940,51 +940,51 @@ function nameOfKey(k){
   if (souls[k]) return souls[k].name;
   if (met[k]) return met[k];
   var w = GT.world;
-  if (w && w.own && k === 'house:' + w.own.id + ':0') return 'Ibu';
+  if (w && w.own && k === 'house:' + w.own.id + ':0') return $t('Ibu');
   return k;
 }
 function npcOfKey(k){ try { return GT.agent.npcByKey(k); } catch(e){ return GT.findNpc(k); } }
 function openGiveCoins(k, nm, after){
-  var n = npcOfKey(k); if (!n) { GT.toast('NPC tidak ditemukan.'); return null; }
-  var body = el('div'); body.appendChild(el('p', null, 'Beri koin dari dompetmu (' + GT.state.coins + ' koin) ke ' + nm + '.'));
+  var n = npcOfKey(k); if (!n) { GT.toast($t('NPC tidak ditemukan.')); return null; }
+  var body = el('div'); body.appendChild(el('p', null, $t('Beri koin dari dompetmu ({0} koin) ke {1}.', [GT.state.coins, nm])));
   var acts = [10, 50, 100].map(function(v){
     return { label:'+' + v, onClick:function(){
-      if (GT.agent.giveCoins(n, v)){ GT.toast(nm + ' menerima ' + v + ' koin.'); if (after) after(); } else GT.toast('Koinmu tidak cukup.');
+      if (GT.agent.giveCoins(n, v)){ GT.toast($t('{0} menerima {1} koin.', [nm, v])); if (after) after(); } else GT.toast($t('Koinmu tidak cukup.'));
       return true;
     } };
   });
-  acts.push({ label:'Batal' });
-  return GT.modal({ title:'Beri koin', body:body, actions:acts });
+  acts.push({ label:$t('Batal') });
+  return GT.modal({ title:$t('Beri koin'), body:body, actions:acts });
 }
 function openPanel(){
   if (GT.isUiOpen()) return null;
   var body = el('div'), list = el('div'), skillBox = el('div');
-  body.appendChild(el('p', 'mnote', 'Beri jiwa ke NPC, lalu hadapi dan tekan E untuk kirim pesan. Daftar: Ibu dan NPC yang pernah kamu ajak bicara.'));
+  body.appendChild(el('p', 'mnote', $t('Beri jiwa ke NPC, lalu hadapi dan tekan E untuk kirim pesan. Daftar: Ibu dan NPC yang pernah kamu ajak bicara.')));
   body.appendChild(list); body.appendChild(skillBox);
-  var h = GT.modal({ title:'Jiwa NPC', body:body, backdropClose:true, actions:[{ label:'Tutup', primary:true }] });
+  var h = GT.modal({ title:$t('Jiwa NPC'), body:body, backdropClose:true, actions:[{ label:$t('Tutup'), primary:true }] });
   function render(){
     list.textContent = '';
     var keys = candidateKeys();
     keys.forEach(function(k){
       var nm = nameOfKey(k), s = souls[k], n = GT.findNpc(k);
       var row = el('div', 'mrow'), g = el('div', 'grow');
-      var t = el('div', null, nm + (/^house:/.test(k) && GT.world && GT.world.own && k === 'house:' + GT.world.own.id + ':0' ? ' (ibumu)' : ''));
-      var sub = el('span', 'sl-sub', (s ? 'Jiwa: ' + PNAME[s.provider] : 'Belum berjiwa') + (n ? ' · ' + sceneLabel(GT.npcScene(n)) : ''));
+      var t = el('div', null, nm + (/^house:/.test(k) && GT.world && GT.world.own && k === 'house:' + GT.world.own.id + ':0' ? $t(' (ibumu)') : ''));
+      var sub = el('span', 'sl-sub', (s ? $t('Jiwa: {0}', [PNAME[s.provider]]) : $t('Belum berjiwa')) + (n ? ' · ' + sceneLabel(GT.npcScene(n)) : ''));
       g.appendChild(t); g.appendChild(sub);
       if (s && n){
-        var st = GT.agent.status(n), tk = el('span', 'sl-sub', 'Tugas: ' + (st.busy ? st.plan.map(function(p){ return p.label; }).join(' > ') : 'tidak ada'));
+        var st = GT.agent.status(n), tk = el('span', 'sl-sub', $t('Tugas: {0}', [st.busy ? st.plan.map(function(p){ return p.label; }).join(' > ') : $t('tidak ada')]));
         tk.setAttribute('data-task', '1');
-        var wl = el('span', 'sl-sub', 'Dompet ' + st.wallet + ' koin · ' + bagText(n).split(' · ')[1]);
+        var wl = el('span', 'sl-sub', $t('Dompet {0} koin · {1}', [st.wallet, bagText(n).split(' · ')[1]]));
         g.appendChild(tk); g.appendChild(wl);
       }
       row.appendChild(g);
-      var b1 = el('button', 'mbtn', s ? 'Atur' : 'Beri jiwa'); b1.type = 'button';
-      b1.setAttribute('aria-label', (s ? 'Atur jiwa ' : 'Beri jiwa ') + nm);
+      var b1 = el('button', 'mbtn', s ? $t('Atur') : $t('Beri jiwa')); b1.type = 'button';
+      b1.setAttribute('aria-label', (s ? $t('Atur jiwa ') : $t('Beri jiwa ')) + nm);
       b1.addEventListener('click', function(){ openConfig(k, nm, render); });
       row.appendChild(b1);
       if (s){
-        var b2 = el('button', 'mbtn', 'Copot'); b2.type = 'button'; b2.setAttribute('aria-label', 'Copot jiwa ' + nm);
-        b2.addEventListener('click', function(){ removeSoul(k); GT.toast('Jiwa ' + nm + ' dicopot.'); render(); });
+        var b2 = el('button', 'mbtn', $t('Copot')); b2.type = 'button'; b2.setAttribute('aria-label', $t('Copot jiwa {0}', [nm]));
+        b2.addEventListener('click', function(){ removeSoul(k); GT.toast($t('Jiwa {0} dicopot.', [nm])); render(); });
         row.appendChild(b2);
       }
       list.appendChild(row);
@@ -992,13 +992,13 @@ function openPanel(){
         var r2 = el('div', 'mrow sl-r2');
         var lab = el('label', 'sl-chk'), cb = el('input'); cb.type = 'checkbox'; cb.checked = GT.agent.isAuto(n); cb.setAttribute('data-auto', k);
         if (isWorker(n)) cb.disabled = true;
-        cb.addEventListener('change', function(){ GT.agent.setAuto(n, cb.checked); GT.toast(nm + (cb.checked ? ' hidup mandiri.' : ' tidak lagi mandiri.')); });
-        lab.appendChild(cb); lab.appendChild(el('span', null, 'Hidup mandiri' + (isWorker(n) ? ' (pekerja)' : s.provider !== 'local' ? ' (memakai kuota otak)' : '')));
+        cb.addEventListener('change', function(){ GT.agent.setAuto(n, cb.checked); GT.toast(nm + (cb.checked ? $t(' hidup mandiri.') : $t(' tidak lagi mandiri.'))); });
+        lab.appendChild(cb); lab.appendChild(el('span', null, $t('Hidup mandiri{0}', [isWorker(n) ? $t(' (pekerja)') : s.provider !== 'local' ? $t(' (memakai kuota otak)') : ''])));
         r2.appendChild(lab);
-        var b3 = el('button', 'mbtn', 'Beri koin'); b3.type = 'button'; b3.setAttribute('aria-label', 'Beri koin ke ' + nm);
+        var b3 = el('button', 'mbtn', $t('Beri koin')); b3.type = 'button'; b3.setAttribute('aria-label', $t('Beri koin ke {0}', [nm]));
         b3.addEventListener('click', function(){ openGiveCoins(k, nm, render); });
         r2.appendChild(b3);
-        var b4 = el('button', 'mbtn', 'Batalkan tugas'); b4.type = 'button'; b4.disabled = !GT.agent.status(n).busy;
+        var b4 = el('button', 'mbtn', $t('Batalkan tugas')); b4.type = 'button'; b4.disabled = !GT.agent.status(n).busy;
         b4.addEventListener('click', function(){ GT.agent.cancel(n); render(); });
         r2.appendChild(b4);
         list.appendChild(r2);
@@ -1006,24 +1006,24 @@ function openPanel(){
         if (rs){
           var rb = el('div', 'sl-sub sl-rel'); rb.setAttribute('data-rel', k);
           var fmt = function(a){ return a.length ? a.map(function(x){ return x.name + ' ' + (x.v > 0 ? '+' : '') + x.v; }).join(', ') : '-'; };
-          rb.appendChild(el('b', null, 'Hubungan'));
-          rb.appendChild(el('span', 'sl-relL', ' Suka: ' + fmt(rs.suka)));
-          rb.appendChild(el('span', 'sl-relD', ' · Tidak suka: ' + fmt(rs.benci)));
+          rb.appendChild(el('b', null, $t('Hubungan')));
+          rb.appendChild(el('span', 'sl-relL', $t(' Suka: {0}', [fmt(rs.suka)])));
+          rb.appendChild(el('span', 'sl-relD', $t(' · Tidak suka: {0}', [fmt(rs.benci)])));
           list.appendChild(rb);
         }
       }
     });
-    if (!keys.length) list.appendChild(el('p', 'mnote', 'Belum ada NPC. Ajak bicara seseorang dulu.'));
+    if (!keys.length) list.appendChild(el('p', 'mnote', $t('Belum ada NPC. Ajak bicara seseorang dulu.')));
     skillBox.textContent = '';
     var sk = GT.agent.skills.list();
-    skillBox.appendChild(el('p', 'mnote', 'Keterampilan yang diajarkan (ajari NAMA: langkah, langkah):'));
-    if (!sk.length) skillBox.appendChild(el('p', 'mnote', '(belum ada)'));
+    skillBox.appendChild(el('p', 'mnote', $t('Keterampilan yang diajarkan (ajari NAMA: langkah, langkah):')));
+    if (!sk.length) skillBox.appendChild(el('p', 'mnote', $t('(belum ada)')));
     sk.forEach(function(name){
       var r = el('div', 'mrow'), gg = el('div', 'grow');
       gg.appendChild(el('div', null, name));
       gg.appendChild(el('span', 'sl-sub', (GT.agent.skills.get(name) || []).map(function(s){ return GT.agent.stepLabel(s); }).join(' > ')));
       r.appendChild(gg);
-      var fb = el('button', 'mbtn', 'Lupakan'); fb.type = 'button'; fb.setAttribute('aria-label', 'Lupakan keterampilan ' + name);
+      var fb = el('button', 'mbtn', $t('Lupakan')); fb.type = 'button'; fb.setAttribute('aria-label', $t('Lupakan keterampilan {0}', [name]));
       fb.addEventListener('click', function(){ GT.agent.skills.forget(name); render(); });
       r.appendChild(fb); skillBox.appendChild(r);
     });
@@ -1135,7 +1135,7 @@ GT.register({
   id:'soul',
   init:function(){
     loadStore();
-    GT.addHudButton({ id:'btnJiwa', label:'Jiwa', key:'J', onClick:openPanel });
+    GT.addHudButton({ id:'btnJiwa', label:$t('Jiwa'), key:'J', onClick:openPanel });
     setInterval(postTick, DELAY.postTick);
     GT.agent.on(onAgentEvent);
     GT.agent.setHook({ isLlm:function(npc){ var sl = souls[GT.npcKey(npc)]; return !!sl && sl.provider !== 'local'; }, autoPlan:autoPlanFor });

@@ -20,10 +20,10 @@
   var LS_KEYS = 'gt.chain.keys', LS_FORCE = 'gt.chain.chooseAccount';
   var TILE_ITEM = { water: 'fish', rock: 'ore', tree: 'wood' };
   var MERCHANTS = [
-    { id: 'sari', pal: 3, dx: 3, dy: 2, tag: 'Sari · Ikan' },
-    { id: 'budi', pal: 2, dx: 5, dy: 2, tag: 'Budi · Bengkel' },
-    { id: 'wati', pal: 5, dx: -3, dy: 2, tag: 'Wati · Roti' },
-    { id: 'joko', pal: 4, dx: -5, dy: 2, tag: 'Joko · Serba Ada' }
+    { id: 'sari', pal: 3, dx: 3, dy: 2, tag: $t('Sari · Ikan') },
+    { id: 'budi', pal: 2, dx: 5, dy: 2, tag: $t('Budi · Bengkel') },
+    { id: 'wati', pal: 5, dx: -3, dy: 2, tag: $t('Wati · Roti') },
+    { id: 'joko', pal: 4, dx: -5, dy: 2, tag: $t('Joko · Serba Ada') }
   ];
   var S = { mode: 'loading', cfg: null, account: null, st: null, market: null, shops: null, history: [], busy: false, poll: 0, modal: null, plots: [], npcs: {} };
 
@@ -48,6 +48,7 @@
     opts = opts || {};
     var method = opts.method || 'GET', body = opts.body ? JSON.stringify(opts.body) : '';
     var headers = { 'content-type': 'application/json' };
+    if (window.GT_LANG === 'id') headers['x-gt-lang'] = 'id'; // the server answers in English unless told otherwise
     var signing = S.account && window.NearLib ? signHeaders(method, '/api' + path, body) : Promise.resolve({});
     return signing.then(function (sh) {
       for (var k in sh) headers[k] = sh[k];
@@ -86,16 +87,16 @@
       if (shell) shell.insertBefore(banner, shell.firstChild);
     }
     var txt, cls = 'chain-banner ';
-    if (S.mode === 'offline') { txt = 'OFFLINE DEMO · hanya mengumpulkan, tidak ada transaksi on-chain'; cls += 'off'; }
-    else if (S.mode === 'mock') { txt = 'SERVER MOCK CHAIN · transaksi tiruan, bukan testnet'; cls += 'mock'; }
-    else if (S.mode === 'testnet') { txt = 'NEAR testnet' + (S.account ? ' · ' + S.account : ' · belum masuk'); cls += 'net'; }
-    else { txt = 'Menghubungkan…'; cls += 'mock'; }
+    if (S.mode === 'offline') { txt = $t('OFFLINE DEMO · hanya mengumpulkan, tidak ada transaksi on-chain'); cls += 'off'; }
+    else if (S.mode === 'mock') { txt = $t('SERVER MOCK CHAIN · transaksi tiruan, bukan testnet'); cls += 'mock'; }
+    else if (S.mode === 'testnet') { txt = $t('NEAR testnet{0}', [S.account ? ' · ' + S.account : $t(' · belum masuk')]); cls += 'net'; }
+    else { txt = $t('Menghubungkan…'); cls += 'mock'; }
     banner.className = cls; banner.textContent = txt;
     banner.hidden = S.mode === 'testnet' && !chainUI(); // mock and offline banners are warnings and always show
     // before signing in, the prototype's local coin counter would show a balance that isn't yours: hide it
     document.documentElement.classList.toggle('gt-guest', (S.mode === 'testnet' || S.mode === 'mock') && !S.account);
     renderTitle();
-    if (accBtn) accBtn.textContent = S.account || S.mode === 'offline' ? 'Tas' : 'Masuk';
+    if (accBtn) accBtn.textContent = S.account || S.mode === 'offline' ? $t('Tas') : $t('Masuk');
   }
 
   /* ---- Title card: what this is and one button to start, for anyone not signed in yet ---- */
@@ -104,9 +105,9 @@
     var open = (S.market || []).filter(function (m) { return m.open; }), closed = (S.market || []).length - open.length, best = null;
     open.forEach(function (m) { m.items.forEach(function (it) { if (it.ask != null && (!best || Math.abs(it.changePct) > Math.abs(best.it.changePct))) best = { m: m, it: it }; }); });
     var parts = [];
-    if (best) parts.push(item(best.it.token) + ' di ' + best.m.name + ' ' + best.it.ask + ' koin' + (best.it.changePct ? ' (' + (best.it.changePct > 0 ? 'naik ' : 'turun ') + Math.abs(best.it.changePct) + '%)' : ''));
-    if (closed) parts.push(closed + ' toko tutup, butuh bantuan warga');
-    return parts.length ? 'Di pasar sekarang: ' + parts.join(' · ') : null;
+    if (best) parts.push($t('{0} di {1} {2} koin{3}', [item(best.it.token), best.m.name, best.it.ask, best.it.changePct ? ' (' + (best.it.changePct > 0 ? $t('naik ') : $t('turun ')) + Math.abs(best.it.changePct) + '%)' : '']));
+    if (closed) parts.push($t('{0} toko tutup, butuh bantuan warga', [closed]));
+    return parts.length ? $t('Di pasar sekarang: {0}', [parts.join(' · ')]) : null;
   }
   function renderTitle() {
     var show = (S.mode === 'testnet' || S.mode === 'mock') && !S.account;
@@ -123,18 +124,18 @@
     titleEl.textContent = '';
     var card = $('div', 'gt-title-card');
     var h = $('h1', null, 'Genesis Town'); h.id = 'gt-title-h'; card.appendChild(h);
-    card.appendChild($('p', 'gt-title-lead', 'Kota pasar piksel. Kumpulkan, olah, dan jual ke pedagang yang harganya bergerak karena pemain.'));
+    card.appendChild($('p', 'gt-title-lead', $t('Kota pasar piksel. Kumpulkan, olah, dan jual ke pedagang yang harganya bergerak karena pemain.')));
     var live = liveLine();
     if (live) card.appendChild($('p', 'gt-title-live', live));
     var acts = $('div', 'gt-title-acts');
-    acts.appendChild(button('Main sekarang', function () { login(); }, 'primary'));
-    acts.appendChild(button('Lihat-lihat dulu', function () { try { sessionStorage.setItem('gt.title.skip', '1'); } catch (e) { /* storage blocked */ } renderTitle(); }));
+    acts.appendChild(button($t('Main sekarang'), function () { login(); }, 'primary'));
+    acts.appendChild(button($t('Lihat-lihat dulu'), function () { try { sessionStorage.setItem('gt.title.skip', '1'); } catch (e) { /* storage blocked */ } renderTitle(); }));
     card.appendChild(acts);
-    card.appendChild($('p', 'gt-title-note', 'Masuk pakai Google atau email. Tanpa dompet, tanpa biaya, langsung di browser.'));
+    card.appendChild($('p', 'gt-title-note', $t('Masuk pakai Google atau email. Tanpa dompet, tanpa biaya, langsung di browser.')));
     titleEl.appendChild(card);
   }
 
-  var SEASON = { semi: 'Semi', panas: 'Panas', gugur: 'Gugur', dingin: 'Dingin' };
+  var SEASON = { semi: $t('Semi'), panas: $t('Panas'), gugur: $t('Gugur'), dingin: $t('Dingin') };
   function renderHud() {
     if (!hudCell) {
       var hud = document.getElementById('hud');
@@ -145,7 +146,7 @@
     var st = S.st;
     hudCell.textContent = '';
     if (!st) return;
-    var l = $('span', 'lbl', 'ENERGI · MUSIM'); hudCell.appendChild(l);
+    var l = $('span', 'lbl', $t('ENERGI · MUSIM')); hudCell.appendChild(l);
     var v = $('span', 'val');
     var bar = $('span', 'chain-energy'); var fill = $('i'); fill.style.width = Math.round(100 * st.energy / st.energyMax) + '%'; bar.appendChild(fill);
     v.appendChild(bar);
@@ -179,14 +180,14 @@
     lsSet(LS_KEY, null);
     var kp = sessionKey();
     var body = $('div');
-    body.appendChild($('p', null, 'Akunmu (' + r.accountId.split('.')[0] + ') belum punya kunci game di perangkat ini.'));
-    body.appendChild($('p', null, 'Setujui satu kali di jendela NEAR Auth, lalu kunci baru ditambahkan ke akunmu di testnet. Kunci ini hanya bisa memanggil kontrak game, tidak bisa memindahkan NEAR. Gas dibayar game.'));
+    body.appendChild($('p', null, $t('Akunmu ({0}) belum punya kunci game di perangkat ini.', [r.accountId.split('.')[0]])));
+    body.appendChild($('p', null, $t('Setujui satu kali di jendela NEAR Auth, lalu kunci baru ditambahkan ke akunmu di testnet. Kunci ini hanya bisa memanggil kontrak game, tidak bisa memindahkan NEAR. Gas dibayar game.')));
     return new Promise(function (resolve, reject) {
-      GT.modal({ title: 'Perangkat baru', body: body, onClose: function (why) { if (why !== 'action') reject(new Error('Dibatalkan')); }, actions: [{ label: 'Setujui di NEAR Auth', primary: true, onClick: function (h) {
+      GT.modal({ title: $t('Perangkat baru'), body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui di NEAR Auth'), primary: true, onClick: function (h) {
         var prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl }), da;
-        GT.toast('Membuka NEAR Auth…');
+        GT.toast($t('Membuka NEAR Auth…'));
         Promise.all([prov.viewAccessKey({ accountId: r.accountId, publicKey: L.PublicKey.from(r.ownerPublicKey) }), prov.viewBlock({ finality: 'final' })])
-          .catch(function () { throw new Error('Kunci NEAR Auth-mu tidak ditemukan di akun ini.'); })
+          .catch(function () { throw new Error($t('Kunci NEAR Auth-mu tidak ditemukan di akun ini.')); })
           .then(function (x) {
             da = L.buildDelegateAction({
               senderId: r.accountId, receiverId: r.accountId,
@@ -197,7 +198,7 @@
           })
           .then(function () { return provider.getSignatureRequest(); })
           .then(function (res) {
-            GT.toast('Menambahkan kunci ke akunmu…');
+            GT.toast($t('Menambahkan kunci ke akunmu…'));
             var sr = res.signatureRequest;
             return api('/auth/add-key', { method: 'POST', body: {
               idToken: idToken,
@@ -205,7 +206,7 @@
               signatureRequest: { guardId: sr.guardId, verifyPayload: sr.verifyPayload, signPayload: Array.from(sr.signPayload), algorithm: sr.algorithm || 'eddsa' }
             } });
           })
-          .then(function (out) { h.close('action'); resolve(out); }, function (e) { GT.toast('Gagal: ' + (e && e.message || e)); });
+          .then(function (out) { h.close('action'); resolve(out); }, function (e) { GT.toast($t('Gagal: {0}', [e && e.message || e])); });
         return false;
       } }] });
     });
@@ -214,7 +215,7 @@
   // `via` is 'google' for "Masuk dengan Google" (the token is Google's own); otherwise the token is NEAR Auth's.
   function finishLogin(idToken, retried, provider, via) {
     var kp = sessionKey();
-    GT.toast(chainUI() ? 'Membuat akunmu di NEAR testnet…' : 'Menyiapkan akunmu…');
+    GT.toast(chainUI() ? $t('Membuat akunmu di NEAR testnet…') : $t('Menyiapkan akunmu…'));
     var reg = function (pk) { var b = { idToken: idToken, sessionPublicKey: pk }; if (via) b.provider = via; return api('/auth/register', { method: 'POST', body: b }); };
     return reg(kp.getPublicKey().toString())
       .catch(function (e) {
@@ -228,23 +229,23 @@
           // Adding a key for a new device needs the owner key, which only NEAR Auth can use.
           var needProvider = function () {
             if (provider) return;
-            if (via === 'google') throw new Error('Akun ini sudah dipakai di perangkat lain. Perangkat baru perlu persetujuan NEAR Auth, yang belum aktif di alamat ini; main dulu dari perangkat pertamamu.');
-            throw new Error('Akun ini perlu kunci baru; masuk dengan NEAR Auth.');
+            if (via === 'google') throw new Error($t('Akun ini sudah dipakai di perangkat lain. Perangkat baru perlu persetujuan NEAR Auth, yang belum aktif di alamat ini; main dulu dari perangkat pertamamu.'));
+            throw new Error($t('Akun ini perlu kunci baru; masuk dengan NEAR Auth.'));
           };
           // a key for this account from an earlier sign-in in this browser: use it instead of adding a new one
           var known = keyOf(r.accountId);
           if (known && known.getPublicKey().toString() !== kp.getPublicKey().toString()) {
             return reg(known.getPublicKey().toString()).then(function (r2) {
-              if (r2.needsKey) { needProvider(); return newDevice(provider, r, idToken).then(function () { signedIn(r.accountId, sessionKey(), 'Kunci baru ditambahkan. Selamat datang kembali!'); }); }
-              return signedIn(r2.accountId, known, 'Selamat datang kembali!');
+              if (r2.needsKey) { needProvider(); return newDevice(provider, r, idToken).then(function () { signedIn(r.accountId, sessionKey(), $t('Kunci baru ditambahkan. Selamat datang kembali!')); }); }
+              return signedIn(r2.accountId, known, $t('Selamat datang kembali!'));
             });
           }
           needProvider();
-          return newDevice(provider, r, idToken).then(function () { return signedIn(r.accountId, sessionKey(), 'Kunci baru ditambahkan. Selamat datang kembali!'); });
+          return newDevice(provider, r, idToken).then(function () { return signedIn(r.accountId, sessionKey(), $t('Kunci baru ditambahkan. Selamat datang kembali!')); });
         }
         keepKey(r.accountId, kp);
         S.account = r.accountId; lsSet(LS_ACC, r.accountId); renderBanner();
-        GT.toast(r.created ? 'Akun dibuat! Paket awal: 100 koin, 1 Alat, 3 Roti, 3 Gandum.' : 'Selamat datang kembali!');
+        GT.toast(r.created ? $t('Akun dibuat! Paket awal: 100 koin, 1 Alat, 3 Roti, 3 Gandum.') : $t('Selamat datang kembali!'));
         return refresh(true);
       });
   }
@@ -268,7 +269,7 @@
     }
     try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) { /* not loaded */ }
     renderBanner(); renderHud();
-    GT.toast('Kamu sudah keluar. Tekan Masuk untuk masuk lagi.');
+    GT.toast($t('Kamu sudah keluar. Tekan Masuk untuk masuk lagi.'));
     return refresh(true);
   }
 
@@ -291,64 +292,64 @@
       var sc = document.createElement('script');
       sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true;
       sc.onload = function () {
-        if (!window.google || !google.accounts || !google.accounts.id) { reject(new Error('Google tidak termuat')); return; }
+        if (!window.google || !google.accounts || !google.accounts.id) { reject(new Error($t('Google tidak termuat'))); return; }
         google.accounts.id.initialize({ client_id: S.cfg.google.clientId, callback: function (res) { if (onGoogle) onGoogle(res); }, ux_mode: 'popup', auto_select: false, use_fedcm_for_button: true });
         resolve(google.accounts.id);
       };
-      sc.onerror = function () { gsi = null; reject(new Error('Tidak bisa memuat tombol Google (cek koneksi atau pemblokir iklan).')); };
+      sc.onerror = function () { gsi = null; reject(new Error($t('Tidak bisa memuat tombol Google (cek koneksi atau pemblokir iklan).'))); };
       document.head.appendChild(sc);
     });
     return gsi;
   }
   function chooseLogin() {
     var body = $('div', 'gt-login');
-    body.appendChild($('p', null, 'Pilih cara masuk. Akunmu tetap akun NEAR testnet; tanpa dompet, tanpa biaya gas.'));
-    var slot = $('div', 'gt-login-google'); slot.appendChild($('p', 'mnote', 'Memuat tombol Google…'));
+    body.appendChild($('p', null, $t('Pilih cara masuk. Akunmu tetap akun NEAR testnet; tanpa dompet, tanpa biaya gas.')));
+    var slot = $('div', 'gt-login-google'); slot.appendChild($('p', 'mnote', $t('Memuat tombol Google…')));
     body.appendChild(slot);
     var actions = [];
-    if (window.NearLib) actions.push({ label: 'Masuk dengan NEAR Auth (Google/email)', onClick: function (h) { h.close('near'); nearLogin(); return true; } });
-    var h = GT.modal({ title: 'Masuk', body: body, actions: actions, onClose: function () { onGoogle = null; } });
+    if (window.NearLib) actions.push({ label: $t('Masuk dengan NEAR Auth (Google/email)'), onClick: function (h) { h.close('near'); nearLogin(); return true; } });
+    var h = GT.modal({ title: $t('Masuk'), body: body, actions: actions, onClose: function () { onGoogle = null; } });
     onGoogle = function (res) {
-      if (!res || !res.credential) { GT.toast('Google tidak memberi token'); return; }
+      if (!res || !res.credential) { GT.toast($t('Google tidak memberi token')); return; }
       h.close('google'); onGoogle = null; S.busy = true;
       finishLogin(res.credential, false, null, 'google')
-        .catch(function (e) { GT.toast('Gagal masuk: ' + (e && e.message || e)); })
+        .catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e && e.message || e])); })
         .then(function () { S.busy = false; });
     };
     loadGsi().then(function (id) {
       if (h.closed) return;
       slot.textContent = '';
       var btn = $('div'); slot.appendChild(btn);
-      id.renderButton(btn, { type: 'standard', theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular', width: 280, locale: 'id' });
+      id.renderButton(btn, { type: 'standard', theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular', width: 280, locale: (window.GT_LANG || 'en') });
     }, function (e) { slot.textContent = ''; slot.appendChild($('p', 'mnote', e.message)); });
   }
 
   function nearLogin() {
     if (S.busy) return;
-    if (!window.NearLib) { GT.toast('Pustaka NEAR belum dimuat (jalankan build klien).'); return; }
+    if (!window.NearLib) { GT.toast($t('Pustaka NEAR belum dimuat (jalankan build klien).')); return; }
     S.busy = true;
     var provider = new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: S.cfg.fastAuth.clientId });
     var choose = lsGet(LS_FORCE) === '1';
     provider.login(undefined, choose)
       .then(function () { lsSet(LS_FORCE, null); return provider.client.getIdTokenClaims(); })
       .then(function (claims) {
-        if (!claims || !claims.__raw) throw new Error('Login tidak memberi token');
+        if (!claims || !claims.__raw) throw new Error($t('Login tidak memberi token'));
         return finishLogin(claims.__raw, false, provider);
       })
-      .catch(function (e) { GT.toast('Gagal masuk: ' + (e && e.message || e)); })
+      .catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e && e.message || e])); })
       .then(function () { S.busy = false; });
   }
 
   function devLogin() {
-    var input = $('input'); input.type = 'text'; input.maxLength = 32; input.placeholder = 'nama (huruf kecil)';
+    var input = $('input'); input.type = 'text'; input.maxLength = 32; input.placeholder = $t('nama (huruf kecil)');
     var body = $('div');
-    body.appendChild($('p', null, 'Server ini memakai rantai tiruan (mock) dengan login pengembang. Ketik nama pemain:'));
+    body.appendChild($('p', null, $t('Server ini memakai rantai tiruan (mock) dengan login pengembang. Ketik nama pemain:')));
     body.appendChild(input);
-    GT.modal({ title: 'Masuk (dev, mock)', body: body, actions: [{ label: 'Masuk', primary: true, onClick: function (h) {
+    GT.modal({ title: $t('Masuk (dev, mock)'), body: body, actions: [{ label: $t('Masuk'), primary: true, onClick: function (h) {
       var v = String(input.value || '').trim().toLowerCase();
-      if (!/^[a-z0-9_-]{1,32}$/.test(v)) { GT.toast('Nama: huruf kecil, angka, - atau _'); return false; }
+      if (!/^[a-z0-9_-]{1,32}$/.test(v)) { GT.toast($t('Nama: huruf kecil, angka, - atau _')); return false; }
       h.close('ok'); S.busy = true;
-      finishLogin('dev:' + v).catch(function (e) { GT.toast('Gagal masuk: ' + e.message); }).then(function () { S.busy = false; });
+      finishLogin('dev:' + v).catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e.message])); }).then(function () { S.busy = false; });
       return true;
     } }] });
     setTimeout(function () { input.focus(); }, 50);
@@ -384,7 +385,7 @@
     if (!GT.setWorld(w.seed, w.unlocked) || prevSeed !== w.seed) return; // first load or a new world: no news
     var fresh = (w.unlocked || []).filter(function (c) { return before.indexOf(c) < 0; });
     var names = fresh.map(function (id) { var c = (GT.world.chunks || []).filter(function (q) { return q.id === id; })[0]; return c ? c.name : id; });
-    if (names.length) GT.toast('Proyek desa selesai! ' + names.join(', ') + ' sekarang terbuka.');
+    if (names.length) GT.toast($t('Proyek desa selesai! {0} sekarang terbuka.', [names.join(', ')]));
   }
 
   function syncClock(t) {
@@ -412,10 +413,10 @@
   }
   /* ---- Langkah pertama: a newcomer's next step, one at a time, ticked off by what they actually do ---- */
   var GOALS = [
-    { id: 'signin', text: 'Tekan Masuk untuk membuat akunmu (Google atau email). Tanpa dompet, tanpa gas.' },
-    { id: 'gather', text: 'Klik kolam, pohon atau batu (atau hadap lalu tekan F). Hasilnya masuk ke Tas.' },
-    { id: 'sell', text: 'Jalan ke Pasar di timur rumahmu dan jual hasilmu ke Sari, Budi, Wati atau Joko.' },
-    { id: 'board', text: 'Masuk ke Balai Desa di samping pasar dan lihat papan proyek di rak belakang.' }
+    { id: 'signin', text: $t('Tekan Masuk untuk membuat akunmu (Google atau email). Tanpa dompet, tanpa gas.') },
+    { id: 'gather', text: $t('Klik kolam, pohon atau batu (atau hadap lalu tekan F). Hasilnya masuk ke Tas.') },
+    { id: 'sell', text: $t('Jalan ke Pasar di timur rumahmu dan jual hasilmu ke Sari, Budi, Wati atau Joko.') },
+    { id: 'board', text: $t('Masuk ke Balai Desa di samping pasar dan lihat papan proyek di rak belakang.') }
   ];
   var goalBox = null;
   function goalKey() { return 'gt.chain.goals.' + (S.account || 'guest'); }
@@ -438,8 +439,8 @@
     if (!next) return;
     goalBox.textContent = '';
     var head = $('div', 'gt-goals-head');
-    head.appendChild($('b', null, next.rescue ? 'Semua toko tutup' : 'Langkah pertama · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
-    var x = $('button', 'gt-goals-x', 'Tutup'); x.type = 'button'; x.setAttribute('aria-label', next.rescue ? 'Sembunyikan untuk hari ini' : 'Sembunyikan langkah pertama');
+    head.appendChild($('b', null, next.rescue ? $t('Semua toko tutup') : $t('Langkah pertama · {0}/{1}', [GOALS.indexOf(next) + 1, GOALS.length])));
+    var x = $('button', 'gt-goals-x', $t('Tutup')); x.type = 'button'; x.setAttribute('aria-label', next.rescue ? $t('Sembunyikan untuk hari ini') : $t('Sembunyikan langkah pertama'));
     x.addEventListener('click', function (e) {
       e.stopPropagation();
       if (next.rescue) lsSet('gt.chain.rescueHidden', String(S.st && S.st.time.day)); else lsSet('gt.chain.goalsHidden', '1');
@@ -462,11 +463,11 @@
         var m = Math.max(0, +n.amount - got);
         if (m > 0) { miss.push(m + ' ' + item(n.token_id)); total += m; }
       });
-      if (!best || total < best.total) best = { name: String(sh.name || sh.id).split(' ').pop(), miss: miss, total: total };
+      if (!best || total < best.total) best = { name: ((S.cfg && S.cfg.econ && S.cfg.econ.merchants && S.cfg.econ.merchants[sh.id]) || {}).name || String(sh.name || sh.id).split(' ').pop(), miss: miss, total: total };
     });
     if (!best) return null;
-    var what = best.miss.length ? 'masih kurang ' + best.miss.join(', ') : 'tinggal kurang koin';
-    return { rescue: true, text: 'Bantu buka lagi toko ' + best.name + ': ' + what + '. Kumpulkan barangnya, lalu bicara dengan ' + best.name + ' di pasar dan pilih Sumbang. Penyumbang dapat saham toko.' };
+    var what = best.miss.length ? $t('masih kurang {0}', [best.miss.join(', ')]) : $t('tinggal kurang koin');
+    return { rescue: true, text: $t('Bantu buka lagi toko {0}: {1}. Kumpulkan barangnya, lalu bicara dengan {2} di pasar dan pilih Sumbang. Penyumbang dapat saham toko.', [best.name, what, best.name]) };
   }
 
   /* ---- Night monsters (the server decides; this draws them and runs the fight window) ---- */
@@ -603,15 +604,15 @@
     top.appendChild(foe);
     var me = $('div', 'gt-fight-me');
     var bar = $('span', 'chain-energy'); var fill = $('i'); fill.style.width = Math.round(100 * (S.st ? S.st.energy / S.st.energyMax : 1)) + '%'; bar.appendChild(fill);
-    me.appendChild($('span', null, 'Energimu ' + (S.st ? S.st.energy : '?')));
+    me.appendChild($('span', null, $t('Energimu {0}', [S.st ? S.st.energy : '?'])));
     me.appendChild(bar);
     top.appendChild(me);
     fightEl.appendChild(top);
-    fightEl.appendChild($('p', 'gt-fight-note', note || (e.tile ? e.name + ' menghadang dari ' + (e.tile === 'rock' ? 'celah batu' : 'balik pohon') + '!' : e.name + ' menyerang di gelap hutan!')));
+    fightEl.appendChild($('p', 'gt-fight-note', note || (e.tile ? $t('{0} menghadang dari {1}!', [e.name, e.tile === 'rock' ? $t('celah batu') : $t('balik pohon')]) : $t('{0} menyerang di gelap hutan!', [e.name]))));
     var acts = $('div', 'gt-fight-acts');
     var touch = document.documentElement.classList.contains('gt-phone');
-    acts.appendChild(button('Lawan' + (touch ? '' : ' (F)') + ' · −' + (cfg.fightEnergy || 5) + ' energi', function () { fightStep('fight'); }, 'primary'));
-    acts.appendChild(button('Lari' + (touch ? '' : ' (Esc)') + ' · −' + (cfg.fleeEnergy || 4), function () { fightStep('flee'); }));
+    acts.appendChild(button($t('Lawan{0} · −{1} energi', [touch ? '' : ' (F)', cfg.fightEnergy || 5]), function () { fightStep('fight'); }, 'primary'));
+    acts.appendChild(button($t('Lari{0} · −{1}', [touch ? '' : ' (Esc)', cfg.fleeEnergy || 4]), function () { fightStep('flee'); }));
     fightEl.appendChild(acts);
   }
   function closeFight() {
@@ -636,7 +637,7 @@
     act({ action: action }, true).then(function (r) {
       var next = r && r.state && r.state.encounter;
       if (action === 'flee') {
-        if (FX) FX.float(me, 'Kabur!', '#cfd8ff');
+        if (FX) FX.float(me, $t('Kabur!'), '#cfd8ff');
         closeFight(); GT.toast(r.toast);
         if (r.ko) knockedOut();
         return;
@@ -645,7 +646,7 @@
       return wait(190).then(function () {
         if (FX) {
           if (hit) { FX.flash(tile, 'rgba(255,255,255,0.9)'); FX.float(tile, r.won ? 'KO!' : '-1', '#ffd84a'); FX.shake(2); }
-          else FX.float(tile, 'Meleset!', '#cfd8ff');
+          else FX.float(tile, $t('Meleset!'), '#cfd8ff');
         }
         if (r.won) {
           if (FX) FX.poof(tile);
@@ -653,7 +654,7 @@
           GT.toast(r.toast);
           return;
         }
-        if (next) renderFight(next, hit ? 'Kena! ' + next.name + ' masih melawan.' : 'Meleset! ' + next.name + ' bersiap menyerang…');
+        if (next) renderFight(next, hit ? $t('Kena! {0} masih melawan.', [next.name]) : $t('Meleset! {0} bersiap menyerang…', [next.name]));
         // the monster's turn
         return wait(380).then(function () {
           fightLunge = performance.now();
@@ -662,7 +663,7 @@
           var lost = energyBefore - (S.st ? S.st.energy : energyBefore) - ((S.cfg && S.cfg.monsters && S.cfg.monsters.fightEnergy) || 0);
           if (FX) { FX.flash(me, 'rgba(232,80,60,0.6)'); if (lost > 0) FX.float(me, '-' + lost, '#ff8a7a'); FX.shake(3); }
           if (r.ko) { closeFight(); knockedOut(); return; }
-          if (next) renderFight(next, next.name + ' menyerang balik' + (lost > 0 ? ' (−' + lost + ' energi)' : '') + '. Lawan atau lari?');
+          if (next) renderFight(next, $t('{0} menyerang balik{1}. Lawan atau lari?', [next.name, lost > 0 ? $t(' (−{0} energi)', [lost]) : '']));
         });
       });
     }, function () { /* the toast already says why */ }).then(function () { S.busy = false; });
@@ -670,15 +671,15 @@
   function knockedOut() {
     var sp = GT.world && GT.world.spawn;
     if (sp && GT.teleportPlayer) GT.teleportPlayer('out', sp.x, sp.y, 'down');
-    GT.toast('Kamu pingsan. Warga membawamu pulang. Istirahat sampai pukul 06:00.');
+    GT.toast($t('Kamu pingsan. Warga membawamu pulang. Istirahat sampai pukul 06:00.'));
   }
 
   function act(body, quiet) {
     if (S.mode === 'offline') {
-      if (body.action === 'gather') { OFF.gather(TILE_ITEM[body.tile]); GT.toast('+1 ' + item(TILE_ITEM[body.tile]) + ' (offline)'); return Promise.resolve(); }
-      GT.toast('Mode offline hanya mendukung mengumpulkan.'); return Promise.resolve();
+      if (body.action === 'gather') { OFF.gather(TILE_ITEM[body.tile]); GT.toast($t('+1 {0} (offline)', [item(TILE_ITEM[body.tile])])); return Promise.resolve(); }
+      GT.toast($t('Mode offline hanya mendukung mengumpulkan.')); return Promise.resolve();
     }
-    if (!S.account) { GT.toast('Masuk dulu (tombol Masuk).'); return Promise.resolve(); }
+    if (!S.account) { GT.toast($t('Masuk dulu (tombol Masuk).')); return Promise.resolve(); }
     body.pos = standPos();
     if (!body.world) body.world = worldNow();
     return api('/act', { method: 'POST', body: body }).then(function (r) {
@@ -714,7 +715,7 @@
         return api('/relay', { method: 'POST', body: body });
       });
     }).then(function (r) {
-      if (r && r.status === 'failed') throw new Error('Ditolak kontrak: ' + (r.error || ''));
+      if (r && r.status === 'failed') throw new Error($t('Ditolak kontrak: {0}', [r.error || '']));
       return refresh(true).then(function () { return r; });
     });
   }
@@ -728,7 +729,7 @@
       var st = stalls[k], pos = st ? st.seat : { x: sp.x + m.dx, y: sp.y + m.dy };
       if (st) st.merchant = m.id;
       S.npcs[m.id] = GT.addNpc('out', { x: pos.x, y: pos.y, name: m.id.charAt(0).toUpperCase() + m.id.slice(1), pal: m.pal, dir: 'down',
-        key: 'merchant:' + m.id, label: st ? null : m.tag, turns: false, noAffinity: true, lines: [['Mampir ke tokoku!']] });
+        key: 'merchant:' + m.id, label: st ? null : m.tag, turns: false, noAffinity: true, lines: [[$t('Mampir ke tokoku!')]] });
     });
   }
   function stallAt(x, y) {
@@ -747,7 +748,7 @@
     var sp = w.spawn, near = w.npcSpawns.filter(function (p) { return Math.abs(p[0] - sp.x) + Math.abs(p[1] - sp.y) < 16; });
     for (var i = 0; i < Math.min(5, near.length); i++) {
       var p = near[(i * 7) % near.length];
-      var n = GT.addNpc('out', { x: p[0], y: p[1], name: VNAMES[i % VNAMES.length], pal: 1 + (i % 6), wander: true, leash: 6, key: 'villager:' + i, lines: [['Pasar ramai hari ini!'], ['Harga ikan turun lagi, lho.'], ['Kebunmu tumbuh bagus!']] });
+      var n = GT.addNpc('out', { x: p[0], y: p[1], name: VNAMES[i % VNAMES.length], pal: 1 + (i % 6), wander: true, leash: 6, key: 'villager:' + i, lines: [[$t('Pasar ramai hari ini!')], [$t('Harga ikan turun lagi, lho.')], [$t('Kebunmu tumbuh bagus!')]] });
       if (n) villagers.push(n);
     }
   }
@@ -798,12 +799,12 @@
   var pendingPlant = null;
   function farm(idx) {
     var p = S.st && S.st.plots[idx];
-    if (!p) { GT.toast('Masuk dulu untuk bertani.'); return; }
+    if (!p) { GT.toast($t('Masuk dulu untuk bertani.')); return; }
     var op = p.state === 'empty' ? 'till' : p.state === 'tilled' ? 'plant' : p.state === 'ready' ? 'harvest' : 'water';
     // Planting spends 1 Gandum, so it needs a second press within 2 seconds.
     if (op === 'plant' && !(pendingPlant && pendingPlant.idx === idx && Date.now() - pendingPlant.t < 2000)) {
       pendingPlant = { idx: idx, t: Date.now() };
-      GT.toast('Tekan ' + keyLabel() + ' sekali lagi untuk menanam ' + (have('wheat') > 0 ? '(pakai 1 Gandum).' : '(Gandummu habis: desa memberi benih gratis, 3 per hari).'));
+      GT.toast($t('Tekan {0} sekali lagi untuk menanam {1}', [keyLabel(), have('wheat') > 0 ? $t('(pakai 1 Gandum).') : $t('(Gandummu habis: desa memberi benih gratis, 3 per hari).')]));
       return;
     }
     pendingPlant = null;
@@ -824,31 +825,31 @@
     var x = pl.x + d[0], y = pl.y + d[1], m = sc.map;
     if (x < 0 || y < 0 || x >= m.w || y >= m.h) return null;
     var npc = (sc.npcs || []).filter(function (n) { return !n.hidden && n.x === x && n.y === y; })[0];
-    if (npc && npc.key && npc.key.indexOf('merchant:') === 0) return 'Buka toko ' + npc.name;
-    if (npc) return 'Bicara dengan ' + npc.name;
+    if (npc && npc.key && npc.key.indexOf('merchant:') === 0) return $t('Buka toko {0}', [npc.name]);
+    if (npc) return $t('Bicara dengan {0}', [npc.name]);
     var tt = m.tiles[y * m.w + x];
-    if (tt === 'stall') { var st1 = stallAt(x, y); if (st1 && st1.merchant) return 'Belanja di lapak ' + st1.merchant.charAt(0).toUpperCase() + st1.merchant.slice(1); }
-    if (sc.house && sc.house.own && tt === 'table') return 'Meja Kerja (crafting)';
-    if (sc.house && sc.house.own && tt === 'chest') return 'Kotak Kirim';
-    if (sc.house && !sc.house.own && tt === 'chest') return 'Peti tetangga (terkunci)';
+    if (tt === 'stall') { var st1 = stallAt(x, y); if (st1 && st1.merchant) return $t('Belanja di lapak {0}{1}', [st1.merchant.charAt(0).toUpperCase(), st1.merchant.slice(1)]); }
+    if (sc.house && sc.house.own && tt === 'table') return $t('Meja Kerja (crafting)');
+    if (sc.house && sc.house.own && tt === 'chest') return $t('Kotak Kirim');
+    if (sc.house && !sc.house.own && tt === 'chest') return $t('Peti tetangga (terkunci)');
     if (sc.kind !== 'out') return null;
     var pi = plotAt(x, y);
     if (pi >= 0) {
-      var p = S.st && S.st.plots[pi]; if (!p) return 'Petak kebun (masuk dulu)';
-      if (p.state === 'empty') return 'Cangkul (−2 energi)';
-      if (p.state === 'tilled') return have('wheat') > 0 ? 'Tanam gandum (1 Gandum, tekan 2x)' : 'Tanam (benih gratis dari desa, tekan 2x)';
-      if (p.state === 'ready') return 'Panen gandum';
-      return p.wateredToday ? 'Sudah disiram hari ini' : 'Siram (−2 energi)';
+      var p = S.st && S.st.plots[pi]; if (!p) return $t('Petak kebun (masuk dulu)');
+      if (p.state === 'empty') return $t('Cangkul (−2 energi)');
+      if (p.state === 'tilled') return have('wheat') > 0 ? $t('Tanam gandum (1 Gandum, tekan 2x)') : $t('Tanam (benih gratis dari desa, tekan 2x)');
+      if (p.state === 'ready') return $t('Panen gandum');
+      return p.wateredToday ? $t('Sudah disiram hari ini') : $t('Siram (−2 energi)');
     }
     var tok = TILE_ITEM[tt];
     if (tok) {
-      var verb = { fish: 'Mancing', ore: 'Nambang', wood: 'Tebang' }[tok];
+      var verb = { fish: $t('Mancing'), ore: $t('Nambang'), wood: $t('Tebang') }[tok];
       var needTool = tok === 'ore' && S.st && (S.st.bag.tool.settled + S.st.bag.tool.today) < 1;
       var L = GT.world && GT.world.layout, night = S.st && S.st.night;
       var danger = tok !== 'fish' && night && night.now && !night.guarded && wildAt(L, x, y);
       var spot = tok === 'fish' && window.GT_FISH && GT_FISH.isSpot(x, y);
-      if (tok === 'fish') return spot ? 'Mancing di riak air: ikan berkumpul di sini' : 'Mancing (lebih cepat di riak air)';
-      return verb + ' (−4 energi)' + (needTool ? ' · butuh Alat' : '') + (danger ? ' · malam: awas monster' : '');
+      if (tok === 'fish') return spot ? $t('Mancing di riak air: ikan berkumpul di sini') : $t('Mancing (lebih cepat di riak air)');
+      return $t('{0} (−4 energi){1}{2}', [verb, needTool ? $t(' · butuh Alat') : '', danger ? $t(' · malam: awas monster') : '']);
     }
     return null;
   }
@@ -925,10 +926,10 @@
   function shopBody(id) {
     var wrap = $('div', 'gt-shop');
     var m = (S.market || []).filter(function (x) { return x.id === id; })[0];
-    if (!m) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
+    if (!m) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     var head = $('div', 'gt-shop-head');
-    head.appendChild($('span', null, 'Koinmu ' + have('coin')));
-    head.appendChild($('span', 'chain-dim', 'Kas ' + m.name + ' ' + m.cash + ' · sewa ' + m.rent + '/hari'));
+    head.appendChild($('span', null, $t('Koinmu {0}', [have('coin')])));
+    head.appendChild($('span', 'chain-dim', $t('Kas {0} {1} · sewa {2}/hari', [m.name, m.cash, m.rent])));
     wrap.appendChild(head);
     if (!m.open) return restoreBody(id, m, wrap);
     var sel = S.shopSel && S.shopSel.id === id ? S.shopSel.token : null;
@@ -936,23 +937,23 @@
     function trade(kind, token, qty) { pick(token); if (qty > 0) act({ action: kind, merchant: id, token: token, qty: qty }).then(refreshModal, refreshModal); }
     var sells = m.items.filter(function (it) { return it.ask != null; });
     if (sells.length) {
-      wrap.appendChild($('h4', 'chain-h', 'Dijual ' + m.name));
+      wrap.appendChild($('h4', 'chain-h', $t('Dijual {0}', [m.name])));
       var g1 = $('div', 'gt-grid');
       sells.forEach(function (it) {
-        g1.appendChild(itemCard(it.token, it.ask + ' koin' + arrow(it), 'stok ' + it.stock, {
+        g1.appendChild(itemCard(it.token, $t('{0} koin{1}', [it.ask, arrow(it)]), $t('stok {0}', [it.stock]), {
           sel: sel === it.token, off: have('coin') < it.ask, title: it.reason,
           onClick: function (e) { trade('buy', it.token, e.shiftKey ? 5 : 1); }
         }));
       });
       wrap.appendChild(g1);
     }
-    wrap.appendChild($('h4', 'chain-h', 'Barangmu · jual ke ' + m.name));
+    wrap.appendChild($('h4', 'chain-h', $t('Barangmu · jual ke {0}', [m.name])));
     var g2 = $('div', 'gt-grid'), byToken = {};
     m.items.forEach(function (it) { byToken[it.token] = it; });
     (window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.cfg.econ.items).filter(function (t) { return t !== 'coin'; })).forEach(function (t) {
       var it = byToken[t], n = have(t), buys = it && it.bid != null;
-      g2.appendChild(itemCard(t, buys ? 'dapat ' + it.bid + arrow(it) : 'tidak dibeli', null, {
-        count: n, off: !buys || n <= 0, sel: sel === t, accent: buys && n > 0, title: buys ? it.reason : m.name + ' tidak membeli ' + item(t),
+      g2.appendChild(itemCard(t, buys ? $t('dapat {0}{1}', [it.bid, arrow(it)]) : $t('tidak dibeli'), null, {
+        count: n, off: !buys || n <= 0, sel: sel === t, accent: buys && n > 0, title: buys ? it.reason : $t('{0} tidak membeli {1}', [m.name, item(t)]),
         onClick: function (e) { if (buys) trade('sell', t, Math.min(n, e.shiftKey ? 5 : 1)); else { pick(t); redraw(); } },
         onRight: function () { if (buys) trade('sell', t, Math.min(n, 10)); }
       }));
@@ -961,12 +962,12 @@
     // the merchant's reason for the item you last touched (prices move every game hour)
     var focus = sel && byToken[sel], touch = document.documentElement.classList.contains('gt-phone');
     var why = $('div', 'gt-shop-why');
-    why.appendChild($('p', null, focus ? item(sel) + ': ' + focus.reason : touch ? 'Ketuk barang untuk jual atau beli 1. Harga berubah tiap jam game.' : 'Klik untuk 1, Shift+klik untuk 5, klik kanan untuk jual semua. Harga berubah tiap jam game.'));
+    why.appendChild($('p', null, focus ? item(sel) + ': ' + focus.reason : touch ? $t('Ketuk barang untuk jual atau beli 1. Harga berubah tiap jam game.') : $t('Klik untuk 1, Shift+klik untuk 5, klik kanan untuk jual semua. Harga berubah tiap jam game.')));
     var left = focus && focus.bid != null ? Math.min(have(sel), 10) : 0; // the server takes at most 10 per trade
-    if (left > 1) why.appendChild(button('Jual ' + left + ' ' + item(sel) + ' (sekitar ' + left * focus.bid + ' koin)', function () { trade('sell', sel, left); }));
+    if (left > 1) why.appendChild(button($t('Jual {0} {1} (sekitar {2} koin)', [left, item(sel), left * focus.bid]), function () { trade('sell', sel, left); }));
     wrap.appendChild(why);
     holdingLine(id, wrap);
-    if (S.account) wrap.appendChild(button('Ngobrol dengan ' + m.name, function () { talkTo(id, m.name); }));
+    if (S.account) wrap.appendChild(button($t('Ngobrol dengan {0}', [m.name]), function () { talkTo(id, m.name); }));
     return wrap;
   }
 
@@ -975,45 +976,45 @@
   function talkTo(id, name) {
     var body = $('div'), log = $('div', 'chain-talk');
     function add(who, text, cls) { var p = $('p', cls || null); p.appendChild($('b', null, who + ': ')); p.appendChild(document.createTextNode(text)); log.appendChild(p); log.scrollTop = log.scrollHeight; }
-    add(name, 'Halo! Mau tanya apa? Harga, stok, atau kenapa harga berubah?');
-    var input = $('input'); input.type = 'text'; input.maxLength = 200; input.placeholder = 'mis. "kenapa harga ikan turun?"';
+    add(name, $t('Halo! Mau tanya apa? Harga, stok, atau kenapa harga berubah?'));
+    var input = $('input'); input.type = 'text'; input.maxLength = 200; input.placeholder = $t('mis. "kenapa harga ikan turun?"');
     body.appendChild(log); body.appendChild(input);
     var prov = S.cfg && S.cfg.dialogue;
-    body.appendChild($('p', 'chain-dim', prov === 'nearai' ? 'Jawaban dari NEAR AI Cloud (inferensi privat) berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.'
-      : prov === 'anthropic' ? 'Jawaban dari Claude berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.'
-      : 'Jawaban disusun dari harga asli toko. (AI belum aktif di server ini.)'));
+    body.appendChild($('p', 'chain-dim', prov === 'nearai' ? $t('Jawaban dari NEAR AI Cloud (inferensi privat) berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.')
+      : prov === 'anthropic' ? $t('Jawaban dari Claude berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.')
+      : $t('Jawaban disusun dari harga asli toko. (AI belum aktif di server ini.)')));
     var waiting = false;
     function ask() {
       var t = String(input.value || '').trim();
       if (!t || waiting) return;
-      input.value = ''; add('Kamu', t, 'me'); waiting = true;
-      var dots = $('p', 'chain-dim', name + ' sedang berpikir…'); log.appendChild(dots);
+      input.value = ''; add($t('Kamu'), t, 'me'); waiting = true;
+      var dots = $('p', 'chain-dim', $t('{0} sedang berpikir…', [name])); log.appendChild(dots);
       api('/talk', { method: 'POST', body: { merchant: id, text: t } }).then(function (r) {
         add(name, r.line, r.source === 'nearai' ? 'ai' : null);
       }, function (e) { add(name, e.message); }).then(function () { waiting = false; if (dots.parentNode) dots.parentNode.removeChild(dots); input.focus(); });
     }
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); ask(); } });
-    GT.modal({ title: 'Ngobrol: ' + name, body: body, actions: [{ label: 'Tanya', primary: true, onClick: function () { ask(); return false; } }] });
+    GT.modal({ title: $t('Ngobrol: {0}', [name]), body: body, actions: [{ label: $t('Tanya'), primary: true, onClick: function () { ask(); return false; } }] });
     setTimeout(function () { input.focus(); }, 50);
   }
 
   function holdingLine(id, wrap) {
     var s = (S.shops || []).filter(function (x) { return x.id === id; })[0];
     if (!s || !s.holding || s.holding.shares === '0') return;
-    var p = $('p', 'chain-dim', 'Sahammu: ' + s.holding.shares + ' dari ' + s.holding.total_shares + ' · dividen siap diambil: ' + s.holding.claimable + ' koin');
+    var p = $('p', 'chain-dim', $t('Sahammu: {0} dari {1} · dividen siap diambil: {2} koin', [s.holding.shares, s.holding.total_shares, s.holding.claimable]));
     wrap.appendChild(p);
-    if (s.holding.claimable !== '0') wrap.appendChild(button('Ambil dividen' + oc(), function () {
-      GT.toast('Mengambil dividen…');
-      signedCall('claim_dividends', { merchant: s.account_id }).then(function () { GT.toast('Dividen masuk!'); refreshModal(); }, function (e) { GT.toast(e.message); });
+    if (s.holding.claimable !== '0') wrap.appendChild(button($t('Ambil dividen{0}', [oc()]), function () {
+      GT.toast($t('Mengambil dividen…'));
+      signedCall('claim_dividends', { merchant: s.account_id }).then(function () { GT.toast($t('Dividen masuk!')); refreshModal(); }, function (e) { GT.toast(e.message); });
     }, 'primary'));
   }
 
-  var WHERE = { fish: 'mancing di kolam atau sungai', wood: 'tebang pohon', ore: 'nambang di Tambang Utara (butuh Alat)', wheat: 'tanam di kebunmu (kalau Gandummu habis, desa memberi 3 benih gratis per hari)', bread: 'Meja Kerja: 2 Gandum', meal: 'Meja Kerja: Ikan + Kayu', tool: 'Meja Kerja: 2 Bijih + Kayu', coin: 'jual ke pedagang yang buka, atau Kotak Kirim di rumahmu' };
+  var WHERE = { fish: $t('mancing di kolam atau sungai'), wood: $t('tebang pohon'), ore: $t('nambang di Tambang Utara (butuh Alat)'), wheat: $t('tanam di kebunmu (kalau Gandummu habis, desa memberi 3 benih gratis per hari)'), bread: $t('Meja Kerja: 2 Gandum'), meal: $t('Meja Kerja: Ikan + Kayu'), tool: $t('Meja Kerja: 2 Bijih + Kayu'), coin: $t('jual ke pedagang yang buka, atau Kotak Kirim di rumahmu') };
   function restoreBody(id, m, wrap) {
     var s = (S.shops || []).filter(function (x) { return x.id === id; })[0];
-    wrap.appendChild($('p', 'chain-closed', 'TUTUP. ' + m.name + ' tidak sanggup membayar sewa.'));
-    if (!s) { wrap.appendChild($('p', null, 'Memuat papan pemulihan…')); return wrap; }
-    wrap.appendChild($('p', null, 'Lengkapi semua baris untuk membuka lagi tokonya. Penyumbang dapat saham dan bagian untung.'));
+    wrap.appendChild($('p', 'chain-closed', $t('TUTUP. {0} tidak sanggup membayar sewa.', [m.name])));
+    if (!s) { wrap.appendChild($('p', null, $t('Memuat papan pemulihan…'))); return wrap; }
+    wrap.appendChild($('p', null, $t('Lengkapi semua baris untuk membuka lagi tokonya. Penyumbang dapat saham dan bagian untung.')));
     var lines = [], allDone = true;
     s.need.forEach(function (n) {
       var got = 0; (s.pledged || []).forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
@@ -1021,25 +1022,25 @@
       var row = $('div', 'mrow chain-item');
       var info = $('div', 'grow');
       info.appendChild($('div', null, item(n.token_id) + ': ' + got + '/' + n.amount));
-      if (missing === 0) info.appendChild($('div', 'chain-done', 'Lengkap'));
+      if (missing === 0) info.appendChild($('div', 'chain-done', $t('Lengkap')));
       else {
         allDone = false;
-        info.appendChild($('div', 'num', 'Kurang ' + missing + ' · kamu punya ' + have + (have < missing ? ' · cari: ' + (WHERE[n.token_id] || '') : '')));
+        info.appendChild($('div', 'num', $t('Kurang {0} · kamu punya {1}{2}', [missing, have, have < missing ? $t(' · cari: {0}', [WHERE[n.token_id] || '']) : ''])));
       }
       row.appendChild(info);
       wrap.appendChild(row);
       if (missing > 0 && have > 0) lines.push({ token_id: n.token_id, amount: String(Math.min(missing, have)) });
     });
-    if (s.contributors) wrap.appendChild($('p', 'chain-dim', s.contributors + ' penyumbang sejauh ini.'));
+    if (s.contributors) wrap.appendChild($('p', 'chain-dim', $t('{0} penyumbang sejauh ini.', [s.contributors])));
     if (lines.length) {
-      var label = 'Sumbang ' + lines.map(function (l) { return l.amount + ' ' + item(l.token_id); }).join(' + ') + oc();
+      var label = $t('Sumbang {0}{1}', [lines.map(function (l) { return l.amount + ' ' + item(l.token_id); }).join(' + '), oc()]);
       wrap.appendChild(button(label, function () {
-        GT.toast('Mengirim sumbangan…');
+        GT.toast($t('Mengirim sumbangan…'));
         signedCall('restore_contribute', { merchant: s.account_id, contribution: lines })
-          .then(function () { GT.toast(chainUI() ? 'Terima kasih! Sumbanganmu tercatat on-chain.' : 'Terima kasih! Sumbanganmu tercatat.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+          .then(function () { GT.toast(chainUI() ? $t('Terima kasih! Sumbanganmu tercatat on-chain.') : $t('Terima kasih! Sumbanganmu tercatat.')); refreshModal(); }, function (e) { GT.toast(e.message); });
       }, 'primary'));
     } else if (!allDone) {
-      wrap.appendChild($('p', 'chain-dim', 'Kamu belum punya barang yang masih kurang (barang hari ini bisa disumbang setelah pukul 06:00). Kalau semua toko tutup, dana desa ikut menyumbang koinnya pada penyelesaian pukul 06:00.'));
+      wrap.appendChild($('p', 'chain-dim', $t('Kamu belum punya barang yang masih kurang (barang hari ini bisa disumbang setelah pukul 06:00). Kalau semua toko tutup, dana desa ikut menyumbang koinnya pada penyelesaian pukul 06:00.')));
     }
     return wrap;
   }
@@ -1048,17 +1049,17 @@
   function spendable(t) { var b = S.st && S.st.bag[t]; return b ? Math.max(0, Math.min(b.settled, b.settled + b.today)) : 0; }
   function projectBody() {
     var wrap = $('div');
-    wrap.appendChild($('p', null, 'Patungan bahan dengan warga lain. Kalau semua baris terpenuhi, bagian peta baru terbuka untuk semua' + (chainUI() ? ' (bahannya dibakar on-chain).' : '.')));
-    if (!S.projects) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
-    if (!S.projects.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada proyek.'));
+    wrap.appendChild($('p', null, $t('Patungan bahan dengan warga lain. Kalau semua baris terpenuhi, bagian peta baru terbuka untuk semua{0}', [chainUI() ? $t(' (bahannya dibakar on-chain).') : '.'])));
+    if (!S.projects) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
+    if (!S.projects.length) wrap.appendChild($('p', 'chain-dim', $t('Belum ada proyek.')));
     S.projects.forEach(function (pj) {
-      wrap.appendChild($('h4', 'chain-h', pj.name + (pj.done ? ' (selesai)' : pj.retired ? ' (dihentikan)' : '')));
+      wrap.appendChild($('h4', 'chain-h', pj.name + (pj.done ? $t(' (selesai)') : pj.retired ? $t(' (dihentikan)') : '')));
       if (pj.retired && !pj.done) {
         // stopped: no new pledges; whoever pledged can take it back
         wrap.appendChild($('p', 'chain-dim', pj.retired));
         var pledged = pj.contributors.filter(function (c) { return c.account_id === S.account; })[0];
-        if (pledged) wrap.appendChild(button('Tarik sumbanganku', function () {
-          signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast('Sumbangan dikembalikan ke tasmu.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+        if (pledged) wrap.appendChild(button($t('Tarik sumbanganku'), function () {
+          signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast($t('Sumbangan dikembalikan ke tasmu.')); refreshModal(); }, function (e) { GT.toast(e.message); });
         }));
         return;
       }
@@ -1068,23 +1069,23 @@
         var missing = Math.max(0, +n.amount - got), have = spendable(n.token_id);
         var row = $('div', 'mrow');
         row.appendChild($('span', 'grow', item(n.token_id) + ': ' + got + '/' + n.amount));
-        if (!pj.done) row.appendChild($('span', 'num', 'bisa kamu sumbang ' + Math.min(missing, have)));
+        if (!pj.done) row.appendChild($('span', 'num', $t('bisa kamu sumbang {0}', [Math.min(missing, have)])));
         wrap.appendChild(row);
         if (!pj.done && missing > 0 && have > 0) lines.push({ token_id: n.token_id, amount: String(Math.min(missing, have)) });
       });
-      var names = pj.contributors.map(function (c) { return c.account_id === S.account ? 'kamu' : String(c.account_id).split('.')[0]; });
-      wrap.appendChild($('p', 'chain-dim', pj.done ? 'Dibangun oleh ' + names.join(', ') + '.' : (names.length ? 'Penyumbang: ' + names.join(', ') + '.' : 'Belum ada penyumbang. Jadilah yang pertama!')));
+      var names = pj.contributors.map(function (c) { return c.account_id === S.account ? $t('kamu') : String(c.account_id).split('.')[0]; });
+      wrap.appendChild($('p', 'chain-dim', pj.done ? $t('Dibangun oleh {0}.', [names.join(', ')]) : (names.length ? $t('Penyumbang: {0}.', [names.join(', ')]) : $t('Belum ada penyumbang. Jadilah yang pertama!'))));
       if (pj.done) return;
       var mine = pj.contributors.filter(function (c) { return c.account_id === S.account; })[0];
-      if (lines.length) wrap.appendChild(button('Sumbang semua yang bisa' + oc(), function () {
-        GT.toast('Mengirim sumbangan…');
-        signedCall('project_contribute', { id: pj.id, contribution: lines }).then(function () { GT.toast(chainUI() ? 'Terima kasih! Sumbanganmu tercatat on-chain.' : 'Terima kasih! Sumbanganmu tercatat.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+      if (lines.length) wrap.appendChild(button($t('Sumbang semua yang bisa{0}', [oc()]), function () {
+        GT.toast($t('Mengirim sumbangan…'));
+        signedCall('project_contribute', { id: pj.id, contribution: lines }).then(function () { GT.toast(chainUI() ? $t('Terima kasih! Sumbanganmu tercatat on-chain.') : $t('Terima kasih! Sumbanganmu tercatat.')); refreshModal(); }, function (e) { GT.toast(e.message); });
       }, 'primary'));
-      if (mine) wrap.appendChild(button('Tarik sumbanganku', function () {
-        signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast('Sumbangan dikembalikan ke tasmu.'); refreshModal(); }, function (e) { GT.toast(e.message); });
+      if (mine) wrap.appendChild(button($t('Tarik sumbanganku'), function () {
+        signedCall('project_withdraw', { id: pj.id }).then(function () { GT.toast($t('Sumbangan dikembalikan ke tasmu.')); refreshModal(); }, function (e) { GT.toast(e.message); });
       }));
     });
-    wrap.appendChild($('p', 'chain-dim', 'Pakai barang yang sudah tersimpan (lewat 06:00). Bisa ditarik lagi selama proyek belum selesai.'));
+    wrap.appendChild($('p', 'chain-dim', $t('Pakai barang yang sudah tersimpan (lewat 06:00). Bisa ditarik lagi selama proyek belum selesai.')));
     return wrap;
   }
 
@@ -1097,11 +1098,11 @@
       Object.keys(d.bal).forEach(function (t) { var r = $('div', 'mrow'); r.appendChild($('span', 'grow', item(t))); r.appendChild($('span', 'num', String(d.bal[t]))); wrap.appendChild(r); });
       return wrap;
     }
-    if (!S.st) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
+    if (!S.st) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     var coin = S.st.bag.coin || { settled: 0, today: 0 };
     var head = $('div', 'gt-shop-head');
-    head.appendChild($('span', null, 'Koin ' + (coin.settled + coin.today) + (coin.today ? ' (' + (coin.today > 0 ? '+' : '') + coin.today + ' hari ini)' : '')));
-    head.appendChild($('span', 'chain-dim', 'Alat ' + S.st.tool.uses + '/' + S.st.tool.durability + ' pemakaian'));
+    head.appendChild($('span', null, $t('Koin {0}{1}', [coin.settled + coin.today, coin.today ? $t(' ({0}{1} hari ini)', [coin.today > 0 ? '+' : '', coin.today]) : ''])));
+    head.appendChild($('span', 'chain-dim', $t('Alat {0}/{1} pemakaian', [S.st.tool.uses, S.st.tool.durability])));
     wrap.appendChild(head);
     var slots = window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.st.bag).filter(function (t) { return t !== 'coin'; });
     var inHand = window.GT_ITEMS && GT_ITEMS.held();
@@ -1109,7 +1110,7 @@
     var grid = $('div', 'gt-grid');
     slots.forEach(function (t) {
       var b = S.st.bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today;
-      grid.appendChild(itemCard(t, b.today ? (b.today > 0 ? '+' : '') + b.today + ' hari ini' : null, t === inHand ? 'di tangan' : null, {
+      grid.appendChild(itemCard(t, b.today ? $t('{0} hari ini', [(b.today > 0 ? '+' : '') + b.today]) : null, t === inHand ? $t('di tangan') : null, {
         count: n, off: n <= 0, sel: t === sel,
         onClick: function () { S.bagSel = t; redraw(); },
         onRight: function () { if (window.GT_ITEMS) { GT_ITEMS.hold(t); S.bagSel = t; redraw(); } }
@@ -1117,17 +1118,17 @@
     });
     wrap.appendChild(grid);
     wrap.appendChild(bagDetail(sel));
-    wrap.appendChild($('p', 'chain-dim', (document.documentElement.classList.contains('gt-phone') ? 'Ketuk barang untuk melihat, lalu Pegang. ' : 'Klik untuk melihat, klik kanan untuk memegang. ') + 'Barang "hari ini" tersimpan permanen pukul 06:00' + (chainUI() ? ' (di NEAR).' : '.')));
-    if (S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
-    wrap.appendChild(button('Semua riwayat', function () { open('history'); }));
-    wrap.appendChild(button('Keluar (ganti akun)', function () { signOut(); }));
+    wrap.appendChild($('p', 'chain-dim', $t('{0}Barang "hari ini" tersimpan permanen pukul 06:00{1}', [document.documentElement.classList.contains('gt-phone') ? $t('Ketuk barang untuk melihat, lalu Pegang. ') : $t('Klik untuk melihat, klik kanan untuk memegang. '), chainUI() ? $t(' (di NEAR).') : '.'])));
+    if (S.account) wrap.appendChild($('p', 'chain-dim', $t('Akun: {0}', [S.account])));
+    wrap.appendChild(button($t('Semua riwayat'), function () { open('history'); }));
+    wrap.appendChild(button($t('Keluar (ganti akun)'), function () { signOut(); }));
     return wrap;
   }
   var USE = {
-    fish: 'Mentah, tidak bisa dimakan. Masak jadi Ikan Bakar di Meja Kerja (Ikan + Kayu), atau jual.',
-    wood: 'Bahan Ikan Bakar dan Alat, dan dibutuhkan proyek desa.', ore: 'Bahan Alat, dan dibutuhkan proyek desa.',
-    wheat: 'Pegang lalu klik kanan petak kebun untuk menanam, atau buat Roti (2 Gandum).',
-    tool: 'Dipakai otomatis saat menambang batu.'
+    fish: $t('Mentah, tidak bisa dimakan. Masak jadi Ikan Bakar di Meja Kerja (Ikan + Kayu), atau jual.'),
+    wood: $t('Bahan Ikan Bakar dan Alat, dan dibutuhkan proyek desa.'), ore: $t('Bahan Alat, dan dibutuhkan proyek desa.'),
+    wheat: $t('Pegang lalu klik kanan petak kebun untuk menanam, atau buat Roti (2 Gandum).'),
+    tool: $t('Dipakai otomatis saat menambang batu.')
   };
   function bagDetail(t) {
     var box = $('div', 'gt-detail'), b = S.st.bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today;
@@ -1136,31 +1137,31 @@
     if (window.GT_ITEMS) top.appendChild(GT_ITEMS.icon(t, 40));
     var txt = $('div', 'grow');
     txt.appendChild($('div', 'gt-detail-name', item(t) + ' · ' + n));
-    txt.appendChild($('div', null, e.energy ? 'Makanan: +' + e.energy + ' energi.' : (USE[t] || '')));
-    txt.appendChild($('div', 'chain-dim', n > 0 ? 'Tercatat ' + b.settled + (b.today ? ' · hari ini ' + (b.today > 0 ? '+' : '') + b.today : '') + ' · bisa dikirim/dijual ke pemain ' + can : 'Cara dapat: ' + (WHERE[t] || '')));
-    if (bb) txt.appendChild($('div', 'chain-dim', 'Pedagang yang paling mahal membeli: ' + bb.name + ', ' + bb.bid + ' koin.'));
+    txt.appendChild($('div', null, e.energy ? $t('Makanan: +{0} energi.', [e.energy]) : (USE[t] || '')));
+    txt.appendChild($('div', 'chain-dim', n > 0 ? $t('Tercatat {0}{1} · bisa dikirim/dijual ke pemain {2}', [b.settled, b.today ? $t(' · hari ini {0}{1}', [b.today > 0 ? '+' : '', b.today]) : '', can]) : $t('Cara dapat: {0}', [WHERE[t] || ''])));
+    if (bb) txt.appendChild($('div', 'chain-dim', $t('Pedagang yang paling mahal membeli: {0}, {1} koin.', [bb.name, bb.bid])));
     top.appendChild(txt);
     box.appendChild(top);
     var row = $('div', 'gt-detail-acts');
-    if (e.energy && n > 0) row.appendChild(button('Makan', function () { act({ action: 'eat', token: t }).then(refreshModal, noop); }, 'primary'));
-    if (window.GT_ITEMS && GT_ITEMS.held() !== t) row.appendChild(button('Pegang', function () { GT_ITEMS.hold(t); redraw(); }));
-    if (can > 0) row.appendChild(button('Jual ke pemain', function () { askList(t, can); }));
-    if (can > 0) row.appendChild(button('Kirim', function () { askSend(t); }));
-    row.appendChild(button('Riwayat', function () { open('history', t); }));
+    if (e.energy && n > 0) row.appendChild(button($t('Makan'), function () { act({ action: 'eat', token: t }).then(refreshModal, noop); }, 'primary'));
+    if (window.GT_ITEMS && GT_ITEMS.held() !== t) row.appendChild(button($t('Pegang'), function () { GT_ITEMS.hold(t); redraw(); }));
+    if (can > 0) row.appendChild(button($t('Jual ke pemain'), function () { askList(t, can); }));
+    if (can > 0) row.appendChild(button($t('Kirim'), function () { askSend(t); }));
+    row.appendChild(button($t('Riwayat'), function () { open('history', t); }));
     if (row.children.length) box.appendChild(row);
     return box;
   }
 
   function askSend(token) {
     var body = $('div');
-    body.appendChild($('p', null, 'Kirim 1 ' + item(token) + ' ke pemain lain.' + (chainUI() ? ' Langsung on-chain, tanpa dompet, tanpa gas.' : ' Langsung sampai.')));
-    var input = $('input'); input.type = 'text'; input.placeholder = 'akun penerima (…players…testnet)'; input.maxLength = 64;
+    body.appendChild($('p', null, $t('Kirim 1 {0} ke pemain lain.{1}', [item(token), chainUI() ? $t(' Langsung on-chain, tanpa dompet, tanpa gas.') : $t(' Langsung sampai.')])));
+    var input = $('input'); input.type = 'text'; input.placeholder = $t('akun penerima (…players…testnet)'); input.maxLength = 64;
     body.appendChild(input);
-    GT.modal({ title: 'Kirim ' + item(token), body: body, actions: [{ label: 'Kirim', primary: true, onClick: function (h) {
+    GT.modal({ title: $t('Kirim {0}', [item(token)]), body: body, actions: [{ label: $t('Kirim'), primary: true, onClick: function (h) {
       var to = String(input.value || '').trim().toLowerCase();
-      if (!/^[a-z0-9._-]{2,64}$/.test(to)) { GT.toast('Nama akun tidak valid'); return false; }
-      h.close('ok'); GT.toast('Mengirim…');
-      signedCall('send_item', { receiver_id: to, token_id: token, amount: '1' }).then(function () { GT.toast('Terkirim!'); }, function (e) { GT.toast('Gagal: ' + e.message); });
+      if (!/^[a-z0-9._-]{2,64}$/.test(to)) { GT.toast($t('Nama akun tidak valid')); return false; }
+      h.close('ok'); GT.toast($t('Mengirim…'));
+      signedCall('send_item', { receiver_id: to, token_id: token, amount: '1' }).then(function () { GT.toast($t('Terkirim!')); }, function (e) { GT.toast($t('Gagal: {0}', [e.message])); });
       return true;
     } }] });
     setTimeout(function () { input.focus(); }, 50);
@@ -1168,13 +1169,13 @@
 
   function craftBody() {
     var wrap = $('div');
-    wrap.appendChild($('p', null, 'Meja kerja. Resep sederhana memakai energi, resep rumit memakai koin.'));
+    wrap.appendChild($('p', null, $t('Meja kerja. Resep sederhana memakai energi, resep rumit memakai koin.')));
     Object.keys(S.cfg.econ.recipes).forEach(function (id) {
       var r = S.cfg.econ.recipes[id];
       var row = $('div', 'mrow');
       row.appendChild($('span', 'grow', item(r.output) + ' ← ' + Object.keys(r.inputs).map(function (t) { return r.inputs[t] + ' ' + item(t); }).join(' + ')));
-      row.appendChild($('span', 'chain-dim', r.energy ? r.energy + ' energi' : r.fee + ' koin'));
-      row.appendChild(button('Buat', function () { act({ action: 'craft', recipe: id }).then(refreshModal, noop); }, 'primary'));
+      row.appendChild($('span', 'chain-dim', r.energy ? $t('{0} energi', [r.energy]) : $t('{0} koin', [r.fee])));
+      row.appendChild(button($t('Buat'), function () { act({ action: 'craft', recipe: id }).then(refreshModal, noop); }, 'primary'));
       wrap.appendChild(row);
     });
     return wrap;
@@ -1182,7 +1183,7 @@
 
   function shipBody() {
     var wrap = $('div');
-    wrap.appendChild($('p', null, 'Kotak Kirim: barang dijual ke kota pukul 06:00 seharga 70% harga dasar. Praktis, tapi pedagang biasanya membayar lebih.'));
+    wrap.appendChild($('p', null, $t('Kotak Kirim: barang dijual ke kota pukul 06:00 seharga 70% harga dasar. Praktis, tapi pedagang biasanya membayar lebih.')));
     if (!S.st) return wrap;
     Object.keys(S.st.bag).forEach(function (t) {
       if (t === 'coin') return;
@@ -1190,8 +1191,8 @@
       if (n <= 0) return;
       var row = $('div', 'mrow');
       row.appendChild($('span', 'grow', b.name + ' (' + n + ')'));
-      row.appendChild(button('Kirim 1', function () { act({ action: 'ship', token: t, qty: 1 }).then(refreshModal, noop); }));
-      if (n >= 5) row.appendChild(button('Kirim 5', function () { act({ action: 'ship', token: t, qty: 5 }).then(refreshModal, noop); }));
+      row.appendChild(button($t('Kirim 1'), function () { act({ action: 'ship', token: t, qty: 1 }).then(refreshModal, noop); }));
+      if (n >= 5) row.appendChild(button($t('Kirim 5'), function () { act({ action: 'ship', token: t, qty: 5 }).then(refreshModal, noop); }));
       wrap.appendChild(row);
     });
     return wrap;
@@ -1211,7 +1212,7 @@
   function shortAcc(a) { return String(a).split('.')[0]; }
   function feePct() { return (S.feeBps != null ? S.feeBps : 500) / 100; }
   function marketCall(method, args, okMsg) {
-    GT.toast('Mengirim ke chain…');
+    GT.toast($t('Mengirim ke chain…'));
     return signedCall(method, args).then(function () { GT.toast(okMsg); }, function (e) { GT.toast(e.message); });
   }
 
@@ -1227,16 +1228,16 @@
   function listingRow(l) {
     var row = $('div', 'mrow chain-item' + (l.anonymous ? ' gt-black-row' : ''));
     var info = $('div', 'grow');
-    info.appendChild($('div', null, l.amount + ' ' + item(l.token_id) + ' · ' + l.price_each + ' koin/buah'));
+    info.appendChild($('div', null, $t('{0} {1} · {2} koin/buah', [l.amount, item(l.token_id), l.price_each])));
     var ba = bestAsk(l.token_id);
-    var who = l.anonymous ? (isMine(l) ? 'Penjual: kamu (anonim)' : 'Penjual: tidak diketahui') : 'Dari ' + (isMine(l) ? 'kamu' : shortAcc(l.seller)) + ' · ' + (l.title || 'Pedagang baru') + ' (' + (l.popularity || 0) + ' poin)';
-    info.appendChild($('div', 'chain-dim', who + (ba && +l.price_each < ba.ask ? ' · lebih murah dari pedagang' : '')));
+    var who = l.anonymous ? (isMine(l) ? $t('Penjual: kamu (anonim)') : $t('Penjual: tidak diketahui')) : $t('Dari {0} · {1} ({2} poin)', [isMine(l) ? $t('kamu') : shortAcc(l.seller), l.title || $t('Pedagang baru'), l.popularity || 0]);
+    info.appendChild($('div', 'chain-dim', who + (ba && +l.price_each < ba.ask ? $t(' · lebih murah dari pedagang') : '')));
     row.appendChild(info);
     if (isMine(l)) {
-      row.appendChild(button('Tarik', function () { marketCall('cancel_listing', { listing_id: l.id }, 'Barangmu ditarik dan kembali ke tas.').then(refreshModal); }));
+      row.appendChild(button($t('Tarik'), function () { marketCall('cancel_listing', { listing_id: l.id }, $t('Barangmu ditarik dan kembali ke tas.')).then(refreshModal); }));
     } else {
-      row.appendChild(button('Beli 1', function () { marketCall('buy_listing', { listing_id: l.id, amount: '1', max_price_each: String(l.price_each) }, 'Terbeli!').then(refreshModal); }, 'primary'));
-      if (+l.amount > 1) row.appendChild(button('Beli ' + l.amount, function () { marketCall('buy_listing', { listing_id: l.id, amount: String(l.amount), max_price_each: String(l.price_each) }, 'Terbeli!').then(refreshModal); }));
+      row.appendChild(button($t('Beli 1'), function () { marketCall('buy_listing', { listing_id: l.id, amount: '1', max_price_each: String(l.price_each) }, $t('Terbeli!')).then(refreshModal); }, 'primary'));
+      if (+l.amount > 1) row.appendChild(button($t('Beli {0}', [l.amount]), function () { marketCall('buy_listing', { listing_id: l.id, amount: String(l.amount), max_price_each: String(l.price_each) }, $t('Terbeli!')).then(refreshModal); }));
     }
     return row;
   }
@@ -1250,8 +1251,8 @@
       var head = $('div', 'gt-group');
       if (window.GT_ITEMS) head.appendChild(GT_ITEMS.icon(t, 24));
       var txt = $('div', 'grow');
-      txt.appendChild($('div', 'gt-detail-name', item(t) + ' · termurah ' + ls[0].price_each + ' koin'));
-      txt.appendChild($('div', 'chain-dim', total + ' tersedia dari ' + ls.length + ' lapak' + (ba ? ' · pedagang menjual ' + ba.ask : '') + (bb ? ' · membeli ' + bb.bid : '')));
+      txt.appendChild($('div', 'gt-detail-name', $t('{0} · termurah {1} koin', [item(t), ls[0].price_each])));
+      txt.appendChild($('div', 'chain-dim', $t('{0} tersedia dari {1} lapak{2}{3}', [total, ls.length, ba ? $t(' · pedagang menjual {0}', [ba.ask]) : '', bb ? $t(' · membeli {0}', [bb.bid]) : ''])));
       head.appendChild(txt);
       wrap.appendChild(head);
       ls.forEach(function (l) { wrap.appendChild(listingRow(l)); });
@@ -1261,56 +1262,56 @@
     var wrap = $('div');
     var tab = S.marketTab || 'lapak';
     var tabs = $('div', 'gt-tabs'); tabs.setAttribute('role', 'tablist');
-    [['lapak', 'Lapak'], ['gelap', 'Pasar Gelap'], ['populer', 'Populer']].forEach(function (t) {
+    [['lapak', $t('Lapak')], ['gelap', $t('Pasar Gelap')], ['populer', $t('Populer')]].forEach(function (t) {
       var b = button(t[1], function () { S.marketTab = t[0]; redraw(); }, tab === t[0] ? 'primary' : '');
       b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', tab === t[0] ? 'true' : 'false');
       tabs.appendChild(b);
     });
     wrap.appendChild(tabs);
-    if (!S.listings) { wrap.appendChild($('p', null, 'Memuat…')); return wrap; }
+    if (!S.listings) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     if (tab === 'lapak') {
-      wrap.appendChild($('p', null, 'Jual pakai namamu: setiap barang yang laku menambah popularitasmu.'));
+      wrap.appendChild($('p', null, $t('Jual pakai namamu: setiap barang yang laku menambah popularitasmu.')));
       var named = S.listings.filter(function (l) { return !l.anonymous && (!S.marketSeller || l.seller === S.marketSeller.account); });
       if (S.marketSeller) {
         // opened from another player's card: only their stall, with a way back to everyone's
-        wrap.appendChild($('h4', 'chain-h', 'Lapak ' + S.marketSeller.nick));
-        wrap.appendChild(button('Lihat semua lapak', function () { S.marketSeller = null; redraw(); }));
+        wrap.appendChild($('h4', 'chain-h', $t('Lapak {0}', [S.marketSeller.nick])));
+        wrap.appendChild(button($t('Lihat semua lapak'), function () { S.marketSeller = null; redraw(); }));
       }
-      if (!named.length) wrap.appendChild($('p', 'chain-dim', 'Belum ada lapak. Jadilah yang pertama!'));
+      if (!named.length) wrap.appendChild($('p', 'chain-dim', $t('Belum ada lapak. Jadilah yang pertama!')));
       byItem(named, wrap);
     } else if (tab === 'gelap') {
-      wrap.appendChild($('p', null, 'Jual tanpa nama dan tanpa popularitas. Anonim di dalam game saja; catatan transaksinya tetap publik.'));
+      wrap.appendChild($('p', null, $t('Jual tanpa nama dan tanpa popularitas. Anonim di dalam game saja; catatan transaksinya tetap publik.')));
       var anon = S.listings.filter(function (l) { return l.anonymous; });
-      if (!anon.length) wrap.appendChild($('p', 'chain-dim', 'Pasar Gelap sedang sepi.'));
+      if (!anon.length) wrap.appendChild($('p', 'chain-dim', $t('Pasar Gelap sedang sepi.')));
       byItem(anon, wrap);
     } else {
-      wrap.appendChild($('p', null, 'Satu poin untuk setiap barang yang laku di Lapak.'));
-      if (!(S.popular || []).length) wrap.appendChild($('p', 'chain-dim', 'Belum ada penjualan di Lapak.'));
+      wrap.appendChild($('p', null, $t('Satu poin untuk setiap barang yang laku di Lapak.')));
+      if (!(S.popular || []).length) wrap.appendChild($('p', 'chain-dim', $t('Belum ada penjualan di Lapak.')));
       (S.popular || []).forEach(function (p, i) {
         var row = $('div', 'mrow');
         row.appendChild($('span', 'num', (i + 1) + '.'));
-        row.appendChild($('span', 'grow', (p.account === S.account ? 'Kamu' : shortAcc(p.account)) + ' · ' + p.title));
-        row.appendChild($('span', 'num', p.points + ' poin · ' + p.sales + ' penjualan'));
+        row.appendChild($('span', 'grow', (p.account === S.account ? $t('Kamu') : shortAcc(p.account)) + ' · ' + p.title));
+        row.appendChild($('span', 'num', $t('{0} poin · {1} penjualan', [p.points, p.sales])));
         wrap.appendChild(row);
       });
       return wrap;
     }
     var mine = S.listings.filter(isMine).length;
-    var h = $('h4', 'chain-h', (tab === 'gelap' ? 'Jual tanpa nama' : 'Jual di Lapak') + ' · lapakmu ' + mine + '/5');
+    var h = $('h4', 'chain-h', $t('{0} · lapakmu {1}/5', [tab === 'gelap' ? $t('Jual tanpa nama') : $t('Jual di Lapak'), mine]));
     wrap.appendChild(h);
     var grid = $('div', 'gt-grid'), any = false;
     if (S.st) (window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.st.bag).filter(function (t) { return t !== 'coin'; })).forEach(function (t) {
       var can = spendable(t), bb = bestBid(t);
       if (can > 0) any = true;
-      grid.appendChild(itemCard(t, can > 0 ? 'bisa jual ' + can : 'belum ada', bb ? 'pedagang ' + bb.bid : null, {
+      grid.appendChild(itemCard(t, can > 0 ? $t('bisa jual {0}', [can]) : $t('belum ada'), bb ? $t('pedagang {0}', [bb.bid]) : null, {
         off: can <= 0 || mine >= 5, accent: can > 0 && mine < 5,
-        title: mine >= 5 ? 'Lapakmu penuh (5). Tarik satu dulu.' : can > 0 ? 'Pasang ' + item(t) : 'Hanya barang yang sudah tersimpan (lewat pukul 06:00) yang bisa dijual ke pemain.',
+        title: mine >= 5 ? $t('Lapakmu penuh (5). Tarik satu dulu.') : can > 0 ? $t('Pasang {0}', [item(t)]) : $t('Hanya barang yang sudah tersimpan (lewat pukul 06:00) yang bisa dijual ke pemain.'),
         onClick: function () { if (can > 0 && mine < 5) askList(t, can, tab === 'gelap'); }
       }));
     });
     wrap.appendChild(grid);
-    if (!any) wrap.appendChild($('p', 'chain-dim', 'Belum ada barang yang bisa dijual di sini.'));
-    wrap.appendChild($('p', 'chain-dim', 'Barang hari ini bisa dijual setelah 06:00 · maks 5 lapak · biaya ' + feePct() + '% per penjualan.' + (chainUI() ? ' Langsung on-chain, tanpa dompet dan tanpa gas.' : '')));
+    if (!any) wrap.appendChild($('p', 'chain-dim', $t('Belum ada barang yang bisa dijual di sini.')));
+    wrap.appendChild($('p', 'chain-dim', $t('Barang hari ini bisa dijual setelah 06:00 · maks 5 lapak · biaya {0}% per penjualan.{1}', [feePct(), chainUI() ? $t(' Langsung on-chain, tanpa dompet dan tanpa gas.') : ''])));
     return wrap;
   }
 
@@ -1318,15 +1319,15 @@
     var body = $('div');
     var bb = bestBid(token), ba = bestAsk(token);
     var base = (S.cfg.econ.items[token] || {}).base || 1;
-    body.appendChild($('p', null, 'Jual ' + item(token) + ' ke pemain lain.'));
-    body.appendChild($('p', 'chain-dim', (bb ? 'Pedagang membeli paling mahal ' + bb.bid + ' (' + bb.name + '). ' : '') + (ba ? 'Pedagang menjual paling murah ' + ba.ask + ' (' + ba.name + ').' : '')));
+    body.appendChild($('p', null, $t('Jual {0} ke pemain lain.', [item(token)])));
+    body.appendChild($('p', 'chain-dim', (bb ? $t('Pedagang membeli paling mahal {0} ({1}). ', [bb.bid, bb.name]) : '') + (ba ? $t('Pedagang menjual paling murah {0} ({1}).', [ba.ask, ba.name]) : '')));
     var qty = $('input'); qty.type = 'number'; qty.min = '1'; qty.max = String(Math.min(50, max)); qty.value = String(Math.min(max, 5));
     var price = $('input'); price.type = 'number'; price.min = '1'; price.max = '100000';
     price.value = String(ba ? Math.max(1, ba.ask - 1) : Math.max(1, Math.round(base)));
-    var l1 = $('label', 'chain-field', 'Jumlah '); l1.appendChild(qty);
-    var l2 = $('label', 'chain-field', 'Harga/buah '); l2.appendChild(price);
+    var l1 = $('label', 'chain-field', $t('Jumlah ')); l1.appendChild(qty);
+    var l2 = $('label', 'chain-field', $t('Harga/buah ')); l2.appendChild(price);
     var side = $('div', 'mseg'); side.setAttribute('role', 'radiogroup');
-    [['lapak', 'Lapak (namamu tampil, dapat popularitas)'], ['gelap', 'Pasar Gelap (tanpa nama, tanpa popularitas)']].forEach(function (o) {
+    [['lapak', $t('Lapak (namamu tampil, dapat popularitas)')], ['gelap', $t('Pasar Gelap (tanpa nama, tanpa popularitas)')]].forEach(function (o) {
       var lab = $('label'), rb = $('input'); rb.type = 'radio'; rb.name = 'gt-side'; rb.value = o[0]; rb.checked = (o[0] === 'gelap') === !!anonymous;
       lab.appendChild(rb); lab.appendChild($('span', null, o[1])); side.appendChild(lab);
     });
@@ -1334,23 +1335,23 @@
     var warn = $('p', 'gt-warn');
     function upd() {
       var t = (+qty.value || 0) * (+price.value || 0), fee = Math.floor(t * (S.feeBps != null ? S.feeBps : 500) / 10000);
-      net.textContent = 'Total ' + t + ' koin, biaya ' + fee + ' dibakar: kamu terima ' + (t - fee) + ' koin kalau semua terjual.';
+      net.textContent = $t('Total {0} koin, biaya {1} dibakar: kamu terima {2} koin kalau semua terjual.', [t, fee, t - fee]);
       var each = (+price.value || 0) * (1 - feePct() / 100);
-      warn.textContent = bb && each < bb.bid ? 'Awas: setelah biaya kamu dapat kurang dari ' + bb.bid + ' koin/buah, harga ' + bb.name + ' kalau kamu jual langsung ke pedagang.' : '';
+      warn.textContent = bb && each < bb.bid ? $t('Awas: setelah biaya kamu dapat kurang dari {0} koin/buah, harga {1} kalau kamu jual langsung ke pedagang.', [bb.bid, bb.name]) : '';
       warn.hidden = !warn.textContent;
     }
     qty.addEventListener('input', upd); price.addEventListener('input', upd); upd();
     body.appendChild(l1); body.appendChild(l2); body.appendChild(side); body.appendChild(net); body.appendChild(warn);
-    GT.modal({ title: 'Jual ' + item(token), body: body, actions: [{ label: 'Pasang', primary: true, onClick: function (h) {
+    GT.modal({ title: $t('Jual {0}', [item(token)]), body: body, actions: [{ label: $t('Pasang'), primary: true, onClick: function (h) {
       var q = Math.floor(+qty.value), pr = Math.floor(+price.value);
       var anon = !!(side.querySelector('input:checked') || {}).value && side.querySelector('input:checked').value === 'gelap';
-      if (!(q >= 1 && q <= Math.min(50, max))) { GT.toast('Jumlah 1–' + Math.min(50, max)); return false; }
-      if (!(pr >= 1 && pr <= 100000)) { GT.toast('Harga 1–100000'); return false; }
+      if (!(q >= 1 && q <= Math.min(50, max))) { GT.toast($t('Jumlah 1–{0}', [Math.min(50, max)])); return false; }
+      if (!(pr >= 1 && pr <= 100000)) { GT.toast($t('Harga 1–100000')); return false; }
       h.close('ok');
       S.marketTab = anon ? 'gelap' : 'lapak';
-      GT.toast('Mengirim ke chain…');
+      GT.toast($t('Mengirim ke chain…'));
       signedCall('list_item', { token_id: token, amount: String(q), price_each: String(pr) }, { anonymous: anon })
-        .then(function () { GT.toast(anon ? 'Dipasang di Pasar Gelap.' : 'Dipasang di Lapak.'); open('market'); }, function (e) { GT.toast(e.message); });
+        .then(function () { GT.toast(anon ? $t('Dipasang di Pasar Gelap.') : $t('Dipasang di Lapak.')); open('market'); }, function (e) { GT.toast(e.message); });
       return true;
     } }] });
     setTimeout(function () { price.focus(); price.select(); }, 50);
@@ -1358,7 +1359,7 @@
 
   // Riwayat in plain words: what happened, with the item's icon, grouped by day; repeats are folded ("+1 Ikan ×5").
   // Anyone who wants the technical record follows "Detail ↗" to the block explorer.
-  var ST_LABEL = { pending: 'diproses…', ok: 'tersimpan', failed: 'gagal', mock: 'tiruan', offchain: 'disimpan 06:00' };
+  var ST_LABEL = { pending: $t('diproses…'), ok: $t('tersimpan'), failed: $t('gagal'), mock: $t('tiruan'), offchain: $t('disimpan 06:00') };
   var KIND_ICON = { account: 'coin', storage: 'coin', device: 'coin', settle: 'coin', buy: 'coin', sell: 'coin', ship: 'coin', fight: 'tool', engage: 'tool' };
   function shortName(a) { a = String(a || ''); var p = a.split('.')[0]; return p.length > 12 ? p.slice(0, 10) + '…' : p; }
   function projName(id) { var pj = (S.projects || []).filter(function (x) { return x.id === id; })[0]; return pj ? pj.name : id; }
@@ -1366,24 +1367,24 @@
   function friendly(h) {
     var t = String(h.summary || ''), m, sub = null;
     var tok = (h.tokens || '').split(',').filter(function (x) { return x && x !== 'coin'; })[0] || KIND_ICON[h.kind] || null;
-    if (h.kind === 'settle' && (m = /^Settlement hari (\d+):?\s*(.*)$/.exec(t))) { t = 'Hasil hari ' + m[1] + ' disimpan permanen'; sub = m[2] || null; }
-    else if (h.kind === 'account') t = 'Akunmu dibuat';
-    else if (h.kind === 'storage') t = 'Akunmu siap dipakai di game';
-    else if (h.kind === 'device') t = 'Perangkat baru bisa main dengan akunmu';
-    else if (h.kind === 'send_item' && (m = /^Kirim (\d+) (\w+) ke (.+)$/.exec(t))) t = 'Kirim ' + m[1] + ' ' + item(m[2]) + ' ke ' + shortName(m[3]);
-    else if (h.kind === 'restore_contribute' && (m = /^Sumbang ke papan pemulihan (\w+): (.*)$/.exec(t))) { t = 'Sumbang untuk buka lagi toko ' + merchName(m[1]); sub = m[2]; }
-    else if ((h.kind === 'project_contribute') && (m = /^Sumbang ke proyek desa ([\w-]+): (.*)$/.exec(t))) { t = 'Sumbang ke ' + projName(m[1]); sub = m[2]; }
-    else if (h.kind === 'project_withdraw' && (m = /proyek desa ([\w-]+)/.exec(t))) t = 'Tarik sumbangan dari ' + projName(m[1]);
-    else if (h.kind === 'buy_listing' && (m = /^Beli (\d+) dari lapak/.exec(t))) t = 'Beli ' + m[1] + ' barang dari lapak pemain';
-    else if (h.kind === 'cancel_listing') t = 'Barangmu ditarik dari Pasar Pemain';
-    else if (h.kind === 'list_item') t = t.replace(/ di Pasar Pemain, /, ' di Pasar: ');
+    if (h.kind === 'settle' && (m = /^Settlement hari (\d+):?\s*(.*)$/.exec(t))) { t = $t('Hasil hari {0} disimpan permanen', [m[1]]); sub = m[2] || null; }
+    else if (h.kind === 'account') t = $t('Akunmu dibuat');
+    else if (h.kind === 'storage') t = $t('Akunmu siap dipakai di game');
+    else if (h.kind === 'device') t = $t('Perangkat baru bisa main dengan akunmu');
+    else if (h.kind === 'send_item' && (m = /^Kirim (\d+) (\w+) ke (.+)$/.exec(t))) t = $t('Kirim {0} {1} ke {2}', [m[1], item(m[2]), shortName(m[3])]);
+    else if (h.kind === 'restore_contribute' && (m = /^Sumbang ke papan pemulihan (\w+): (.*)$/.exec(t))) { t = $t('Sumbang untuk buka lagi toko {0}', [merchName(m[1])]); sub = m[2]; }
+    else if ((h.kind === 'project_contribute') && (m = /^Sumbang ke proyek desa ([\w-]+): (.*)$/.exec(t))) { t = $t('Sumbang ke {0}', [projName(m[1])]); sub = m[2]; }
+    else if (h.kind === 'project_withdraw' && (m = /proyek desa ([\w-]+)/.exec(t))) t = $t('Tarik sumbangan dari {0}', [projName(m[1])]);
+    else if (h.kind === 'buy_listing' && (m = /^Beli (\d+) dari lapak/.exec(t))) t = $t('Beli {0} barang dari lapak pemain', [m[1]]);
+    else if (h.kind === 'cancel_listing') t = $t('Barangmu ditarik dari Pasar Pemain');
+    else if (h.kind === 'list_item') t = t.replace(/ di Pasar Pemain, /, $t(' di Pasar: '));
     return { icon: tok, title: t, sub: sub };
   }
   function dayLabel(d) {
     var now = new Date(), y = new Date(now); y.setDate(now.getDate() - 1);
-    if (d.toDateString() === now.toDateString()) return 'Hari ini';
-    if (d.toDateString() === y.toDateString()) return 'Kemarin';
-    return d.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][d.getMonth()];
+    if (d.toDateString() === now.toDateString()) return $t('Hari ini');
+    if (d.toDateString() === y.toDateString()) return $t('Kemarin');
+    return d.getDate() + ' ' + [$t('Jan'), $t('Feb'), $t('Mar'), $t('Apr'), $t('Mei'), $t('Jun'), $t('Jul'), $t('Agu'), $t('Sep'), $t('Okt'), $t('Nov'), $t('Des')][d.getMonth()];
   }
   function clock(d) { return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
   function historyBody(token) {
@@ -1393,12 +1394,12 @@
       if (S.mode === 'offline') rows = S.history.filter(function (h) { return (h.tokens || '').indexOf(',' + token + ',') >= 0; });
       else rows = S.itemHistory && S.itemHistory.token === token ? S.itemHistory.rows : null;
       var nav = $('div', 'gt-detail-acts');
-      nav.appendChild(button('Semua riwayat', function () { open('history'); }));
-      nav.appendChild(button('Kembali ke Tas', function () { var h = S.modal && S.modal.h; if (h) h.close(); open('bag'); }));
+      nav.appendChild(button($t('Semua riwayat'), function () { open('history'); }));
+      nav.appendChild(button($t('Kembali ke Tas'), function () { var h = S.modal && S.modal.h; if (h) h.close(); open('bag'); }));
       wrap.appendChild(nav);
     }
-    if (!rows) wrap.appendChild($('p', null, 'Memuat…'));
-    else if (!rows.length) wrap.appendChild($('p', null, token ? 'Belum ada riwayat untuk barang ini.' : 'Belum ada kegiatan. Coba mancing di kolam!'));
+    if (!rows) wrap.appendChild($('p', null, $t('Memuat…')));
+    else if (!rows.length) wrap.appendChild($('p', null, token ? $t('Belum ada riwayat untuk barang ini.') : $t('Belum ada kegiatan. Coba mancing di kolam!')));
     // fold consecutive identical off-chain rows (same text, same day, no transaction to link)
     var items = [];
     (rows || []).forEach(function (h) {
@@ -1420,20 +1421,20 @@
       txt.appendChild($('div', 'gt-hist-s', (f.sub ? f.sub + ' · ' : '') + meta));
       row.appendChild(txt);
       if (h.tx_hash && S.mode === 'testnet') {
-        var a = $('a', 'chain-link', 'Detail ↗'); a.href = S.cfg.explorerTxUrl + encodeURIComponent(h.tx_hash); a.target = '_blank'; a.rel = 'noopener noreferrer';
-        a.title = 'Buka catatan lengkap transaksi ini di browser (NEAR explorer)';
+        var a = $('a', 'chain-link', $t('Detail ↗')); a.href = S.cfg.explorerTxUrl + encodeURIComponent(h.tx_hash); a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.title = $t('Buka catatan lengkap transaksi ini di browser (NEAR explorer)');
         row.appendChild(a);
       }
       wrap.appendChild(row);
     });
-    if (S.st) wrap.appendChild($('p', 'chain-dim', 'Kegiatan hari ini disimpan pukul 06:00. Detail ↗ membuka catatan lengkapnya.'));
+    if (S.st) wrap.appendChild($('p', 'chain-dim', $t('Kegiatan hari ini disimpan pukul 06:00. Detail ↗ membuka catatan lengkapnya.')));
     // technical mode (account name, on-chain labels elsewhere in the game) stays available, out of the way
     var tog = $('label', 'chain-field gt-details');
     var cb = $('input'); cb.type = 'checkbox'; cb.checked = details;
     cb.addEventListener('change', function () { setChainUI(cb.checked); redraw(); });
-    tog.appendChild(cb); tog.appendChild($('span', null, ' Mode teknis (nama akun dan label on-chain di seluruh game)'));
+    tog.appendChild(cb); tog.appendChild($('span', null, $t(' Mode teknis (nama akun dan label on-chain di seluruh game)')));
     wrap.appendChild(tog);
-    if (details && S.account) wrap.appendChild($('p', 'chain-dim', 'Akun: ' + S.account));
+    if (details && S.account) wrap.appendChild($('p', 'chain-dim', $t('Akun: {0}', [S.account])));
     return wrap;
   }
 
@@ -1442,7 +1443,7 @@
     if (S.mode !== 'offline' && !S.account && kind !== 'shop') { login(); return; }
     if (S.modal && S.modal.h && S.modal.h.isOpen()) S.modal.h.close('switch'); // one window at a time (Tas → Riwayat)
     if (kind === 'project') markGoal('board');
-    var title = kind === 'bag' ? 'Tas' : kind === 'market' ? 'Pasar Pemain' : kind === 'project' ? 'Papan Proyek Desa' : kind === 'history' ? (arg ? 'Riwayat · ' + item(arg) : 'Riwayat') : kind === 'craft' ? 'Meja Kerja' : kind === 'ship' ? 'Kotak Kirim' : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
+    var title = kind === 'bag' ? $t('Tas') : kind === 'market' ? $t('Pasar Pemain') : kind === 'project' ? $t('Papan Proyek Desa') : kind === 'history' ? (arg ? $t('Riwayat · {0}', [item(arg)]) : $t('Riwayat')) : kind === 'craft' ? $t('Meja Kerja') : kind === 'ship' ? $t('Kotak Kirim') : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
     var body = kind === 'shop' ? shopBody(arg) : BODIES[kind](arg);
     var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; if (kind === 'market') S.marketSeller = null; } });
     S.modal = { kind: kind, arg: arg, h: h };
@@ -1460,7 +1461,7 @@
     if (ctx.mode !== 'talk') return false;
     if (ctx.npc && ctx.npc.key && ctx.npc.key.indexOf('merchant:') === 0) { open('shop', ctx.npc.key.slice(9)); return true; }
     // The prototype's mart keepers sold for local play coins; the town's shops are now the four merchants.
-    if (ctx.npc && ctx.npc.key && /:keeper$/.test(ctx.npc.key)) { GT.toast('Mart sudah pindah: belanja di pasar dekat rumahmu (Sari, Budi, Wati, Joko).'); return true; }
+    if (ctx.npc && ctx.npc.key && /:keeper$/.test(ctx.npc.key)) { GT.toast($t('Mart sudah pindah: belanja di pasar dekat rumahmu (Sari, Budi, Wati, Joko).')); return true; }
     if (ctx.npc || ctx.door) return false;
     if (ctx.tileType === 'stall') { var st0 = stallAt(ctx.tile.x, ctx.tile.y); if (st0 && st0.merchant) { open('shop', st0.merchant); return true; } }
     var house = ctx.scene.house, own = house && house.own, board = ctx.scene.map && ctx.scene.map.board;
@@ -1469,11 +1470,11 @@
       if (house.kind === 'broker') { open('market'); return true; }
     }
     if (own && (ctx.tileType === 'table' || ctx.tileType === 'chest')) {
-      if (S.mode !== 'offline' && !S.account) { GT.toast('Masuk dulu (tombol Masuk) untuk memakai ' + (ctx.tileType === 'table' ? 'Meja Kerja.' : 'Kotak Kirim.')); return true; }
+      if (S.mode !== 'offline' && !S.account) { GT.toast($t('Masuk dulu (tombol Masuk) untuk memakai {0}', [ctx.tileType === 'table' ? $t('Meja Kerja.') : $t('Kotak Kirim.')])); return true; }
       open(ctx.tileType === 'table' ? 'craft' : 'ship'); return true;
     }
     if (house && !own && ctx.tileType === 'chest') {
-      GT.toast('Peti milik ' + (house.owner || 'tetangga') + ', terkunci. Kotak Kirim-mu ada di peti rumahmu sendiri.');
+      GT.toast($t('Peti milik {0}, terkunci. Kotak Kirim-mu ada di peti rumahmu sendiri.', [house.owner || 'tetangga']));
       return true;
     }
     if (ctx.scene.kind !== 'out') return false;
@@ -1496,11 +1497,11 @@
     }
     // Fishing is a small skill game (js/mods/fishing.js); the catch is the same gather action.
     if (tt === 'water' && window.GT_FISH && S.mode !== 'offline') {
-      if (!S.account) { GT.toast('Masuk dulu (tombol Masuk) untuk memancing.'); return true; }
+      if (!S.account) { GT.toast($t('Masuk dulu (tombol Masuk) untuk memancing.')); return true; }
       var cost = (S.cfg.econ.gather && S.cfg.econ.gather.energyCost) || 0;
-      if (S.st && S.st.energy < cost) { GT.toast('Energimu habis. Makan dulu atau tunggu besok.'); return true; }
+      if (S.st && S.st.energy < cost) { GT.toast($t('Energimu habis. Makan dulu atau tunggu besok.')); return true; }
       var em = S.emptyWater && S.emptyWater[tx + ',' + ty];
-      if (em && em > Date.now()) { GT.toast('Ikan di sini sudah habis. Cari riak air di tempat lain.'); return true; }
+      if (em && em > Date.now()) { GT.toast($t('Ikan di sini sudah habis. Cari riak air di tempat lain.')); return true; }
       GT_FISH.start({ tile: { x: tx, y: ty }, onCatch: gather });
       return true;
     }
@@ -1516,9 +1517,9 @@
   }
 
   function init() {
-    accBtn = GT.addHudButton({ id: 'chainbtn', label: 'Masuk', key: 'N', secondary: false, onClick: function () { open('bag'); } });
+    accBtn = GT.addHudButton({ id: 'chainbtn', label: $t('Masuk'), key: 'N', secondary: false, onClick: function () { open('bag'); } });
     GT.hotkey('H', function () { open('history'); });
-    GT.addHudButton({ id: 'pasarbtn', label: 'Pasar', key: 'K', onClick: function () { if (S.mode === 'offline') GT.toast('Pasar Pemain butuh server game.'); else open('market'); } });
+    GT.addHudButton({ id: 'pasarbtn', label: $t('Pasar'), key: 'K', onClick: function () { if (S.mode === 'offline') GT.toast($t('Pasar Pemain butuh server game.')); else open('market'); } });
     // The old local bag (play items) is replaced by the NEAR bag: hide its button and point the I key here.
     var oldBag = document.getElementById('bagbtn'); if (oldBag) oldBag.style.display = 'none';
     GT.hotkey('I', function () { if (S.mode === 'offline') GT.openBag(); else open('bag'); }); // offline demo keeps the local bag
@@ -1531,22 +1532,22 @@
       if (cfg.world && GT.setWorld) GT.setWorld(cfg.world.seed, cfg.world.unlocked);
       S.account = lsGet(LS_ACC);
       if (S.account && lsGet(LS_KEY) && !keyRing()[S.account] && window.NearLib) { try { keepKey(S.account, window.NearLib.KeyPair.fromString(lsGet(LS_KEY))); } catch (e) { /* bad key */ } }
-      if (cfg.devTools) GT.addDevSection('NEAR settlement', function (sec) {
-        sec.appendChild($('p', 'mnote', 'Lompat ke pukul 06:00 berikutnya dan tulis hari ini ke chain sekarang.'));
-        sec.appendChild(button('Settle sekarang', function () {
-          GT.toast('Settlement berjalan…');
-          api('/dev/settle', { method: 'POST' }).then(function (r) { GT.toast('Settled sampai hari ' + r.settledThrough); refresh(true); }, function (e) { GT.toast(e.message); });
+      if (cfg.devTools) GT.addDevSection($t('NEAR settlement'), function (sec) {
+        sec.appendChild($('p', 'mnote', $t('Lompat ke pukul 06:00 berikutnya dan tulis hari ini ke chain sekarang.')));
+        sec.appendChild(button($t('Settle sekarang'), function () {
+          GT.toast($t('Settlement berjalan…'));
+          api('/dev/settle', { method: 'POST' }).then(function (r) { GT.toast($t('Settled sampai hari {0}', [r.settledThrough])); refresh(true); }, function (e) { GT.toast(e.message); });
         }, 'primary'));
         if (cfg.chainMode === 'mock') {
-          sec.appendChild($('p', 'mnote', 'Rantai tiruan saja: isi tas dengan bahan proyek desa dan toko (langsung tersimpan) untuk mencoba alurnya.'));
-          sec.appendChild(button('Beri bahan (mock)', function () {
+          sec.appendChild($('p', 'mnote', $t('Rantai tiruan saja: isi tas dengan bahan proyek desa dan toko (langsung tersimpan) untuk mencoba alurnya.')));
+          sec.appendChild(button($t('Beri bahan (mock)'), function () {
             api('/dev/grant', { method: 'POST', body: { items: { wood: 120, ore: 40, coin: 600, fish: 10, wheat: 20 } } })
-              .then(function (r) { S.st = r.state; renderHud(); redraw(); GT.toast('Tas diisi: 120 Kayu, 40 Bijih, 600 Koin, 10 Ikan, 20 Gandum.'); }, function (e) { GT.toast(e.message); });
+              .then(function (r) { S.st = r.state; renderHud(); redraw(); GT.toast($t('Tas diisi: 120 Kayu, 40 Bijih, 600 Koin, 10 Ikan, 20 Gandum.')); }, function (e) { GT.toast(e.message); });
           }));
         }
-        sec.appendChild($('p', 'mnote', 'Lompat ke pukul 20:00 berikutnya: monster muncul di Hutan Utara pada malam hari.'));
-        sec.appendChild(button('Lompat ke malam', function () {
-          api('/dev/night', { method: 'POST' }).then(function () { GT.toast('Sekarang malam.'); refresh(true); }, function (e) { GT.toast(e.message); });
+        sec.appendChild($('p', 'mnote', $t('Lompat ke pukul 20:00 berikutnya: monster muncul di Hutan Utara pada malam hari.')));
+        sec.appendChild(button($t('Lompat ke malam'), function () {
+          api('/dev/night', { method: 'POST' }).then(function () { GT.toast($t('Sekarang malam.')); refresh(true); }, function (e) { GT.toast(e.message); });
         }));
       });
     }).catch(function () { S.mode = 'offline'; }).then(function () {

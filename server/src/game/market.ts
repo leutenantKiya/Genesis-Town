@@ -31,7 +31,7 @@ export class Market {
   ids(): string[] { return Object.keys(this.econ.merchants); }
   def(id: string): MerchantDef {
     const d = Object.hasOwn(this.econ.merchants, id) ? this.econ.merchants[id] : undefined;
-    if (!d) throw new HttpError(404, 'Pedagang tidak dikenal.');
+    if (!d) throw new HttpError(404, 'Unknown merchant.');
     return d;
   }
   personality(d: MerchantDef): Personality { return this.econ.personalities[d.personality]; }
@@ -81,8 +81,8 @@ export class Market {
 
   quote(id: string, token: string, side: 'sell' | 'buy', qty: number): { unit: number; total: number } {
     const d = this.def(id);
-    if (!Object.hasOwn(this.econ.items, token) || !this.tokens(d).includes(token)) throw new HttpError(404, 'Barang tidak dikenal.');
-    if (!Number.isInteger(qty) || qty < 1 || qty > this.econ.pricing.maxQuoteQty) throw new HttpError(400, `Jumlah 1-${this.econ.pricing.maxQuoteQty}.`);
+    if (!Object.hasOwn(this.econ.items, token) || !this.tokens(d).includes(token)) throw new HttpError(404, 'Unknown item.');
+    if (!Number.isInteger(qty) || qty < 1 || qty > this.econ.pricing.maxQuoteQty) throw new HttpError(400, `Amount 1-${this.econ.pricing.maxQuoteQty}.`);
     const row = this.row(id, token);
     const unit = lotUnitPrice(side === 'sell' ? 'merchant_buys' : 'merchant_sells', qty, row.mid, this.inputs(id, token, row), this.personality(d), this.econ.pricing);
     return { unit, total: unit * qty };
@@ -106,14 +106,14 @@ export class Market {
   sell(account: string, id: string, token: string, qty: number) {
     const d = this.def(id);
     this.checkTrade(id, qty);
-    if (!d.buys.includes(token)) throw new HttpError(409, `${d.name} tidak membeli ${this.itemName(token)}.`);
+    if (!d.buys.includes(token)) throw new HttpError(409, `${d.name} doesn't buy ${this.itemName(token)}.`);
     const t = this.clock.time();
     const acct = this.account(id);
     const cap = (this.personality(d).buyCapMult ?? this.econ.pricing.dailyBuyCapPerTarget) * (d.target[token] ?? 10);
-    if (this.gs.boughtToday(acct, token, t.settleDay) + this.consignedToday(acct, token, t.settleDay) + qty > cap) throw new HttpError(409, `${d.name} sudah cukup membeli ${this.econ.items[token].name} hari ini.`);
-    if (this.gs.balance(account, token) < qty) throw new HttpError(409, 'Barangmu tidak cukup.');
+    if (this.gs.boughtToday(acct, token, t.settleDay) + this.consignedToday(acct, token, t.settleDay) + qty > cap) throw new HttpError(409, `${d.name} has bought enough ${this.econ.items[token].name} today.`);
+    if (this.gs.balance(account, token) < qty) throw new HttpError(409, 'You don\'t have enough.');
     const { unit, total } = this.quote(id, token, 'sell', qty);
-    if (this.gs.balance(acct, 'coin') < total) throw new HttpError(409, `${d.name} tidak punya cukup uang.`);
+    if (this.gs.balance(acct, 'coin') < total) throw new HttpError(409, `${d.name} doesn't have enough money.`);
     const ref = `${id}:${token}:${qty}@${unit}`;
     this.gs.add(t.settleDay, account, token, -qty, 'trade', ref);
     this.gs.add(t.settleDay, account, 'coin', total, 'trade', ref);
@@ -122,19 +122,19 @@ export class Market {
     const row = this.row(id, token);
     row.bought += qty;
     this.gs.saveMarket(row);
-    return { toast: `Terjual ${qty} ${this.econ.items[token].name} ke ${d.name}: +${total} koin`, unit, total };
+    return { toast: `Sold ${qty} ${this.econ.items[token].name} to ${d.name}: +${total} coins`, unit, total };
   }
 
   /** Player buys `qty` of `token` from merchant `id`. */
   buy(account: string, id: string, token: string, qty: number) {
     const d = this.def(id);
     this.checkTrade(id, qty);
-    if (!d.sells.includes(token)) throw new HttpError(409, `${d.name} tidak menjual ${this.itemName(token)}.`);
+    if (!d.sells.includes(token)) throw new HttpError(409, `${d.name} doesn't sell ${this.itemName(token)}.`);
     const t = this.clock.time();
     const acct = this.account(id);
-    if (this.gs.balance(acct, token) < qty) throw new HttpError(409, `Stok ${d.name} habis.`);
+    if (this.gs.balance(acct, token) < qty) throw new HttpError(409, `${d.name} is out of stock.`);
     const { unit, total } = this.quote(id, token, 'buy', qty);
-    if (this.gs.balance(account, 'coin') < total) throw new HttpError(409, 'Uangmu tidak cukup.');
+    if (this.gs.balance(account, 'coin') < total) throw new HttpError(409, 'You don\'t have enough coins.');
     const ref = `${id}:${token}:${qty}@${unit}`;
     this.gs.add(t.settleDay, account, token, qty, 'trade', ref);
     this.gs.add(t.settleDay, account, 'coin', -total, 'trade', ref);
@@ -143,14 +143,14 @@ export class Market {
     const row = this.row(id, token);
     row.sold += qty;
     this.gs.saveMarket(row);
-    return { toast: `Membeli ${qty} ${this.econ.items[token].name} dari ${d.name}: -${total} koin`, unit, total };
+    return { toast: `Bought ${qty} ${this.econ.items[token].name} from ${d.name}: -${total} coins`, unit, total };
   }
 
   private itemName(token: string): string { return Object.hasOwn(this.econ.items, token) ? this.econ.items[token].name : token; }
 
   private checkTrade(id: string, qty: number) {
-    if (!this.isOpen(id)) throw new HttpError(409, `Toko ${this.def(id).name} sedang TUTUP.`);
-    if (!Number.isInteger(qty) || qty < 1 || qty > this.econ.pricing.maxQuoteQty) throw new HttpError(400, `Jumlah 1-${this.econ.pricing.maxQuoteQty}.`);
+    if (!this.isOpen(id)) throw new HttpError(409, `The shop of ${this.def(id).name} is CLOSED.`);
+    if (!Number.isInteger(qty) || qty < 1 || qty > this.econ.pricing.maxQuoteQty) throw new HttpError(400, `Amount 1-${this.econ.pricing.maxQuoteQty}.`);
   }
 
   /** Merchants craft one unit per hour of an item they make, if below target and inputs are available. */

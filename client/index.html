@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -73,12 +73,14 @@
         </div>
       </div>
     </div>
-    <p class="help"><kbd>Panah/WASD</kbd> jalan &middot; <kbd>Spasi/Enter/Z</kbd> bicara &middot; <kbd>E</kbd> pesan &middot; <kbd>I</kbd> tas &middot; <kbd>P</kbd> profil &middot; <kbd>M</kbd> peta</p>
+    <p class="help"><kbd>Panah/WASD</kbd> <span>jalan</span> &middot; <kbd>Spasi/Enter/Z</kbd> <span>bicara</span> &middot; <kbd>E</kbd> <span>pesan</span> &middot; <kbd>I</kbd> <span>tas</span> &middot; <kbd>P</kbd> <span>profil</span> &middot; <kbd>M</kbd> <span>peta</span></p>
   </div>
 </main>
 <div id="mroot"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
 
+<script src="js/i18n.js"></script>
+<script src="js/lang/en.js"></script>
 <script src="vendor/env.js"></script>
 <script src="js/pwa.js"></script>
 <script src="js/flags.js"></script>
@@ -112,5 +114,6 @@
 <script src="js/mods/sim.js"></script>
 <script src="js/mods/view3d.js"></script>
 <script src="js/mods/concert.js"></script>
+<script>if (window.GT_I18N) GT_I18N.dom();</script>
 </body>
 </html>

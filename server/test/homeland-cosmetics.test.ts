@@ -46,7 +46,7 @@ test('dress charges coin to the town', async () => {
   w.dress(P, 0, 'syal');
   assert.equal(w.gs.balance(P, 'coin'), 70);
   assert.equal(w.H.view(P).workers[0].cosmetic, 'syal');
-  fails(() => w.dress(P, 0, 'mahkota'), 409, /Koin kurang/);
+  fails(() => w.dress(P, 0, 'mahkota'), 409, /Not enough coins/);
   assert.equal(w.gs.balance(P, 'coin'), 70);
   // bots can be dressed too
   w.house(P); w.give(P, 'coin', 500); w.H.hire(P, 'builder', 1);
@@ -62,8 +62,8 @@ test('dressing another player\'s bot 409, no coin', async () => {
   w.house(Q); w.gs.setHomelandTh(Q, 1);
   w.H.hire(Q, 'builder', 1); // Q's bot id 1
   const before = w.gs.balance(P, 'coin');
-  fails(() => w.dress(P, 1, 'caping'), 409, 'Pekerja itu bukan milikmu.');
-  fails(() => w.dress(P, 99, 'caping'), 409, 'Pekerja itu bukan milikmu.');
+  fails(() => w.dress(P, 1, 'caping'), 409, "That worker isn't yours.");
+  fails(() => w.dress(P, 99, 'caping'), 409, "That worker isn't yours.");
   assert.equal(w.gs.balance(P, 'coin'), before);
   assert.equal(w.H.view(Q).bots[0].cosmetic, null);
 });
@@ -71,8 +71,8 @@ test('dressing another player\'s bot 409, no coin', async () => {
 test('unknown or prototype cosmetic 400', async () => {
   const w = await setup();
   w.give(P, 'coin', 500);
-  for (const c of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'topi', '', undefined]) fails(() => w.dress(P, 0, c), 400, /Perlengkapan tidak dikenal/);
-  for (const b of ['abc', -1, 1.5, null]) fails(() => w.dress(P, b, 'caping'), 400, /Pekerja tidak dikenal/);
+  for (const c of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'topi', '', undefined]) fails(() => w.dress(P, 0, c), 400, /Unknown gear/);
+  for (const b of ['abc', -1, 1.5, null]) fails(() => w.dress(P, b, 'caping'), 400, /Unknown worker/);
   assert.equal(w.gs.balance(P, 'coin'), 500);
   // must stand at the Balai Kota
   fails(() => w.act(P, { action: 'dress', bot: 0, cosmetic: 'caping' }, w.game.map!.layout.spawn), 409, /./);

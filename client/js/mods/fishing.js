@@ -122,8 +122,8 @@
     if (!ui || !F) return;
     var reel = F.phase === 'reel';
     ui.meter.hidden = !reel;
-    var key = phoneish() ? '' : ' (Spasi)';
-    ui.btn.textContent = F.phase === 'bite' ? 'Tarik!' + key : reel ? 'Tahan' + key : 'Menunggu…';
+    var key = phoneish() ? '' : $t(' (Spasi)');
+    ui.btn.textContent = F.phase === 'bite' ? $t('Tarik!{0}', [key]) : reel ? $t('Tahan{0}', [key]) : $t('Menunggu…');
     ui.btn.classList.toggle('hot', F.phase === 'bite');
     ui.btn.classList.toggle('down', reel && F.hold);
     if (reel) {
@@ -162,7 +162,7 @@
   }
   function press() {
     if (!F) return;
-    if (F.phase === 'cast' || F.phase === 'wait') return end('Umpan ditarik. Belum ada ikan yang makan.');
+    if (F.phase === 'cast' || F.phase === 'wait') return end($t('Umpan ditarik. Belum ada ikan yang makan.'));
     if (F.phase === 'bite') { F.phase = 'reel'; F.t = 0; F.hold = true; F.zy = Math.max(0, Math.min(1 - F.zone, F.fy - F.zone / 2)); render(); return; }
     if (F.phase === 'reel') F.hold = true;
   }
@@ -174,7 +174,7 @@
     F.t += dt;
     if (F.phase === 'cast' && F.t >= 0.45) { F.phase = 'wait'; F.t = 0; }
     else if (F.phase === 'wait' && F.t >= F.bite) { F.phase = 'bite'; F.t = 0; }
-    else if (F.phase === 'bite' && F.t >= 1.1) return end('Ikannya lepas. Tekan begitu tanda "!" muncul.');
+    else if (F.phase === 'bite' && F.t >= 1.1) return end($t('Ikannya lepas. Tekan begitu tanda "!" muncul.'));
     else if (F.phase === 'reel') {
       // the green zone: holding lifts it, letting go drops it; it bounces softly off the ends
       F.zv += (F.hold ? 2.4 : -2.1) * dt;
@@ -190,7 +190,7 @@
       var inside = F.fy >= F.zy && F.fy <= F.zy + F.zone;
       F.prog += (inside ? 0.3 : -0.2) * dt;
       if (F.prog >= 1) return end(null, true);
-      if (F.prog <= 0) return end('Ikannya lepas! Jaga ikan tetap di area hijau.');
+      if (F.prog <= 0) return end($t('Ikannya lepas! Jaga ikan tetap di area hijau.'));
     }
     render();
   }
@@ -198,7 +198,7 @@
   function onKey(e) {
     if (!F) return false;
     if (e.type !== 'keydown') return true;
-    if (e.code === 'Escape') { end('Berhenti memancing.'); return true; }
+    if (e.code === 'Escape') { end($t('Berhenti memancing.')); return true; }
     if (HOLD_KEYS[e.code] && !e.repeat) press();
     return true; // nothing else moves while the line is out
   }

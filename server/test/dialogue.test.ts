@@ -4,23 +4,23 @@ import { Dialogue, localLine, clean, facts } from '../src/dialogue.ts';
 import type { MerchantView } from '../src/game/market.ts';
 
 const sari: MerchantView = {
-  id: 'sari', account: 'sari.gt.test', name: 'Sari', shop: 'Lapak Ikan Sari', open: true, cash: 600, rent: 40,
+  id: 'sari', account: 'sari.gt.test', name: 'Sarah', shop: "Sarah's Fish Stall", open: true, cash: 600, rent: 40,
   items: [
-    { token: 'fish', name: 'Ikan', stock: 50, target: 20, ask: 9, bid: 6, mid: 7.5, changePct: -10, reason: 'Stok ikan saya 50, targetnya 20. Harga turun 10%.' },
-    { token: 'wood', name: 'Kayu', stock: 10, target: 10, ask: null, bid: 4, mid: 4.4, changePct: 0, reason: 'Stok pas. Harga tetap.' },
+    { token: 'fish', name: 'Fish', stock: 50, target: 20, ask: 9, bid: 6, mid: 7.5, changePct: -10, reason: 'My fish stock is 50, target 20. Price down 10%.' },
+    { token: 'wood', name: 'Wood', stock: 10, target: 10, ask: null, bid: 4, mid: 4.4, changePct: 0, reason: 'Stock is right. Price steady.' },
   ],
 };
 const cfg = { apiKey: 'test-key', baseUrl: 'https://example.invalid/v1', timeoutMs: 1000 };
 
 test('local line answers about the item asked, else the biggest price move, and explains a closed shop', () => {
-  assert.match(localLine(sari, 'berapa harga kayu?'), /^Kayu: aku beli 4 koin/);
-  assert.match(localLine(sari, 'halo'), /^Ikan: aku beli 6, aku jual 9 koin\. Stok ikan saya 50/);
-  assert.match(localLine({ ...sari, open: false }, 'halo'), /tutup/);
+  assert.match(localLine(sari, 'how much is wood?'), /^Wood: I buy 4 coins/);
+  assert.match(localLine(sari, 'halo'), /^Fish: I buy 6, I sell 9 coins\. My fish stock is 50/);
+  assert.match(localLine({ ...sari, open: false }, 'halo'), /closed/);
 });
 
 test('facts carry the real prices and reasons; clean strips reasoning and markup', () => {
   const f = facts(sari, 'fair');
-  assert.match(f, /Ikan: stok 50\/20; beli dari pemain 6, jual 9 koin; Stok ikan saya 50/);
+  assert.match(f, /Fish: stock 50\/20; buys from players at 6, sells at 9 coins; My fish stock is 50/);
   assert.equal(clean('<think>hmm</think> **Halo!**  Ikan murah.'), 'Halo! Ikan murah.');
 });
 
@@ -44,15 +44,15 @@ test('with a key: discovers the model, sends facts as the system prompt, returns
   assert.deepEqual(r, { line: 'Ikan lagi banyak, aku beli 6 saja.', source: 'nearai', model: 'provider/model-a', chatId: 'chatcmpl-1' });
   const chat = seen.find((s) => s.url.endsWith('/chat/completions'))!;
   assert.equal(chat.body!.model, 'provider/model-a');
-  assert.match(chat.body!.messages[0].content, /beli dari pemain 6, jual 9/);
+  assert.match(chat.body!.messages[0].content, /buys from players at 6, sells at 9/);
   assert.equal(chat.body!.messages[1].content, 'jual ikan dong');
 });
 
 test('a pinned model skips discovery; provider errors fall back to the local line', async () => {
   const urls: string[] = [];
   const d = new Dialogue({ ...cfg, model: 'pinned/model' }, (async (url: string) => { urls.push(url); return new Response('nope', { status: 500 }); }) as typeof fetch);
-  const r = await d.reply(sari, 'fair', 'kayu?');
+  const r = await d.reply(sari, 'fair', 'wood?');
   assert.equal(r.source, 'local');
-  assert.match(r.line, /^Kayu/);
+  assert.match(r.line, /^Wood/);
   assert.deepEqual(urls, ['https://example.invalid/v1/chat/completions']);
 });

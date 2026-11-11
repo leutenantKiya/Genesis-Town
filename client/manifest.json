@@ -1,7 +1,7 @@
 {
   "name": "Genesis Town",
   "short_name": "Genesis Town",
-  "lang": "id",
+  "lang": "en",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

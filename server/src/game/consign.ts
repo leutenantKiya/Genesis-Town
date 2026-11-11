@@ -33,14 +33,14 @@ export class Consign {
 
   deposit(account: string, token: unknown, qty: unknown, minPrice: unknown): { toast: string; lots: Lot[] } {
     const { econ, gs } = this.d;
-    if (typeof token !== 'string' || token === 'coin' || !Object.hasOwn(econ.items, token)) throw new HttpError(400, 'Barang tidak dikenal.');
-    if (typeof qty !== 'number' || !Number.isInteger(qty) || qty < 1) throw new HttpError(400, 'Jumlah harus bilangan bulat positif.');
-    if (typeof minPrice !== 'number' || !Number.isInteger(minPrice) || minPrice < 1 || minPrice > 100_000) throw new HttpError(400, 'Harga minimum harus bilangan bulat positif.');
+    if (typeof token !== 'string' || token === 'coin' || !Object.hasOwn(econ.items, token)) throw new HttpError(400, 'Unknown item.');
+    if (typeof qty !== 'number' || !Number.isInteger(qty) || qty < 1) throw new HttpError(400, 'The amount must be a positive whole number.');
+    if (typeof minPrice !== 'number' || !Number.isInteger(minPrice) || minPrice < 1 || minPrice > 100_000) throw new HttpError(400, 'The minimum price must be a positive whole number.');
     this.d.atStall(account);
     const max = econ.consign.maxPerItem, held = this.lot(account, token)?.qty ?? 0;
-    if (held + qty > max) throw new HttpError(409, `Titipan maks ${max} per barang (sudah ${held}).`);
+    if (held + qty > max) throw new HttpError(409, `Consignment max ${max} per item (already ${held}).`);
     const name = econ.items[token].name;
-    if (gs.balance(account, token) < qty) throw new HttpError(409, `${name} kurang.`);
+    if (gs.balance(account, token) < qty) throw new HttpError(409, `Not enough ${name}.`);
     const day = this.d.clock.time().settleDay;
     gs.tx(() => {
       gs.add(day, account, token, -qty, 'consign_in', `consign:${token}:${qty}`);
@@ -48,25 +48,25 @@ export class Consign {
       gs.db.prepare(`INSERT INTO consign_lots (account, token, qty, min_price) VALUES (?, ?, ?, ?)
         ON CONFLICT(account, token) DO UPDATE SET qty = qty + excluded.qty, min_price = excluded.min_price`).run(account, token, qty, minPrice);
     });
-    const toast = `${qty} ${name} dititip ke ${econ.consign.merchant}, minimal ${minPrice} koin.`;
+    const toast = `${qty} ${name} consigned to ${econ.consign.merchant}, minimum ${minPrice} coins.`;
     this.d.history(account, toast, [token]);
     return { toast, lots: this.lots(account) };
   }
 
   withdraw(account: string, token: unknown): { toast: string; lots: Lot[] } {
     const { econ, gs } = this.d;
-    if (typeof token !== 'string' || !Object.hasOwn(econ.items, token)) throw new HttpError(400, 'Barang tidak dikenal.');
+    if (typeof token !== 'string' || !Object.hasOwn(econ.items, token)) throw new HttpError(400, 'Unknown item.');
     this.d.atStall(account);
     const lot = this.lot(account, token);
-    if (!lot || lot.qty < 1) throw new HttpError(409, 'Tidak ada titipan yang bisa diambil.');
+    if (!lot || lot.qty < 1) throw new HttpError(409, 'No consignments to collect.');
     const day = this.d.clock.time().settleDay;
-    try { this.d.world.checkGain(account, token, lot.qty); } catch { throw new HttpError(409, `Batas harian ${econ.items[token].name} tercapai. Ambil sisanya besok.`); }
+    try { this.d.world.checkGain(account, token, lot.qty); } catch { throw new HttpError(409, `Daily limit ${econ.items[token].name} reached. Collect the rest tomorrow.`); }
     gs.tx(() => {
       gs.add(day, this.d.town, token, -lot.qty, 'consign_out', `${account}:${token}:${lot.qty}`);
       gs.add(day, account, token, lot.qty, 'consign_out', `consign:${token}:${lot.qty}`);
       gs.db.prepare('UPDATE consign_lots SET qty = 0 WHERE account = ? AND token = ?').run(account, token);
     });
-    const toast = `${lot.qty} ${econ.items[token].name} diambil kembali.`;
+    const toast = `${lot.qty} ${econ.items[token].name} taken back.`;
     this.d.history(account, toast, [token]);
     return { toast, lots: this.lots(account) };
   }
@@ -107,7 +107,7 @@ export class Consign {
         if (fee > 0) gs.add(day, town, 'coin', fee, 'consign_fee', ref);
         gs.db.prepare('UPDATE consign_lots SET qty = qty - ?, sold = sold + ?, earned = earned + ? WHERE account = ? AND token = ?').run(k, k, net, lot.account, lot.token);
       });
-      this.d.history(lot.account, `Titipanmu terjual: ${k} ${econ.items[lot.token].name}, +${net} koin`, [lot.token, 'coin']);
+      this.d.history(lot.account, `Your consignment sold: ${k} ${econ.items[lot.token].name}, +${net} coins`, [lot.token, 'coin']);
     }
   }
 }

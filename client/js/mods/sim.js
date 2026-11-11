@@ -6,9 +6,9 @@
  */
 (function () {
   'use strict';
-  var NAMES = { fish: 'Ikan', ore: 'Bijih', wood: 'Kayu', wheat: 'Gandum', bread: 'Roti', meal: 'Ikan Bakar', tool: 'Alat' };
+  var NAMES = { fish: $t('Ikan'), ore: $t('Bijih'), wood: $t('Kayu'), wheat: $t('Gandum'), bread: $t('Roti'), meal: $t('Ikan Bakar'), tool: $t('Alat') };
   // series colours are theme tokens (resolved at draw time, so they follow the season); the swatch class in mods.css uses the same token
-  var MER = [{ id: 'sari', name: 'Sari', c: 'link' }, { id: 'budi', name: 'Budi', c: 'warn-ink' }, { id: 'wati', name: 'Wati', c: 'good' }, { id: 'joko', name: 'Joko', c: 'paper-dim' }];
+  var MER = [{ id: 'sari', name: $t('Sari'), c: 'link' }, { id: 'budi', name: $t('Budi'), c: 'warn-ink' }, { id: 'wati', name: $t('Wati'), c: 'good' }, { id: 'joko', name: $t('Joko'), c: 'paper-dim' }];
   function T(n) { return window.GT_THEME ? GT_THEME.get(n) : ''; }
   var FONT = '12px "Pixelify Sans", sans-serif';
   var st = { res: null, upto: 0, playing: false, speed: 1, timer: 0, modal: null, players: 25, hover: {} };
@@ -75,7 +75,7 @@
       var i = Math.round(((x - g.L) / g.pw) * (g.n - 1)); i = Math.max(0, Math.min(Math.min(g.n, st.upto) - 1, i));
       var f = st.res.frames[i];
       tip.textContent = '';
-      tip.appendChild($('div', 'sim-tip-h', 'Hari ' + f.day + ', ' + ('0' + f.hourOfDay).slice(-2) + ':00 · ' + f.season));
+      tip.appendChild($('div', 'sim-tip-h', $t('Hari {0}, {1}:00 · {2}', [f.day, ('0' + f.hourOfDay).slice(-2), f.season])));
       g.series.forEach(function (s) {
         var r = $('div'); r.appendChild($('i', 'sw-' + s.color));
         r.appendChild(document.createTextNode(s.name + ': ' + fmt(s.values[i]) + g.unit)); tip.appendChild(r);
@@ -96,31 +96,31 @@
   var els = {};
   function build() {
     var root = $('div', 'sim-panel');
-    root.appendChild($('p', 'sim-label', 'Memuat simulasi…'));
+    root.appendChild($('p', 'sim-label', $t('Memuat simulasi…')));
     els.label = root.lastChild;
     var ctrl = $('div', 'sim-ctrl');
-    els.play = btn('Jeda', function () { st.playing = !st.playing; els.play.textContent = st.playing ? 'Jeda' : 'Putar'; if (st.playing) tick(); }, 'primary');
-    els.speed = btn('Kecepatan 1×', function () { st.speed = st.speed === 1 ? 4 : 1; els.speed.textContent = 'Kecepatan ' + st.speed + '×'; });
-    var end = btn('Lompat ke akhir', function () { st.upto = st.res ? st.res.frames.length : 0; render(); });
-    var pl = $('label', 'sim-players'); pl.appendChild(document.createTextNode('Pemain '));
+    els.play = btn($t('Jeda'), function () { st.playing = !st.playing; els.play.textContent = st.playing ? $t('Jeda') : $t('Putar'); if (st.playing) tick(); }, 'primary');
+    els.speed = btn($t('Kecepatan 1×'), function () { st.speed = st.speed === 1 ? 4 : 1; els.speed.textContent = $t('Kecepatan {0}×', [st.speed]); });
+    var end = btn($t('Lompat ke akhir'), function () { st.upto = st.res ? st.res.frames.length : 0; render(); });
+    var pl = $('label', 'sim-players'); pl.appendChild(document.createTextNode($t('Pemain ')));
     var sel = $('select'); [10, 25, 40, 60].forEach(function (n) { var o = $('option', null, String(n)); o.value = n; if (n === st.players) o.selected = true; sel.appendChild(o); });
     sel.addEventListener('change', function () { st.players = +sel.value; load(); }); pl.appendChild(sel);
     ctrl.appendChild(els.play); ctrl.appendChild(els.speed); ctrl.appendChild(end); ctrl.appendChild(pl);
     els.clock = $('span', 'sim-clock', ''); ctrl.appendChild(els.clock);
     root.appendChild(ctrl);
 
-    root.appendChild($('h3', null, 'Harga rata-rata per barang (garis putus = harga dasar)'));
+    root.appendChild($('h3', null, $t('Harga rata-rata per barang (garis putus = harga dasar)')));
     els.minis = $('div', 'sim-minis'); root.appendChild(els.minis);
-    root.appendChild($('h3', null, 'Kas pedagang (area merah = toko TUTUP)'));
+    root.appendChild($('h3', null, $t('Kas pedagang (area merah = toko TUTUP)')));
     var cw = $('div', 'sim-chart'); els.cash = $('canvas'); cw.appendChild(els.cash); root.appendChild(cw); attachHover(els.cash, cw);
     var legend = $('div', 'sim-legend');
     MER.forEach(function (m) { var s = $('span'); s.appendChild($('i', 'sw-' + m.c)); s.appendChild(document.createTextNode(m.name)); legend.appendChild(s); });
     root.appendChild(legend);
-    root.appendChild($('h3', null, 'Jumlah uang beredar (garis putus = batas)'));
+    root.appendChild($('h3', null, $t('Jumlah uang beredar (garis putus = batas)')));
     var mw = $('div', 'sim-chart'); els.money = $('canvas'); mw.appendChild(els.money); root.appendChild(mw); attachHover(els.money, mw);
-    root.appendChild($('h3', null, 'Kejadian'));
+    root.appendChild($('h3', null, $t('Kejadian')));
     els.events = $('div', 'sim-events'); root.appendChild(els.events);
-    var det = $('details'); det.appendChild($('summary', null, 'Tabel (akhir simulasi)')); els.table = $('div'); det.appendChild(els.table); root.appendChild(det);
+    var det = $('details'); det.appendChild($('summary', null, $t('Tabel (akhir simulasi)'))); els.table = $('div'); det.appendChild(els.table); root.appendChild(det);
     return root;
   }
 
@@ -130,7 +130,7 @@
     var r = st.res; if (!r || !st.modal || !st.modal.isOpen()) return;
     var F = r.frames, upto = Math.max(1, Math.min(st.upto, F.length)), W = width();
     var last = F[upto - 1];
-    els.clock.textContent = 'Hari ' + last.day + ' · ' + ('0' + last.hourOfDay).slice(-2) + ':00 · ' + last.season;
+    els.clock.textContent = $t('Hari {0} · {1}:00 · {2}', [last.day, ('0' + last.hourOfDay).slice(-2), last.season]);
     // price small multiples
     if (!els.minis.children.length) Object.keys(NAMES).forEach(function (t) {
       var box = $('div', 'sim-mini'); box.appendChild($('div', 'sim-mini-t', NAMES[t])); var c = $('canvas'); box.appendChild(c); els.minis.appendChild(box); attachHover(c, box); box._t = t; box._c = c;
@@ -139,27 +139,27 @@
     [].forEach.call(els.minis.children, function (box) {
       var t = box._t, vals = F.map(function (f) { return f.prices[t]; }), base = r.summary.priceRange[t].base;
       var lo = Math.min(base, r.summary.priceRange[t].min), hi = Math.max(base, r.summary.priceRange[t].max);
-      lineChart(box._c, [{ name: NAMES[t], color: 'link', values: vals }], { w: mw, h: 92, yMin: Math.floor(lo * 0.9), yMax: Math.ceil(hi * 1.05), ref: { y: base }, unit: ' koin' });
+      lineChart(box._c, [{ name: NAMES[t], color: 'link', values: vals }], { w: mw, h: 92, yMin: Math.floor(lo * 0.9), yMax: Math.ceil(hi * 1.05), ref: { y: base }, unit: $t(' koin') });
     });
     // merchant cash with closed periods shaded (per merchant, merged)
     var shade = [];
     MER.forEach(function (m) { var from = -1; F.forEach(function (f, i) { var c = !f.merchants[m.id].open; if (c && from < 0) from = i; if ((!c || i === F.length - 1) && from >= 0) { shade.push({ from: from, to: i }); from = -1; } }); });
     var cashS = MER.map(function (m) { return { name: m.name, color: m.c, values: F.map(function (f) { return f.merchants[m.id].cash; }) }; });
     var cmax = Math.max.apply(null, cashS.map(function (s) { return Math.max.apply(null, s.values); }));
-    lineChart(els.cash, cashS, { w: W, h: 190, yMin: 0, yMax: Math.ceil(cmax * 1.05), labels: true, shade: shade, unit: ' koin' });
+    lineChart(els.cash, cashS, { w: W, h: 190, yMin: 0, yMax: Math.ceil(cmax * 1.05), labels: true, shade: shade, unit: $t(' koin') });
     var cap = r.summary.moneyCap, mmax = Math.max(r.summary.moneyMax, cap * 0.3);
-    lineChart(els.money, [{ name: 'Uang beredar', color: 'link', values: F.map(function (f) { return f.moneySupply; }) }], { w: W, h: 130, yMin: 0, yMax: Math.ceil(Math.min(cap * 1.05, mmax * 1.15)), ref: cap <= mmax * 1.15 ? { y: cap, label: 'batas ' + fmt(cap) } : null, unit: ' koin' });
+    lineChart(els.money, [{ name: $t('Uang beredar'), color: 'link', values: F.map(function (f) { return f.moneySupply; }) }], { w: W, h: 130, yMin: 0, yMax: Math.ceil(Math.min(cap * 1.05, mmax * 1.15)), ref: cap <= mmax * 1.15 ? { y: cap, label: $t('batas {0}', [fmt(cap)]) } : null, unit: $t(' koin') });
     // events so far
     els.events.textContent = '';
     var ev = r.events.filter(function (e) { return e.kind !== 'settled' && e.hour < upto; });
-    if (!ev.length) els.events.appendChild($('p', 'chain-dim', 'Belum ada toko yang bangkrut.'));
-    ev.forEach(function (e) { els.events.appendChild($('div', 'sim-ev ' + e.kind, 'Hari ' + e.day + ': ' + e.text)); });
+    if (!ev.length) els.events.appendChild($('p', 'chain-dim', $t('Belum ada toko yang bangkrut.')));
+    ev.forEach(function (e) { els.events.appendChild($('div', 'sim-ev ' + e.kind, $t('Hari {0}: {1}', [e.day, e.text]))); });
     // table
-    var tb = '<table class="sim-table"><tr><th>Pedagang</th><th>Kas akhir</th><th>Status</th></tr>';
-    MER.forEach(function (m) { var x = last.merchants[m.id]; tb += '<tr><td>' + m.name + '</td><td>' + x.cash + '</td><td>' + (x.open ? 'buka' : 'TUTUP') + '</td></tr>'; });
-    tb += '</table><table class="sim-table"><tr><th>Barang</th><th>Harga akhir</th><th>Min</th><th>Maks</th><th>Dasar</th></tr>';
+    var tb = $t('<table class="sim-table"><tr><th>Pedagang</th><th>Kas akhir</th><th>Status</th></tr>');
+    MER.forEach(function (m) { var x = last.merchants[m.id]; tb += '<tr><td>' + m.name + '</td><td>' + x.cash + '</td><td>' + (x.open ? $t('buka') : $t('TUTUP')) + '</td></tr>'; });
+    tb += $t('</table><table class="sim-table"><tr><th>Barang</th><th>Harga akhir</th><th>Min</th><th>Maks</th><th>Dasar</th></tr>');
     Object.keys(NAMES).forEach(function (t) { var pr = r.summary.priceRange[t]; tb += '<tr><td>' + NAMES[t] + '</td><td>' + last.prices[t] + '</td><td>' + pr.min + '</td><td>' + pr.max + '</td><td>' + pr.base + '</td></tr>'; });
-    els.table.innerHTML = tb + '</table><p class="chain-dim">Uang beredar akhir ' + last.moneySupply + ' (batas ' + cap + ').</p>';
+    els.table.innerHTML = $t('{0}</table><p class="chain-dim">Uang beredar akhir {1} (batas {2}).</p>', [tb, last.moneySupply, cap]);
   }
 
   function tick() {
@@ -168,30 +168,30 @@
     var n = st.res.frames.length;
     st.upto = Math.min(n, st.upto + st.speed);
     render();
-    if (st.upto >= n) { st.playing = false; els.play.textContent = 'Putar ulang'; els.play.onclick = null; return; }
+    if (st.upto >= n) { st.playing = false; els.play.textContent = $t('Putar ulang'); els.play.onclick = null; return; }
     st.timer = setTimeout(tick, Math.max(40, Math.round(60000 / n)));
   }
 
   function load() {
     st.res = null; st.upto = 0; els.minis && (els.minis.textContent = '');
-    els.label.textContent = 'Menjalankan simulasi ' + st.players + ' pemain selama 7 hari…';
-    fetch((window.GT_API || '') + '/api/sim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ days: 7, players: st.players, seed: 42 }) })
+    els.label.textContent = $t('Menjalankan simulasi {0} pemain selama 7 hari…', [st.players]);
+    fetch((window.GT_API || '') + '/api/sim', { method: 'POST', headers: window.GT_LANG === 'id' ? { 'content-type': 'application/json', 'x-gt-lang': 'id' } : { 'content-type': 'application/json' }, body: JSON.stringify({ days: 7, players: st.players, seed: 42 }) })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (res) {
-        st.res = res; st.upto = 1; st.playing = true; els.play.textContent = 'Jeda';
-        els.label.textContent = res.label + ' · ' + st.players + ' pemain simulasi · 7 hari dalam ~60 detik.';
+        st.res = res; st.upto = 1; st.playing = true; els.play.textContent = $t('Jeda');
+        els.label.textContent = $t('{0} · {1} pemain simulasi · 7 hari dalam ~60 detik.', [res.label, st.players]);
         render(); tick();
       })
-      .catch(function (e) { els.label.textContent = 'Simulasi butuh server (npm run dev atau dev:mock). ' + e.message; });
+      .catch(function (e) { els.label.textContent = $t('Simulasi butuh server (npm run dev atau dev:mock). {0}', [e.message]); });
   }
 
   function open() {
     if (st.modal && st.modal.isOpen()) return;
-    st.modal = GT.modal({ title: 'Simulasi 1 minggu', wide: true, body: build(), onClose: function () { st.playing = false; clearTimeout(st.timer); } });
+    st.modal = GT.modal({ title: $t('Simulasi 1 minggu'), wide: true, body: build(), onClose: function () { st.playing = false; clearTimeout(st.timer); } });
     if (st.modal.box) st.modal.box.classList.add('sim-box');
     els.play.onclick = function () {
       if (st.res && st.upto >= st.res.frames.length) { st.upto = 1; }
-      st.playing = !st.playing || st.upto <= 1; els.play.textContent = st.playing ? 'Jeda' : 'Putar'; if (st.playing) tick();
+      st.playing = !st.playing || st.upto <= 1; els.play.textContent = st.playing ? $t('Jeda') : $t('Putar'); if (st.playing) tick();
     };
     load();
   }
@@ -200,8 +200,8 @@
   GT.register({
     id: 'sim',
     init: function () {
-      GT.addHudButton({ id: 'simbtn', label: 'Simulasi', onClick: open, secondary: false });
-      GT.addDevSection('Simulasi ekonomi', function (sec) { sec.appendChild(btn('Simulasi 1 minggu', open, 'primary')); });
+      GT.addHudButton({ id: 'simbtn', label: $t('Simulasi'), onClick: open, secondary: false });
+      GT.addDevSection($t('Simulasi ekonomi'), function (sec) { sec.appendChild(btn($t('Simulasi 1 minggu'), open, 'primary')); });
     }
   });
 })();

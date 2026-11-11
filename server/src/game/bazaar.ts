@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { ListingInfo } from '../chain.ts';
 
-export const TITLES: Array<[number, string]> = [[100, 'Legenda Pasar'], [30, 'Terkenal'], [10, 'Dikenal'], [1, 'Pedagang'], [0, 'Pedagang baru']];
+export const TITLES: Array<[number, string]> = [[100, 'Market Legend'], [30, 'Famous'], [10, 'Known'], [1, 'Merchant'], [0, 'New merchant']];
 export function titleFor(points: number) { return (TITLES.find(([p]) => points >= p) ?? TITLES[TITLES.length - 1])[1]; }
 /** A tag that lets a seller's own browser recognise its anonymous listings without revealing the account to others. */
 export function sellerTag(account: string) { return createHash('sha256').update('gt-seller:' + account).digest('hex').slice(0, 16); }

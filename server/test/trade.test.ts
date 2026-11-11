@@ -30,12 +30,12 @@ test('accept fails when offerer spent the items', async () => {
   w.game.gs.add(w.day(), P, 'fish', -(w.bal(P, 'fish') - 2), 'test'); // P spends down to 2
   const snap = () => [w.bal(P, 'fish'), w.bal(Q, 'coin'), w.bal(P, 'coin'), w.bal(Q, 'fish')];
   const before = snap();
-  fails(() => w.game.trade.accept(Q, o.id), 409, /Ikan.* kurang\./);
+  fails(() => w.game.trade.accept(Q, o.id), 409, /Not enough Fish\./);
   assert.deepEqual(snap(), before);
   // the receiver is short of coin
   w.give(P, 'fish', 10);
   const o2 = w.game.trade.offer(P, { to: Q, give: { fish: 1 }, want: { coin: 5000 } });
-  fails(() => w.game.trade.accept(Q, o2.id), 409, /Koin kurang\./);
+  fails(() => w.game.trade.accept(Q, o2.id), 409, /Not enough Coin\./);
   assert.deepEqual(snap(), [before[0] + 10, before[1], before[2], before[3]]);
 });
 
@@ -45,7 +45,7 @@ test('double accept: second answers 409', async () => {
   w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 5 }, want: {} });
   w.game.trade.accept(Q, o.id);
-  fails(() => w.game.trade.accept(Q, o.id), 409, /sudah/);
+  fails(() => w.game.trade.accept(Q, o.id), 409, /already/);
   fails(() => w.game.trade.accept(R, o.id), 404, /./); // not the receiver
   assert.equal(w.game.gs.dayRows(w.day()).filter((r) => r.kind === 'trade' && r.token === 'fish' && r.account === Q).length, 1);
 });
@@ -56,7 +56,7 @@ test('expired offer answers 409', async () => {
   w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 5 }, want: {} });
   w.adv(121_000);
-  fails(() => w.game.trade.accept(Q, o.id), 409, 'Tawaran kedaluwarsa.');
+  fails(() => w.game.trade.accept(Q, o.id), 409, 'The offer expired.');
   assert.equal(w.game.trade.list(Q).incoming.length, 0);
 });
 
@@ -64,15 +64,15 @@ test('trade only in public and near each other', async () => {
   const w = await world();
   w.give(P, 'fish', 5);
   w.stand(P, 'consign'); w.stand(Q, 'consign', 8); // far apart
-  fails(() => w.game.trade.offer(P, { to: Q, give: { fish: 1 }, want: {} }), 409, 'Kalian harus berdekatan di area publik.');
+  fails(() => w.game.trade.offer(P, { to: Q, give: { fish: 1 }, want: {} }), 409, 'You both must be close together in the public area.');
   w.stand(Q, 'consign', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 1 }, want: {} });
   w.stand(Q, 'consign', 8);
-  fails(() => w.game.trade.accept(Q, o.id), 409, 'Kalian harus berdekatan di area publik.');
+  fails(() => w.game.trade.accept(Q, o.id), 409, 'You both must be close together in the public area.');
   // in a Homeland
   const row = w.game.homelands.ensure(Q);
   w.game.positions!.setWorld(Q, `HL-${row.id}`, w.game.homelands.map(row).layout.spawn, Date.now());
-  fails(() => w.game.trade.accept(Q, o.id), 409, 'Kalian harus berdekatan di area publik.');
+  fails(() => w.game.trade.accept(Q, o.id), 409, 'You both must be close together in the public area.');
   // validation
   fails(() => w.game.trade.offer(P, { to: P, give: { fish: 1 }, want: {} }), 400, /./);
   fails(() => w.game.trade.offer(P, { to: 'Nobody#12345', give: { fish: 1 }, want: {} }), 404, /./);
@@ -87,7 +87,7 @@ test('cancel by either side', async () => {
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 1 }, want: {} });
   fails(() => w.game.trade.cancel(R, o.id), 404, /./);
   w.game.trade.cancel(Q, o.id);
-  fails(() => w.game.trade.accept(Q, o.id), 409, /sudah/);
+  fails(() => w.game.trade.accept(Q, o.id), 409, /already/);
 });
 
 test('frozen accounts cannot offer or accept trades', async () => {
@@ -96,7 +96,7 @@ test('frozen accounts cannot offer or accept trades', async () => {
   w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 5 }, want: { coin: 40 } });
   w.game.gs.recordShortfall(1, 0, P, 'fish', -5, -3); // offerer frozen: the receiver cannot accept either
-  fails(() => w.game.trade.accept(Q, o.id), 403, /dibekukan/);
-  fails(() => w.game.trade.offer(P, { to: Q, give: { fish: 1 } }), 403, /dibekukan/);
+  fails(() => w.game.trade.accept(Q, o.id), 403, /frozen/);
+  fails(() => w.game.trade.offer(P, { to: Q, give: { fish: 1 } }), 403, /frozen/);
   assert.equal(w.bal(Q, 'fish'), 0);
 });

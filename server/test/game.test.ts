@@ -42,7 +42,7 @@ test('starter kit, gathering with energy, node charges and respawn', async () =>
   for (let i = 0; i < 4; i++) game.act(P, { action: 'gather', tile: 'water', x: 5, y: 5 });
   assert.equal(bal(game, P, 'fish'), 4);
   assert.equal(game.state(P).energy, 100 - 4 * 4);
-  assert.throws(() => game.act(P, { action: 'gather', tile: 'water', x: 5, y: 5 }), /Sudah habis/);
+  assert.throws(() => game.act(P, { action: 'gather', tile: 'water', x: 5, y: 5 }), /Depleted/);
   clock.advanceHours(2);
   game.act(P, { action: 'gather', tile: 'water', x: 5, y: 5 });
   assert.equal(bal(game, P, 'fish'), 5);
@@ -68,11 +68,11 @@ test('a felled tree is a stump in the state until it grows back', async () => {
 test('ore and wood need a tool, and the tool breaks after 20 uses', async () => {
   const { game, clock } = await world();
   game.gs.add(0, Q, 'tool', -1, 'test');
-  assert.throws(() => game.act(Q, { action: 'gather', tile: 'rock', x: 1, y: 1 }), /Bijih|Alat/);
+  assert.throws(() => game.act(Q, { action: 'gather', tile: 'rock', x: 1, y: 1 }), /Ore|Tool/);
   let broke = '';
   for (let i = 0; i < 20; i++) {
     const r = game.act(P, { action: 'gather', tile: 'rock', x: i, y: 0 });
-    if (/patah/.test(r.toast)) broke = r.toast;
+    if (/broke/.test(r.toast)) broke = r.toast;
     if (game.state(P).energy < 10) { game.act(P, { action: 'eat', token: 'bread' }); clock.advanceHours(0); }
   }
   assert.ok(broke, 'tool broke on the 20th use');
@@ -87,7 +87,7 @@ test('crafting: simple recipes cost energy, complex ones cost coin; eating resto
   assert.equal(bal(game, P, 'bread'), 4);
   assert.equal(bal(game, P, 'coin'), 100);
   assert.equal(game.state(P).energy, 95);
-  assert.throws(() => game.act(P, { action: 'craft', recipe: 'tool' }), /kurang/);
+  assert.throws(() => game.act(P, { action: 'craft', recipe: 'tool' }), /Not enough/);
   game.gs.add(0, P, 'ore', 2, 'test');
   game.gs.add(0, P, 'wood', 1, 'test');
   const tools = bal(game, P, 'tool');
@@ -99,7 +99,7 @@ test('crafting: simple recipes cost energy, complex ones cost coin; eating resto
   p.energy = 4;
   game.gs.savePlayer(p);
   game.gs.add(0, P, 'wheat', 2, 'test');
-  assert.throws(() => game.act(P, { action: 'craft', recipe: 'bread' }), /Energi kurang/);
+  assert.throws(() => game.act(P, { action: 'craft', recipe: 'bread' }), /Not enough energy/);
   game.act(P, { action: 'eat', token: 'bread' });
   assert.equal(game.state(P).energy, 29);
 });
@@ -111,7 +111,7 @@ test('farm: till, plant, water once a day, harvest after 3 watered days', async 
   assert.equal(bal(game, P, 'wheat'), 2);
   for (let d = 0; d < 3; d++) {
     game.act(P, { action: 'farm', op: 'water', plot: 0 });
-    if (d === 0) assert.throws(() => game.act(P, { action: 'farm', op: 'water', plot: 0 }), /Sudah disiram/);
+    if (d === 0) assert.throws(() => game.act(P, { action: 'farm', op: 'water', plot: 0 }), /Already watered/);
     clock.advanceHours(24);
   }
   assert.equal(game.state(P).plots[0].state, 'ready');
@@ -126,10 +126,10 @@ test('farm: with no Gandum left the village gives a few seeds a day, so farming 
   for (let i = 0; i < 3; i++) game.act(P, { action: 'farm', op: 'plant', plot: i }); // the starter kit's 3 seeds
   assert.equal(bal(game, P, 'wheat'), 0);
   const r = game.act(P, { action: 'farm', op: 'plant', plot: 3 }) as { toast: string };
-  assert.match(r.toast, /Desa memberimu 1 benih/);
+  assert.match(r.toast, /village gives you 1 wheat seed/);
   game.act(P, { action: 'farm', op: 'plant', plot: 4 });
   assert.equal(bal(game, P, 'wheat'), 0);
-  assert.throws(() => game.act(P, { action: 'farm', op: 'plant', plot: 5 }), /benih desa hari ini sudah habis/);
+  assert.throws(() => game.act(P, { action: 'farm', op: 'plant', plot: 5 }), /village seeds are used up/);
   clock.advanceHours(24);
   game.act(P, { action: 'farm', op: 'plant', plot: 5 });
   assert.equal(game.state(P).plots[5].state, 'planted');
@@ -140,7 +140,7 @@ test('selling to a merchant moves items and coin, prices react with a reason, da
   for (let i = 0; i < 3; i++) for (let k = 0; k < 4; k++) game.act(P, { action: 'gather', tile: 'water', x: i, y: 9 });
   const before = game.merchants().find((m) => m.id === 'sari')!.items.find((i) => i.token === 'fish')!;
   const r = game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 10 }) as { toast: string };
-  assert.match(r.toast, /Terjual 10 Ikan ke Sari/);
+  assert.match(r.toast, /Sold 10 Fish to Sarah/);
   assert.equal(bal(game, P, 'fish'), 2);
   assert.equal(bal(game, 'sari.gt.test', 'fish'), 30);
   assert.ok(bal(game, P, 'coin') > 100);
@@ -148,12 +148,12 @@ test('selling to a merchant moves items and coin, prices react with a reason, da
   await game.step();
   const after = game.merchants().find((m) => m.id === 'sari')!.items.find((i) => i.token === 'fish')!;
   assert.ok(after.mid < before.mid, `${after.mid} < ${before.mid}`);
-  assert.match(after.reason, /Harga turun/);
+  assert.match(after.reason, /Price down/);
   // Sari buys at most 2 x target (40) fish a day.
   game.gs.add(game.clock.time().settleDay, P, 'fish', 40, 'test');
   for (let i = 0; i < 3; i++) game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 10 });
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 1 }), /sudah cukup membeli/);
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'fish', qty: 1 }), /tidak membeli/);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 1 }), /has bought enough/);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'fish', qty: 1 }), /doesn't buy/);
 });
 
 test('town demand creates new coin only within the faucet', async () => {
@@ -210,7 +210,7 @@ test('a merchant that cannot pay rent closes; a restoration board reopens it and
   const budi = (await chain.listShops()).find((s) => s.account_id === 'budi.gt.test')!;
   assert.equal(budi.open, false, 'closed after failing rent');
   assert.ok(game.market.closed.has('budi.gt.test'));
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'budi', token: 'ore', qty: 1 }), /TUTUP/);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'budi', token: 'ore', qty: 1 }), /CLOSED/);
   // Restore through the (mock) chain as the relayer would.
   const call = (m: string, a: object) => chain.relay({ delegateAction: { actions: [{ functionCall: { methodName: m, args: Buffer.from(JSON.stringify(a)) } }] } }, P);
   const res = await call('restore_contribute', { merchant: 'budi.gt.test', contribution: [{ token_id: 'coin', amount: '200' }, { token_id: 'ore', amount: '10' }, { token_id: 'wood', amount: '5' }] });
@@ -237,12 +237,12 @@ test('spend guard: on-chain debits only use items that are on chain and not spen
   const { game, chain } = await world();
   const guard = spendGuard(chain, game);
   // Starter kit is off-chain until the first settlement.
-  await assert.rejects(guard(P, 'list_item', { token_id: 'bread', amount: '1', price_each: '5' }), /di rantai baru 0/);
+  await assert.rejects(guard(P, 'list_item', { token_id: 'bread', amount: '1', price_each: '5' }), /on the chain is only 0/);
   await game.devSettle();
   assert.equal(game.gs.settledBalance(P, 'bread'), 3);
   await guard(P, 'list_item', { token_id: 'bread', amount: '3', price_each: '5' });
   game.act(P, { action: 'ship', token: 'bread', qty: 1 }); // spends one off-chain today
-  await assert.rejects(guard(P, 'list_item', { token_id: 'bread', amount: '3', price_each: '5' }), /tidak cukup: perlu 3, punya 2/);
+  await assert.rejects(guard(P, 'list_item', { token_id: 'bread', amount: '3', price_each: '5' }), /Not enough .*: need 3, have 2/);
   await guard(P, 'send_item', { receiver_id: Q, token_id: 'bread', amount: '2' });
 });
 
@@ -317,9 +317,9 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
     return { x: t.x, y: t.y + 1 };
   };
   const gather = (tile: string, t: { x: number; y: number }) => { now += 3_600_000; return game.act(P, { action: 'gather', tile, x: t.x, y: t.y, pos: beside(t) }); };
-  assert.match(gather('water', openWater).toast, /Ikan/);
-  assert.throws(() => gather('water', grass), /Tidak ada/);
-  assert.throws(() => gather('tree', lockedTree), /Posisi tidak valid|Dusun Seberang belum dibuka/);
+  assert.match(gather('water', openWater).toast, /Fish/);
+  assert.throws(() => gather('water', grass), /Nothing to gather/);
+  assert.throws(() => gather('tree', lockedTree), /Invalid position|Far Bank Hamlet isn't open yet/);
   // the town builds the bridge (on chain), and the server opens Dusun Seberang
   await game.devSettle();
   chain.add(P, 'wood', 60n); chain.add(P, 'ore', 20n); chain.add(P, 'coin', 300n);
@@ -329,7 +329,7 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
   assert.deepEqual(await game.syncProjects(), ['seberang']);
   assert.ok(map.chunkAt(lockedTree.x, lockedTree.y).open);
   assert.ok(map.layout.tiles.includes('bridge'), 'the bridge is on the map now');
-  assert.match(gather('tree', lockedTree).toast, /Kayu/);
+  assert.match(gather('tree', lockedTree).toast, /Wood/);
   assert.deepEqual(JSON.parse(game.gs.meta('world.unlocked')!), ['seberang'], 'persisted');
 });
 
@@ -349,21 +349,21 @@ test('positions: actions happen where the player stands, and nobody jumps across
   const stall = L.market.stalls[0], front = { x: stall.x, y: stall.y + 1 };
   const own = L.buildings.find((b) => b.own)!, door = { x: own.dx, y: own.dy + 1 };
   // no position, or a position inside a wall, is refused
-  assert.throws(() => game.act(P, { action: 'eat', token: 'bread' }), /posisi pemain tidak ada/);
-  assert.throws(() => game.act(P, { action: 'eat', token: 'bread', pos: { x: own.x, y: own.y } }), /Posisi tidak valid/);
+  assert.throws(() => game.act(P, { action: 'eat', token: 'bread' }), /player position missing/);
+  assert.throws(() => game.act(P, { action: 'eat', token: 'bread', pos: { x: own.x, y: own.y } }), /Invalid position/);
   // at home: craft is fine; selling from home is not
   now += 1000;
   game.act(P, { action: 'ship', token: 'bread', qty: 1, pos: door });
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: door }), /lapak pedagang/);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: door }), /merchants' stalls/);
   // jumping from the house to the market in one second is refused; walking there (a minute later) is fine
   now += 1000;
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: front }), /melompat/);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: front }), /jumped too far/);
   now += 60_000;
   game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: front });
   // crafting needs the house, farming needs the plot
   now += 1000;
-  assert.throws(() => game.act(P, { action: 'craft', recipe: 'bread', pos: front }), /Meja Kerja/);
-  assert.throws(() => game.act(P, { action: 'farm', op: 'till', plot: 0, pos: front }), /petak kebunmu/);
+  assert.throws(() => game.act(P, { action: 'craft', recipe: 'bread', pos: front }), /Workbench/);
+  assert.throws(() => game.act(P, { action: 'farm', op: 'till', plot: 0, pos: front }), /garden plot/);
   // the spawn is always allowed (where a player appears after loading the page)
   now += 1000;
   game.act(P, { action: 'ship', token: 'bread', qty: 1, pos: L.spawn });

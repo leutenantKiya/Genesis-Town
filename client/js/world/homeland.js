@@ -17,13 +17,30 @@
  */
 (function (root) {
   'use strict';
+  // Text: in the browser $t is the i18n layer (js/i18n.js); on the server (no window) these keys fall back to English.
+  var EN_TEXT = {
+    "Hutan": "Forest",
+    "Bukit Batu": "Rocky Hills",
+    "Kolam": "Pond",
+    "Pantai": "Beach",
+    "Padang": "Meadow",
+    "Kolam Ikan": "Fish Pond",
+    "Tambang": "Mine",
+    "Restoran": "Restaurant",
+    "Rumah Pekerja": "Workers' House",
+    "Rumah Sakit": "Hospital",
+    "Balai Kota": "Town Hall",
+    "Rumahmu": "Your House",
+    "Pusat Desa": "Village Center"
+  };
+  var $t = root.$t || function (k, v) { var s = EN_TEXT[k] || k; return v ? s.replace(/\{(\d+)\}/g, function (m, i) { return v[i]; }) : s; };
 
   var VERSION = 3, CH = 16, N = 3, W = CH * N, H = CH * N;
   var CHUNKS = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
   var ORTHO = ['n', 'w', 'e', 's'];
   var SOLID = { tree: 1, fence: 1, sign: 1, mailbox: 1, rock: 1, water: 1, bush: 1, barrel: 1, crate: 1, stall: 1, lamp: 1, void: 1 };
-  var NAMES = { forest: 'Hutan', rock: 'Bukit Batu', pond: 'Kolam', sea: 'Pantai', meadow: 'Padang' };
-  var KIND_NAMES = { kolam: 'Kolam Ikan', tambang: 'Tambang', restoran: 'Restoran', rumah: 'Rumah Pekerja', rumahsakit: 'Rumah Sakit' };
+  var NAMES = { forest: $t('Hutan'), rock: $t('Bukit Batu'), pond: $t('Kolam'), sea: $t('Pantai'), meadow: $t('Padang') };
+  var KIND_NAMES = { kolam: $t('Kolam Ikan'), tambang: $t('Tambang'), restoran: $t('Restoran'), rumah: $t('Rumah Pekerja'), rumahsakit: $t('Rumah Sakit') };
   var MAX_PLOTS = 6;
   var FIELD = [3, 2]; // plots across x down: the fence always encloses the biggest field (6 plots)
 
@@ -231,12 +248,12 @@
 
     // buildings
     function bld(kind, x0, y0, w, h, dx, dy, extra) {
-      var b = { kind: kind, name: KIND_NAMES[kind] || (kind === 'townhall' ? 'Balai Kota' : kind), x: x0, y: y0, w: w, h: h, dx: dx, dy: dy, chunk: chunkId(dx, dy), open: true };
+      var b = { kind: kind, name: KIND_NAMES[kind] || (kind === 'townhall' ? $t('Balai Kota') : kind), x: x0, y: y0, w: w, h: h, dx: dx, dy: dy, chunk: chunkId(dx, dy), open: true };
       for (var key in extra) b[key] = extra[key];
       return b;
     }
-    var buildings = [bld('townhall', tx, ty, 4, 4, tdx, tdy, { name: 'Balai Kota', own: true, style: 0, id: 0 })];
-    if (hasHouse) buildings.push(bld('house', hx, hy, 3, 3, hdx, hdy, { name: 'Rumahmu', own: true, style: R.int(0, 3) }));
+    var buildings = [bld('townhall', tx, ty, 4, 4, tdx, tdy, { name: $t('Balai Kota'), own: true, style: 0, id: 0 })];
+    if (hasHouse) buildings.push(bld('house', hx, hy, 3, 3, hdx, hdy, { name: $t('Rumahmu'), own: true, style: R.int(0, 3) }));
     var byId = {};
     lots.forEach(function (l) { byId[l.id] = l; });
     (prog.built || []).forEach(function (b) {
@@ -273,7 +290,7 @@
     var open = ['c'];
     (prog.open || []).forEach(function (id) { if (CHUNKS.indexOf(id) >= 0 && open.indexOf(id) < 0) open.push(id); });
     var chunks = CHUNKS.map(function (cid, ci) {
-      return { id: cid, name: cid === 'c' ? 'Pusat Desa' : NAMES[biomes[cid]], cx: ci % N, cy: Math.floor(ci / N), biome: cid === 'c' ? 'center' : biomes[cid], open: open.indexOf(cid) >= 0, project: null };
+      return { id: cid, name: cid === 'c' ? $t('Pusat Desa') : NAMES[biomes[cid]], cx: ci % N, cy: Math.floor(ci / N), biome: cid === 'c' ? 'center' : biomes[cid], open: open.indexOf(cid) >= 0, project: null };
     });
     return {
       version: VERSION, seed: seed, attempt: att, w: W, h: H, chunk: CH, riverX1: null,

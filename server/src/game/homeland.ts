@@ -156,18 +156,18 @@ export class Homelands {
   dress(account: string, bot: unknown, cosmetic: unknown, day: number): { toast: string; tags: string[] } {
     this.settle(account);
     const def = typeof cosmetic === 'string' ? this.cosmeticDef(cosmetic) : undefined;
-    if (!def) throw new HttpError(400, 'Perlengkapan tidak dikenal.');
+    if (!def) throw new HttpError(400, 'Unknown gear.');
     const id = Number(bot);
-    if (bot === null || bot === '' || typeof bot === 'boolean' || !Number.isInteger(id) || id < 0) throw new HttpError(400, 'Pekerja tidak dikenal.');
+    if (bot === null || bot === '' || typeof bot === 'boolean' || !Number.isInteger(id) || id < 0) throw new HttpError(400, 'Unknown worker.');
     const gs = this.d.gs;
-    if (id !== 0 && !gs.homelandBots(account).some((b) => b.id === id)) throw new HttpError(409, 'Pekerja itu bukan milikmu.');
+    if (id !== 0 && !gs.homelandBots(account).some((b) => b.id === id)) throw new HttpError(409, 'That worker isn\'t yours.');
     const coin = gs.balance(account, 'coin');
-    if (coin < def.price) throw new HttpError(409, `Koin kurang (punya ${coin}, perlu ${def.price}).`);
+    if (coin < def.price) throw new HttpError(409, `Not enough coins (have ${coin}, need ${def.price}).`);
     const ref = `${homeWorld(this.ensure(account).id)}:dress:${id}`;
     gs.add(day, account, 'coin', -def.price, 'cosmetic', ref);
     gs.add(day, this.d.town, 'coin', def.price, 'cosmetic', ref);
     gs.setCosmetic(account, id, cosmetic as string);
-    return { toast: `${def.name} dipasang (-${def.price} koin).`, tags: ['coin'] };
+    return { toast: `${def.name} installed (-${def.price} coins).`, tags: ['coin'] };
   }
 
   /* ------------------------------------------------------------ houses, motivation, hospital */
@@ -279,9 +279,9 @@ export class Homelands {
     this.settle(account);
     const gs = this.d.gs;
     const f = this.effects(account).forage, fs = this.forageStored(account);
-    if (!f || !fs) throw new HttpError(409, 'Kamu belum punya Pemburu.');
+    if (!f || !fs) throw new HttpError(409, 'You don\'t have a Hunter yet.');
     const got = Object.entries(fs.stored).filter(([, n]) => n > 0);
-    if (!got.length) throw new HttpError(409, 'Pemburu belum membawa apa-apa.');
+    if (!got.length) throw new HttpError(409, 'The Hunter isn\'t carrying anything.');
     for (const [t, n] of got) checkGain(account, t, n); // throws on a full daily cap; nothing has changed yet
     const world = homeWorld(this.ensure(account).id);
     for (const [t, n] of got) gs.add(day, account, t, n, 'forage', `${world}:forage`);
@@ -305,18 +305,18 @@ export class Homelands {
   }
   private cookWhy(account: string, r: { inputs: Record<string, number> }, qty: number): string | null {
     const lack = Object.entries(r.inputs).some(([t, n]) => this.d.gs.balance(account, t) < n * qty);
-    return lack ? `Bahan kurang (perlu ${Object.entries(r.inputs).map(([t, n]) => `${n * qty} ${this.name(t)}`).join(', ')}).` : null;
+    return lack ? `Not enough materials (need ${Object.entries(r.inputs).map(([t, n]) => `${n * qty} ${this.name(t)}`).join(', ')}).` : null;
   }
 
   private pantryOf(account: string): number { return this.d.gs.pantryOf(account)?.pantry ?? 0; }
   private qtyOf(qty: unknown, max: number): number {
     const q = Number(qty);
-    if (!Number.isInteger(q) || q < 1 || q > max) throw new HttpError(400, `Jumlah harus 1 sampai ${max}.`);
+    if (!Number.isInteger(q) || q < 1 || q > max) throw new HttpError(400, `The amount must be 1 to ${max}.`);
     return q;
   }
   private pantrySpace(account: string, q: number) {
     const max = this.cfg.restoran.pantryMax, have = this.pantryOf(account);
-    if (have + q > max) throw new HttpError(409, `Lemari makanan penuh (${have} dari ${max}).`);
+    if (have + q > max) throw new HttpError(409, `The pantry is full (${have} of ${max}).`);
   }
   private setPantry(account: string, n: number) { this.d.gs.savePantry(account, n, this.d.gs.pantryOf(account)?.tick_at ?? this.now()); }
 
@@ -324,7 +324,7 @@ export class Homelands {
   cook(account: string, qty: unknown, day: number): { toast: string; tags: string[] } {
     this.settle(account);
     const r = this.cookRecipe(account);
-    if (!r) throw new HttpError(409, 'Bangun Restoran dulu.');
+    if (!r) throw new HttpError(409, 'Build the Restaurant first.');
     const q = this.qtyOf(qty, 10);
     const why = this.cookWhy(account, r, q);
     if (why) throw new HttpError(409, why);
@@ -332,21 +332,21 @@ export class Homelands {
     const gs = this.d.gs, world = homeWorld(this.ensure(account).id);
     for (const [t, n] of Object.entries(r.inputs)) gs.add(day, account, t, -n * q, 'cook', `${world}:cook`);
     this.setPantry(account, this.pantryOf(account) + q);
-    return { toast: `${q} ${this.name(r.output)} masuk lemari Restoran (${this.pantryOf(account)} dari ${this.cfg.restoran.pantryMax}).`, tags: Object.keys(r.inputs) };
+    return { toast: `${q} ${this.name(r.output)} went into the Restaurant pantry (${this.pantryOf(account)} of ${this.cfg.restoran.pantryMax}).`, tags: Object.keys(r.inputs) };
   }
 
   /** Moves bread or meal from the bag into the pantry. */
   stock(account: string, token: string, qty: unknown, day: number): { toast: string; tags: string[] } {
     this.settle(account);
-    if (!this.restoranLot(account)) throw new HttpError(409, 'Bangun Restoran dulu.');
-    if (!['bread', 'meal'].includes(token)) throw new HttpError(400, 'Hanya roti dan ikan bakar yang bisa ditaruh.');
+    if (!this.restoranLot(account)) throw new HttpError(409, 'Build the Restaurant first.');
+    if (!['bread', 'meal'].includes(token)) throw new HttpError(400, 'Only bread and grilled fish can be stored.');
     const q = this.qtyOf(qty, this.cfg.restoran.pantryMax);
     const have = this.d.gs.balance(account, token);
-    if (have < q) throw new HttpError(409, `${this.name(token)} kurang (punya ${have}, perlu ${q}).`);
+    if (have < q) throw new HttpError(409, `Not enough ${this.name(token)} (have ${have}, need ${q}).`);
     this.pantrySpace(account, q);
     this.d.gs.add(day, account, token, -q, 'stock', `${homeWorld(this.ensure(account).id)}:pantry`);
     this.setPantry(account, this.pantryOf(account) + q);
-    return { toast: `${q} ${this.name(token)} ditaruh di lemari Restoran.`, tags: [token] };
+    return { toast: `${q} ${this.name(token)} put into the Restaurant pantry.`, tags: [token] };
   }
 
   /* ------------------------------------------------------------ worker bots */
@@ -382,15 +382,15 @@ export class Homelands {
   /** Why this job cannot be hired right now, or null. Pure. */
   private hireWhy(account: string, th: number, job: string): string | null {
     const def = this.botDef(job);
-    if (!def) return 'Pekerja tidak dikenal.';
+    if (!def) return 'Unknown worker.';
     const have = this.d.gs.homelandBots(account).filter((b) => b.job === job).length;
-    if (have >= def.max) return `Pekerja ${def.name} sudah penuh (maks ${def.max}).`;
+    if (have >= def.max) return `${def.name} workers are full (max ${def.max}).`;
     const need = def.th ?? (job === 'builder' ? 1 : 2);
-    if (th < need) return `Balai Kota perlu level ${need}.`;
+    if (th < need) return `Town Hall needs level ${need}.`;
     const beds = this.bedInfo(account);
-    if (beds.used >= beds.total) return 'Tidak ada kasur kosong. Bangun Rumah Pekerja atau tambah kasur.';
+    if (beds.used >= beds.total) return 'No empty bed. Build a Workers\' House or add beds.';
     const coin = this.d.gs.balance(account, 'coin');
-    if (coin < def.price) return `Koin kurang (punya ${coin}, perlu ${def.price}).`;
+    if (coin < def.price) return `Not enough coins (have ${coin}, need ${def.price}).`;
     return null;
   }
 
@@ -398,7 +398,7 @@ export class Homelands {
     this.settle(account);
     const row = this.ensure(account);
     const def = this.botDef(String(job));
-    if (!def) throw new HttpError(400, 'Pekerja tidak dikenal.');
+    if (!def) throw new HttpError(400, 'Unknown worker.');
     const why = this.hireWhy(account, row.th, job);
     if (why) throw new HttpError(409, why);
     const gs = this.d.gs;
@@ -407,7 +407,7 @@ export class Homelands {
     gs.add(day, this.d.town, 'coin', def.price, 'hire', ref);
     gs.addHomelandBot(account, job, this.now(), this.pickHouse(account));
     if (def.effect.forage) gs.setForage(account, this.now(), 0);
-    return { toast: `${def.name} dipekerjakan (-${def.price} koin).`, tags: ['coin'] };
+    return { toast: `${def.name} hired (-${def.price} coins).`, tags: ['coin'] };
   }
 
   collect(account: string, lot: string, day: number, checkGain: (a: string, t: string, n: number) => void): { toast: string; tags: string[]; gained: Record<string, number> } {
@@ -415,10 +415,10 @@ export class Homelands {
     const gs = this.d.gs;
     const b = gs.homelandBuildings(account).find((x) => x.lot === lot);
     const def = b && this.cfg.buildings[b.kind];
-    if (!b || !def) throw new HttpError(409, 'Belum ada bangunan di sini.');
-    if (!def.produces) throw new HttpError(409, `${def.name} tidak menghasilkan apa-apa sendiri.`);
+    if (!b || !def) throw new HttpError(409, 'There\'s no building here yet.');
+    if (!def.produces) throw new HttpError(409, `${def.name} doesn't produce anything by itself.`);
     const stored = this.storedOf(account, def, b.last_collect);
-    if (stored <= 0) throw new HttpError(409, 'Belum ada hasil.');
+    if (stored <= 0) throw new HttpError(409, 'No output yet.');
     checkGain(account, def.produces, stored); // throws on a full daily cap; nothing has changed yet
     const world = homeWorld(gs.homelandOf(account)!.id);
     gs.add(day, account, def.produces, stored, 'collect', `${world}:${lot}`);
@@ -441,7 +441,7 @@ export class Homelands {
   private furnParts(target: string): { lot: string; item: string } {
     const parts = String(target).split(':');
     const items = Object.values(this.cfg.buildings).flatMap((d) => Object.keys(d.furniture ?? {}));
-    if (parts.length !== 2 || !items.includes(parts[1])) throw new HttpError(400, 'Perabot tidak dikenal.');
+    if (parts.length !== 2 || !items.includes(parts[1])) throw new HttpError(400, 'Unknown furniture.');
     return { lot: parts[0], item: parts[1] };
   }
 
@@ -449,49 +449,49 @@ export class Homelands {
     const gs = this.d.gs, account = row.account;
     const furn = kind === 'furniture' ? this.furnParts(target) : null; // names are checked before anything else
     const jobs = gs.homelandJobs(account);
-    if (jobs.length >= this.builderSlots(account)) throw new HttpError(409, 'Builder sedang bekerja.');
-    if (!this.pickWorker(account)) throw new HttpError(409, 'Semua tukang sedang sakit. Tunggu sampai sembuh.');
+    if (jobs.length >= this.builderSlots(account)) throw new HttpError(409, 'The builder is busy.');
+    if (!this.pickWorker(account)) throw new HttpError(409, 'All builders are sick. Wait until they recover.');
     let plan: { cost: Cost; secs: number; label: string; job: string };
-    const same = (job: string) => { if (jobs.some((j) => j.target === job)) throw new HttpError(409, 'Sedang dibangun.'); return job; };
+    const same = (job: string) => { if (jobs.some((j) => j.target === job)) throw new HttpError(409, 'Already under construction.'); return job; };
     if (kind === 'th') {
       const step = this.thStep(row);
-      if (!step) throw new HttpError(409, 'Balai Kota sudah level tertinggi.');
-      plan = { cost: step.cost, secs: step.secs, label: `Balai Kota level ${step.level}`, job: same(target) };
+      if (!step) throw new HttpError(409, 'The Town Hall is already at the highest level.');
+      plan = { cost: step.cost, secs: step.secs, label: `Town Hall level ${step.level}`, job: same(target) };
     } else if (kind === 'chunk') {
       const step = this.chunkStep(row);
-      if (!(target in NEIGHBOURS)) throw new HttpError(409, 'Chunk itu tidak bersebelahan dengan wilayahmu.');
-      if (target === 'c' || row.open.includes(target) || !step) throw new HttpError(409, 'Sudah dibangun.');
+      if (!(target in NEIGHBOURS)) throw new HttpError(409, 'That chunk is not next to your territory.');
+      if (target === 'c' || row.open.includes(target) || !step) throw new HttpError(409, 'Already built.');
       const mine = new Set(['c', ...row.open]);
-      if (!NEIGHBOURS[target].some((n) => mine.has(n))) throw new HttpError(409, 'Chunk itu tidak bersebelahan dengan wilayahmu.');
-      if (row.th < step.th) throw new HttpError(409, `Balai Kota perlu level ${step.th}.`);
-      plan = { cost: step.cost, secs: step.secs, label: 'Wilayah baru', job: same(target) };
+      if (!NEIGHBOURS[target].some((n) => mine.has(n))) throw new HttpError(409, 'That chunk is not next to your territory.');
+      if (row.th < step.th) throw new HttpError(409, `Town Hall needs level ${step.th}.`);
+      plan = { cost: step.cost, secs: step.secs, label: 'New region', job: same(target) };
     } else if (kind === 'build') {
       const lot = this.map(row).layout.lots.find((l) => l.id === target);
       const def = lot && this.cfg.buildings[lot.kind];
-      if (!lot || !def) throw new HttpError(409, 'Lahan itu tidak ada.');
-      if (gs.homelandBuildings(account).some((b) => b.lot === target)) throw new HttpError(409, 'Sudah dibangun.');
-      if (row.th < def.th) throw new HttpError(409, `Balai Kota perlu level ${def.th}.`);
-      if (def.needsChunk && !row.open.includes(lot.chunk) && lot.chunk !== 'c') throw new HttpError(409, 'Wilayah itu belum dibuka.');
+      if (!lot || !def) throw new HttpError(409, 'That lot does not exist.');
+      if (gs.homelandBuildings(account).some((b) => b.lot === target)) throw new HttpError(409, 'Already built.');
+      if (row.th < def.th) throw new HttpError(409, `Town Hall needs level ${def.th}.`);
+      if (def.needsChunk && !row.open.includes(lot.chunk) && lot.chunk !== 'c') throw new HttpError(409, 'That region isn\'t open yet.');
       plan = { cost: def.cost, secs: def.secs, label: def.name, job: same(target) };
     } else if (furn) {
       const b = gs.homelandBuildings(account).find((x) => x.lot === furn.lot);
       const hdef = b && Object.hasOwn(this.cfg.buildings, b.kind) ? this.cfg.buildings[b.kind] : undefined;
-      if (!b || !hdef?.furniture) throw new HttpError(409, 'Bangun Rumah Pekerja dulu.');
-      if (!Object.hasOwn(hdef.furniture, furn.item)) throw new HttpError(400, 'Perabot tidak dikenal.');
+      if (!b || !hdef?.furniture) throw new HttpError(409, 'Build the Workers\' House first.');
+      if (!Object.hasOwn(hdef.furniture, furn.item)) throw new HttpError(400, 'Unknown furniture.');
       const fd = hdef.furniture[furn.item], lvl = gs.furnitureLevel(account, target);
-      if (lvl >= fd.max || !fd.levels[lvl]) throw new HttpError(409, `${fd.name} sudah level tertinggi.`);
+      if (lvl >= fd.max || !fd.levels[lvl]) throw new HttpError(409, `${fd.name} is already at the highest level.`);
       const label = fd.names ? fd.names[lvl] ?? fd.name : `${fd.name} ke-${lvl + 2}`;
       plan = { cost: fd.levels[lvl].cost, secs: fd.levels[lvl].secs, label, job: same(target) };
     } else if (kind === 'upgrade') {
       const h = this.hospital(account);
-      if (!h || h.lot !== String(target)) throw new HttpError(409, 'Bangun Rumah Sakit dulu.');
+      if (!h || h.lot !== String(target)) throw new HttpError(409, 'Build the Hospital first.');
       const step = h.def.upgrade?.[h.level - 1];
-      if (h.level >= (h.def.maxLevel ?? 1) || !step) throw new HttpError(409, 'Rumah Sakit sudah level tertinggi.');
-      plan = { cost: step.cost, secs: step.secs, label: `Rumah Sakit level ${h.level + 1}`, job: same(`${h.lot}:up`) };
-    } else throw new HttpError(400, 'Jenis bangunan tidak dikenal.');
+      if (h.level >= (h.def.maxLevel ?? 1) || !step) throw new HttpError(409, 'The Hospital is already at the highest level.');
+      plan = { cost: step.cost, secs: step.secs, label: `Hospital level ${h.level + 1}`, job: same(`${h.lot}:up`) };
+    } else throw new HttpError(400, 'Unknown building type.');
     for (const [t, n] of Object.entries(plan.cost)) {
       const have = gs.balance(account, t);
-      if (have < n) throw new HttpError(409, `${this.name(t)} kurang (punya ${have}, perlu ${n}).`);
+      if (have < n) throw new HttpError(409, `Not enough ${this.name(t)} (have ${have}, need ${n}).`);
     }
     return plan;
   }
@@ -518,7 +518,7 @@ export class Homelands {
     const secs = Math.ceil(plan.secs * (1 + this.cfg.fatigue.slowdownAt100 * w.fatigue / 100) / this.motivationFactor(account, w.slot) - 1e-9);
     const ends_at = this.now() + secs * 1000;
     gs.addHomelandJob(account, plan.job, kind, ends_at, w.slot, plan.secs, this.now());
-    return { toast: `${plan.label}: pembangun mulai bekerja.`, tags: Object.keys(plan.cost), ends_at };
+    return { toast: `${plan.label}: the builder starts working.`, tags: Object.keys(plan.cost), ends_at };
   }
 
   /* ------------------------------------------------------------ view */
@@ -545,7 +545,7 @@ export class Homelands {
     for (const [kind, def] of Object.entries(this.cfg.buildings)) {
       const lot = m.layout.lots.find((l) => l.kind === kind)?.id ?? null;
       let why: string | null = null;
-      if (!lot) why = 'Lahan tidak tersedia.';
+      if (!lot) why = 'Lot not available.';
       else { try { this.plan(row, 'build', lot); } catch (e) { why = (e as Error).message; } }
       buildings[kind] = { ...def, lot, can: why === null, why };
     }
@@ -561,7 +561,7 @@ export class Homelands {
       bots: this.bots(account),
       workers: this.contractorSlots(account).map((slot) => {
         const w = this.workerOf(account, slot), busy = jobs.some((j) => j.worker === slot);
-        return { slot, name: slot === 0 ? 'Tukang Balai Kota' : `Tukang ${slot}`, fatigue: Math.round(w.fatigue * 10) / 10, busy, sick_until: w.sick_until, motivation: this.motivationOf(account, slot), cosmetic: this.d.gs.cosmeticsOf(account)[slot] ?? null };
+        return { slot, name: slot === 0 ? 'Town Hall Builder' : `Builder ${slot}`, fatigue: Math.round(w.fatigue * 10) / 10, busy, sick_until: w.sick_until, motivation: this.motivationOf(account, slot), cosmetic: this.d.gs.cosmeticsOf(account)[slot] ?? null };
       }),
       cosmetics: this.cfg.cosmetics ?? {},
       houses: this.houseLots(account).map((lot) => this.houseView(account, lot)),
@@ -582,9 +582,9 @@ export class Homelands {
 
   access(account: string, id: number): { row: HomelandRow; owner: boolean } {
     const row = this.byId(id);
-    if (!row) throw new HttpError(404, 'Dunia itu tidak ada.');
+    if (!row) throw new HttpError(404, 'That world does not exist.');
     const owner = row.account === account;
-    if (!owner && !this.d.gs.homelandInvites(id).includes(account)) throw new HttpError(409, 'Kamu tidak diundang ke dunia ini.');
+    if (!owner && !this.d.gs.homelandInvites(id).includes(account)) throw new HttpError(409, 'You are not invited to this world.');
     return { row, owner };
   }
 
@@ -598,11 +598,11 @@ export class Homelands {
         const m = /^(.+)#(\d{5})$/.exec(raw);
         if (m) acct = this.d.players.accountByNameTag(m[1].trim(), m[2]);
         else if (this.d.players.isPlayer(raw)) acct = raw;
-        else throw new HttpError(400, 'Tulis nama#tag pemain (contoh: Budi#12345).');
+        else throw new HttpError(400, 'Write the player\'s name#tag (example: Ann#12345).');
       }
       if (!acct) unknown.push(raw.slice(0, 30)); else if (acct !== account && !list.includes(acct)) list.push(acct);
     }
-    if (unknown.length) throw new HttpError(400, `Pemain tidak ditemukan: ${unknown.join(', ')}. Tulis nama pemain persis seperti di permainan.`);
+    if (unknown.length) throw new HttpError(400, `Player not found: ${unknown.join(', ')}. Write the player name exactly as in the game.`);
     list.splice(MAX_INVITES);
     this.d.gs.setHomelandInvites(row.id, list);
     return list;

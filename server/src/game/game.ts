@@ -66,7 +66,7 @@ export class Game {
       atStall: (a) => {
         if (!this.map || !this.positions) return;
         const p = this.positions.worldOf(a) === 'public' ? this.positions.last.get(a) : undefined;
-        if (!p || !this.map.nearLandmark(p, 'consign')) throw new HttpError(409, `Datang ke lapak Titip Jual (${this.econ.consign.merchant}) di pasar.`);
+        if (!p || !this.map.nearLandmark(p, 'consign')) throw new HttpError(409, `Come to the Consignment stall (${this.econ.consign.merchant}) at the market.`);
       },
     });
     if (o.worldSeed != null) {
@@ -102,10 +102,10 @@ export class Game {
   worldFor(account: string, wid: string, ownerOnly: boolean): { map: GameMap | null; row: HomelandRow | null } {
     if (wid === 'public') return { map: this.map, row: null };
     const id = parseHome(wid);
-    if (id === null || !worldIdOk(wid) || wid !== homeWorld(id)) throw new HttpError(400, 'Dunia tidak dikenal.');
-    if (!this.map) throw new HttpError(409, 'Dunia Homeland belum aktif.');
+    if (id === null || !worldIdOk(wid) || wid !== homeWorld(id)) throw new HttpError(400, 'Unknown world.');
+    if (!this.map) throw new HttpError(409, 'The Homeland world isn\'t active yet.');
     const { row, owner } = this.homelands.access(account, id);
-    if (ownerOnly && !owner) throw new HttpError(409, 'Ini bukan Homeland-mu. Tamu hanya boleh jalan-jalan.');
+    if (ownerOnly && !owner) throw new HttpError(409, 'This isn\'t your Homeland. Guests can only look around.');
     return { map: this.homelands.map(row), row };
   }
 
@@ -121,15 +121,15 @@ export class Game {
 
   /** Portal trip: from within 2 tiles of this world's portal to the public area (arrive at its portal) or a Homeland you own or are invited to (arrive at its spawn). */
   private travel(account: string, from: string, fromMap: GameMap | null, to: string, pos: Pos): { toast: string; world: string; arrive: Pos } {
-    if (!this.map || !this.positions || !fromMap) throw new HttpError(409, 'Perjalanan belum aktif.');
-    if (!to) throw new HttpError(400, 'Mau ke mana?');
-    if (to === from) throw new HttpError(409, 'Kamu sudah di sana.');
+    if (!this.map || !this.positions || !fromMap) throw new HttpError(409, 'Travel isn\'t active yet.');
+    if (!to) throw new HttpError(400, 'Where to?');
+    if (to === from) throw new HttpError(409, 'You\'re already there.');
     const d = fromMap.portal();
-    if (Math.abs(pos.x - d.x) + Math.abs(pos.y - d.y) > 2) throw new HttpError(409, 'Pergi ke portal dulu.');
+    if (Math.abs(pos.x - d.x) + Math.abs(pos.y - d.y) > 2) throw new HttpError(409, 'Go to the portal first.');
     const target = this.worldFor(account, to, false);
     const arrive = target.row ? target.map!.layout.spawn : this.map.portal();
     this.positions.setWorld(account, to, arrive, this.now());
-    return { toast: target.row ? (target.row.account === account ? 'Tiba di Homeland-mu.' : 'Tiba di Homeland temanmu.') : 'Tiba di area publik.', world: to, arrive };
+    return { toast: target.row ? (target.row.account === account ? 'Arrived at your Homeland.' : 'Arrived at your friend\'s Homeland.') : 'Arrived in the public area.', world: to, arrive };
   }
 
   /** Dev tool (mock chain only): moves coin that already exists from the town treasury to a player's settled balance. */
@@ -137,7 +137,7 @@ export class Game {
     if (!(this.chain instanceof MockChain)) throw new HttpError(403, 'only on the mock chain');
     if (!Number.isInteger(coin) || coin < 1 || coin > 100_000) throw new HttpError(400, 'coin 1-100000');
     const free = Math.min(this.gs.settledBalance(this.town, 'coin'), this.gs.balance(this.town, 'coin'));
-    if (coin > free) throw new HttpError(409, `Kas desa hanya punya ${free} koin yang bebas.`);
+    if (coin > free) throw new HttpError(409, `The village fund only has ${free} free coins.`);
     this.chain.add(this.town, 'coin', -BigInt(coin));
     this.chain.add(account, 'coin', BigInt(coin));
     await this.settlement.refresh([this.town, account]);
@@ -201,7 +201,7 @@ export class Game {
   /** Off-chain action from the player. Every one is logged in Riwayat as "waiting for settlement". */
   /** An account whose settlement debit the chain could not cover is frozen until the operator lifts it. */
   assertActive(account: string) {
-    if (this.gs.isFrozen(account)) throw new HttpError(403, 'Akun ini dibekukan karena saldo on-chain tidak cocok dengan permainan. Hubungi pengelola.');
+    if (this.gs.isFrozen(account)) throw new HttpError(403, 'This account is frozen because the on-chain balance does not match the game. Contact the operators.');
   }
 
   act(account: string, body: Record<string, unknown>) {
@@ -214,35 +214,35 @@ export class Game {
     // Knocked out by a monster: nothing works until 06:00. A monster in the way: fight or flee first.
     if (this.monsters) {
       this.monsters.checkAwake(account);
-      if (this.monsters.pending.has(account) && a !== 'fight' && a !== 'flee') throw new HttpError(409, `${this.monsters.pending.get(account)!.name} menghadang! Lawan atau lari dulu.`);
+      if (this.monsters.pending.has(account) && a !== 'fight' && a !== 'flee') throw new HttpError(409, `${this.monsters.pending.get(account)!.name} blocks your way! Fight or run first.`);
     }
     // With the shared map, every action says where the player stands, and the action must happen there.
     // Every action says which world it is in (default: the public area). Homelands: only the owner acts; guests just walk.
     const wid = s('world') || 'public';
     const w = this.worldFor(account, wid, a !== 'travel');
     const home = this.econ.homeland;
-    if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'Area publik hanya untuk berdagang.');
-    if (w.row && a === 'ship') throw new HttpError(409, 'Kotak Kirim hanya ada di area publik.');
-    if ((a === 'build' || a === 'collect' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Bangun dan panen di Homeland-mu sendiri.');
+    if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
+    if (w.row && a === 'ship') throw new HttpError(409, 'The Shipping Box is only in the public area.');
+    if ((a === 'build' || a === 'collect' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Build and harvest in your own Homeland.');
     let pos: Pos | null = null;
     if (this.map && this.positions && w.map) {
       pos = this.positions.report(account, body.pos, this.now(), wid, w.map, this.homeFor(account, wid));
       const far = (msg: string) => { throw new HttpError(409, msg); };
-      if (a === 'gather' && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Terlalu jauh. Berdiri tepat di sebelahnya.');
-      if ((a === 'sell' || a === 'buy') && !w.map.nearStall(pos)) far('Jual-beli dilakukan di lapak pedagang di pasar.');
-      if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Berdiri di sebelah petak kebunmu.');
-      if ((a === 'craft' || a === 'ship') && !w.map.atOwnHouse(pos)) far(a === 'craft' ? 'Meja Kerja ada di Balai Kota-mu.' : 'Kotak Kirim ada di rumahmu.');
+      if (a === 'gather' && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Too far. Stand right next to it.');
+      if ((a === 'sell' || a === 'buy') && !w.map.nearStall(pos)) far('Buying and selling happens at the merchants\' stalls in the market.');
+      if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Stand next to your garden plot.');
+      if ((a === 'craft' || a === 'ship') && !w.map.atOwnHouse(pos)) far(a === 'craft' ? 'The Workbench is in your Town Hall.' : 'The Shipping Box is at your house.');
       if (a === 'build' && w.map instanceof HomelandMap) {
-        if (s('kind') === 'build' || s('kind') === 'furniture' || s('kind') === 'upgrade') { if (!w.map.nearLot(pos, s('target').split(':')[0])) far('Berdiri di dekat lahan itu.'); }
-        else if (!w.map.atOwnHouse(pos)) far('Berdiri di depan Balai Kota.');
+        if (s('kind') === 'build' || s('kind') === 'furniture' || s('kind') === 'upgrade') { if (!w.map.nearLot(pos, s('target').split(':')[0])) far('Stand near that lot.'); }
+        else if (!w.map.atOwnHouse(pos)) far('Stand in front of the Town Hall.');
       }
       if (a === 'cook' || a === 'stock') {
         const lot = this.homelands.restoranLot(account);
-        if (!lot) far('Bangun Restoran dulu.');
-        else if (!(w.map instanceof HomelandMap) || !w.map.nearLot(pos, lot)) far('Berdiri di dekat pintu Restoran.');
+        if (!lot) far('Build the Restaurant first.');
+        else if (!(w.map instanceof HomelandMap) || !w.map.nearLot(pos, lot)) far('Stand near the Restaurant door.');
       }
-      if ((a === 'hire' || a === 'forage' || a === 'dress') && !w.map.atOwnHouse(pos)) far('Berdiri di depan Balai Kota.');
-      if (a === 'collect' && w.map instanceof HomelandMap && !w.map.nearLot(pos, s('lot'))) far('Berdiri di dekat bangunannya.');
+      if ((a === 'hire' || a === 'forage' || a === 'dress') && !w.map.atOwnHouse(pos)) far('Stand in front of the Town Hall.');
+      if (a === 'collect' && w.map instanceof HomelandMap && !w.map.nearLot(pos, s('lot'))) far('Stand near the building.');
     }
     let res: { toast: string; tags?: string[]; world?: string; arrive?: Pos; gained?: Record<string, number> };
     switch (a) {
@@ -251,7 +251,7 @@ export class Game {
         // a monster can block a gather in the wild part of a Homeland (or the village forest when it is not trade-only)
         const enc = w.row && w.map instanceof HomelandMap ? this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1), w.map, true)
           : home.publicTradeOnly ? null : this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
-        if (enc) { res = { toast: `${enc.name} menghadang! Lawan atau lari.` }; break; }
+        if (enc) { res = { toast: `${enc.name} blocks your way! Fight or run.` }; break; }
         res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1), w.row ? `${wid}:` : '', w.row && this.econ.gather.tiles[s('tile')] === 'wood' ? this.homelands.effects(account).woodBonus : 0); // Homeland nodes are charged per Homeland
         break;
       }
@@ -259,7 +259,7 @@ export class Game {
       case 'engage': {
         const where = w.row && w.map instanceof HomelandMap ? w.map : this.map!;
         const enc = this.need(this.monsters).engage(account, s('monster'), (pos ?? body.pos ?? {}) as { x: number; y: number }, where, !!w.row);
-        res = { toast: `${enc.name} menyerang! Lawan atau lari.` };
+        res = { toast: `${enc.name} attacks! Fight or run.` };
         break;
       }
       case 'flee': res = this.need(this.monsters).flee(account); break;
@@ -357,7 +357,7 @@ export class Game {
     const out = [];
     for (const s of shops) {
       const id = s.account_id.split('.')[0];
-      out.push({ ...s, id, holding: account ? await this.chain.holding(s.account_id, account) : null });
+      out.push({ ...s, id, name: this.econ.merchants[id]?.shop ?? s.name, holding: account ? await this.chain.holding(s.account_id, account) : null });
     }
     return out;
   }

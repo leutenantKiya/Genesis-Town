@@ -9,6 +9,7 @@ import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
 import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
+import { langOf, localizeJson, type Lang } from './lang.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
@@ -82,8 +83,11 @@ function intField(b: Record<string, unknown>, k: string) {
 }
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> { return parseJson(await readRaw(req)); }
 
+/** The language each response is for (X-GT-Lang of its request). English is the server's own text; 'id' is translated on the way out (lang.ts). */
+const resLang = new WeakMap<ServerResponse, Lang>();
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+  if (resLang.get(res) === 'id') body = localizeJson(body);
   res.end(JSON.stringify(body, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
 }
 
@@ -105,10 +109,11 @@ export function createApp(deps: AppDeps) {
   const stalls = game.map?.layout.market.stalls ?? [];
   social.setNpcs(game.market.ids().flatMap((id, k) => stalls[k] ? [{ id, account: game.market.account(id), name: game.econ.merchants[id].name, look: MERCHANT_LOOK[id] ?? k % 8, x: stalls[k].x, y: stalls[k].y - 1, title: game.econ.merchants[id].shop }] : []));
   social.onNpcMsg = (npc, from, text) => {
-    if (!talkLimiter.take(from)) throw new HttpError(429, 'Pedagangnya sedang sibuk melayani. Coba sebentar lagi.');
-    void dialogue.reply(game.market.view(npc.id), game.econ.merchants[npc.id].personality, text)
+    if (!talkLimiter.take(from)) throw new HttpError(429, 'The merchant is busy serving customers. Try again in a moment.');
+    void dialogue.reply(game.market.view(npc.id), game.econ.merchants[npc.id].personality, text, acctLang.get(from) ?? 'en')
       .then((r) => { social.npcSay(npc, from, r.line); }, () => { /* the player simply gets no answer */ });
   };
+  const acctLang = new Map<string, Lang>(); // last language each account played in (merchant chat replies follow it)
   const presenceLimiter = new RateLimiter(240, 100_000); // about 2 reports a second per account
   const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
     const accts = [sender, ...extra];
@@ -133,9 +138,9 @@ export function createApp(deps: AppDeps) {
   async function checkedWorld(acct: string, v: unknown, at?: { x: number; y: number }) {
     const w = worldOf(v);
     await game.prepare(acct, { world: w });
-    if (!social.access(acct, w)) throw new HttpError(409, 'Kamu tidak boleh ke sana.');
+    if (!social.access(acct, w)) throw new HttpError(409, 'You can\'t go there.');
     if (at) game.reportPosition(acct, at, w); // a reload on the own Homeland spawn moves the player there first
-    if (game.positions && game.positions.worldOf(acct) !== w) throw new HttpError(409, 'Kamu tidak ada di dunia itu.');
+    if (game.positions && game.positions.worldOf(acct) !== w) throw new HttpError(409, 'You are not in that world.');
     return w;
   }
 
@@ -164,7 +169,7 @@ export function createApp(deps: AppDeps) {
     if (req.method !== 'OPTIONS') return false;
     res.writeHead(204, {
       'access-control-allow-methods': 'GET, POST',
-      'access-control-allow-headers': 'content-type, x-account-id, x-gt-key, x-gt-ts, x-gt-sig',
+      'access-control-allow-headers': 'content-type, x-account-id, x-gt-key, x-gt-ts, x-gt-sig, x-gt-lang',
       'access-control-max-age': '86400',
     });
     res.end();
@@ -190,7 +195,7 @@ export function createApp(deps: AppDeps) {
     } else if (req.method === 'GET' && p === '/api/homeland/layout') {
       const acct = accountOf(req, url), w = url.searchParams.get('world') ?? '';
       const id = parseHome(w);
-      if (id === null) throw new HttpError(400, 'Dunia tidak dikenal.');
+      if (id === null) throw new HttpError(400, 'Unknown world.');
       const { row } = game.homelands.access(acct, id);
       game.homelands.settle(row.account);
       const built = game.gs.homelandBuildings(row.account).map((b) => ({ lot: b.lot, kind: b.kind }));
@@ -198,7 +203,7 @@ export function createApp(deps: AppDeps) {
     } else if (req.method === 'POST' && p === '/api/homeland/invite') {
       const raw = await readRaw(req);
       const acct = accountOf(req, url, raw);
-      if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
+      if (!actLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
       game.assertActive(acct);
       const b = parseJson(raw);
       if (!Array.isArray(b.accounts)) throw new HttpError(400, 'accounts must be a list');
@@ -232,7 +237,7 @@ export function createApp(deps: AppDeps) {
     if (req.method !== 'POST') throw new HttpError(404, 'no such route');
     const raw = await readRaw(req);
     const acct = accountOf(req, url, raw);
-    if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
+    if (!actLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
     game.assertActive(acct);
     const b = parseJson(raw);
     if (b.pos !== undefined) game.reportPosition(acct, b.pos as { x: number; y: number }, 'public'); // the client's tile, checked like any report
@@ -309,11 +314,11 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
-        if (!chatIpLimiter.take(clientIp(req))) throw new HttpError(429, 'terlalu cepat');
+        if (!chatIpLimiter.take(clientIp(req))) throw new HttpError(429, 'too fast');
         game.assertActive(acct); // frozen accounts cannot speak
         const b = parseJson(raw) as { world?: unknown; text?: unknown };
         const text = typeof b.text === 'string' ? b.text : '';
-        if (!deps.store.nameOf(acct)) throw new HttpError(409, 'Pilih nama dulu.');
+        if (!deps.store.nameOf(acct)) throw new HttpError(409, 'Choose a name first.');
         const w = await checkedWorld(acct, b.world);
         return send(res, 200, { msg: social.say(acct, w, text) });
       }
@@ -339,14 +344,14 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'POST' && p === '/api/act') {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
-        if (!actLimiter.take(acct)) throw new HttpError(429, 'Pelan-pelan… terlalu banyak aksi');
+        if (!actLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
         const ab = parseJson(raw);
         const w = worldOf(ab.world); // a bad world id must fail before the action changes any state
         // ids from the request must be the game's own (not '__proto__' & co) and quantities real integers
         if (ab.action === 'sell' || ab.action === 'buy' || ab.action === 'ship') intField(ab, 'qty');
-        if (ab.merchant !== undefined && !has(game.econ.merchants, ab.merchant)) throw new HttpError(404, 'Pedagang tidak dikenal.');
-        if (ab.token !== undefined && ab.token !== '' && !has(game.econ.items, ab.token)) throw new HttpError(400, 'Barang tidak dikenal.');
-        if (ab.recipe !== undefined && !has(game.econ.recipes, ab.recipe)) throw new HttpError(400, 'Resep tidak dikenal.');
+        if (ab.merchant !== undefined && !has(game.econ.merchants, ab.merchant)) throw new HttpError(404, 'Unknown merchant.');
+        if (ab.token !== undefined && ab.token !== '' && !has(game.econ.items, ab.token)) throw new HttpError(400, 'Unknown item.');
+        if (ab.recipe !== undefined && !has(game.econ.recipes, ab.recipe)) throw new HttpError(400, 'Unknown recipe.');
         await game.prepare(acct, ab); // owner changes on chain show up here, before the act checks who owns what
         const out = game.act(acct, ab) as { world?: string; arrive?: { x: number; y: number } } & Record<string, unknown>;
         return send(res, 200, out);
@@ -368,17 +373,17 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'POST' && p === '/api/talk') {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
-        if (!talkLimiter.take(acct)) throw new HttpError(429, 'Pedagangnya sedang sibuk melayani. Coba sebentar lagi.');
+        if (!talkLimiter.take(acct)) throw new HttpError(429, 'The merchant is busy serving customers. Try again in a moment.');
         const b = parseJson(raw);
         const id = String(b.merchant ?? '');
         if (!has(game.econ.merchants, id)) throw new HttpError(404, 'no such merchant');
-        const r = await dialogue.reply(game.market.view(id), game.econ.merchants[id].personality, String(b.text ?? ''));
+        const r = await dialogue.reply(game.market.view(id), game.econ.merchants[id].personality, String(b.text ?? ''), resLang.get(res) ?? 'en');
         return send(res, 200, r);
       }
       if (req.method === 'GET' && p === '/api/projects') {
         // Town projects as the contract holds them (pledges, contributors, done), plus the map areas they open.
         const retired = Object.fromEntries(game.econ.projects.filter((p) => p.retired).map((p) => [p.id, p.retired]));
-        return send(res, 200, { projects: (await deps.chain.listProjects()).map((p) => (retired[p.id] ? { ...p, retired: retired[p.id] } : p)), world: game.map?.view() ?? null });
+        return send(res, 200, { projects: (await deps.chain.listProjects()).map((p) => { const own = game.econ.projects.find((q) => q.id === p.id); const named = own ? { ...p, name: own.name } : p; return retired[p.id] ? { ...named, retired: retired[p.id] } : named; }), world: game.map?.view() ?? null });
       }
       if (req.method === 'GET' && p === '/api/listings') {
         // Player market: open listings read from the contract (escrowed there), newest first.
@@ -403,14 +408,14 @@ export function createApp(deps: AppDeps) {
       }
       if (req.method === 'POST' && p === '/api/sim') {
         // open to everyone (the public simulator page), so: one limiter per address and clamped inputs
-        if (!simLimiter.take(clientIp(req))) throw new HttpError(429, 'terlalu banyak simulasi, coba sebentar lagi');
+        if (!simLimiter.take(clientIp(req))) throw new HttpError(429, 'too many simulations, try again shortly');
         const b = await readJson(req);
         const num = (v: unknown, d: number) => { const n = Math.floor(Number(v ?? d)); return Number.isFinite(n) ? n : d; };
         const days = Math.max(1, Math.min(30, num(b.days, 7)));
         const players = Math.max(1, Math.min(60, num(b.players, 25)));
         const seed = num(b.seed, 42) >>> 0;
         const r = await simulate(days, players, seed);
-        return send(res, 200, { ...r, label: 'Simulasi off-chain: rantai tiruan, kode harga dan aturan yang sama (economy/pricing.ts)' });
+        return send(res, 200, { ...r, label: 'Off-chain simulation: mock chain, same price code and rules (economy/pricing.ts)' });
       }
       if (req.method === 'POST' && p === '/api/dev/night') {
         // Dev panel: jump the game clock to the next 20:00 (night monsters); crossing 06:00 settles as usual
@@ -465,6 +470,10 @@ export function createApp(deps: AppDeps) {
   }
 
   const server = createServer((req, res) => {
+    const lang = langOf(req.headers['x-gt-lang']);
+    resLang.set(res, lang);
+    const who = req.headers['x-account-id'];
+    if (typeof who === 'string' && who.length < 80) acctLang.set(who, lang);
     handle(req, res).catch((e) => {
       const status = e instanceof HttpError ? e.status : 500;
       if (status === 500) console.error(e);

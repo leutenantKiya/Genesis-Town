@@ -35,7 +35,7 @@ test('a gathering node gives exactly its charges per cycle, every cycle', async 
   const g = () => game.act(P, { action: 'gather', tile: 'water', x: 5, y: 5 });
   for (let cycle = 0; cycle < 3; cycle++) {
     for (let i = 0; i < econ.gather.charges; i++) g();
-    assert.throws(g, /Sudah habis/, `cycle ${cycle}: refused after ${econ.gather.charges}`);
+    assert.throws(g, /Depleted/, `cycle ${cycle}: refused after ${econ.gather.charges}`);
     clock.advanceHours(econ.gather.respawnGameHours);
     game.gs.savePlayer({ account: P, energy: 100, energy_hour: game.clock.hours(), tool_uses: 0 });
   }
@@ -46,7 +46,7 @@ test('a Homeland node is limited per cycle too', async () => {
   const g = () => game.world.gather(P, 'water', 7, 7, 'HL-1:');
   for (let cycle = 0; cycle < 2; cycle++) {
     for (let i = 0; i < econ.gather.charges; i++) g();
-    assert.throws(g, /Sudah habis/);
+    assert.throws(g, /Depleted/);
     clock.advanceHours(econ.gather.respawnGameHours);
     game.gs.savePlayer({ account: P, energy: 100, energy_hour: game.clock.hours(), tool_uses: 0 });
   }
@@ -106,7 +106,7 @@ test('the off-chain daily gain cap refuses items and coin past what the contract
   const day = game.clock.time().settleDay;
   game.gs.add(day, P, 'fish', econ.caps.dailyGainPerItem - 1, 'test');
   game.act(P, { action: 'gather', tile: 'water', x: 5, y: 5 }); // the last allowed unit
-  assert.throws(() => game.act(P, { action: 'gather', tile: 'water', x: 6, y: 5 }), (e: { status: number; message: string }) => e.status === 409 && /batas/i.test(e.message));
+  assert.throws(() => game.act(P, { action: 'gather', tile: 'water', x: 6, y: 5 }), (e: { status: number; message: string }) => e.status === 409 && /limit/i.test(e.message));
   // coin: a sale that would push today's net coin gain over the cap
   game.gs.add(day, P, 'coin', 4990, 'test');
   game.gs.add(day, P, 'wheat', 10, 'test');
