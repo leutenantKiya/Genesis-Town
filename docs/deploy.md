@@ -49,7 +49,7 @@ private keys are typed by you into the host, never committed and never put in a 
 | `PORT` | usually set by the host; the Dockerfile defaults to 3000 |
 | `DB_PATH` | `/data/genesis-town.db` (the Dockerfile sets it) |
 | `CORS_ORIGINS` | empty, or the client's origin when it is hosted apart (see the split setup below) |
-| `DATABASE_URL` | optional (**secret**): Neon's **direct** connection string (host without `-pooler`), see below |
+| `DATABASE_URL` | optional (**secret**): Neon's **direct** connection string (host without `-pooler`), see below; `DATABASE_URL_UNPOOLED` wins when both are set (as `neon env pull` writes them) |
 | `SNAPSHOT_MINUTES` | empty (5): how often the database copy is saved to Neon when something changed |
 
 Dev tools stay closed on a host even if `DEV_TOOLS=1` is left on: they only answer direct requests from the same

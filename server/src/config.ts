@@ -86,7 +86,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     settleChunk: Number(env.SETTLE_CHUNK ?? 25),
     dbPath: env.DB_PATH ?? 'data/genesis-town.db',
-    databaseUrl: env.DATABASE_URL?.trim() || null,
+    // the direct string when `neon env pull` / `neon deploy` wrote both (Neon: one long-lived client, session-level SQL)
+    databaseUrl: env.DATABASE_URL_UNPOOLED?.trim() || env.DATABASE_URL?.trim() || null,
     snapshotMinutes: Math.max(1, Number(env.SNAPSHOT_MINUTES ?? 5) || 5),
     chainMode,
     devLogin: chainMode === 'mock' && env.DEV_LOGIN === '1',

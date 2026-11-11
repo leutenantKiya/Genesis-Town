@@ -25,7 +25,9 @@ export interface SnapshotRemote {
 export function pgRemote(url: string): SnapshotRemote {
   async function withClient<T>(fn: (c: import('pg').Client) => Promise<T>): Promise<T> {
     const { default: pg } = await import('pg');
-    const c = new pg.Client({ connectionString: url, connectionTimeoutMillis: 15_000 });
+    // Neon's strings say sslmode=require, which pg 8 already treats as verify-full; say so, and pg stops warning
+    const conn = url.replace(/([?&]sslmode=)(prefer|require|verify-ca)\b/, '$1verify-full');
+    const c = new pg.Client({ connectionString: conn, connectionTimeoutMillis: 15_000 });
     await c.connect();
     try {
       await c.query(`CREATE TABLE IF NOT EXISTS gt_snapshot (
