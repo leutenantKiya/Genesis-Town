@@ -18,7 +18,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = 2, CH = 16, N = 3, W = CH * N, H = CH * N;
+  var VERSION = 3, CH = 16, N = 3, W = CH * N, H = CH * N;
   var CHUNKS = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
   var ORTHO = ['n', 'w', 'e', 's'];
   var SOLID = { tree: 1, fence: 1, sign: 1, mailbox: 1, rock: 1, water: 1, bush: 1, barrel: 1, crate: 1, stall: 1, lamp: 1 };
@@ -108,7 +108,10 @@
     addLot('kolam', 'c', 11, 2);
     addLot('restoran', 'c', 11, 6);
     addLot('rumahsakit', 'c', 11, 10);
-    addLot('rumah', 'c', 1, 2);
+    // generator 3 (new players): the player's own house stands where the centre's Rumah Pekerja lot was, and that lot moves
+    // down between the house and the farm, its door opening onto the field. Older worlds (gen 2) keep their layout.
+    var hasHouse = (prog.gen || VERSION) >= 3;
+    addLot('rumah', 'c', 1, hasHouse ? 6 : 2);
     if (rockId) addLot('tambang', rockId, 2, 2);
     // one Rumah Pekerja per outer chunk, beside the chunk's cross path (lot x 10..12, door row 12)
     CHUNKS.forEach(function (cid) { if (cid !== 'c') addLot('rumah', cid, rockId === cid ? 10 : 10, 9); });
@@ -117,6 +120,9 @@
     var tx = cOx + 6, ty = cOy + 1, tdx = cOx + 8, tdy = cOy + 4;
     reserve(tx - 1, ty - 1, tx + 4, ty + 4);
     var spawn = { x: tdx, y: tdy + 1 };
+    // the player's own house, built from the start, west of the Town Hall: 3 x 3, door on the path that runs past both
+    var hx = cOx + 1, hy = cOy + 2, hdx = hx + 1, hdy = hy + 2;
+    if (hasHouse) reserve(hx - 1, hy - 1, hx + 3, hy + 3);
 
     // the farm: fence ring with a one-tile margin around the biggest field, gate in the middle of the south fence
     var fw = FIELD[0] + 4, fh = FIELD[1] + 4;
@@ -168,9 +174,12 @@
       for (x = Math.min(l.door.x, tdx); x <= Math.max(l.door.x, tdx); x++) path(x, fy);
     });
     for (x = gate.x; x <= tdx; x++) path(x, gate.y + 1);
+    if (hasHouse) for (x = hdx; x <= tdx; x++) path(x, hdy + 1); // the house's door to the Town Hall's
     // farm ring and plots
     for (x = fx0; x <= fx1; x++) { tiles[I(x, fy0)] = 'fence'; tiles[I(x, fy1)] = x === gate.x ? 'path' : 'fence'; }
     for (y = fy0; y <= fy1; y++) { tiles[I(fx0, y)] = 'fence'; tiles[I(fx1, y)] = 'fence'; }
+    // the centre Rumah Pekerja's way in is a gap in the farm's top fence
+    lots.forEach(function (l) { if (l.chunk === 'c' && l.door.y + 1 === fy0) tiles[I(l.door.x, fy0)] = 'path'; });
     var nPlots = Math.max(1, Math.min(MAX_PLOTS, th | 0));
     var plots = [];
     for (var pi = 0; pi < FIELD[0] * FIELD[1]; pi++) {
@@ -195,6 +204,7 @@
       return b;
     }
     var buildings = [bld('townhall', tx, ty, 4, 4, tdx, tdy, { name: 'Balai Kota', own: true, style: 0, id: 0 })];
+    if (hasHouse) buildings.push(bld('house', hx, hy, 3, 3, hdx, hdy, { name: 'Rumahmu', own: true, style: R.int(0, 3) }));
     var byId = {};
     lots.forEach(function (l) { byId[l.id] = l; });
     (prog.built || []).forEach(function (b) {
@@ -252,7 +262,7 @@
     prog = prog || {};
     var th = Math.max(1, (prog.th | 0) || 1);
     for (var att = 0; att < 80; att++) {
-      if (!tryGen(seed, att, MAX_PLOTS, { open: [], built: [] })) continue;
+      if (!tryGen(seed, att, MAX_PLOTS, { open: [], built: [], gen: prog.gen })) continue;
       return tryGen(seed, att, th, prog);
     }
     throw new Error('homeland: no valid layout for seed ' + seed);

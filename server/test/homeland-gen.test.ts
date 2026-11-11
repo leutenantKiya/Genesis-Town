@@ -95,9 +95,9 @@ test('built buildings appear on their lot', () => {
   assert.ok(b && b.x === lot.x && b.y === lot.y && b.dx === lot.door.x && b.dy === lot.door.y);
 });
 
-test('generator v2 has a rumah lot per chunk and a rumahsakit lot, all reachable', () => {
+test('generator v2 and later have a rumah lot per chunk and a rumahsakit lot, all reachable', () => {
   const ids = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
-  assert.equal(GH.VERSION, 2);
+  assert.equal(GH.VERSION, 3);
   for (let s = 1; s <= 30; s++) {
     const L0 = GH.generate(s, base);
     assert.deepEqual(ids.map((id) => `rumah-${id}`).filter((id) => !L0.lots.some((l: any) => l.id === id)), [], `seed ${s} rumah lots`);
@@ -108,4 +108,25 @@ test('generator v2 has a rumah lot per chunk and a rumahsakit lot, all reachable
     for (const l of L0.lots) assert.ok(r.has((l.door.y + 1) * L.w + l.door.x), `seed ${s} lot ${l.id} reachable`);
     assert.deepEqual(L.lots, L0.lots); // lots never move with progress
   }
+});
+
+test('a new Homeland (generator 3) has the player\'s own house beside the Town Hall, reachable from the spawn', () => {
+  for (const seed of [1, 42, 12345, 987654]) {
+    const L = GH.generate(seed, { ...base, gen: 3 });
+    const th = L.buildings.find((b: any) => b.kind === 'townhall'), house = L.buildings.find((b: any) => b.kind === 'house');
+    assert.ok(house, 'the house is there from the start');
+    assert.equal(house.own, true);
+    assert.equal(house.w, 3); assert.equal(house.h, 3);
+    assert.ok(house.x + house.w < th.x && th.x - (house.x + house.w) <= 3, 'west of the Town Hall, close by');
+    assert.ok(reach(L, L.spawn.x, L.spawn.y).has((house.dy + 1) * L.w + house.dx), 'its door can be walked to from the spawn');
+    const lot = L.lots.find((l: any) => l.id === 'rumah-c');
+    assert.ok(reach(L, L.spawn.x, L.spawn.y).has((lot.door.y + 1) * L.w + lot.door.x), 'the centre Rumah Pekerja lot is still reachable');
+  }
+});
+
+test('an older Homeland (generator 2) keeps its layout: no house, the centre Rumah Pekerja lot where it was', () => {
+  const L = GH.generate(42, { ...base, gen: 2 });
+  assert.equal(L.buildings.filter((b: any) => b.kind === 'house').length, 0);
+  const lot = L.lots.find((l: any) => l.id === 'rumah-c');
+  assert.equal(lot.y, 16 + 2);
 });

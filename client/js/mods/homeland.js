@@ -85,7 +85,7 @@
 
   /* The map for the generator inputs of the view. Keeps the player where they stand. */
   function layoutFor(r) {
-    return GTHomeland.generate(r.seed, { open: r.open || [], th: r.th, built: (r.built || []).map(function (b) { return { kind: b.kind, lot: b.lot }; }) });
+    return GTHomeland.generate(r.seed, { open: r.open || [], th: r.th, gen: r.gen, built: (r.built || []).map(function (b) { return { kind: b.kind, lot: b.lot }; }) });
   }
   function rebuild() {
     if (!H || !window.GTHomeland) return false;

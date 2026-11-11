@@ -40,7 +40,7 @@ test('ensure is idempotent and ids count up', () => {
   assert.deepEqual(hl.ensure(A), a);
   assert.equal(a.th, 1);
   assert.deepEqual(a.open, []);
-  assert.equal(a.gen, 2);
+  assert.equal(a.gen, 3); // new Homelands get the newest generator (3: the player's house)
   assert.notEqual(a.seed, b.seed);
   assert.equal(hl.byId(2)!.account, B);
   assert.equal(hl.byId(99), undefined);

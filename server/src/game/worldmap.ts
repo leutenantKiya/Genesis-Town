@@ -33,7 +33,7 @@ interface VillageApi {
 export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos } }).GTVillage;
 
 /** A player's Homeland (client/js/world/homeland.js): the same generator the browser runs. */
-export interface HomelandProgress { open: string[]; th: number; built: Array<{ kind: string; lot: string }> }
+export interface HomelandProgress { open: string[]; th: number; built: Array<{ kind: string; lot: string }>; gen?: number }
 export interface HomelandLot { id: string; kind: string; chunk: string; x: number; y: number; w: number; h: number; door: Pos }
 export interface HomelandLayout extends Omit<Layout, 'projects'> { portal: Pos; lots: HomelandLot[] }
 interface HomelandApi {

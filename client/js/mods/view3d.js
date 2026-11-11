@@ -20,13 +20,13 @@
   var LS = 'gt.view', T = 12, STEP = Math.PI / 4;
   var DV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var KIT = ['vendor/three.js', 'js/three/kit.js', 'js/three/ground.js', 'js/three/building.js', 'js/three/nature.js', 'js/three/props.js',
-    'js/three/actor.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/world.js'];
+    'js/three/actor.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/world.js', 'js/three/room.js'];
   var mode = saved() || (phone() ? '2d' : '3d');
   var loading = null, ok = false, failed = false;
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
   var actors = new Map(), gctx = null, gtex = null, gAt = 0, last = 0, sw = 0, sh = 0, VW = 1, VH = 1;
   var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null, yawWant = 0, zoom = 1;
-  var ui = null, drag = null, took = 0, shownWorld = '', snapNext = true;
+  var ui = null, drag = null, took = 0, shownWorld = '', snapNext = true, last0 = 0;
 
   function saved() { try { var v = localStorage.getItem(LS); return v === '2d' || v === '3d' ? v : null; } catch (e) { return null; } }
   function phone() { try { return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900; } catch (e) { return false; } }
@@ -66,6 +66,7 @@
     sky = GT3.Sky(scene, renderer); rig = GT3.Rig(camera); // the lab's camera, unchanged
     tmp = new THREE.Vector3(); ray = new THREE.Raycaster(); ndc = new THREE.Vector2();
     plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); hit = new THREE.Vector3();
+    setupUnfold();
     ok = true;
     buildUi();
     if (mode === '3d') GT.setView3d(api);
@@ -285,6 +286,99 @@
     if (stumpSt) stumpSynced = true;
   }
 
+  /* ---------------------------------------------------------------- walking into a building, with no cut
+     Rooms are bigger than their buildings (a 3 x 3 house holds a 10 x 8 room), so the room cannot just sit under the
+     roof. The engine changes the scene at once (engine.js doorTransition) and the view unfolds it, in UNFOLD_MS:
+       - the building's roof and walls fade out over the first 45%, then it is hidden while you are inside;
+       - the room grows out of the door: its doormat stays on the building's door tile while it scales from the
+         building's size to its own, fading in early;
+       - four mist sheets just above the room's walls close in round it and the village fades away behind them
+         (their opening moves toward the camera by the walls' height over tan(pitch), so it frames the room on screen).
+     Walking out plays it backwards. Inside, positions are the room's tiles, mapped into the world by `cur`. With
+     "Kurangi animasi" or prefers-reduced-motion the change is instant. */
+  var UNFOLD_MS = 700, MIST_Y = 1.75, rooms = new Map(), unfold = { p: 0, want: 0, rec: null }, cur = null, mist = null, lamp = null, mistCol = null;
+  function setupUnfold() {
+    lamp = new THREE.PointLight(0xffd8a0, 0, 16, 1.4); scene.add(lamp);
+    // drawn over the world (no depth test): roofs, trees and lamps taller than the sheets never poke through it
+    var mat = new THREE.MeshBasicMaterial({ color: 0x1b1d33, transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false });
+    mist = { mat: mat, planes: [] };
+    for (var i = 0; i < 4; i++) { var q = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); q.rotation.x = -Math.PI / 2; q.renderOrder = 50; q.visible = false; scene.add(q); mist.planes.push(q); }
+    mistCol = new THREE.Color();
+  }
+  function ums() { return window.__gtUnfoldMs || UNFOLD_MS; } // a test can slow it down to photograph the steps
+  function reducedMotion() {
+    if (document.documentElement.classList.contains('gt-reduced-motion')) return true;
+    try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+  }
+  function smooth(a, b, x) { var t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+  function setAlpha(mats, a) {
+    mats.forEach(function (m) { var see = a < 0.999; if (m.transparent !== see) { m.transparent = see; m.needsUpdate = true; } m.opacity = a; m.depthWrite = !see; });
+  }
+  function roomFor(o) {
+    var rec = rooms.get(o.key);
+    if (rec && rec.map === o.map) return rec;
+    if (rec) { rec.room.dispose(); scene.remove(rec.outer); }
+    var b = o.house, m = o.map, room = GT3.Room(m, b), outer = new THREE.Group();
+    var lx = m.mat.x + 0.5, lz = m.h - 0.5;
+    room.group.position.set(-lx, 0, -lz); outer.add(room.group); outer.position.set(b.dx + 0.5, 0, b.dy + 0.5); outer.visible = false;
+    scene.add(outer);
+    var s0 = Math.min(1, Math.min((b.w || 3) / m.w, (b.h || 3) / m.h));
+    rec = { map: m, b: b, room: room, outer: outer, lx: lx, lz: lz, ax: b.dx + 0.5, az: b.dy + 0.5, s: s0, s0: s0, g: null };
+    rooms.set(o.key, rec);
+    return rec;
+  }
+  function buildingOf(b) {
+    var g = null;
+    if (world) world.buildings.forEach(function (x) { var u = x.userData.building; if (u.dx === b.dx && u.dy === b.dy) g = x; });
+    return g;
+  }
+  // scene tiles -> world: indoors through the room's place and scale, outdoors unchanged
+  function mx(x) { return cur ? cur.ax + (x - cur.lx) * cur.s : x; }
+  function mz(z) { return cur ? cur.az + (z - cur.lz) * cur.s : z; }
+  function updateUnfold(o, dt) {
+    var rec = o.house ? roomFor(o) : null;
+    if (rec && unfold.rec !== rec) {
+      if (unfold.rec) finishUnfold(unfold.rec);
+      unfold.rec = rec; rec.g = buildingOf(rec.b);
+    }
+    unfold.want = rec ? 1 : 0;
+    var r = unfold.rec;
+    if (!r) { cur = null; return false; }
+    if (reducedMotion() || snapNext) unfold.p = unfold.want;
+    else unfold.p = unfold.want ? Math.min(1, unfold.p + dt * 1000 / ums()) : Math.max(0, unfold.p - dt * 1000 / ums());
+    var P = unfold.p;
+    if (P <= 0 && !unfold.want) { finishUnfold(r); unfold.rec = null; cur = null; return false; }
+    r.s = r.s0 + (1 - r.s0) * smooth(0.15, 1, P);
+    r.outer.scale.setScalar(r.s); r.outer.visible = true;
+    setAlpha(r.room.mats, smooth(0.05, 0.4, P));
+    r.room.glow(sky.night);
+    if (r.g) { var a = 1 - smooth(0, 0.45, P); setAlpha(r.g.userData.mats, a); r.g.visible = a > 0.01; }
+    // the mist: an opening the size of the room (plus a margin), moved toward the camera, sheets on its four sides
+    var k = smooth(0.2, 0.9, P), y = yawNow(), off = MIST_Y / Math.tan(rig.pitch), M = 0.5, BIG = 220;
+    var x0 = r.ax - r.lx * r.s - M + Math.sin(y) * off, x1 = r.ax + (r.room.w - r.lx) * r.s + M + Math.sin(y) * off;
+    var z0 = r.az - r.lz * r.s - M + Math.cos(y) * off, z1 = r.az + (r.room.h - r.lz) * r.s + M + Math.cos(y) * off;
+    var sheets = [[x0 - BIG / 2, (z0 + z1) / 2, BIG, BIG * 2], [x1 + BIG / 2, (z0 + z1) / 2, BIG, BIG * 2], [(x0 + x1) / 2, z0 - BIG / 2, x1 - x0, BIG], [(x0 + x1) / 2, z1 + BIG / 2, x1 - x0, BIG]];
+    mist.planes.forEach(function (q, i) { var d = sheets[i]; q.position.set(d[0], MIST_Y, d[1]); q.scale.set(d[2], d[3], 1); q.visible = k > 0.001; });
+    mistCol.set('#14152a').lerp(scene.background, 0.35);
+    mist.mat.color.copy(mistCol); mist.mat.opacity = k;
+    // the room is bigger than its building, so neighbours (the Town Hall, trees) stand inside its footprint: the village
+    // goes once the mist is half drawn, so they never show through the room; the sky colour turns into the mist
+    var gone = k > 0.5;
+    world.group.visible = !gone; if (gtex) gtex.userData.mesh.visible = !gone;
+    if (k > 0) { scene.background.lerp(mistCol, k); scene.fog.color.copy(scene.background); }
+    lamp.position.set(r.ax + (r.room.w / 2 - r.lx) * r.s, 1.5 * r.s, r.az + (r.room.h / 2 - r.lz) * r.s);
+    lamp.intensity = (2.5 + 9 * sky.night) * smooth(0.3, 1, P);
+    cur = o.house ? r : null;
+    return true;
+  }
+  function finishUnfold(r) {
+    r.outer.visible = false;
+    if (r.g) { setAlpha(r.g.userData.mats, 1); r.g.visible = true; }
+    mist.planes.forEach(function (q) { q.visible = false; }); mist.mat.opacity = 0;
+    if (world) world.group.visible = true; if (gtex) gtex.userData.mesh.visible = true;
+    lamp.intensity = 0;
+  }
+
   var drop = null;
   function updateDrop(now) {
     var a = actors.get('me');
@@ -314,40 +408,48 @@
       return gctx;
     },
     draw: function (o) {
-      ensureWorld(o.map);
+      ensureWorld(o.out || o.map);
       document.documentElement.classList.add('gt-3d'); cv.style.display = 'block'; syncUi();
       size(o);
       var now = performance.now(), dt = last ? Math.min(0.1, (now - last) / 1000) : 0.016; last = now;
       var season = GT.season(), snowy = !!(window.SPRITES && SPRITES.snow), sk = season + (snowy ? '*' : '');
       if (sk !== seasonKey) { seasonKey = sk; world.setSeason(season, snowy); }
-      var seen = new Set();
+      var seen = new Set(), dtU = last0 ? Math.min(0.1, (now - last0) / 1000) : 0.016; last0 = now;
+      var unfolding = false;
+      cur = null;
+      if (o.house) cur = roomFor(o); // the mapping for this frame's entities (its scale is last frame's, a frame behind)
       o.ents.forEach(function (e) {
         if (e.px == null) return;
         var key = e.me ? 'me' : (e.n || e.id); if (!key) return;
         var a = actors.get(key);
         if (a && a.pal !== e.pal) { a.actor.dispose(); a = null; }
         if (!a) { a = { actor: GT3.Actor(e.pal | 0), pal: e.pal }; scene.add(a.actor.group); actors.set(key, a); }
-        var x = e.px / T + 0.5, z = e.py / T + 0.5;
-        a.actor.set(x, z, screenDir(e.dir || 'down'), e.step | 0);
+        var x = mx(e.px / T + 0.5), z = mz(e.py / T + 0.5);
+        a.actor.set(x, z, screenDir(e.dir || 'down'), e.step | 0); a.outdoor = !o.house;
         a.actor.group.visible = !e.hidden; // the character screen's throw is drawing the player until it lands
         seen.add(key);
         if (e.me) { pt.x = x; pt.y = z; }
       });
-      actors.forEach(function (a, k) { if (!seen.has(k)) { a.actor.dispose(); actors.delete(k); } });
+      // walking in, the people outside stay where they were until the mist has closed over them (then they go)
+      var keepOut = !!o.house && unfold.p < 1 && world.group.visible;
+      actors.forEach(function (a, k) { if (!seen.has(k) && !(keepOut && a.outdoor)) { a.actor.dispose(); actors.delete(k); } });
       rig.follow(pt.x, pt.y, dt);
       if (snapNext || Math.hypot(rig.target.x - pt.x, rig.target.z - pt.y) > 8) { rig.snap(); snapNext = false; } // a new world or a long jump: no glide across the map
       sky.set(o.hour, season); sky.follow(pt.x, pt.y);
       world.update(now / 1000, o.hour, sky.night);
       syncStumps(now); world.nature.tick(dt);
-      see.update(pt.x, pt.y, dt, camera);
+      unfolding = updateUnfold(o, dtU);
+      if (!unfolding) see.update(pt.x, pt.y, dt, camera); // the building being walked into is the unfold's to fade
       actors.forEach(function (a) { a.actor.face(camera); });
       updateDrop(now);
       updateSwings(dt);
       renderer.render(scene, camera);
       return toScreen(pt.x, pt.y, 0);
     },
-    toScreen: toScreen,
+    toScreen: function (x, z, l) { return toScreen(mx(x), mz(z), l); },
     worldDir: worldDir,
+    rooms: true, // the engine keeps the 2.5D view indoors: rooms unfold out of their buildings (doorTransition)
+    unfoldMs: function () { return reducedMotion() ? 0 : ums(); },
     // a walk on screen axes to the world, by the camera's turn (the lab's walk)
     screenToWorld: function (ix, iz) { var c = Math.cos(yawWant), s = Math.sin(yawWant); return { x: ix * c + iz * s, y: -ix * s + iz * c }; },
     tookClick: function () { return performance.now() - took < 400; },
@@ -358,9 +460,10 @@
       ndc.set((clientX - r.left) / r.width * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ndc, camera);
       if (!ray.ray.intersectPlane(plane, hit)) return null;
+      if (cur) return { x: Math.floor(cur.lx + (hit.x - cur.ax) / cur.s), y: Math.floor(cur.lz + (hit.z - cur.az) / cur.s) };
       return { x: Math.floor(hit.x), y: Math.floor(hit.z) };
     },
-    playerTile: function () { return { x: pt.x, y: pt.y }; }
+    playerTile: function () { return cur ? { x: cur.lx + (pt.x - cur.ax) / cur.s, y: cur.lz + (pt.y - cur.az) / cur.s } : { x: pt.x, y: pt.y }; }
   };
 
   window.GT_VIEW3D = {
@@ -371,12 +474,13 @@
       if (mode === '3d') { failed = false; if (ok) GT.setView3d(api); else start(); }
       else { GT.setView3d(null); hide(); }
     },
-    toScreen: function (x, z, l) { return toScreen(x, z, l); },
+    toScreen: function (x, z, l) { return toScreen(mx(x), mz(z), l); },
     playerTile: function () { return api.playerTile(); },
     turn: turn,
     // drop the player's own 3D sprite into the world over `ms`, then call done (charscreen.js); false when not drawing
     dropIn: function (ms, done) { if (!GT.view3dOn || !GT.view3dOn()) return false; drop = { t0: performance.now(), ms: ms, done: done, dusted: false }; return true; },
     tookClick: function () { return api.tookClick(); },
+    _unfold: function () { return unfold.p; },
     // the lab's keys while the 2.5D view shows (settings.js asks first): Q / E turn, + / - zoom
     onKey: function (e) {
       if (!GT.view3dOn || !GT.view3dOn()) return false;

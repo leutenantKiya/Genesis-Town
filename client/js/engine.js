@@ -1742,9 +1742,16 @@ function callModsBool(hook, args){
 }
 
 /* ---------- interaction ---------- */
+/* In the 2.5D view a door has no black fade: the scene changes at once and the view unfolds the room out of the
+   building (mods/view3d.js), while unfoldT holds the controls for as long as that takes. */
+var unfoldT = 0;
+function doorTransition(fn){
+  if (v3on() && view3d.unfoldMs){ fn(); unfoldT = view3d.unfoldMs() / 1000; return; }
+  transition(fn);
+}
 function doorBump(door, ctxIn){
   if (door.kind === 'mart' || door.kind === 'casino' || door.invited){
-    transition(function(){ enterBuilding(door); });
+    doorTransition(function(){ enterBuilding(door); });
   } else {
     if (!ctxIn){
       var m = scene.map;
@@ -1760,7 +1767,7 @@ function enterBuilding(door){
   setScene(sc, sc.map.entry.x, sc.map.entry.y, 'up');
 }
 function leaveBuilding(){
-  transition(function(){
+  doorTransition(function(){
     var sc = scene, back = sc.returnTo || world.spawn;
     setScene(outScene, back.x, back.y, 'down');
   });
@@ -1776,7 +1783,7 @@ function keeperOf(sc){ var r = null; sc.npcs.forEach(function(n){ if (n.key && /
 
 function interact(mode){
   mode = mode || 'talk';
-  if (tr || modals.length) return;
+  if (tr || modals.length || unfoldT > 0) return;
   if (mapOpen){ setMap(false); return; }
   if (D){ advanceDialog(); return; }
   if (P.moving) return;
@@ -1819,7 +1826,7 @@ function interact(mode){
 }
 
 /* ---------- update ---------- */
-function canControl(){ return !D && !tr && !mapOpen && !modals.length; }
+function canControl(){ return !D && !tr && !mapOpen && !modals.length && !(unfoldT > 0); }
 // held arrows are screen directions (turned by the 2.5D camera) unless a mod pressed them as world ones (mouse.js paths)
 function desired(){ if (!held.length) return null; var h = held[held.length - 1]; return h.world ? h.d : worldDir(h.d); }
 
@@ -1829,7 +1836,7 @@ function desired(){ if (!held.length) return null; var h = held[held.length - 1]
    arrows add up (two keys walk a diagonal), turned by the camera; a drag on the world is an analog stick (GT.setStick).
    FREE_SPEED * sqrt(2) stays under the server's walking check (8 tiles a second, Manhattan, worldmap.ts). */
 var FREE_SPEED = 5, FREE_R = 0.28, stick = null;
-function freeOn(){ return v3on(); }
+function freeOn(){ return v3on() && scene.kind === 'out'; }
 function freeOk(x, y){
   var r = FREE_R, c = [[-r, -r], [r, -r], [-r, r], [r, r]];
   for (var i = 0; i < 4; i++) if (!canEnterPlayer(Math.floor(x + c[i][0]), Math.floor(y + c[i][1]))) return false;
@@ -1862,6 +1869,12 @@ function updatePlayerFree(dt){
   var sp = FREE_SPEED * dt, nx = P.cx + mx * sp, ny = P.cy + my * sp;
   if (freeOk(nx, P.cy)) P.cx = nx;
   if (freeOk(P.cx, ny)) P.cy = ny;
+  else if (my < -0.6 && !(P.bumpT > 0)){
+    // the step up was stopped by the door itself: go in. The check above only sees the door inside a 0.04-tile band
+    // in front of it, which a step of 5 tiles a second (0.08 a frame, more on a slow frame) often jumps over.
+    var btx = Math.floor(P.cx), bty = Math.floor(ny - FREE_R);
+    if (bty !== P.y && inb(m, btx, bty) && m.door.has(bty*m.w + btx)){ P.bumpT = 0.8; P.dir = 'up'; P.moving = false; doorBump(m.door.get(bty*m.w + btx)); return; }
+  }
   P.dir = Math.abs(mx) > Math.abs(my) ? (mx > 0 ? 'right' : 'left') : (my > 0 ? 'down' : 'up');
   P.walkT = (P.walkT || 0) + dt; P.flip = Math.floor(P.walkT / MOVE_T) % 2 === 0;
   P.moving = true;
@@ -1948,6 +1961,7 @@ function update(dt){
   checkClock();
   callMods('onFrame', [dt]);
   if (tr) updateTransition(dt);
+  if (unfoldT > 0) unfoldT -= dt;
   if (mapOpen){ drawMinimap(); return; }
   updateDialog(dt);
   updatePlayer(dt);
@@ -1977,7 +1991,8 @@ function charStep(o){
    The view keeps one world pixel at the player's depth equal to one canvas pixel, so overlays near the player line up. */
 var playerHidden = false; // the character screen's throw draws the player itself until it lands (GT.setPlayerHidden)
 var view3d = null, ovK = 0; // ovK: while the 3D overlays draw, device px per art px at the player's depth (else 0)
-function v3on(){ return !!(view3d && scene && scene.kind === 'out' && view3d.ready()); }
+// indoors too when the view can draw rooms (view3d.rooms): the room stands where its building is, in the same world
+function v3on(){ return !!(view3d && scene && view3d.ready() && (scene.kind === 'out' || (scene.house && view3d.rooms))); }
 /** Where a mod draws something that stands on tile (tx, ty) (fractions allowed): the tile's top-left in the overlay's
     units, as tx*T - camX, ty*T - camY in 2D. In 2.5D it follows that tile's feet on screen at any camera turn, and
     offsets from it stay in art pixels at the sprites' size, so a hat still sits on a head. */
@@ -1993,9 +2008,10 @@ function render3d(pp){
   scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n, pal:n.pal, dir:n.dir, step:charStep(n)}); });
   ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true, hidden:playerHidden});
   callMods('onEntities', [ents, ctx, camX, camY, T]); // mods add {px, py, pal, dir, step, id}; their draw() is not called
-  var g = view3d.groundCtx(scene.map);
+  var outside = scene.kind === 'out', g = outside ? view3d.groundCtx(scene.map) : null;
   if (g) { g.clearRect(0, 0, g.canvas.width, g.canvas.height); callMods('onDrawGround', [g, 0, 0, T]); }
-  var feet = view3d.draw({ ents:ents, VW:VW, VH:VH, S:S, map:scene.map, hour:clockInfo().phase * 24 });
+  var feet = view3d.draw({ ents:ents, VW:VW, VH:VH, S:S, map:scene.map, hour:clockInfo().phase * 24,
+    out: outScene.map, house: outside ? null : scene.house, key: outside ? null : scene.key });
   ovK = view3d.artScale(S);
   camX = pp.px + 6 - feet.x * S / ovK; camY = pp.py + 12 - feet.y * S / ovK;
   ctx.setTransform(ovK, 0, 0, ovK, 0, 0);

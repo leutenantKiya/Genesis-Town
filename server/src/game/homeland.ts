@@ -216,7 +216,7 @@ export class Homelands {
   }
 
   private progress(row: HomelandRow): HomelandProgress {
-    return { open: row.open, th: row.th, built: this.d.gs.homelandBuildings(row.account).map((b) => ({ kind: b.kind, lot: b.lot })) };
+    return { open: row.open, th: row.th, gen: row.gen, built: this.d.gs.homelandBuildings(row.account).map((b) => ({ kind: b.kind, lot: b.lot })) };
   }
 
   /** The map as it is now (progress decides what is open and built; cached per progress key). */

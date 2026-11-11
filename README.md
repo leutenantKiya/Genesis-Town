@@ -17,7 +17,7 @@
 > - warmer art, a full-window layout, fullscreen (F) and a settings menu (O) with rebindable keys.
 > - **2.5D view** (2026-11-10, Pengaturan > Tampilan): the village and Homelands in three.js with the HD-2D look of
 >   `lab3d.html` (solid buildings and trees, sun and shadows, seasons, night glow, see-through walls). Default on a
->   computer, 2D on a phone; indoors and without WebGL the 2D view draws. The lab's camera and keys: **Q / E** turn the
+>   computer, 2D on a phone; without WebGL the 2D view draws. The lab's camera and keys: **Q / E** turn the
 >   view by 45 degrees (the bag stays on I and the Tas button), **+ / -** zoom, and the arrows walk the way they point on
 >   screen. Signs and name tags follow each head at any turn, drawn small so they do not cover the world.
 >   The lab's controls are in the game too: its trays (top right) hold **Desa / Homeland** (walks to the portal, then
@@ -27,7 +27,15 @@
 >   **Free walking** in the 2.5D view outdoors: no tile grid, diagonals with two keys or a drag, 5 tiles a second, sliding
 >   along walls; walking up into a door still goes in. The server still gets the tile under the player's feet, so its
 >   position and walking-speed checks are unchanged. Indoors and in the 2D view walking stays on the grid. Same rules and positions as 2D: the engine
->   still owns them (`client/js/mods/view3d.js`). Walking into a building without a scene cut is still *(planned)*.
+>   still owns them (`client/js/mods/view3d.js`).
+>   **Walking in without a cut** (2026-11-11): stepping through a door no longer fades to black. The building's roof and
+>   walls fade, the room unfolds out of the door to its full size (rooms are bigger than their buildings), and the
+>   village fades into mist around it; walking out plays it backwards (0.7 s, instant with Kurangi animasi). The room
+>   is the 2D game's own room, drawn as a cut-away dollhouse lit by a warm lamp, its windows glowing at night
+>   (`client/js/three/room.js`). Walking up into a door outdoors now always goes in (a step could skip the trigger).
+> - **Your own house** (2026-11-11): every new Homeland (generator 3) has the player's house west of the Town Hall,
+>   built from the start, with its door on the path to the Town Hall; walk in to find Ibu at home. The centre's Rumah
+>   Pekerja lot moved down beside it, its door opening onto the farm. Homelands made before keep their layout.
 >   **Felled trees** show as stumps: the last chop tips the top over and it fades, then the tree regrows as a sapling,
 >   a young tree and a grown one over its 2 game hour cooldown (server `state.stumps`).
 >   The village portal, where everyone on the server arrives, is drawn about twice the size of a Homeland's in both views
