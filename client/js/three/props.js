@@ -4,7 +4,12 @@
  * counters with their striped awnings (L.market.stalls), and the Homeland portal (L.portal).
  *
  * Everything static is merged into one mesh; lamp heads, awnings and the portal are separate so they can glow or move.
- * Returns { group, glow(k) (0 day .. 1 night), update(t) }.
+ * Returns { group, glow(k) (0 day .. 1 night), update(t), lights(px, pz) }.
+ *
+ * Night light of the street lamps (all fade in with glow(k), nothing by day):
+ *   - a fixed pool of warm PointLights (no shadows) handed each frame to the lamps nearest (px, pz): the ground, walls, trees and
+ *     the sprite cards near a lamp really brighten. The pool size never changes, so shaders are never recompiled;
+ *   - for EVERY lamp one soft pool of light on the ground and a halo round the head, each merged into one mesh (two draw calls).
  */
 (function () {
   'use strict';
@@ -23,7 +28,7 @@
   function cyl(parts, r, h, x, y, z, color, seg) { parts.push({ geo: new THREE.CylinderGeometry(r, r, h, seg || 8), matrix: GT3.xform(x, y + h / 2, z), color: color }); }
 
   GT3.Props = function (L) {
-    var W = L.w, H = L.h, group = new THREE.Group(), parts = [], heads = [], x, y;
+    var W = L.w, H = L.h, group = new THREE.Group(), parts = [], heads = [], x, y, lamps = [];
     function at(xx, yy) { return xx < 0 || yy < 0 || xx >= W || yy >= H ? null : L.tiles[yy * W + xx]; }
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
       var t = at(x, y), cx = x + 0.5, cz = y + 0.5;
@@ -75,7 +80,7 @@
         box(parts, 0.07, 1.42, 0.07, cx, 0.1, cz, shaded(C.lamp, C.lamp, C.lampD));
         box(parts, 0.36, 0.05, 0.36, cx, 1.52, cz, C.lampD);
         box(parts, 0.3, 0.06, 0.3, cx, 1.79, cz, C.lampD);
-        heads.push([cx, cz]);
+        heads.push([cx, cz]); lamps.push([cx, cz]);
       } else if (t === 'barrel') {
         cyl(parts, 0.27, 0.58, cx, 0, cz, function (n) { return n.y > 0.5 ? C.barrelL : C.barrel; }, 9);
         cyl(parts, 0.285, 0.05, cx, 0.12, cz, C.ring, 9); cyl(parts, 0.285, 0.05, cx, 0.42, cz, C.ring, 9);
@@ -105,6 +110,70 @@
       var hp = []; heads.forEach(function (h) { box(hp, 0.24, 0.22, 0.24, h[0], 1.57, h[1], '#ffffff'); });
       var hm = new THREE.Mesh(GT3.merge(hp), headMat); hm.castShadow = true; hm.name = 'lamp-heads';
       group.add(hm);
+    }
+
+    /* --- the light of the lamps at night */
+    var night = 0, POOL = 5, TARGETS = 4, RAD = 2.7;
+    var glowC = GT3.canvas(64, 64), gg = glowC.getContext('2d'), gr = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,214,130,0.85)'); gr.addColorStop(0.35, 'rgba(255,190,100,0.38)'); gr.addColorStop(0.7, 'rgba(255,170,80,0.1)'); gr.addColorStop(1, 'rgba(255,160,70,0)');
+    gg.fillStyle = gr; gg.fillRect(0, 0, 64, 64);
+    var glowTex = new THREE.CanvasTexture(glowC); glowTex.userData.shared = true;
+    var poolMat = null, haloMat = null, slots = [];
+    if (lamps.length) {
+      // pools on the ground: one quad per lamp, additive, no depth write, a hair above the ground
+      var pg = [], pu = [], pi = [];
+      lamps.forEach(function (l, i) {
+        var y0 = 0.045, a = l[0] - RAD, b = l[0] + RAD, c = l[1] - RAD, d = l[1] + RAD;
+        pg.push(a, y0, c, b, y0, c, b, y0, d, a, y0, d); pu.push(0, 0, 1, 0, 1, 1, 0, 1);
+        pi.push(i * 4, i * 4 + 2, i * 4 + 1, i * 4, i * 4 + 3, i * 4 + 2);
+      });
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pg, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(pu, 2)); geo.setIndex(pi);
+      poolMat = new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      var pool = new THREE.Mesh(geo, poolMat); pool.name = 'lamp-pools'; pool.renderOrder = 2; pool.frustumCulled = false; pool.visible = false;
+      group.add(pool); poolMat.userData.mesh = pool;
+      // a halo round each head: a round sprite that always faces the camera (Points), hidden behind walls
+      var hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(lamps.reduce(function (a, l) { a.push(l[0], 1.57, l[1]); return a; }, []), 3));
+      haloMat = new THREE.PointsMaterial({ map: glowTex, size: 1.5, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      var halo = new THREE.Points(hg, haloMat); halo.name = 'lamp-halos'; halo.renderOrder = 3; halo.frustumCulled = false; halo.visible = false;
+      group.add(halo); haloMat.userData.mesh = halo;
+      // the PointLight pool: always the same number of lights, so no material is ever recompiled
+      for (var si = 0; si < POOL; si++) {
+        var pl = new THREE.PointLight(0xffd28a, 0, 5.2, 2); pl.castShadow = false; pl.position.set(0, 1.6, 0); pl.name = 'lamp-light';
+        group.add(pl); slots.push({ light: pl, lamp: -1 });
+      }
+    }
+    var lastAt = 0, scratch = [];
+    function lights(px, pz) {
+      if (!lamps.length) return;
+      var now = performance.now(), dt = Math.min(0.1, (now - (lastAt || now)) / 1000); lastAt = now;
+      if (poolMat) { poolMat.opacity = Math.min(1, night * 0.6); haloMat.opacity = Math.min(1, night * 0.8); poolMat.userData.mesh.visible = haloMat.userData.mesh.visible = night > 0.01; }
+      // the TARGETS lamps nearest the focus (within the light's reach plus a little), the rest of the pool fades out
+      scratch.length = 0;
+      for (var i = 0; i < lamps.length; i++) {
+        var dx = lamps[i][0] - px, dz = lamps[i][1] - pz, d2 = dx * dx + dz * dz;
+        if (d2 < 15 * 15) scratch.push(i, d2);
+      }
+      var want = [];
+      for (var n = 0; n < TARGETS; n++) {
+        var bi = -1, bd = 1e9;
+        for (var j = 0; j < scratch.length; j += 2) if (scratch[j + 1] < bd && want.indexOf(scratch[j]) < 0) { bd = scratch[j + 1]; bi = scratch[j]; }
+        if (bi < 0) break; want.push(bi);
+      }
+      slots.forEach(function (s) { if (s.lamp >= 0 && want.indexOf(s.lamp) >= 0) s.keep = true; else s.keep = false; });
+      want.forEach(function (li) {
+        if (slots.some(function (s) { return s.lamp === li; })) return;
+        // hand the lamp to a slot that has faded out (or is unused); if none is free yet, it gets one a few frames later
+        var free = null;
+        slots.forEach(function (s) { if (!s.keep && s.light.intensity < 0.05 && (!free || s.lamp < 0)) free = s; });
+        if (free) { free.lamp = li; free.keep = true; free.light.position.set(lamps[li][0], 1.6, lamps[li][1]); }
+      });
+      var k = Math.min(1, dt * 5);
+      slots.forEach(function (s) {
+        var goal = s.keep ? 10 * night : 0;
+        s.light.intensity += (goal - s.light.intensity) * k;
+        if (s.light.intensity < 0.02 && !s.keep) { s.light.intensity = 0; s.lamp = -1; }
+      });
     }
 
     /* --- awnings over the market stalls, in each stall's colour */
@@ -139,7 +208,9 @@
 
     return {
       group: group,
-      glow: function (k) { headMat.emissiveIntensity = 1.6 * k; },
+      glow: function (k) { night = k; headMat.emissiveIntensity = 1.6 * k; },
+      lights: lights,
+      lampCount: lamps.length,
       update: function (t) { if (disc) disc.rotation.z = t * 0.6; }
     };
   };
