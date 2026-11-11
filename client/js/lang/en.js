@@ -1305,9 +1305,9 @@
     "Tempel kode di sini": "Paste the code here",
     "Masuk dengan kode": "Sign in with code",
     "Kode tidak valid. Salin seluruh kode dari perangkat lain.": "Invalid code. Copy the whole code from the other device.",
-    "Kode sudah kedaluwarsa. Buat kode baru di perangkat lain.": "This code has expired. Make a new one on the other device.",
     "Kode ini tidak cocok dengan akun mana pun atau sudah tidak berlaku.": "This code does not match any account or no longer works.",
     "Akun dipindahkan ke perangkat ini. Selamat datang kembali!": "Account moved to this device. Welcome back!",
-    "Kode ini berlaku 10 menit. Siapa pun yang memegang kode ini bisa bermain sebagai kamu; jangan dibagikan.": "This code works for 10 minutes. Anyone who has it can play as you; do not share it."
+    "Kode ini berlaku 10 menit. Siapa pun yang memegang kode ini bisa bermain sebagai kamu; jangan dibagikan.": "This code works for 10 minutes. Anyone who has it can play as you; do not share it.",
+    "Kode sudah kedaluwarsa atau sudah dipakai. Buat kode baru di perangkat lain.": "This code has expired or was already used. Make a new one on the other device."
   });
 })();

@@ -10,6 +10,7 @@ import { relay, RateLimiter } from './relayer.ts';
 import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
 import { langOf, localizeJson, type Lang } from './lang.ts';
+import { TransferStore } from './transfer.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
@@ -48,6 +49,7 @@ export interface AppDeps {
   currentBlockHeight: () => Promise<bigint>;
   clientDir: string;
   dialogue?: Dialogue;
+  transfers?: TransferStore;
   /** The Neon copy of the database, when DATABASE_URL is set (snapshot.ts): its state shows in /api/health. */
   snapshot?: { status(): { lastSavedAt: number | null; lastSize: number | null; lastError: string | null; saves: number } };
   /** NEAR left for gas on the server's own accounts (funds.ts): shown in /api/health. */
@@ -98,6 +100,9 @@ export function createApp(deps: AppDeps) {
   const ipLimiter = new RateLimiter(10, 200); // account creation per IP
   const simLimiter = new RateLimiter(6, 300); // simulations per IP (each new parameter set starts a worker thread)
   const talkLimiter = new RateLimiter(6, 150);
+  const transfers = deps.transfers ?? new TransferStore(); // one-time codes for moving to another device (transfer.ts)
+  const transferSweep = setInterval(() => transfers.sweep(), 60_000); transferSweep.unref();
+  const redeemLimiter = new RateLimiter(10, 100); // code redemptions per address (the id is random, this only stops guessing)
   const deviceLimiter = new RateLimiter(3, 20); // new-device key additions per IP (each costs the relayer a NEAR Auth sign call) // merchant questions per account (each may be one NEAR AI call)
   const dialogue = deps.dialogue ?? new Dialogue({ ...deps.cfg.nearai, ...deps.cfg.dialogue });
   const clientRoot = resolve(deps.clientDir);
@@ -282,6 +287,17 @@ export function createApp(deps: AppDeps) {
         const ip = clientIp(req);
         if (!ipLimiter.take(ip)) throw new HttpError(429, 'too many sign-ups from this address');
         return send(res, 200, await register({ ...deps, onNewPlayer: (a) => game.onNewPlayer(a) }, await readJson(req)));
+      }
+      if (req.method === 'POST' && p === '/api/transfer') {
+        // signed: only the account's own game key can open a code for it
+        const raw = await readRaw(req);
+        const acct = accountOf(req, url, raw);
+        const b = parseJson(raw);
+        return send(res, 200, transfers.create(acct, b.ct, b.iv));
+      }
+      if (req.method === 'POST' && p === '/api/transfer/redeem') {
+        if (!redeemLimiter.take(clientIp(req))) throw new HttpError(429, 'too many new-device requests');
+        return send(res, 200, transfers.redeem((await readJson(req)).id));
       }
       if (req.method === 'POST' && p === '/api/auth/add-key') {
         const ip = clientIp(req);

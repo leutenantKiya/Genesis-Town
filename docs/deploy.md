@@ -159,13 +159,20 @@ table). Check once before relying on it: on localhost sign in with one Google ac
 confirm both land on the same `p….players` account. A Google player on a second device needs the owner key (NEAR
 Auth) to add a game key, so that step waits for NEAR Auth to accept the domain.
 
-**Workaround: move to another device with a code** (client only, `client/js/mods/chain.js`). Signed in, the bag has
-"Move to another device": a one-time code (`gt1.` + base64url of the account id, this browser's game key and an
-expiry 10 minutes away). On the other device, choose "I have a code from another device" on the sign-in window (or in
-the "new device" window) and paste it; the client keeps the key only if the server accepts a signed request with it.
-The game key is a function-call key on the game contract (it cannot move NEAR), but the 10 minutes are only checked by
-the game page: the key itself stays valid, so anyone who sees the code can play as that player. Treat a leaked code
-like a leaked game key and never post it anywhere.
+**Workaround: move to another device with a code** (`client/js/mods/chain.js`, `server/src/transfer.ts`). Signed in, the
+bag has "Move to another device". The browser makes a random 128-bit secret, encrypts the account id and this
+browser's game key with AES-GCM under it, and uploads only the ciphertext (`POST /api/transfer`, signed, at most 3 live
+codes per account). The code shown is the server's random id plus the secret. On the other device, "I have a code
+from another device" (on the sign-in window, or in the "new device" window) sends the id to `POST /api/transfer/redeem`,
+gets the ciphertext **once** (the server deletes it at once; it also forgets it after 10 minutes, and a restart drops
+all codes), decrypts it with the secret, and keeps the key only if the server accepts a signed request with it. The
+server never sees the secret or the key, so a code seen later, or used twice, gives nothing.
+
+What it does not change: it is the **same game key on both devices** (a function-call key on the game contract only,
+it cannot move NEAR) and it stays valid until removed. Anyone who sees a code in its 10 minutes and redeems it first
+can play as that player, and keeps playing afterwards. A player who leaks a code should sign in with NEAR Auth on
+localhost (the only place it works today) and remove the keys. A server-side revocation list for session keys is the
+planned next step.
 
 ## Updating
 

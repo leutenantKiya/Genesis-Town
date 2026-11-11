@@ -268,38 +268,58 @@
     }
   }
 
-  /* ---- Move to another device (client only): a one-time code holding the account id and this browser's game key.
-     The key is already an access key on the account (function calls on the game contract only), so the server needs
-     no change. The code works for ten minutes and must be treated like a password. ---- */
-  var CODE_PREFIX = 'gt1.', CODE_MS = 10 * 60 * 1000;
-  function b64url(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-  function unb64url(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
-  function makeTransferCode() {
-    var kp = S.account && window.NearLib && keyOf(S.account);
-    if (!kp) return null;
-    return CODE_PREFIX + b64url(JSON.stringify({ a: S.account, k: kp.toString(), exp: Date.now() + CODE_MS }));
+  /* ---- Move to another device: a one-time code = server id + a random secret. The browser encrypts {account, game key}
+     with AES-GCM under a key derived (HKDF) from the secret and uploads only the ciphertext (POST /api/transfer, signed).
+     The server keeps it for 10 minutes, gives it out once and deletes it (server/src/transfer.ts), and never sees the
+     secret, so a seen, old or used code gives nothing. The key itself is the same game key on both devices (a
+     function-call key on the game contract, it cannot move NEAR). ---- */
+  var CODE_PREFIX = 'gt2.';
+  function toB64url(u8) { var s = ''; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function fromB64url(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var bin = atob(s), u8 = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return u8; }
+  function transferKey(secret, usage) {
+    var c = window.crypto.subtle;
+    return c.importKey('raw', secret, 'HKDF', false, ['deriveKey']).then(function (base) {
+      return c.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('genesis-town transfer v1') }, base, { name: 'AES-GCM', length: 256 }, false, usage);
+    });
   }
-  function parseTransferCode(text) {
-    var bad = new Error($t('Kode tidak valid. Salin seluruh kode dari perangkat lain.'));
-    var t = String(text || '').replace(/\s+/g, '');
-    if (t.indexOf(CODE_PREFIX) !== 0 || !window.NearLib) throw bad;
-    var o; try { o = JSON.parse(unb64url(t.slice(CODE_PREFIX.length))); } catch (e) { throw bad; }
-    if (!o || typeof o.a !== 'string' || typeof o.k !== 'string' || typeof o.exp !== 'number' || !/^[a-z0-9][a-z0-9._-]{1,63}$/.test(o.a) || o.a.indexOf('.') < 0 || o.k.indexOf('ed25519:') !== 0) throw bad;
-    if (o.exp < Date.now()) throw new Error($t('Kode sudah kedaluwarsa. Buat kode baru di perangkat lain.'));
-    var kp; try { kp = window.NearLib.KeyPair.fromString(o.k); } catch (e) { throw bad; }
-    return { account: o.a, kp: kp };
+  function canTransfer() { return !!(window.NearLib && window.crypto && window.crypto.subtle); }
+  function makeTransferCode() {
+    var kp = S.account && canTransfer() && keyOf(S.account);
+    if (!kp) return Promise.reject(new Error($t('Gagal.')));
+    var secret = window.crypto.getRandomValues(new Uint8Array(16)), iv = window.crypto.getRandomValues(new Uint8Array(12));
+    return transferKey(secret, ['encrypt'])
+      .then(function (k) { return window.crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, k, new TextEncoder().encode(JSON.stringify({ a: S.account, k: kp.toString() }))); })
+      .then(function (ct) { return api('/transfer', { method: 'POST', body: { ct: toB64url(new Uint8Array(ct)), iv: toB64url(iv) } }); })
+      .then(function (r) { return CODE_PREFIX + r.id + '.' + toB64url(secret); });
   }
   // keeps the key only if the server accepts a signed request with it
   function redeemTransferCode(text) {
-    var c; try { c = parseTransferCode(text); } catch (e) { return Promise.reject(e); }
-    var prev = S.account, had = keyRing()[c.account];
-    keepKey(c.account, c.kp); S.account = c.account;
-    return api('/state').then(function () {
-      return signedIn(c.account, c.kp, $t('Akun dipindahkan ke perangkat ini. Selamat datang kembali!'));
-    }, function () {
-      var r = keyRing(); if (had) r[c.account] = had; else delete r[c.account];
-      lsSet(LS_KEYS, JSON.stringify(r)); S.account = prev;
-      throw new Error($t('Kode ini tidak cocok dengan akun mana pun atau sudah tidak berlaku.'));
+    var bad = new Error($t('Kode tidak valid. Salin seluruh kode dari perangkat lain.'));
+    var m = /^gt2\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]{22})$/.exec(String(text || '').replace(/\s+/g, ''));
+    if (!m || !canTransfer()) return Promise.reject(bad);
+    var secret; try { secret = fromB64url(m[2]); } catch (e) { return Promise.reject(bad); }
+    return api('/transfer/redeem', { method: 'POST', body: { id: m[1] } }).then(null, function (e) {
+      if (e && e.status === 404) throw new Error($t('Kode sudah kedaluwarsa atau sudah dipakai. Buat kode baru di perangkat lain.'));
+      throw e;
+    }).then(function (r) {
+      return transferKey(secret, ['decrypt'])
+        .then(function (k) { return window.crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64url(r.iv) }, k, fromB64url(r.ct)); })
+        .then(function (buf) {
+          var o = JSON.parse(new TextDecoder().decode(buf));
+          if (!o || o.a !== r.account || typeof o.k !== 'string' || o.k.indexOf('ed25519:') !== 0 || !/^[a-z0-9][a-z0-9._-]{1,63}$/.test(o.a)) throw bad;
+          return { account: o.a, kp: window.NearLib.KeyPair.fromString(o.k) };
+        })
+        .catch(function () { throw bad; });
+    }).then(function (c) {
+      var prev = S.account, had = keyRing()[c.account];
+      keepKey(c.account, c.kp); S.account = c.account;
+      return api('/state').then(function () {
+        return signedIn(c.account, c.kp, $t('Akun dipindahkan ke perangkat ini. Selamat datang kembali!'));
+      }, function () {
+        var ring = keyRing(); if (had) ring[c.account] = had; else delete ring[c.account];
+        lsSet(LS_KEYS, JSON.stringify(ring)); S.account = prev;
+        throw new Error($t('Kode ini tidak cocok dengan akun mana pun atau sudah tidak berlaku.'));
+      });
     });
   }
   // the "I have a code" field for the sign-in windows; done() runs after a successful sign-in
@@ -316,25 +336,25 @@
     box.appendChild(input); box.appendChild(go); box.appendChild(msg);
     return box;
   }
-  // signed in: shows the code to type or paste on the other device
+  // signed in: shows the code to type or paste on the other device (made on demand: the server holds it for 10 minutes)
   function transferWindow() {
-    var code = makeTransferCode();
-    if (!code) { GT.toast($t('Gagal.')); return; }
-    var body = $('div');
-    body.appendChild($('p', null, $t('Di perangkat lain: pilih "Aku punya kode dari perangkat lain" saat masuk, lalu tempel kode ini.')));
-    var ta = $('textarea', 'gt-code-box'); ta.readOnly = true; ta.rows = 5; ta.value = code; ta.spellcheck = false;
-    ta.setAttribute('aria-label', $t('Pindahkan ke perangkat lain'));
-    ta.addEventListener('focus', function () { ta.select(); });
-    body.appendChild(ta);
-    var note = $('p', 'mnote');
-    var copy = button($t('Salin'), function () {
-      var ok = function () { note.textContent = $t('Tersalin!'); };
-      var fallback = function () { ta.focus(); ta.select(); try { if (document.execCommand('copy')) ok(); } catch (e) { /* select-all is enough */ } };
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(ok, fallback); else fallback();
-    }, 'primary');
-    body.appendChild(copy); body.appendChild(note);
-    body.appendChild($('p', 'chain-warn', $t('Kode ini berlaku 10 menit. Siapa pun yang memegang kode ini bisa bermain sebagai kamu; jangan dibagikan.')));
-    GT.modal({ title: $t('Pindahkan ke perangkat lain'), body: body });
+    makeTransferCode().then(function (code) {
+      var body = $('div');
+      body.appendChild($('p', null, $t('Di perangkat lain: pilih "Aku punya kode dari perangkat lain" saat masuk, lalu tempel kode ini.')));
+      var ta = $('textarea', 'gt-code-box'); ta.readOnly = true; ta.rows = 3; ta.value = code; ta.spellcheck = false;
+      ta.setAttribute('aria-label', $t('Pindahkan ke perangkat lain'));
+      ta.addEventListener('focus', function () { ta.select(); });
+      body.appendChild(ta);
+      var note = $('p', 'mnote');
+      var copy = button($t('Salin'), function () {
+        var ok = function () { note.textContent = $t('Tersalin!'); };
+        var fallback = function () { ta.focus(); ta.select(); try { if (document.execCommand('copy')) ok(); } catch (e) { /* select-all is enough */ } };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(ok, fallback); else fallback();
+      }, 'primary');
+      body.appendChild(copy); body.appendChild(note);
+      body.appendChild($('p', 'chain-warn', $t('Kode ini berlaku 10 menit. Siapa pun yang memegang kode ini bisa bermain sebagai kamu; jangan dibagikan.')));
+      GT.modal({ title: $t('Pindahkan ke perangkat lain'), body: body });
+    }, function (e) { GT.toast((e && e.message) || $t('Gagal.')); });
   }
 
   function signedIn(account, kp, msg) {
