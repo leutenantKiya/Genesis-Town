@@ -57,6 +57,11 @@
 >   a secret scan of the whole git history (`node scripts/check-secrets.mjs`).
 >   A returning player on a new browser adds a game key signed with their own NEAR Auth login (new-device flow,
 >   run live on testnet 2026-11-03). Sign-out keeps each account's key in the browser.
+> - **Masuk dengan Google** (2026-11-11, with `GOOGLE_CLIENT_ID`): a plain Sign in with Google button next to NEAR
+>   Auth, for domains NEAR Auth does not accept yet. The server checks Google's ID token (Google's certs, issuer,
+>   audience, expiry) and files the player under `google-oauth2|<Google id>`, the id NEAR Auth gives the same Google
+>   account, so both buttons open one NEAR account with the same MPC owner key; the server never holds a private key.
+>   Limit until NEAR Auth accepts the domain: a Google player on a second device cannot add a game key there.
 > - **Phone layout** (portrait): the game view fills the screen between a one-line status bar and the thumb zone
 >   (D-pad, A, E, drawn as translucent glass with an opaque fallback) with a bottom bar for Tas, Pasar, Peta and
 >   Lainnya; windows open as bottom sheets; buttons
@@ -177,7 +182,7 @@
 >   Database: the server keeps SQLite; with `DATABASE_URL` set, a gzipped copy is kept in **Neon Postgres** (saved every
 >   5 minutes when it changed, after each settlement and on shutdown; loaded back on a host with no disk), so Railway
 >   needs no volume (`server/src/snapshot.ts`, docs/deploy.md).
->   Waiting on: the host (owner's account) and NEAR Auth accepting the public domain.
+>   Waiting on: NEAR Auth accepting the public domain (until then players use Masuk dengan Google there).
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
@@ -386,7 +391,8 @@ npm run dev
 ```
 
 The local server must run on port 3000. The shared NEAR Auth testnet login only accepts `http://localhost:3000` as a
-callback.
+callback. With `GOOGLE_CLIENT_ID` set, a **Masuk dengan Google** button works on any origin listed in that Google
+client (see `.env.example`).
 
 ## Demo / offline mode
 

@@ -21,6 +21,7 @@ export interface Config {
   playersParentId: string;
   playersParentPrivateKey: string;
   playerInitialNear: bigint; // yoctoNEAR sent to each new player account
+  googleClientId: string | null; // Sign in with Google (GIS) OAuth client id; public, but kept in env with the rest
   fastAuth: { domain: string; clientId: string; contractId: string; mpcContractId: string; mpcDomainId: number };
   explorerTxUrl: string; // prefix, hash is appended
   relay: { perMinute: number; perDay: number; maxGasTera: number; maxBlocksAhead: number };
@@ -71,6 +72,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     playersParentId: get('PLAYERS_PARENT_ACCOUNT_ID'),
     playersParentPrivateKey: get('PLAYERS_PARENT_PRIVATE_KEY'),
     playerInitialNear: BigInt(env.PLAYER_INITIAL_YOCTO ?? '10000000000000000000000'), // 0.01 NEAR
+    googleClientId: env.GOOGLE_CLIENT_ID?.trim() || null,
     // Values from https://docs.auth.near.org/resources/testnet.md and protocol/concepts/auth0.md
     fastAuth: {
       domain: env.FASTAUTH_DOMAIN || 'login.testnet.fast-auth.com',

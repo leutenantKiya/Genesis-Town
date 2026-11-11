@@ -40,6 +40,7 @@ private keys are typed by you into the host, never committed and never put in a 
 | `MERCHANT_PARENT_ACCOUNT_ID` | as in `.env` |
 | `WORLD_SEED` | empty (keeps the current village) |
 | `FASTAUTH_CLIENT_ID`, `FASTAUTH_DOMAIN` | empty, or the client id and Auth0 domain NEAR Auth gives for the public domain (see Login below) |
+| `GOOGLE_CLIENT_ID` | the Google OAuth client id for "Masuk dengan Google" (see Login below); empty hides the button |
 | `ANTHROPIC_API_KEY` | optional (**secret**); Claude writes merchant replies; without any AI key merchants answer with local lines |
 | `DIALOGUE_PROVIDER` | empty (`anthropic` if the Anthropic key is set, else `nearai` if its key is set, else `local`), or `anthropic` / `nearai` / `local` |
 | `DIALOGUE_MODEL` | empty (default `claude-sonnet-5-5`, low effort) |
@@ -141,6 +142,22 @@ request process is the mainnet application form (https://docs.auth.near.org/home
 dedicated domain, client id and signing audience. So test Masuk on the public URL right after the first deploy; if
 NEAR Auth refuses the domain, ask the NEAR Auth team (or the hackathon organisers) to allow it for testnet, and set
 `FASTAUTH_CLIENT_ID` / `FASTAUTH_DOMAIN` if they issue new credentials.
+
+On 2026-11-11 the Railway domain got "Callback URL mismatch" from NEAR Auth, as expected. The NEAR Auth request form
+is https://form.typeform.com/to/VWHjf3HV (the only contact the docs give). Meanwhile **Masuk dengan Google** works
+there without NEAR:
+
+1. https://console.developers.google.com/auth/clients → Create client → Application type **Web application**.
+2. Authorized JavaScript origins: the game client's origin(s), scheme and host only (e.g.
+   `https://genesistown.up.railway.app`), plus `http://localhost:3000` and `http://localhost` for local tests.
+3. Fill in the Branding page (app name, support email). The default scopes (email, profile, openid) are enough.
+4. Set `GOOGLE_CLIENT_ID` on the server. No client secret is used.
+
+The server checks Google's ID token itself (`server/src/auth.ts` `googleVerifier`) and stores the player as
+`google-oauth2|<Google sub>`, which is how NEAR Auth's tenant names the same Google user (seen in our own players
+table). Check once before relying on it: on localhost sign in with one Google account through both buttons and
+confirm both land on the same `p….players` account. A Google player on a second device needs the owner key (NEAR
+Auth) to add a game key, so that step waits for NEAR Auth to accept the domain.
 
 ## Updating
 

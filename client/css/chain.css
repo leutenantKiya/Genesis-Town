@@ -233,3 +233,6 @@ html.gt-phone .gt-chat-input{min-height:44px;font-size:16px}
 @media (prefers-reduced-motion:reduce){
   .gt-slot,.gt-card,.gt-fish-btn,.gt-title h1{transition:none}
 }
+
+/* "Masuk" chooser: Google renders its own button inside this slot */
+.gt-login-google{display:flex;justify-content:center;align-items:center;min-height:44px;margin:12px 0 4px}

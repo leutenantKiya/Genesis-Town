@@ -211,23 +211,30 @@
     });
   }
 
-  function finishLogin(idToken, retried, provider) {
+  // `via` is 'google' for "Masuk dengan Google" (the token is Google's own); otherwise the token is NEAR Auth's.
+  function finishLogin(idToken, retried, provider, via) {
     var kp = sessionKey();
     GT.toast(chainUI() ? 'Membuat akunmu di NEAR testnet…' : 'Menyiapkan akunmu…');
-    return api('/auth/register', { method: 'POST', body: { idToken: idToken, sessionPublicKey: kp.getPublicKey().toString() } })
+    var reg = function (pk) { var b = { idToken: idToken, sessionPublicKey: pk }; if (via) b.provider = via; return api('/auth/register', { method: 'POST', body: b }); };
+    return reg(kp.getPublicKey().toString())
       .catch(function (e) {
         // This browser's key belongs to another login: make a fresh key for this one and try once more.
-        if (!retried && /already belongs to another account/.test(e.message)) { lsSet(LS_KEY, null); return finishLogin(idToken, true, provider).then(function () { return null; }); }
+        if (!retried && /already belongs to another account/.test(e.message)) { lsSet(LS_KEY, null); return finishLogin(idToken, true, provider, via).then(function () { return null; }); }
         throw e;
       })
       .then(function (r) {
         if (r === null) return;
         if (r.needsKey) {
-          var needProvider = function () { if (!provider) throw new Error('Akun ini perlu kunci baru; masuk dengan NEAR Auth.'); };
+          // Adding a key for a new device needs the owner key, which only NEAR Auth can use.
+          var needProvider = function () {
+            if (provider) return;
+            if (via === 'google') throw new Error('Akun ini sudah dipakai di perangkat lain. Perangkat baru perlu persetujuan NEAR Auth, yang belum aktif di alamat ini; main dulu dari perangkat pertamamu.');
+            throw new Error('Akun ini perlu kunci baru; masuk dengan NEAR Auth.');
+          };
           // a key for this account from an earlier sign-in in this browser: use it instead of adding a new one
           var known = keyOf(r.accountId);
           if (known && known.getPublicKey().toString() !== kp.getPublicKey().toString()) {
-            return api('/auth/register', { method: 'POST', body: { idToken: idToken, sessionPublicKey: known.getPublicKey().toString() } }).then(function (r2) {
+            return reg(known.getPublicKey().toString()).then(function (r2) {
               if (r2.needsKey) { needProvider(); return newDevice(provider, r, idToken).then(function () { signedIn(r.accountId, sessionKey(), 'Kunci baru ditambahkan. Selamat datang kembali!'); }); }
               return signedIn(r2.accountId, known, 'Selamat datang kembali!');
             });
@@ -259,6 +266,7 @@
     if (window.NearLib && S.cfg && S.cfg.fastAuth && !S.cfg.devLogin) {
       try { new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: S.cfg.fastAuth.clientId }).logout({ openUrl: false }).catch(noop); } catch (e) { /* cache only */ }
     }
+    try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) { /* not loaded */ }
     renderBanner(); renderHud();
     GT.toast('Kamu sudah keluar. Tekan Masuk untuk masuk lagi.');
     return refresh(true);
@@ -267,6 +275,56 @@
   function login() {
     if (S.busy) return;
     if (S.cfg && S.cfg.devLogin) return devLogin();
+    if (S.cfg && S.cfg.google) return chooseLogin();
+    return nearLogin();
+  }
+
+  /* ---- "Masuk dengan Google": Google Identity Services, no NEAR Auth needed (it only accepts allow-listed domains).
+     The server checks Google's token and files the player under the id NEAR Auth gives the same Google account, so
+     both buttons open one account. Library, calls and options: https://developers.google.com/identity/gsi/web */
+  var gsi = null, onGoogle = null;
+  function loadGsi() {
+    if (gsi) return gsi;
+    gsi = new Promise(function (resolve, reject) {
+      // Google's docs: on plain-http localhost the button needs this referrer policy
+      if (location.protocol === 'http:') { var m = document.createElement('meta'); m.name = 'referrer'; m.content = 'no-referrer-when-downgrade'; document.head.appendChild(m); }
+      var sc = document.createElement('script');
+      sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true;
+      sc.onload = function () {
+        if (!window.google || !google.accounts || !google.accounts.id) { reject(new Error('Google tidak termuat')); return; }
+        google.accounts.id.initialize({ client_id: S.cfg.google.clientId, callback: function (res) { if (onGoogle) onGoogle(res); }, ux_mode: 'popup', auto_select: false, use_fedcm_for_button: true });
+        resolve(google.accounts.id);
+      };
+      sc.onerror = function () { gsi = null; reject(new Error('Tidak bisa memuat tombol Google (cek koneksi atau pemblokir iklan).')); };
+      document.head.appendChild(sc);
+    });
+    return gsi;
+  }
+  function chooseLogin() {
+    var body = $('div', 'gt-login');
+    body.appendChild($('p', null, 'Pilih cara masuk. Akunmu tetap akun NEAR testnet; tanpa dompet, tanpa biaya gas.'));
+    var slot = $('div', 'gt-login-google'); slot.appendChild($('p', 'mnote', 'Memuat tombol Google…'));
+    body.appendChild(slot);
+    var actions = [];
+    if (window.NearLib) actions.push({ label: 'Masuk dengan NEAR Auth (Google/email)', onClick: function (h) { h.close('near'); nearLogin(); return true; } });
+    var h = GT.modal({ title: 'Masuk', body: body, actions: actions, onClose: function () { onGoogle = null; } });
+    onGoogle = function (res) {
+      if (!res || !res.credential) { GT.toast('Google tidak memberi token'); return; }
+      h.close('google'); onGoogle = null; S.busy = true;
+      finishLogin(res.credential, false, null, 'google')
+        .catch(function (e) { GT.toast('Gagal masuk: ' + (e && e.message || e)); })
+        .then(function () { S.busy = false; });
+    };
+    loadGsi().then(function (id) {
+      if (h.closed) return;
+      slot.textContent = '';
+      var btn = $('div'); slot.appendChild(btn);
+      id.renderButton(btn, { type: 'standard', theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular', width: 280, locale: 'id' });
+    }, function (e) { slot.textContent = ''; slot.appendChild($('p', 'mnote', e.message)); });
+  }
+
+  function nearLogin() {
+    if (S.busy) return;
     if (!window.NearLib) { GT.toast('Pustaka NEAR belum dimuat (jalankan build klien).'); return; }
     S.busy = true;
     var provider = new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: S.cfg.fastAuth.clientId });

@@ -43,6 +43,7 @@ export interface AppDeps {
   store: Store;
   game: Game;
   verify: TokenVerifier;
+  verifyGoogle?: TokenVerifier; // "Masuk dengan Google"; absent when GOOGLE_CLIENT_ID is not set
   currentBlockHeight: () => Promise<bigint>;
   clientDir: string;
   dialogue?: Dialogue;
@@ -258,6 +259,7 @@ export function createApp(deps: AppDeps) {
           explorerTxUrl: deps.cfg.explorerTxUrl,
           rpcUrl: deps.cfg.rpcUrl,
           fastAuth: deps.cfg.fastAuth,
+          google: deps.cfg.googleClientId && deps.verifyGoogle ? { clientId: deps.cfg.googleClientId } : null,
           devLogin: deps.cfg.devLogin,
           devTools: devAllowed(req),
           dialogue: dialogue.provider,

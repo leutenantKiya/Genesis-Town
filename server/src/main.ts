@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { loadConfig } from './config.ts';
 import { Store } from './db.ts';
 import { MockChain, TestnetChain } from './chain.ts';
-import { auth0Verifier, withDevLogin } from './auth.ts';
+import { auth0Verifier, googleVerifier, withDevLogin } from './auth.ts';
 import { blockHeightSource } from './relayer.ts';
 import { createApp } from './app.ts';
 import { Game } from './game/game.ts';
@@ -61,6 +61,7 @@ const { server } = createApp({
   store,
   game,
   verify: withDevLogin(cfg, auth0Verifier(cfg)),
+  verifyGoogle: cfg.googleClientId ? googleVerifier(cfg.googleClientId) : undefined,
   currentBlockHeight: cfg.chainMode === 'mock' ? async () => 0n : blockHeightSource(cfg),
   clientDir: join(here, '../../client'),
   snapshot: snapshots ?? undefined,

@@ -36,6 +36,25 @@ export function auth0Verifier(cfg: Config, keys?: JWTVerifyGetKey): TokenVerifie
   };
 }
 
+// "Masuk dengan Google" without NEAR Auth (it only accepts allow-listed domains). Google's ID token is checked as
+// https://developers.google.com/identity/gsi/web/guides/verify-google-id-token says: signed by a key from
+// https://www.googleapis.com/oauth2/v3/certs, `iss` accounts.google.com or https://accounts.google.com, `aud` our
+// client id, `exp` not passed. The player is filed under "google-oauth2|<sub>", the id NEAR Auth's Auth0 tenant gives
+// the same Google account, so both buttons lead to one account and one MPC-derived owner key.
+export const GOOGLE_CERTS = 'https://www.googleapis.com/oauth2/v3/certs';
+export function googleVerifier(clientId: string, keys?: JWTVerifyGetKey): TokenVerifier {
+  const jwks = keys ?? createRemoteJWKSet(new URL(GOOGLE_CERTS));
+  return async (idToken) => {
+    const { payload } = await jwtVerify(idToken, jwks, {
+      issuer: ['accounts.google.com', 'https://accounts.google.com'],
+      audience: clientId,
+      algorithms: ['RS256'],
+    });
+    if (typeof payload.sub !== 'string' || !/^[0-9]{1,64}$/.test(payload.sub)) throw new Error('token has no Google account id');
+    return { sub: 'google-oauth2|' + payload.sub };
+  };
+}
+
 // Deterministic, privacy-preserving account name: p<hash of sub>.<players parent>. The salt changed in M2
 // ("genesis-town:m2:") because M1 accounts carry a session key limited to `send_item`.
 export function playerAccountId(sub: string, parent: string): string {
@@ -51,14 +70,17 @@ export function isEd25519Key(s: unknown): s is string {
 export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsKey?: boolean; ownerPublicKey?: string }
 
 export async function register(
-  deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; onNewPlayer?: (accountId: string) => void },
-  body: { idToken?: unknown; sessionPublicKey?: unknown },
+  deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; verifyGoogle?: TokenVerifier; onNewPlayer?: (accountId: string) => void },
+  body: { idToken?: unknown; sessionPublicKey?: unknown; provider?: unknown },
 ): Promise<RegisterResult> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'body must be a JSON object');
   if (typeof body.idToken !== 'string') throw new HttpError(400, 'idToken required');
   if (!isEd25519Key(body.sessionPublicKey)) throw new HttpError(400, 'sessionPublicKey must be an ed25519 public key');
+  if (body.provider !== undefined && body.provider !== 'near' && body.provider !== 'google') throw new HttpError(400, 'provider must be "near" or "google"');
+  const verify = body.provider === 'google' ? deps.verifyGoogle : deps.verify;
+  if (!verify) throw new HttpError(400, 'Google login is not set up on this server');
   let sub: string;
-  try { ({ sub } = await deps.verify(body.idToken)); } catch (e) {
+  try { ({ sub } = await verify(body.idToken)); } catch (e) {
     throw new HttpError(401, 'login token rejected: ' + (e as Error).message);
   }
   const existing = deps.store.playerBySub(sub);
