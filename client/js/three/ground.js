@@ -12,7 +12,7 @@
   var GT3 = window.GT3, S = window.SPRITES;
   if (!GT3) return;
   var THREE = GT3.THREE, TILE = GT3.TILE, PX = GT3.PX, R = GT3.R;
-  var SINK = 3 * PX, DEPTH = 2;      // how far the water lies below the ground; height of the world's cut edge
+  var SINK = 3 * PX;                 // how far the water lies below the ground
   // per-season noise tint on the grass: [dark rgb, light rgb, dark strength, light strength] (as the 2D world cache)
   var NOISE_TINT = { semi: ['20,60,30', '220,240,120', 0.45, 0.28], panas: ['16,64,24', '244,240,96', 0.45, 0.30],
     gugur: ['64,40,12', '240,196,104', 0.45, 0.30], snow: ['120,140,180', '255,255,255', 0.35, 0.4] };
@@ -31,8 +31,8 @@
       var x, y, i, gt, P = GT3.pal();
       g.clearRect(0, 0, cv.width, cv.height);
       for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
-        i = y * W + x; gt = S.groundOf(L.tiles[i]) || 'grass'; ground[i] = gt;
-        if (gt === 'water') continue; // cut out: the water sheet shows through
+        i = y * W + x; gt = L.tiles[i] === 'void' ? 'void' : S.groundOf(L.tiles[i]) || 'grass'; ground[i] = gt;
+        if (gt === 'water' || gt === 'void') continue; // cut out: the water below, or the sky between islands, shows through
         var hv = GT3.hash(x, y, seed) % 10;
         S.drawGround(g, gt, x * TILE, y * TILE, gt === 'grass' ? (hv < 6 ? 0 : hv < 8 ? 1 : hv < 9 ? 2 : 3) : hv & 3);
         if (gt === 'grass') {
@@ -43,12 +43,12 @@
       }
       for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
         gt = ground[y * W + x];
-        if (gt === 'water' || gt === 'grass') continue;
+        if (gt === 'water' || gt === 'grass' || gt === 'void') continue;
         S.drawEdges(g, gt, x * TILE, y * TILE, { n: gAt(x, y - 1) === 'grass', s: gAt(x, y + 1) === 'grass', w: gAt(x - 1, y) === 'grass', e: gAt(x + 1, y) === 'grass' });
       }
       // a dark wet line where ground meets water, so the bank reads from above too
       for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
-        if (ground[y * W + x] === 'water') continue;
+        if (ground[y * W + x] === 'water' || ground[y * W + x] === 'void') continue;
         g.fillStyle = 'rgba(40,24,12,0.38)';
         if (isWater(x, y + 1)) g.fillRect(x * TILE, y * TILE + TILE - 1, TILE, 1);
         if (isWater(x, y - 1)) g.fillRect(x * TILE, y * TILE, TILE, 1);
@@ -68,7 +68,7 @@
         });
       }
       for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
-        if (!locked(x, y) || ground[y * W + x] === 'water') continue;
+        if (!locked(x, y) || ground[y * W + x] === 'water' || ground[y * W + x] === 'void') continue;
         var edge = !locked(x - 1, y) || !locked(x + 1, y) || !locked(x, y - 1) || !locked(x, y + 1);
         g.fillStyle = edge ? FOG_EDGE : FOG;
         g.fillRect(x * TILE, y * TILE, TILE, TILE);
@@ -83,7 +83,7 @@
     plane.name = 'ground';
     group.add(plane);
 
-    /* --- water: one sheet a few pixels below, its ripple pattern drifting slowly */
+    /* --- water: a sheet a few pixels below the ground under the water tiles only (the sky shows between islands) */
     var wcv = GT3.canvas(24, 24), wg = wcv.getContext('2d'), wtex = GT3.tex(wcv, true);
     function paintWater() {
       var P = GT3.pal().water, r = GT3.rng(77);
@@ -94,11 +94,13 @@
       wtex.needsUpdate = true;
     }
     paintWater();
-    wtex.repeat.set(W / 2, H / 2);
-    var hasWater = ground.indexOf('water') >= 0, water = null;
-    if (hasWater) {
-      water = new THREE.Mesh(new THREE.PlaneGeometry(W, H), GT3.mat({ map: wtex }));
-      water.rotation.x = -Math.PI / 2; water.position.set(W / 2, -SINK, H / 2); water.receiveShadow = true; water.name = 'water';
+    var x, y, wq = [];
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) if (ground[y * W + x] === 'water') // uv in world tiles / 2: the ripples run on across tiles
+      wq.push({ geo: GT3.quad([x, -SINK, y + 1], [x + 1, -SINK, y + 1], [x + 1, -SINK, y], [x, -SINK, y], [x / 2, -(y + 1) / 2, (x + 1) / 2, -y / 2]) });
+    var water = null;
+    if (wq.length) {
+      water = new THREE.Mesh(GT3.merge(wq), GT3.mat({ map: wtex, vertexColors: true }));
+      water.receiveShadow = true; water.name = 'water';
       group.add(water);
     }
 
@@ -111,9 +113,9 @@
       btex.needsUpdate = true;
     }
     paintBank();
-    var parts = [], x, y;
+    var parts = [];
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
-      if (ground[y * W + x] === 'water') continue;
+      if (ground[y * W + x] === 'water' || ground[y * W + x] === 'void') continue;
       if (isWater(x, y + 1)) parts.push({ geo: GT3.quad([x, -SINK, y + 1], [x + 1, -SINK, y + 1], [x + 1, 0, y + 1], [x, 0, y + 1]) });
       if (isWater(x, y - 1)) parts.push({ geo: GT3.quad([x + 1, -SINK, y], [x, -SINK, y], [x, 0, y], [x + 1, 0, y]) });
       if (isWater(x + 1, y)) parts.push({ geo: GT3.quad([x + 1, -SINK, y + 1], [x + 1, -SINK, y], [x + 1, 0, y], [x + 1, 0, y + 1]) });
@@ -125,44 +127,101 @@
       group.add(banks);
     }
 
-    /* --- the cut edge of the world */
-    var scv = GT3.canvas(48, 24), sg = scv.getContext('2d'), stex = GT3.tex(scv, true);
-    function paintSkirt() {
-      var P = GT3.pal(), r = GT3.rng(1234), i;
-      R(sg, 0, 0, 48, 24, '#2c1a10');
-      R(sg, 0, 0, 48, 2, P.grass[0]); R(sg, 0, 0, 48, 1, P.grass[1]);
-      for (i = 0; i < 48; i += 3) R(sg, i + (r() < 0.5 ? 1 : 0), 2, 1, 1, P.grass[0]);
-      R(sg, 0, 3, 48, 7, P.soil[1]); R(sg, 0, 3, 48, 1, P.soil[2]);
-      for (i = 0; i < 20; i++) R(sg, Math.floor(r() * 47), 4 + Math.floor(r() * 5), 2, 1, r() < 0.5 ? P.soil[0] : P.soil[2]);
-      R(sg, 0, 10, 48, 1, P.soil[0]);
-      R(sg, 0, 11, 48, 8, '#4a2e1c');
-      for (i = 0; i < 9; i++) { var sx = Math.floor(r() * 44), sy = 12 + Math.floor(r() * 5); R(sg, sx, sy, 3, 2, '#7a746c'); R(sg, sx, sy, 3, 1, '#a09a90'); }
-      R(sg, 0, 19, 48, 1, '#3a2416');
-      for (i = 0; i < 14; i++) R(sg, Math.floor(r() * 47), 20 + Math.floor(r() * 4), 2, 1, '#3a2416');
-      stex.needsUpdate = true;
+    /* --- the island underneath: every bit of land hangs over the sky on a stepped block of earth and stone, deepest
+       where it is furthest from an edge, so each island ends in a rough rocky point like a floating island. The faces are
+       flat-coloured in bands (a grass lip, then earth, then two tones of stone), voxel-like, and recoloured by season. */
+    function solidAt(xx, yy) { return xx >= 0 && yy >= 0 && xx < W && yy < H && ground[yy * W + xx] !== 'void'; }
+    var dist = new Float32Array(W * H).fill(-1), q = [];
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+      if (!solidAt(x, y)) continue;
+      if (!solidAt(x + 1, y) || !solidAt(x - 1, y) || !solidAt(x, y + 1) || !solidAt(x, y - 1)) { dist[y * W + x] = 0; q.push(x, y); }
     }
-    paintSkirt();
-    var sk = [];
-    function v(yTop) { return 1 + yTop / DEPTH; } // texture row at a given height (y <= 0)
-    function seg(p0, p1, u0, u1, top) {
-      sk.push({ geo: GT3.quad([p0[0], -DEPTH, p0[1]], [p1[0], -DEPTH, p1[1]], [p1[0], top, p1[1]], [p0[0], top, p0[1]], [u0, 0, u1, v(top)]) });
+    for (var qi = 0; qi < q.length; qi += 2) {
+      var qx = q[qi], qy = q[qi + 1], dd = dist[qy * W + qx];
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) { var nx = qx + d[0], ny = qy + d[1]; if (solidAt(nx, ny) && dist[ny * W + nx] < 0) { dist[ny * W + nx] = dd + 1; q.push(nx, ny); } });
     }
-    for (x = 0; x < W; x++) {
-      seg([x, H], [x + 1, H], x / 4, (x + 1) / 4, isWater(x, H - 1) ? -SINK : 0);          // south face
-      seg([x + 1, 0], [x, 0], x / 4, (x + 1) / 4, isWater(x, 0) ? -SINK : 0);                // north
+    function bottom(xx, yy) {
+      var d = Math.min(7, Math.max(0, dist[yy * W + xx]));
+      return -(0.9 + d * 0.8 + ((GT3.hash(xx, yy, seed + 7) % 100) / 100) * 0.6);
     }
-    for (y = 0; y < H; y++) {
-      seg([W, y + 1], [W, y], y / 4, (y + 1) / 4, isWater(W - 1, y) ? -SINK : 0);            // east
-      seg([0, y], [0, y + 1], y / 4, (y + 1) / 4, isWater(0, y) ? -SINK : 0);                // west
+    function topAt(xx, yy) { return ground[yy * W + xx] === 'water' ? -SINK : 0; }
+    var under = null;
+    function buildUnder() {
+      var P = GT3.pal(), up = [];
+      var bands = [[0, -0.2, P.grass[0]], [-0.2, -1.1, P.soil[1]], [-1.1, -2.6, '#7a7c8c'], [-2.6, -99, '#5e6072']];
+      function side(p0, p1, top, bot, flip) { // a vertical face from p0 to p1 (x, z), between heights top and bot, in bands
+        bands.forEach(function (b, bi) {
+          var t = Math.min(top, b[0]), u = Math.max(bot, b[1]);
+          if (t - u < 0.01) return;
+          var col = b[2];
+          if (bi >= 2 && GT3.hash(Math.round(p0[0] * 3), Math.round(p0[1] * 3), bi) % 3 === 0) col = bi === 2 ? '#8a8c9c' : '#6c6e80';
+          up.push({ geo: GT3.quad([p0[0], u, p0[1]], [p1[0], u, p1[1]], [p1[0], t, p1[1]], [p0[0], t, p0[1]]), color: col });
+        });
+      }
+      for (var yy = 0; yy < H; yy++) for (var xx = 0; xx < W; xx++) {
+        if (!solidAt(xx, yy)) continue;
+        var b0 = bottom(xx, yy), t0 = topAt(xx, yy);
+        up.push({ geo: GT3.quad([xx, b0, yy], [xx + 1, b0, yy], [xx + 1, b0, yy + 1], [xx, b0, yy + 1]), color: '#4e5062' });
+        [[1, 0, [xx + 1, yy + 1], [xx + 1, yy]], [-1, 0, [xx, yy], [xx, yy + 1]], [0, 1, [xx, yy + 1], [xx + 1, yy + 1]], [0, -1, [xx + 1, yy], [xx, yy]]].forEach(function (d) {
+          var nx = xx + d[0], ny = yy + d[1];
+          if (!solidAt(nx, ny)) side(d[2], d[3], t0, b0);                       // the cliff over the sky
+          else { var bn = bottom(nx, ny); if (bn > b0) side(d[2], d[3], bn, b0); } // a step in the rock underneath
+        });
+      }
+      var m = new THREE.Mesh(GT3.merge(up), GT3.mat({ vertexColors: true, side: THREE.DoubleSide }));
+      m.name = 'island-under'; m.castShadow = true; m.receiveShadow = true;
+      if (under) { group.remove(under); under.geometry.dispose(); under.material.dispose(); }
+      under = m; group.add(m);
     }
-    var skirt = new THREE.Mesh(GT3.merge(sk), GT3.mat({ map: stex, vertexColors: true }));
-    skirt.name = 'skirt';
-    group.add(skirt);
+    buildUnder();
+
+    /* --- waterfalls: wherever water reaches an island's edge it pours over into the sky */
+    var fcv = GT3.canvas(8, 32), fg = fcv.getContext('2d'), ftex = GT3.tex(fcv, true);
+    function paintFall() {
+      var P = GT3.pal().water, r = GT3.rng(5);
+      fg.clearRect(0, 0, 8, 32);
+      for (var yy = 0; yy < 32; yy++) for (var xx = 0; xx < 8; xx++) {
+        var k = r(); R(fg, xx, yy, 1, 1, k < 0.25 ? P[3] : k < 0.6 ? P[2] : P[1]);
+      }
+      ftex.needsUpdate = true;
+    }
+    paintFall();
+    var falls = [];
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+      if (ground[y * W + x] !== 'water') continue;
+      var fb = bottom(x, y) - 2.5;
+      if (!solidAt(x, y + 1)) falls.push({ geo: GT3.quad([x, fb, y + 1.04], [x + 1, fb, y + 1.04], [x + 1, -SINK, y + 1.04], [x, -SINK, y + 1.04], [0, 0, 1, 3]) });
+      if (!solidAt(x, y - 1)) falls.push({ geo: GT3.quad([x + 1, fb, y - 0.04], [x, fb, y - 0.04], [x, -SINK, y - 0.04], [x + 1, -SINK, y - 0.04], [0, 0, 1, 3]) });
+      if (!solidAt(x + 1, y)) falls.push({ geo: GT3.quad([x + 1.04, fb, y + 1], [x + 1.04, fb, y], [x + 1.04, -SINK, y], [x + 1.04, -SINK, y + 1], [0, 0, 1, 3]) });
+      if (!solidAt(x - 1, y)) falls.push({ geo: GT3.quad([x - 0.04, fb, y], [x - 0.04, fb, y + 1], [x - 0.04, -SINK, y + 1], [x - 0.04, -SINK, y], [0, 0, 1, 3]) });
+    }
+    var fall = null;
+    if (falls.length) {
+      fall = new THREE.Mesh(GT3.merge(falls), new THREE.MeshBasicMaterial({ map: ftex, vertexColors: true, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+      fall.name = 'waterfalls'; group.add(fall);
+    }
+
+    /* --- clouds drifting below the islands */
+    var clouds = new THREE.Group(), cr = GT3.rng(seed + 3), cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+    for (var c = 0; c < Math.round(W * H / 260); c++) {
+      var puff = new THREE.Group(), n = 3 + Math.floor(cr() * 4);
+      for (var pi = 0; pi < n; pi++) {
+        var bx = new THREE.Mesh(new THREE.BoxGeometry(1.6 + cr() * 2.4, 0.7 + cr() * 0.6, 1.4 + cr() * 2), cloudMat);
+        bx.position.set(pi * 1.3 + cr() * 0.6, cr() * 0.4, cr() * 1.2); puff.add(bx);
+      }
+      puff.position.set(cr() * (W + 20) - 10, -7 - cr() * 6, cr() * (H + 20) - 10);
+      puff.userData.v = 0.15 + cr() * 0.25; clouds.add(puff);
+    }
+    clouds.name = 'clouds'; group.add(clouds);
 
     return {
       group: group, canvas: cv, isWater: isWater, locked: locked, groundAt: gAt,
-      redraw: function () { paint(); gtex.needsUpdate = true; paintWater(); paintBank(); paintSkirt(); },
-      update: function (t) { if (water) wtex.offset.set((t * 0.035) % 1, (t * 0.02) % 1); }
+      redraw: function () { paint(); gtex.needsUpdate = true; paintWater(); paintBank(); paintFall(); buildUnder(); },
+      update: function (t) {
+        wtex.offset.set((t * 0.035) % 1, (t * 0.02) % 1);
+        ftex.offset.y = (t * 1.6) % 1;
+        clouds.children.forEach(function (p) { p.position.x += p.userData.v * 0.016; if (p.position.x > W + 14) p.position.x = -14; });
+      }
     };
   };
   GT3.SINK = SINK;

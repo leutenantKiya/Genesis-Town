@@ -7,7 +7,11 @@ test('every seed makes a valid village; the same seed always makes the same one'
   for (let seed = 1; seed <= 40; seed++) {
     const L = Village.generate(seed * 7919);
     const kinds = L.buildings.map((b) => b.kind);
-    for (const k of ['hall', 'church', 'clinic', 'post', 'broker', 'warung']) assert.ok(kinds.includes(k), `seed ${seed}: ${k}`);
+    for (const k of ['hall', 'post', 'broker', 'warung']) assert.ok(kinds.includes(k), `seed ${seed}: ${k}`);
+    for (const k of ['church', 'clinic']) assert.ok(!kinds.includes(k), `seed ${seed}: no ${k} (version 2: the square is for trade and fun)`);
+    const F = (L as any).fun;
+    assert.ok(F && F.fountain && F.stage && F.carousel && F.pond && F.benches.length >= 6, `seed ${seed}: fountain, stage, carousel, pond, benches`);
+    assert.equal(L.tiles[F.fountain.y * L.w + F.fountain.x], 'fountain');
     assert.equal(L.buildings.filter((b) => b.kind === 'house' && (b as { own?: boolean }).own).length, 1, 'one player house');
     assert.ok(L.chunks.find((c) => c.id === 'seberang' && !c.open), 'Dusun Seberang starts closed');
     assert.ok(!L.tiles.includes('bridge'), 'no bridge before the project');

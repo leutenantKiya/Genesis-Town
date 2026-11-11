@@ -21,7 +21,7 @@
 (function (root) {
   'use strict';
 
-  var CH = 32, NC = 3, W = CH * NC, H = CH * NC, VERSION = 1;
+  var CH = 32, NC = 3, W = CH * NC, H = CH * NC, VERSION = 2;
 
   /* ---------------------------------------------------------------- PRNG and noise (deterministic everywhere) */
   function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -60,7 +60,8 @@
   };
 
   // Tiles that block walking (must match the engine's SOLID set for the tiles this generator uses).
-  var SOLID = { tree: 1, fence: 1, sign: 1, mailbox: 1, rock: 1, water: 1, bush: 1, barrel: 1, crate: 1, stall: 1, lamp: 1 };
+  var SOLID = { tree: 1, fence: 1, sign: 1, mailbox: 1, rock: 1, water: 1, bush: 1, barrel: 1, crate: 1, stall: 1, lamp: 1,
+    fountain: 1, stage: 1, carousel: 1, table: 1, lily: 1 };
   var SOFT = { grass: 1, flower: 1, tallgrass: 1 }; // free ground that can be built on
 
   function chunkAt(x, y, rx1) {
@@ -108,9 +109,9 @@
     }
     function poly(pts) { for (var k = 1; k < pts.length; k++) line(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1], R.chance(0.5)); }
 
-    // plaza (7 x 6) in the core, west of the river
-    var px = R.int(41, 46), py = R.int(42, 47);
-    var plaza = { x0: px - 3, y0: py - 2, x1: px + 3, y1: py + 3 };
+    // the market square (17 x 12) in the core, west of the river, with a fountain in the middle (version 2)
+    var px = R.int(40, 43), py = R.int(42, 46);
+    var plaza = { x0: px - 8, y0: py - 6, x1: px + 8, y1: py + 5 };
     for (y = plaza.y0; y <= plaza.y1; y++) for (x = plaza.x0; x <= plaza.x1; x++) { tiles[I(x, y)] = 'plaza'; res[I(x, y)] = 1; }
     var ry = plaza.y1 + 1; // the main east-west road runs along the plaza's south side
     var bridgeY = ry;
@@ -184,11 +185,10 @@
     // landmarks, most important first
     var core = ['desa'];
     if (!place('hall', 'Balai Desa', 5, 4, core, near(px, py, 8))) return null;
-    if (!place('church', 'Gereja Desa', 5, 5, core.concat(['hutan']), function (x, y) { return near(px, py, 12)(x, y) - (y > py ? 6 : 0); })) return null;
     if (!place('broker', 'Kantor Makelar', 4, 3, core, near(px, py, 7))) return null;
     if (!place('post', 'Kantor Pos', 4, 3, core, near(px, py, 9))) return null;
-    if (!place('clinic', 'Puskesmas', 4, 3, core, near(px, py, 11))) return null;
-    if (!place('warung', 'Warung Kopi', 4, 3, core, near(px, ry, 6))) return null;
+    var warung = place('warung', 'Warung Kopi', 4, 3, core, near(px, ry, 6));
+    if (!warung) return null;
 
     // the player's house with the farm next to it, in Ladang Barat near the main road
     var own = place('house', null, 3, 3, ['ladang'], function (x, y) { return -Math.abs(x - 24) * 0.8 - Math.abs(y - ry) * 1.5; }, { own: true, style: R.int(0, 3) });
@@ -212,7 +212,7 @@
     (function () { var y = farm.gate.y + 1; while (inb(farm.gate.x, y) && get(farm.gate.x, y) !== 'path' && y < farm.gate.y + 8) { if (!free(farm.gate.x, y)) break; road(farm.gate.x, y); y++; } })();
 
     // houses: the core and the fields first, then the hamlet across the river and a hut in the forest
-    var housePlan = [['desa', 7], ['ladang', 4], ['seberang', 5], ['hutan', 1], ['padang', 2]];
+    var housePlan = [['desa', 4], ['ladang', 5], ['seberang', 5], ['hutan', 1], ['padang', 2]];
     housePlan.forEach(function (hp) {
       for (var n = 0; n < hp[1]; n++) {
         var anchor = hp[0] === 'desa' ? [px, py] : hp[0] === 'seberang' ? [78, ry] : hp[0] === 'ladang' ? [18, ry] : hp[0] === 'padang' ? [px, 72] : [px, 18];
@@ -220,14 +220,88 @@
       }
     });
 
-    // market stalls in the plaza: one row, merchants stand behind (north), customers in front
-    var stallColors = ['#e8503c', '#4a8ad8', '#e8a13c', '#58a858'], market = { stalls: [] };
-    [plaza.x0 + 1, plaza.x0 + 2, plaza.x0 + 4, plaza.x0 + 5].forEach(function (sx, k) {
+    // the merchants' stalls along the square's north side, two by two (merchants stand behind, customers in front); the
+    // gap between the pairs holds the Titip Jual stall and the Papan Juara board (landmarks); lapak stalls for players
+    // along the south side; the fountain in the middle with benches round it, a street lamp at each corner
+    var stallColors = ['#e8503c', '#4a8ad8', '#e8a13c', '#58a858'], market = { stalls: [], lapak: [] };
+    [plaza.x0 + 3, plaza.x0 + 5, plaza.x0 + 11, plaza.x0 + 13].forEach(function (sx, k) {
       tiles[I(sx, plaza.y0 + 1)] = 'stall';
       market.stalls.push({ x: sx, y: plaza.y0 + 1, seat: { x: sx, y: plaza.y0 }, color: stallColors[k] });
     });
-    tiles[I(plaza.x0, plaza.y1)] = 'crate'; tiles[I(plaza.x1, plaza.y1)] = 'barrel';
-    info[I(plaza.x0 + 3, plaza.y0)] = 'Pasar Genesis. Pedagang berjualan di sini setiap hari.';
+    ['#d86a9a', '#7a6ad8', '#3aa6a0', '#d8a83a'].forEach(function (c, k) {
+      var sx = [plaza.x0 + 3, plaza.x0 + 5, plaza.x0 + 11, plaza.x0 + 13][k];
+      tiles[I(sx, plaza.y1 - 1)] = 'stall';
+      market.lapak.push({ x: sx, y: plaza.y1 - 1, color: c });
+      info[I(sx, plaza.y1 - 1)] = 'Lapak pemain. Pasang daganganmu lewat Pasar.';
+    });
+    var fountain = { x: px, y: py };
+    for (y = py - 1; y <= py + 1; y++) for (x = px - 1; x <= px + 1; x++) tiles[I(x, y)] = 'fountain';
+    info[I(px, py + 1)] = 'Air mancur Pasar Genesis. Airnya jernih dan dingin.';
+    var benches = [];
+    [[px - 3, py], [px + 3, py], [px - 1, py + 3], [px + 1, py + 3], [px - 1, py - 3], [px + 1, py - 3]].forEach(function (b) { tiles[I(b[0], b[1])] = 'bench'; benches.push({ x: b[0], y: b[1] }); });
+    [[plaza.x0, plaza.y0], [plaza.x1, plaza.y0], [plaza.x0, plaza.y1], [plaza.x1, plaza.y1]].forEach(function (l) { tiles[I(l[0], l[1])] = 'lamp'; });
+    info[I(plaza.x0 + 8, plaza.y0)] = 'Pasar Genesis. Pedagang berjualan di sini setiap hari.';
+
+    /* --- the fun side of town (version 2): a stage with a concert every night, a carousel, a lily pond with a muddy bank
+       where the frogs sit, and a terrace in front of the warung. Each is a free patch of ground near the square. */
+    function area(w, h, chunks, scoreFn) {
+      var best = null;
+      for (var y0 = 3; y0 < H - h - 3; y0++) for (var x0 = 3; x0 < W - w - 3; x0++) {
+        var good = true;
+        for (var yy = y0 - 1; yy <= y0 + h && good; yy++) for (var xx = x0 - 1; xx <= x0 + w && good; xx++) {
+          if (!free(xx, yy) || chunks.indexOf(chunkAtR(xx, yy).id) < 0) good = false;
+        }
+        if (!good) continue;
+        var sc = scoreFn(x0 + w / 2, y0 + h / 2) + R.f();
+        if (!best || sc > best.sc) best = { x0: x0, y0: y0, x1: x0 + w - 1, y1: y0 + h - 1, sc: sc };
+      }
+      if (best) for (var y2 = best.y0; y2 <= best.y1; y2++) for (var x2 = best.x0; x2 <= best.x1; x2++) res[I(x2, y2)] = 1;
+      return best;
+    }
+    function linkToRoad(x, y) { // a short path from (x, y) down to the nearest road or square
+      for (var k = 0; k < 12; k++) { var t = get(x, y + k); if (t === 'path' || t === 'plaza') return; if (!inb(x, y + k) || SOLID[t]) return; road(x, y + k); }
+    }
+    var fun = core.concat(['ladang', 'hutan']);
+    // stage: a 7 x 2 platform with room for an audience of 7 x 4 in front, two rows of benches
+    var stage = area(7, 6, fun, near(px, ry + 2, 9));
+    if (!stage) return null;
+    for (y = stage.y0; y <= stage.y1; y++) for (x = stage.x0; x <= stage.x1; x++) tiles[I(x, y)] = y < stage.y0 + 2 ? 'stage' : 'plaza';
+    [stage.x0 + 1, stage.x0 + 3, stage.x0 + 5].forEach(function (bx) { tiles[I(bx, stage.y0 + 4)] = 'bench'; benches.push({ x: bx, y: stage.y0 + 4 }); });
+    info[I(stage.x0 + 3, stage.y0 + 2)] = 'Panggung Genesis. Konser tiap malam, dari jam 19.00.';
+    linkToRoad(stage.x0 + 3, stage.y1 + 1);
+    // carousel: a round ride on a 3 x 3 base, with a paved ring to stand round it
+    var carousel = area(5, 5, fun, near(px + 10, ry + 3, 4));
+    if (!carousel) return null;
+    for (y = carousel.y0; y <= carousel.y1; y++) for (x = carousel.x0; x <= carousel.x1; x++) {
+      var inner = x > carousel.x0 && x < carousel.x1 && y > carousel.y0 && y < carousel.y1;
+      tiles[I(x, y)] = inner ? 'carousel' : 'plaza';
+    }
+    carousel = { x: carousel.x0 + 2, y: carousel.y0 + 2, x0: carousel.x0, y0: carousel.y0, x1: carousel.x1, y1: carousel.y1 };
+    info[I(carousel.x, carousel.y1)] = 'Komedi putar. Kudanya berputar pelan, siang dan malam.';
+    linkToRoad(carousel.x, carousel.y1 + 1);
+    // the frog pond: an oval of water with lily pads, a muddy bank on its south and west edges, reeds round it
+    var pond = area(8, 6, fun, near(px - 14, py + 2, 4));
+    if (!pond) return null;
+    var pcx = (pond.x0 + pond.x1) / 2, pcy = (pond.y0 + pond.y1) / 2, prw = 3.4, prh = 2.3;
+    for (y = pond.y0; y <= pond.y1; y++) for (x = pond.x0; x <= pond.x1; x++) {
+      var pd = (x - pcx) * (x - pcx) / (prw * prw) + (y - pcy) * (y - pcy) / (prh * prh);
+      if (pd <= 1) tiles[I(x, y)] = hash3(x, y, ns + 61) < 0.22 ? 'lily' : 'water';
+      else if (pd <= 1.9 && (y > pcy || x < pcx)) tiles[I(x, y)] = 'mud';
+      else if (pd <= 2.3) tiles[I(x, y)] = 'tallgrass';
+    }
+    pond = { x0: pond.x0, y0: pond.y0, x1: pond.x1, y1: pond.y1 };
+    info[I(Math.round(pcx), pond.y1)] = 'Kolam teratai. Katak-katak suka duduk di lumpurnya.';
+    linkToRoad(Math.round(pcx), pond.y1 + 1);
+    // the warung terrace: two tables with a bench each on the free ground beside its door
+    var terrace = [];
+    [[-2, 1], [2, 1], [-2, 3], [2, 3]].forEach(function (o) {
+      if (terrace.length >= 2) return;
+      var tx = warung.dx + o[0], ty = warung.dy + o[1];
+      if (!free(tx, ty) || !free(tx, ty + 1)) return;
+      tiles[I(tx, ty)] = 'table'; tiles[I(tx, ty + 1)] = 'bench'; res[I(tx, ty)] = 1; res[I(tx, ty + 1)] = 1;
+      info[I(tx, ty)] = 'Meja teras Warung Kopi. Duduk santai sambil ngopi.';
+      terrace.push({ x: tx, y: ty }); benches.push({ x: tx, y: ty + 1 });
+    });
 
     /* --- nature */
     var mine = null;
@@ -321,6 +395,7 @@
     for (var k = 0; k < buildings.length; k++) { var b = buildings[k]; if (isOpen(b.dx, b.dy) && !ok(b.dx, b.dy + 1)) return null; }
     for (k = 0; k < market.stalls.length; k++) if (!ok(market.stalls[k].x, market.stalls[k].y + 1) || !ok(market.stalls[k].seat.x, market.stalls[k].seat.y)) return null;
     if (!ok(farm.gate.x, farm.gate.y)) return null;
+    if (!ok(stage.x0 + 3, stage.y0 + 2) || !ok(carousel.x, carousel.y1) || !ok(Math.round(pcx), pond.y1)) return null;
     // enough reachable gathering spots of each kind
     var spots = { water: 0, rock: 0, tree: 0 };
     for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
@@ -341,7 +416,8 @@
       version: VERSION, seed: seed, attempt: att, w: W, h: H, chunk: CH, riverX1: rx1,
       tiles: tiles, info: info, buildings: buildings, market: market,
       farm: { plots: farm.plots, gate: farm.gate, x0: farm.x0, y0: farm.y0, x1: farm.x1, y1: farm.y1 },
-      plaza: plaza, mine: mine, spawn: spawn, river: { y: bridgeY, x0: river[bridgeY].x0, x1: river[bridgeY].x1 },
+      plaza: plaza, mine: mine, spawn: spawn,
+      fun: { fountain: fountain, stage: stage, carousel: carousel, pond: pond, benches: benches, terrace: terrace }, river: { y: bridgeY, x0: river[bridgeY].x0, x1: river[bridgeY].x1 },
       chunks: CHUNKS.map(function (c) { return { id: c.id, name: c.name, cx: c.cx, cy: c.cy, biome: c.biome, open: c.open || unlocked.indexOf(c.id) >= 0, project: c.project || null }; }),
       projects: PROJECTS, spots: spots
     };

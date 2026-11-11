@@ -441,10 +441,29 @@
     return !!(window.GTHomeland && L.lots && GTHomeland.wild(L, x, y));
   }
   function wander(m, t) { var h = 0; for (var i = 0; i < m.id.length; i++) h = (h * 31 + m.id.charCodeAt(i)) | 0; return { dx: Math.sin(t * 0.7 + h) * 0.45, dy: Math.cos(t * 0.5 + h * 1.3) * 0.35 }; }
+  /** Where each monster stands this frame (wandering, the one in a fight lunging at the player): the 2.5D view draws
+      these as models (GT_CHAIN.monsters, three/monsters.js) and this file then draws nothing for them. */
+  function monstersNow() {
+    var sc = GT.scene, out = [];
+    if (!sc || sc.kind !== 'out') return out;
+    var t = performance.now() / 1000, e = S.st && S.st.encounter;
+    roamers().forEach(function (m) {
+      if (e && e.id === m.id) return;
+      var w = wander(m, t);
+      out.push({ id: m.id, kind: m.kind, x: m.x + w.dx, y: m.y + w.dy, fx: GT.player.x - m.x, fy: GT.player.y - m.y });
+    });
+    if (e) {
+      var lx = 0, ly = 0, lk = (performance.now() - fightLunge) / 260;
+      if (lk >= 0 && lk < 1) { var reach = Math.sin(lk * Math.PI) * 0.5, dxp = GT.player.x - e.x, dyp = GT.player.y - e.y, dl = Math.max(1, Math.abs(dxp) + Math.abs(dyp)); lx = dxp / dl * reach; ly = dyp / dl * reach; }
+      out.push({ id: e.id || 'fight', kind: e.kind, x: e.x + lx, y: e.y + ly, fx: GT.player.x - e.x, fy: GT.player.y - e.y, fight: true });
+    }
+    return out;
+  }
   function onDraw(ctx, camX, camY, T) {
     var sc = GT.scene;
     if (!sc || sc.kind !== 'out') return;
     var t = performance.now() / 1000, e = S.st && S.st.encounter;
+    if (GT.view3dOn && GT.view3dOn()) { drawWeather(ctx, T, t); return; } // the 2.5D view draws the monsters in 3D
     roamers().forEach(function (m) {
       if (e && e.id === m.id) return;
       var w = wander(m, t);
@@ -1487,6 +1506,6 @@
     return true;
   }
 
-  window.GT_CHAIN = { state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, _signedCall: signedCall };
+  window.GT_CHAIN = { monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame, onKey: onKey });
 })();

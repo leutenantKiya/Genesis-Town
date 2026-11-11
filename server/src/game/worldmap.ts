@@ -19,7 +19,8 @@ export interface Layout {
 export interface Pos { x: number; y: number }
 
 // Tiles nobody stands on (as in the generator; street lamps are added by the client and are not known here).
-const SOLID = new Set(['tree', 'fence', 'sign', 'mailbox', 'rock', 'water', 'bush', 'barrel', 'crate', 'stall', 'lamp']);
+// void: the sky between Homeland islands; fountain, stage, carousel, table, lily: the public square's fun side (village v2)
+const SOLID = new Set(['tree', 'fence', 'sign', 'mailbox', 'rock', 'water', 'bush', 'barrel', 'crate', 'stall', 'lamp', 'void', 'fountain', 'stage', 'carousel', 'table', 'lily']);
 // Walking speed: one tile per 0.15 s in the client (MOVE_T), so at most ~6.7 tiles per second.
 const TILES_PER_SEC = 8, SLACK = 6;
 const dist = (a: Pos, b: Pos) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);

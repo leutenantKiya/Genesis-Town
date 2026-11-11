@@ -88,12 +88,21 @@ Islands; Homelands are off-chain, not NFTs, and cannot be sold.
 | People | everyone, live | the owner and invited guests, live |
 | World id | `public` | `HL-<n>` (one per player, a counter assigned at the first Homeland request) |
 
+### Islands (generator 3, 2026-11-11)
+
+Each chunk is a floating island. The eight outer chunks keep a two-tile ring of `void` (sky, solid for walking) with
+rounded, ragged corners; the centre keeps its square but loses its free corners (never its trees, rocks, paths, fence,
+lots or buildings). Where two orthogonal chunks meet, the gap is crossed on the cross path (local rows or columns 7 and
+8) by `bridge` tiles, laid only when both chunks are open; the layout check counts every possible bridge as walkable, so
+every lot is reachable once everything is open. The 3D view hangs a stepped block of earth and stone under every bit of
+land (deepest furthest from an edge), pours water over edges as waterfalls and floats clouds below.
+
 ### Generator
 
 `homeland.js` makes one 3 x 3 chunk map (16 x 16 tiles each, 48 x 48 in all) from the player's seed (stored with the
 Homeland row, with a `gen` version so later generator changes do not move existing worlds). The Town Hall stands in the
 middle chunk with a farm plot, a few trees and rocks, and the portal. Each of the eight outer chunks gets a biome
-(forest, rock, pond or shore); every seed has a forest and water next to the centre. Building lots are fixed per chunk. Generator version 2 (`GTHomeland.VERSION`) adds one `rumah` lot in every chunk (including the centre) and a `rumahsakit` lot in the centre; existing rows keep working. Generator 3 (new Homelands from 2026-11-11, `prog.gen`) adds the player's own house (`kind: 'house', own: true`, 3 x 3) west of the Town Hall, where the centre `rumah` lot was; that lot moves four rows down, its door opening through a gap in the farm's top fence. The row's `gen` goes into `generate`, so gen 2 worlds stay as they were.
+(forest, rock, pond or shore); every seed has a forest and water next to the centre. Building lots are fixed per chunk. Generator version 2 (`GTHomeland.VERSION`) adds one `rumah` lot in every chunk (including the centre) and a `rumahsakit` lot in the centre; existing rows keep working. Generator 3 (new Homelands from 2026-11-11, `prog.gen`) adds the player's own house (`kind: 'house', own: true`, 3 x 3) west of the Town Hall, where the centre `rumah` lot was; that lot moves four rows down, its door opening through a gap in the farm's top fence. Worlds made before (gen 2) were given the house as well (owner's choice, 2026-11-11); a built centre Rumah Pekerja moves with its lot.
 The browser and the server run the same file, so the server checks positions and gather tiles (`HomelandMap` in
 `worldmap.ts`). Locked chunks are drawn under fog.
 
@@ -216,3 +225,16 @@ plus a 5-digit tag, unique as `name#tag`. Nothing of this is stored on chain.
   Her fee is 5%. Withdraw returns the unsold units.
 - **Papan Juara.** A board on the plaza ranks the top 10 sellers by items sold, for today or all time, and shows your own
   rank. Counted: sales to merchants, consignment sales and items given in a direct trade that paid you coin.
+
+## The public square (village generator 2, 2026-11-11)
+
+`village.js` VERSION 2 rebuilds the core around a 17 x 12 market square (`L.plaza`) with a 3 x 3 `fountain` in the
+middle (`L.fun.fountain`). The merchants' stalls stand two by two along the north side (seats behind them), so the
+Titip Jual stall and the Papan Juara board (`landmarks`) sit in the gap and east of the last stall; four players' lapak
+stalls (`L.market.lapak`, decor) line the south side. `bench` tiles (walkable: a character standing still on one sits)
+ring the fountain; lamps mark the corners. The church and the Puskesmas are no longer placed. Near the square, on free
+ground in the core, the fields or the forest: a 7 x 2 `stage` with a 7 x 4 audience area and benches (`L.fun.stage`), a
+`carousel` on a 3 x 3 base (`L.fun.carousel`), a lily pond (`water`, `lily`, a `mud` bank, reeds; `L.fun.pond`) and two
+terrace tables with benches in front of the warung (`L.fun.terrace`). `fountain`, `stage`, `carousel`, `table` and
+`lily` are solid on the server and in the client. The concert (19:00 to 01:00) is client-only: `mods/concert.js` plays
+the music, `three/fun.js` draws the band and the lights.

@@ -81,6 +81,10 @@
 <script src="js/three/sky.js"></script>
 <script src="js/three/rig.js"></script>
 <script src="js/three/seethrough.js"></script>
+<script src="js/three/fun.js"></script>
+<script src="js/three/life.js"></script>
+<script src="js/three/monsters.js"></script>
+<script src="js/three/room.js"></script>
 <script src="js/three/world.js"></script>
 <script>
 (function () {
@@ -178,7 +182,7 @@
     sky.set(state.hour, state.season); sky.follow(px, pz);
     world.update(now / 1000, state.hour, sky.night);
     see.update(px, pz, dt, camera);
-    player.face(camera); npcs.forEach(function (n) { n.face(camera); });
+    player.face(camera); npcs.forEach(function (n) { n.face(camera); }); if (world.face) world.face(camera);
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }

@@ -31,7 +31,7 @@ var WT = 60, HT = 60, BS = 6, NB = 10;
 var DIRS = {up:[0,-1], down:[0,1], left:[-1,0], right:[1,0]};
 var OPP = {up:'down', down:'up', left:'right', right:'left'};
 var DIRLIST = ['up','down','left','right'];
-var SOLID = new Set(['tree','fence','sign','mailbox','rock','water','wall','bed','table','tv','plant','counter','fridge','bookshelf','shelf','chair','card_table','slot','chest','dice_table','lamp','bush','barrel','crate','stall']);
+var SOLID = new Set(['void','fountain','stage','carousel','lily','tree','fence','sign','mailbox','rock','water','wall','bed','table','tv','plant','counter','fridge','bookshelf','shelf','chair','card_table','slot','chest','dice_table','lamp','bush','barrel','crate','stall']);
 var ANIMATED = {water:1, flower:1};
 var MOVE_T = 0.15, NPC_T = 0.26, NPC_FAST = 0.18, TURN_T = 0.09, CPS = 48;
 var REDUCE = false;
@@ -139,6 +139,11 @@ function fbLamp(g, x, y){   // simple stand-in street lamp when sprites.js has n
 }
 function drawChar(g, x, y, pal, dir, step){
   if (SPRITES.charShadow && scene && scene.kind === 'out') SPRITES.charShadow(g, x, y);
+  // sitting: standing still on a bench (the public square, village v2) sets the sprite down on the seat, facing out
+  if (!step && scene && scene.kind === 'out'){
+    var m = scene.map, tx = Math.round((x + camX) / T), ty = Math.round((y + camY) / T);
+    if (inb(m, tx, ty) && m.tiles[ty*m.w + tx] === 'bench'){ y += 3; dir = 'down'; }
+  }
   try { SPRITES.drawCharacter(g, x, y, pal, dir, step); }
   catch(e){ SPRITES.drawCharacter(g, x, y, (pal | 0) % 6, dir, step); }
 }
@@ -1669,7 +1674,7 @@ function setMap(on){
   elMap.classList.toggle('on', mapOpen);
   if (mapOpen) drawMinimap();
 }
-var MM_COL = { grass:'#5fae36', flower:'#5fae36', tallgrass:'#56a232', path:'#d0903c', plaza:'#c6bba4', stall:'#e8a13c', water:'#2a8cc0', bridge:'#8e5a30',
+var MM_COL = { fountain:'#64c4e2', stage:'#b07840', carousel:'#e8503c', lily:'#2a8cc0', mud:'#6a4a2c', bench:'#c6bba4', void:'#9fd0f0', grass:'#5fae36', flower:'#5fae36', tallgrass:'#56a232', path:'#d0903c', plaza:'#c6bba4', stall:'#e8a13c', water:'#2a8cc0', bridge:'#8e5a30',
   tree:'#2e6a34', bush:'#3f8a2e', rock:'#8a8478', sand:'#e8bf72', soil:'#6a4024', fence:'#8a6038' };
 // the minimap takes its ground, water and tree colours from the current season ramps (art.js PAL)
 function syncMinimapColours(){

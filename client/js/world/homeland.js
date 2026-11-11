@@ -21,7 +21,7 @@
   var VERSION = 3, CH = 16, N = 3, W = CH * N, H = CH * N;
   var CHUNKS = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
   var ORTHO = ['n', 'w', 'e', 's'];
-  var SOLID = { tree: 1, fence: 1, sign: 1, mailbox: 1, rock: 1, water: 1, bush: 1, barrel: 1, crate: 1, stall: 1, lamp: 1 };
+  var SOLID = { tree: 1, fence: 1, sign: 1, mailbox: 1, rock: 1, water: 1, bush: 1, barrel: 1, crate: 1, stall: 1, lamp: 1, void: 1 };
   var NAMES = { forest: 'Hutan', rock: 'Bukit Batu', pond: 'Kolam', sea: 'Pantai', meadow: 'Padang' };
   var KIND_NAMES = { kolam: 'Kolam Ikan', tambang: 'Tambang', restoran: 'Restoran', rumah: 'Rumah Pekerja', rumahsakit: 'Rumah Sakit' };
   var MAX_PLOTS = 6;
@@ -74,6 +74,7 @@
     // a pond or sea next to the centre, never the forest one
     if (!ORTHO.some(isWater)) {
       cand = ORTHO.filter(function (id) { return b[id] !== 'forest'; });
+      if (!cand.length) cand = ORTHO.filter(function (id) { return id !== ORTHO.filter(function (o) { return b[o] === 'forest'; })[0]; }); // all four forest: keep one
       b[cand[R.int(0, cand.length - 1)]] = R.int(0, 1) ? 'pond' : 'sea';
     }
     // a rock chunk somewhere: a corner if none exists
@@ -108,9 +109,10 @@
     addLot('kolam', 'c', 11, 2);
     addLot('restoran', 'c', 11, 6);
     addLot('rumahsakit', 'c', 11, 10);
-    // generator 3 (new players): the player's own house stands where the centre's Rumah Pekerja lot was, and that lot moves
-    // down between the house and the farm, its door opening onto the field. Older worlds (gen 2) keep their layout.
-    var hasHouse = (prog.gen || VERSION) >= 3;
+    // the player's own house stands where the centre's Rumah Pekerja lot was, and that lot moves down between the house
+    // and the farm, its door opening onto the field. Every world has it (generator 3; older worlds were upgraded too,
+    // and a built centre Rumah Pekerja moves with its lot).
+    var hasHouse = true;
     addLot('rumah', 'c', 1, hasHouse ? 6 : 2);
     if (rockId) addLot('tambang', rockId, 2, 2);
     // one Rumah Pekerja per outer chunk, beside the chunk's cross path (lot x 10..12, door row 12)
@@ -192,6 +194,36 @@
       var hh = hash3(x, y, ns + 17);
       if (hh < 0.12) tiles[k2] = 'tree'; else if (hh < 0.16) tiles[k2] = 'rock'; else if (hh < 0.23) tiles[k2] = 'flower'; else if (hh < 0.3) tiles[k2] = 'tallgrass';
     }
+    // Islands: every chunk floats on its own. The eight outer ones keep a two-tile gap of open sky ('void') all round, with
+    // rounded, ragged corners; the centre keeps its whole square but loses its free corners. Plank bridges cross a gap
+    // on the cross path (rows or columns 7 and 8) once the chunks on both sides are open, so opening a chunk is what
+    // lays its bridge. Lots, buildings, paths and fences are never carved away.
+    var isOpen = {}; ['c'].concat(prog.open || []).forEach(function (id) { isOpen[id] = 1; });
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+      var lx3 = x % CH, ly3 = y % CH, cid3 = chunkId(x, y), k3 = I(x, y), t3 = tiles[k3];
+      var ex = Math.min(lx3, CH - 1 - lx3), ey = Math.min(ly3, CH - 1 - ly3), keep = res[k3] || t3 === 'path' || t3 === 'fence' || t3 === 'soil';
+      var vd;
+      // (the centre's trees and rocks stay: they are what a new player gathers first)
+      if (cid3 === 'c') vd = !keep && t3 !== 'tree' && t3 !== 'rock' && ex < 3 && ey < 3 && (3 - ex) * (3 - ex) + (3 - ey) * (3 - ey) > 5;
+      else vd = ex < 2 || ey < 2 || (!keep && ((ex < 5 && ey < 5 && (5 - ex) * (5 - ex) + (5 - ey) * (5 - ey) > 10) || (Math.min(ex, ey) === 2 && hash3(x, y, ns + 41) < 0.3)));
+      if (vd) tiles[k3] = 'void';
+    }
+    var bridgeAt = new Uint8Array(W * H); // every place a bridge can be, open or not (for the reachability check)
+    function bridgeBetween(a, b) {
+      var ia = CHUNKS.indexOf(a), ib = CHUNKS.indexOf(b), ax = (ia % N) * CH, ay = Math.floor(ia / N) * CH, bx = (ib % N) * CH, by = Math.floor(ib / N) * CH;
+      var horiz = ay === by, x0 = Math.min(ax, bx), y0 = Math.min(ay, by);
+      for (var j = CH - 4; j < CH + 4; j++) for (var q = 7; q <= 8; q++) { // only across the gap at the shared edge
+        var gx = horiz ? x0 + j : x0 + q, gy = horiz ? y0 + q : y0 + j;
+        if (tiles[I(gx, gy)] !== 'void') continue;
+        bridgeAt[I(gx, gy)] = 1;
+        if (isOpen[a] && isOpen[b]) tiles[I(gx, gy)] = 'bridge';
+      }
+    }
+    for (var cy3 = 0; cy3 < N; cy3++) for (var cx3 = 0; cx3 < N; cx3++) {
+      if (cx3 < N - 1) bridgeBetween(CHUNKS[cy3 * N + cx3], CHUNKS[cy3 * N + cx3 + 1]);
+      if (cy3 < N - 1) bridgeBetween(CHUNKS[cy3 * N + cx3], CHUNKS[(cy3 + 1) * N + cx3]);
+    }
+
     // keep the spawn and portal tiles clear and mark them
     tiles[I(spawn.x, spawn.y)] = 'path';
     tiles[I(portal.x, portal.y)] = 'path';
@@ -225,7 +257,7 @@
     for (i = 0; i < lots.length; i++) if (lots[i].chunk === 'c' && !ok(lots[i].door.x, lots[i].door.y)) return null;
     // with every chunk open, every lot door is reachable from the spawn (outer lots through the cross paths)
     var walkAll = new Uint8Array(W * H);
-    for (i = 0; i < W * H; i++) walkAll[i] = SOLID[tiles[i]] ? 0 : 1;
+    for (i = 0; i < W * H; i++) walkAll[i] = SOLID[tiles[i]] && !bridgeAt[i] ? 0 : 1;
     for (y = ty; y < ty + 4; y++) for (x = tx; x < tx + 4; x++) walkAll[I(x, y)] = 0;
     lots.forEach(function (l) { for (var yy = l.y; yy < l.y + 3; yy++) for (var xx = l.x; xx < l.x + 3; xx++) walkAll[I(xx, yy)] = 0; });
     var seenAll = bfs(walkAll, spawn.x, spawn.y);
@@ -261,7 +293,7 @@
     seed = seed >>> 0;
     prog = prog || {};
     var th = Math.max(1, (prog.th | 0) || 1);
-    for (var att = 0; att < 80; att++) {
+    for (var att = 0; att < 400; att++) {
       if (!tryGen(seed, att, MAX_PLOTS, { open: [], built: [], gen: prog.gen })) continue;
       return tryGen(seed, att, th, prog);
     }

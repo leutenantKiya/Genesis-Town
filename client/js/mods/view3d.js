@@ -20,7 +20,7 @@
   var LS = 'gt.view', T = 12, STEP = Math.PI / 4;
   var DV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var KIT = ['vendor/three.js', 'js/three/kit.js', 'js/three/ground.js', 'js/three/building.js', 'js/three/nature.js', 'js/three/props.js',
-    'js/three/actor.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/world.js', 'js/three/room.js'];
+    'js/three/actor.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/fun.js', 'js/three/life.js', 'js/three/world.js', 'js/three/room.js', 'js/three/monsters.js'];
   var mode = saved() || (phone() ? '2d' : '3d');
   var loading = null, ok = false, failed = false;
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
@@ -379,6 +379,21 @@
     lamp.intensity = 0;
   }
 
+  /* ---------------------------------------------------------------- night monsters: chain.js says where (the server's
+     list, wandering), here each is a model (three/monsters.js) that faces the player and trots or flaps */
+  var beasts = new Map();
+  function updateMonsters(now) {
+    var list = (window.GT_CHAIN && GT_CHAIN.monsters && !cur) ? GT_CHAIN.monsters() : [], seen = {}, t = now / 1000;
+    list.forEach(function (m) {
+      var b = beasts.get(m.id);
+      if (b && b.kind !== m.kind) { b.dispose(); b = null; }
+      if (!b) { b = GT3.Monster(m.kind); scene.add(b.group); beasts.set(m.id, b); }
+      b.set(m.x + 0.5, m.y + 0.5, t + (m.x * 7 + m.y * 3), Math.atan2(m.fx, m.fy));
+      seen[m.id] = 1;
+    });
+    beasts.forEach(function (b, id) { if (!seen[id]) { b.dispose(); beasts.delete(id); } });
+  }
+
   var drop = null;
   function updateDrop(now) {
     var a = actors.get('me');
@@ -425,7 +440,12 @@
         if (a && a.pal !== e.pal) { a.actor.dispose(); a = null; }
         if (!a) { a = { actor: GT3.Actor(e.pal | 0), pal: e.pal }; scene.add(a.actor.group); actors.set(key, a); }
         var x = mx(e.px / T + 0.5), z = mz(e.py / T + 0.5);
-        a.actor.set(x, z, screenDir(e.dir || 'down'), e.step | 0); a.outdoor = !o.house;
+        // sitting: standing still on a bench (village v2) lowers the sprite onto the seat, facing out
+        var tm = o.house ? o.map : (o.out || o.map), tx = Math.floor(e.px / T + 0.5), ty = Math.floor(e.py / T + 0.5);
+        var sit = !(e.step | 0) && tm.tiles && tm.tiles[ty * tm.w + tx] === 'bench';
+        a.actor.set(x, z, sit ? screenDir('down') : screenDir(e.dir || 'down'), e.step | 0); a.outdoor = !o.house;
+        if (!(e.me && drop)) { if (sit) a.actor.pose(-0.14, 0, 0.84); else if (a.sat) a.actor.pose(0, 0, 1); }
+        a.sat = sit;
         a.actor.group.visible = !e.hidden; // the character screen's throw is drawing the player until it lands
         seen.add(key);
         if (e.me) { pt.x = x; pt.y = z; }
@@ -441,7 +461,9 @@
       unfolding = updateUnfold(o, dtU);
       if (!unfolding) see.update(pt.x, pt.y, dt, camera); // the building being walked into is the unfold's to fade
       actors.forEach(function (a) { a.actor.face(camera); });
+      if (world.face) world.face(camera);
       updateDrop(now);
+      updateMonsters(now);
       updateSwings(dt);
       renderer.render(scene, camera);
       return toScreen(pt.x, pt.y, 0);

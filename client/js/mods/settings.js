@@ -265,6 +265,12 @@
     cb.addEventListener('change', function () { st.reducedMotion = cb.checked; save(); applyLayout(); });
     rm.appendChild(cb); rm.appendChild($('span', null, 'Kurangi animasi'));
     wrap.appendChild(rm);
+    if (window.GT_CONCERT) { // the night concert on the square's stage (mods/concert.js)
+      var mu = $('label', 'dchk'), mc = $('input'); mc.type = 'checkbox'; mc.checked = GT_CONCERT.on();
+      mc.addEventListener('change', function () { GT_CONCERT.setOn(mc.checked); });
+      mu.appendChild(mc); mu.appendChild($('span', null, 'Musik konser (malam, di panggung alun-alun)'));
+      wrap.appendChild(mu);
+    }
     var keys = $('div');
     var h = $('h3', null, 'Tombol'); keys.appendChild(h);
     keys.appendChild($('p', 'mnote', 'Klik sebuah kotak lalu tekan tombol baru. Esc membatalkan. Tombol yang sudah dipakai aksi lain akan dipindahkan.'));

@@ -113,6 +113,15 @@
     } else if (type === 'water') {
       p = PAL.water; R(g, 0, 0, TILE, TILE, p[1]);
       for (i = 0; i < 5; i++) R(g, Math.floor(r() * 12), Math.floor(r() * 12), 2, 1, '#2580b4');
+    } else if (type === 'mud') {
+      // the frog pond's bank: wet brown earth with puddles that catch the sky
+      R(g, 0, 0, TILE, TILE, '#6a4a2c');
+      for (i = 0; i < 12; i++) R(g, Math.floor(r() * 12), Math.floor(r() * 12), 1, 1, r() < 0.5 ? '#5a3c22' : '#7e5a36');
+      x = 2 + Math.floor(r() * 5); y = 3 + Math.floor(r() * 5); R(g, x, y, 4, 2, '#4a3420'); R(g, x + 1, y, 2, 1, PAL.water[2]);
+    } else if (type === 'void') {
+      // the sky between Homeland islands, with a wisp of cloud far below
+      R(g, 0, 0, TILE, TILE, '#9fd0f0');
+      if (v === 1 || v === 3) { x = Math.floor(r() * 6); y = 3 + Math.floor(r() * 6); R(g, x, y, 5, 2, '#e8f4fc'); R(g, x + 1, y - 1, 3, 1, '#f4faff'); }
     }
     return c;
   }
@@ -122,7 +131,7 @@
     var c = groundCache[key] || (groundCache[key] = buildGround(type, v & 3));
     g.drawImage(c, x, y);
   };
-  S.GROUND_TYPES = { grass: 1, path: 1, sand: 1, plaza: 1, soil: 1, water: 1 };
+  S.GROUND_TYPES = { grass: 1, path: 1, sand: 1, plaza: 1, soil: 1, water: 1, void: 1, mud: 1 };
 
   /** Which ground a tile sits on (props drawn over grass, counters over plaza...). */
   S.groundOf = function (t) {
@@ -137,6 +146,11 @@
   // nb = {n,e,s,w}: true where that neighbour is grass (for lips) / not water (for banks).
   S.drawEdges = function (g, type, x, y, nb, v) {
     var r = rng(hash(x, y, 913)), p = PAL.grass, i, k;
+    if (type === 'void') {
+      // the island's cliff seen from the south: earth and stone hanging below the land above
+      if (nb.n) { R(g, x, y, TILE, 2, PAL.soil[1]); R(g, x, y + 2, TILE, 3, '#7a7c8c'); R(g, x, y + 5, TILE, 1, '#5e6072'); for (k = 1; k < TILE; k += 4) R(g, x + k, y + 6, 2, 1, '#5e6072'); }
+      return;
+    }
     if (type === 'water') {
       var w = PAL.water;
       if (nb.n) { R(g, x, y, TILE, 2, w[0]); R(g, x, y + 2, TILE, 1, '#1f6fa0'); }
@@ -320,7 +334,19 @@
     '.k........k.'] };
   T.plaza = { pal: { p: PAL.plaza[1] }, rows: ['pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp'] };
   T.soil = { pal: { p: PAL.soil[1] }, rows: ['pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp', 'pppppppppppp'] };
-  S._tileTypes.push('bush', 'barrel', 'crate', 'stall', 'plaza', 'soil');
+  // the public square's fun side (village v2): the 3D view builds these as models; the 2D view draws these tiles
+  T.bench = { under: 'plaza', pal: { k: '#3a2418', w: '#b07840', l: '#d49c5c', d: '#7a4a28' }, rows: [
+    '............', '............', '............', '.kkkkkkkkkk.', '.kllllllllk.', '.kwwwwwwwwk.', '.kkkkkkkkkk.', '.kddddddddk.',
+    '..k......k..', '..k......k..', '..k......k..', '............'] };
+  T.lily = { under: 'water', pal: { k: '#2a6a3a', g: '#48a046', l: '#86c85a', p: '#f2a8c0', w: '#fff0f4' }, rows: [
+    '............', '............', '...kkkk.....', '..kgglgk....', '.kgggllgk...', '.kgggpwgk...', '.kgg.ggkk...', '..kgggk.....', '...kkk..kk..', '........kgk.', '.........k..', '............'] };
+  T.fountain = { under: 'plaza', pal: { k: '#4a4c5c', s: '#a8aab8', h: '#d4d6e0', w: '#2a8cc0', l: '#64c4e2', f: '#e4f6f2' }, rows: [
+    'kkkkkkkkkkkk', 'khhhhhhhhhhk', 'kswwwwwwwwsk', 'kswllwwwlwsk', 'kswwwwfwwwsk', 'kswwwfffwwsk', 'kswwwwfwwwsk', 'kswlwwwwllsk', 'kswwwwwwwwsk', 'kssssssssssk', 'kkkkkkkkkkkk', '............'] };
+  T.stage = { under: 'plaza', pal: { k: '#3a2418', b: '#8e5a30', l: '#b07840', h: '#d49c5c' }, rows: [
+    'hhhhhhhhhhhh', 'llllllllllll', 'bbbbbbbbbbbb', 'kkkkkkkkkkkk', 'hhhhhhhhhhhh', 'llllllllllll', 'bbbbbbbbbbbb', 'kkkkkkkkkkkk', 'hhhhhhhhhhhh', 'llllllllllll', 'bbbbbbbbbbbb', 'kkkkkkkkkkkk'] };
+  T.carousel = { under: 'plaza', pal: { k: '#2a2430', r: '#e8503c', w: '#f6f0e0', y: '#ffd84a', p: '#c8a030' }, rows: [
+    '....kkkk....', '..kkrrwwkk..', '.krrrwwwwrk.', '.krrrwwwrrk.', 'krrrrypyrrrk', 'kwwwypppywwk', 'kwwwwypywwwk', 'krrrwwwwrrrk', '.krrrwwwrrk.', '.kkrrwwwrkk.', '...kkkkkk...', '............'] };
+  S._tileTypes.push('bush', 'barrel', 'crate', 'stall', 'plaza', 'soil', 'bench', 'lily', 'fountain', 'stage', 'carousel');
 
   /** Striped awning over a stall: covers the top of the merchant standing behind. x,y = stall tile top-left. */
   S.drawAwning = function (g, x, y, color) {

@@ -27,7 +27,32 @@
     function at(xx, yy) { return xx < 0 || yy < 0 || xx >= W || yy >= H ? null : L.tiles[yy * W + xx]; }
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
       var t = at(x, y), cx = x + 0.5, cz = y + 0.5;
-      if (t === 'fence') {
+      if (t === 'bridge' && (at(x - 1, y) === 'void' || at(x + 1, y) === 'void' || at(x, y - 1) === 'void' || at(x, y + 1) === 'void' || at(x - 1, y) === 'water' || at(x + 1, y) === 'water')) {
+        // a plank bridge between islands (or over the river): a beam underneath, posts and a rope rail on its open sides
+        box(parts, 1.0, 0.16, 1.0, cx, -0.17, cz, shaded(C.fenceD, '#6a4020', '#4a2c18'));
+        var ns = at(x, y - 1) === 'bridge' || at(x, y + 1) === 'bridge'; // runs north-south
+        [-1, 1].forEach(function (sd) {
+          var ox = ns ? sd * 0.46 : 0, oz = ns ? 0 : sd * 0.46, side = ns ? at(x + sd, y) : at(x, y + sd);
+          if (side === 'bridge') return;
+          box(parts, 0.09, 0.5, 0.09, cx + ox + (ns ? 0 : -0.4), 0, cz + oz + (ns ? -0.4 : 0), C.fenceD);
+          box(parts, ns ? 0.05 : 1.0, 0.05, ns ? 1.0 : 0.05, cx + ox, 0.4, cz + oz, '#c8a878');
+        });
+      } else if (t === 'bench') {
+        // a park bench facing south: seat, backrest, four legs (sit on it: walk onto it and stand still)
+        box(parts, 0.86, 0.07, 0.38, cx, 0.34, cz + 0.04, shaded('#d49c5c', '#b07840', '#7a4a28'));
+        box(parts, 0.86, 0.26, 0.06, cx, 0.46, cz - 0.16, shaded('#d49c5c', '#b07840', '#7a4a28'));
+        [[-0.38, 0.16], [0.38, 0.16], [-0.38, -0.14], [0.38, -0.14]].forEach(function (q) { box(parts, 0.06, 0.34, 0.06, cx + q[0], 0, cz + q[1], '#3a2418'); });
+      } else if (t === 'table' && at(x, y + 1) === 'bench') {
+        // a terrace table with a striped parasol
+        box(parts, 0.08, 0.6, 0.08, cx, 0, cz, '#3a2418');
+        parts.push({ geo: new THREE.CylinderGeometry(0.4, 0.4, 0.06, 10), matrix: GT3.xform(cx, 0.62, cz), color: shaded('#e2b06a', '#b07840', '#7a4a28') });
+        box(parts, 0.04, 1.0, 0.04, cx, 0.65, cz, '#e8e4dc');
+        parts.push({ geo: new THREE.ConeGeometry(0.72, 0.32, 8), matrix: GT3.xform(cx, 1.78, cz), color: function (n, c) { return Math.floor((Math.atan2(c.z - cz, c.x - cx) + Math.PI) / (Math.PI / 4)) % 2 ? '#f6f0e0' : '#e8503c'; } });
+      } else if (t === 'lily') {
+        // a lily pad floating on the pond, now and then with a pink flower
+        parts.push({ geo: new THREE.CylinderGeometry(0.3, 0.3, 0.03, 9, 1, false, 0.4, Math.PI * 1.8), matrix: GT3.xform(cx, -GT3.SINK + 0.03, cz), color: '#48a046' });
+        if ((x + y) % 2) box(parts, 0.12, 0.1, 0.12, cx + 0.06, -GT3.SINK + 0.05, cz - 0.04, '#f2a8c0');
+      } else if (t === 'fence') {
         box(parts, 0.12, 0.62, 0.12, cx, 0, cz, shaded(C.fence, C.fence, C.fenceD));
         var e = at(x + 1, y) === 'fence', s = at(x, y + 1) === 'fence';
         [0.22, 0.44].forEach(function (ry) {
@@ -83,7 +108,7 @@
     }
 
     /* --- awnings over the market stalls, in each stall's colour */
-    ((L.market && L.market.stalls) || []).forEach(function (st) {
+    ((L.market && L.market.stalls) || []).concat((L.market && L.market.lapak) || []).forEach(function (st) {
       var c = GT3.canvas(12, 8), g = c.getContext('2d');
       for (var i = 0; i < 12; i++) R(g, i, 0, 1, 8, Math.floor(i / 3) % 2 ? '#f6f0e0' : st.color);
       R(g, 0, 7, 12, 1, 'rgba(0,0,0,0.25)');

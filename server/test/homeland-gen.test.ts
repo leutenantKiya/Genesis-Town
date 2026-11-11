@@ -81,9 +81,11 @@ test('farm plots grow with town hall level, capped at 6', () => {
   assert.deepEqual([1, 2, 3, 4, 6, 9].map(n), [1, 2, 3, 4, 6, 6]);
 });
 
-test('opening a chunk never moves anything already in the centre', () => {
+test('opening a chunk never moves anything: it only lays the bridge across the gap', () => {
   const a = GH.generate(42, base), b = GH.generate(42, { ...base, open: ['n'] });
-  assert.deepEqual(a.tiles, b.tiles);
+  const changed = a.tiles.map((t: string, i: number) => (t === b.tiles[i] ? null : t + '>' + b.tiles[i])).filter(Boolean);
+  assert.ok(changed.length >= 4, 'a bridge appears');
+  assert.ok(changed.every((c: string) => c === 'void>bridge'), 'only sky turns into bridge');
   assert.deepEqual(b.unlocked, ['c', 'n']);
   assert.equal(b.chunks.find((c: any) => c.id === 'n').open, true);
 });
@@ -124,9 +126,22 @@ test('a new Homeland (generator 3) has the player\'s own house beside the Town H
   }
 });
 
-test('an older Homeland (generator 2) keeps its layout: no house, the centre Rumah Pekerja lot where it was', () => {
+test('an older Homeland (generator 2) gets the house too, and its centre Rumah Pekerja lot moves beside it', () => {
   const L = GH.generate(42, { ...base, gen: 2 });
-  assert.equal(L.buildings.filter((b: any) => b.kind === 'house').length, 0);
+  assert.equal(L.buildings.filter((b: any) => b.kind === 'house' && b.own).length, 1);
   const lot = L.lots.find((l: any) => l.id === 'rumah-c');
-  assert.equal(lot.y, 16 + 2);
+  assert.equal(lot.y, 16 + 6);
+});
+
+test('Homelands are floating islands: sky between the chunks, bridges only where both sides are open', () => {
+  const L0 = GH.generate(7, base), L1 = GH.generate(7, { ...base, open: ['n', 'e'] });
+  const at = (L: any, x: number, y: number) => L.tiles[y * L.w + x];
+  // the gap between the centre and the north island, on the cross path, and off it
+  assert.equal(at(L0, 16 + 7, 15), 'void');
+  assert.equal(at(L1, 16 + 7, 15), 'bridge');
+  assert.equal(at(L1, 16 + 3, 14), 'void');
+  // the north and east islands are not neighbours: no bridge from n to e, and none to a closed chunk
+  assert.equal(at(L1, 32 + 7, 15), 'void');
+  assert.ok(reach(L1, L1.spawn.x, L1.spawn.y).has(8 * L1.w + 16 + 8), 'the north island can be walked to');
+  assert.ok(!reach(L0, L0.spawn.x, L0.spawn.y).has(8 * L0.w + 16 + 8), 'and not before it is open');
 });

@@ -33,9 +33,22 @@
 >   village fades into mist around it; walking out plays it backwards (0.7 s, instant with Kurangi animasi). The room
 >   is the 2D game's own room, drawn as a cut-away dollhouse lit by a warm lamp, its windows glowing at night
 >   (`client/js/three/room.js`). Walking up into a door outdoors now always goes in (a step could skip the trigger).
+> - **Floating-island Homelands** (2026-11-11): every area of a Homeland is its own island in the sky, with stepped
+>   rock and earth hanging underneath, waterfalls where a pond or the sea reaches the edge, and clouds drifting below.
+>   Opening an area lays a plank bridge across the gap (the bridge is part of the map, so the server checks it too).
+> - **The public square** (village generator 2, 2026-11-11): the market is now a 17 x 12 square with a fountain in the
+>   middle, the four merchants' stalls along the north side, players' lapak stalls along the south side, benches and
+>   street lamps; the church and the Puskesmas are gone (Balai Desa, Kantor Makelar, Kantor Pos, the Warung and the
+>   houses stay). **Sit** on any bench by walking onto it and standing still. Around the square: a **stage** with a
+>   concert every night from 19:00 to 01:00 (a band, spotlights, and the town's own chiptune tune made in the browser,
+>   louder the closer you stand; Pengaturan > Musik konser turns it off), a turning **carousel**, a **lily pond** with
+>   frogs on its muddy bank, and a **terrace** with parasols in front of the warung. Fishing stays in the Homelands
+>   (the public area is trade-only).
+> - **Living world** (2.5D view): butterflies over the flowers by day, fireflies by the water at night, frogs that hop
+>   on the mud and the lily pads; the night monsters (boars, bats) are 3D models that trot or flap and face you.
 > - **Your own house** (2026-11-11): every new Homeland (generator 3) has the player's house west of the Town Hall,
 >   built from the start, with its door on the path to the Town Hall; walk in to find Ibu at home. The centre's Rumah
->   Pekerja lot moved down beside it, its door opening onto the farm. Homelands made before keep their layout.
+>   Pekerja lot moved down beside it, its door opening onto the farm (older Homelands too; a built one moves with it).
 >   **Felled trees** show as stumps: the last chop tips the top over and it fades, then the tree regrows as a sapling,
 >   a young tree and a grown one over its 2 game hour cooldown (server `state.stumps`).
 >   The village portal, where everyone on the server arrives, is drawn about twice the size of a Homeland's in both views
