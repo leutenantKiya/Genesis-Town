@@ -171,6 +171,10 @@
 >   checks), `GET /api/health`, and `TRUST_PROXY=1` so per-address limits see each visitor behind the host's proxy.
 >   Split setup also ready: client on Vercel (`vercel.json`, `GT_API_BASE`), server on Railway (`railway.json`,
 >   volume at `/data`, `CORS_ORIGINS`), browser calls the server directly.
+>   Settlement (2026-11-11): days on which nothing happened close without a transaction (a long pause catches up in
+>   seconds instead of sending hundreds of empty days); `settle_day` attaches 100 Tgas, not 300 (it uses about 19 for a
+>   full server chunk); the settler key's allowance is unlimited (still only the game contract's four settler methods);
+>   `/api/health` shows the NEAR left for gas on the server's accounts and warns when one runs low.
 >   Database: the server keeps SQLite; with `DATABASE_URL` set, a gzipped copy is kept in **Neon Postgres** (saved every
 >   5 minutes when it changed, after each settlement and on shutdown; loaded back on a host with no disk), so Railway
 >   needs no volume (`server/src/snapshot.ts`, docs/deploy.md).

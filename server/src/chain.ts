@@ -35,7 +35,11 @@ export interface Chain {
   derivedOwnerKey(sub: string): Promise<string>;
   /** Calls `sign` on the NEAR Auth contract (paid by the relayer); `value` is the base64 result (the MPC signature). */
   fastAuthSign(args: { guard_id: string; verify_payload: string; sign_payload: number[]; algorithm: string }): Promise<TxResult & { value?: string }>;
+  /** NEAR an account can still spend on gas and transfers (yoctoNEAR): its balance minus what its storage locks. */
+  spendableNear(accountId: string): Promise<bigint>;
 }
+// NEAR locks 10^19 yoctoNEAR per byte of account storage (1 NEAR per 100 kB; testnet RPC `storage_amount_per_byte`)
+const STORAGE_YOCTO_PER_BYTE = 10n ** 19n;
 
 interface Outcome { transaction: { hash: string }; status: unknown }
 
@@ -94,9 +98,17 @@ export class TestnetChain implements Chain {
     return toResult(o as unknown as Outcome);
   }
 
+  async spendableNear(accountId: string): Promise<bigint> {
+    const a = await this.provider.viewAccount({ accountId });
+    return BigInt(a.amount) - BigInt(a.storage_usage) * STORAGE_YOCTO_PER_BYTE;
+  }
+
   registerPlayer(accountId: string) { return this.settlerCall('register_player', { account_id: accountId }, '30'); }
+  // Measured on testnet: about 2.5 Tgas plus 0.65 per entry (18 entries burnt 14.4 Tgas), so a server chunk of 25 needs
+  // about 19 and the contract's limit of 50 about 35. A function-call key pays for the gas ATTACHED, not the gas used,
+  // so 300 Tgas drained the settler key's allowance a hundred times faster than the work did.
   settleDay(day: number, chunk: number, entries: DeltaEntry[], root: string, active: number) {
-    return this.settlerCall('settle_day', { day, chunk, entries, ledger_root: root, active_players: active }, '300');
+    return this.settlerCall('settle_day', { day, chunk, entries, ledger_root: root, active_players: active }, '100');
   }
   isChunkApplied(day: number, chunk: number) { return this.view<boolean>('is_chunk_applied', { day, chunk }); }
   closeShop(merchant: string) { return this.settlerCall('close_shop', { merchant }, '50'); }
@@ -400,6 +412,7 @@ export class MockChain implements Chain {
   }
 
   async balances(accountId: string, tokenIds: string[]) { return tokenIds.map((t) => String(this.get(accountId, t))); }
+  async spendableNear(_accountId: string) { return 10n ** 26n; } // the mock chain never runs out of gas money
   async isRegistered(accountId: string) { return this.accounts.has(accountId); }
   async listShops(): Promise<ShopInfo[]> {
     return [...this.shops].map(([acct, s]) => ({

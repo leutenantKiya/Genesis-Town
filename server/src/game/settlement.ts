@@ -61,14 +61,26 @@ export class Settlement {
 
   settledThrough(): number { return Number(this.d.gs.meta('settle.through') ?? -1); }
 
-  /** Settles every ledger day that has ended (at most 7 per call). Returns the days settled. */
+  /**
+   * A day on which nothing happened: no ledger rows at all, so there is nothing to net or prove, no rent (shops pay none
+   * on a day without players), no dividend and no shop to close. Such a day is closed here without a transaction: every
+   * settle_day costs gas and keeps the day's root and counters in the contract's storage for good, and a server that was
+   * off for a while would otherwise have to send hundreds of empty days before it reaches a real one.
+   */
+  private quiet(day: number): boolean { return this.d.gs.dayRows(day).length === 0; }
+
+  /** Settles every ledger day that has ended (at most 7 on-chain days per call; quiet days cost nothing and do not count).
+   *  Returns the days closed. */
   async settleDue(): Promise<number[]> {
     if (this.busy) return [];
     this.busy = true;
     const done: number[] = [];
+    let sent = 0, lastQuiet = -1;
     try {
       const upTo = this.d.clock.time().settleDay - 1;
-      for (let day = this.settledThrough() + 1; day <= upTo && done.length < 7; day++) {
+      for (let day = this.settledThrough() + 1; day <= upTo && sent < 7; day++) {
+        if (this.quiet(day)) { lastQuiet = day; done.push(day); continue; }
+        if (lastQuiet === day - 1) this.d.gs.setMeta('settle.through', String(lastQuiet)); // the quiet days before this one
         const r = this.retry.get(day);
         if (r && this.d.clock.now() < r.until) break;
         let ok = false;
@@ -81,6 +93,13 @@ export class Settlement {
         }
         this.retry.delete(day);
         done.push(day);
+        sent++;
+      }
+      if (lastQuiet > this.settledThrough()) {
+        // the run ended on quiet days: close them, and do once what every settled day does for the shops (the town's
+        // relief fund when all are closed, and their open/closed state as the chain has it)
+        this.d.gs.setMeta('settle.through', String(lastQuiet));
+        try { await this.relief(lastQuiet); await this.refreshShops(); } catch (e) { console.error(`after quiet day ${lastQuiet}:`, (e as Error).message); }
       }
     } finally {
       this.busy = false;

@@ -168,3 +168,36 @@ test('dividends are planned before settling and paid once, even after a crash or
   assert.ok(Number(h.claimable) > 0);
   assert.equal(String(game.gs.settledBalance('wati.gt.test', 'coin')), String(chain.get('wati.gt.test', 'coin')));
 });
+
+test('days on which nothing happened close without a transaction, so a server that was off does not spend gas on them', async () => {
+  const p = 'a.players.test';
+  const { game, chain, clock } = await world([p]);
+  const day0 = game.clock.time().settleDay;
+  game.gs.add(day0, p, 'wood', 3, 'gather');
+  // the server is off for 30 game days: no rows are written for them (the loop catches up only the last 24 hours)
+  game.gs.setMeta('clock.hour', String(game.clock.hours() + 30 * game.econ.time.hoursPerDay));
+  clock.advanceHours(30 * game.econ.time.hoursPerDay);
+  const upTo = game.clock.time().settleDay - 1;
+  const busy = new Set(Array.from({ length: upTo - day0 + 1 }, (_, i) => day0 + i).filter((d) => game.gs.dayRows(d).length > 0));
+  assert.ok(busy.has(day0) && busy.size < 5, `only a few days have rows (${[...busy]})`);
+  for (let i = 0; i < 6 && game.settlement.settledThrough() < upTo; i++) await game.step();
+  assert.equal(game.settlement.settledThrough(), upTo, 'every day up to yesterday is closed');
+  assert.deepEqual([...new Set(chain.settleCalls.map((c) => c.day))].sort((a, b) => a - b), [...busy].sort((a, b) => a - b), 'settle_day was sent only for days with rows');
+  assert.equal(String(chain.get(p, 'wood')), '3', 'the real day still reached the chain');
+});
+
+test('an empty day between two busy days is skipped, and the busy day after it settles in the same run', async () => {
+  const p = 'b.players.test';
+  const { game, chain, clock } = await world([p]);
+  const d = game.clock.time().settleDay;
+  game.gs.add(d, p, 'fish', 1, 'gather');
+  game.gs.add(d + 2, p, 'fish', 2, 'gather'); // d + 1 has nothing
+  clock.advanceHours(3 * game.econ.time.hoursPerDay);
+  game.gs.setMeta('clock.hour', String(game.clock.hours()));
+  const upTo = game.clock.time().settleDay - 1;
+  await game.settlement.settleDue();
+  assert.ok(game.settlement.settledThrough() >= d + 2 && game.settlement.settledThrough() <= upTo);
+  assert.ok(!chain.settleCalls.some((c) => c.day === d + 1), 'no transaction for the empty day');
+  assert.ok(chain.settleCalls.some((c) => c.day === d) && chain.settleCalls.some((c) => c.day === d + 2));
+  assert.equal(String(chain.get(p, 'fish')), '3');
+});

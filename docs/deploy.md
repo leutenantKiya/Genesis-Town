@@ -51,6 +51,7 @@ private keys are typed by you into the host, never committed and never put in a 
 | `CORS_ORIGINS` | empty, or the client's origin when it is hosted apart (see the split setup below) |
 | `DATABASE_URL` | optional (**secret**): Neon's **direct** connection string (host without `-pooler`), see below; `DATABASE_URL_UNPOOLED` wins when both are set (as `neon env pull` writes them) |
 | `SNAPSHOT_MINUTES` | empty (5): how often the database copy is saved to Neon when something changed |
+| `FUNDS_LOW_NEAR` | empty (0.25): warn when the settler, relayer or players' parent account has less NEAR than this left for gas |
 
 Dev tools stay closed on a host even if `DEV_TOOLS=1` is left on: they only answer direct requests from the same
 machine with no proxy headers.
@@ -64,7 +65,10 @@ machine with no proxy headers.
    one-off shell). Without this step the hosted game starts with a fresh off-chain database: on-chain balances are
    still read from the contract, but today's off-chain progress, plots and history are not.
 4. Deploy, then check:
-   - `GET /api/health` returns `{"ok":true,"chain":"testnet",...}` and `settledThrough` catches up within minutes;
+   - `GET /api/health` returns `{"ok":true,"chain":"testnet",...}` and `settledThrough` catches up within minutes
+     (days on which nothing happened close without a transaction, so even a long pause catches up in seconds);
+     `funds` lists the NEAR left for gas on the settler, relayer and players' parent, and `funds.low` names any that
+     needs topping up;
    - `GET /api/config` shows `"devTools":false`;
    - the page loads, and Masuk opens NEAR Auth (see Login below).
 

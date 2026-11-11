@@ -10,6 +10,7 @@ import { createApp } from './app.ts';
 import { Game } from './game/game.ts';
 import { loadEcon } from './game/econ.ts';
 import { pgRemote, restoreSnapshot, startSnapshots } from './snapshot.ts';
+import { watchFunds } from './funds.ts';
 
 try { process.loadEnvFile(join(dirname(fileURLToPath(import.meta.url)), '../../.env')); } catch { /* no .env: use the real environment */ }
 const cfg = loadConfig();
@@ -49,6 +50,8 @@ if (cfg.chainMode === 'mock') {
 const game = new Game(store, chain, { merchantParent: cfg.merchantParentId, town: cfg.townAccountId, chunkSize: cfg.settleChunk, econ, worldSeed: cfg.worldSeed });
 await game.init();
 game.start();
+// the NEAR the server's own accounts spend on gas and new accounts (testnet only: the mock chain has no gas)
+const funds = chain.mode === 'testnet' ? watchFunds(chain, [cfg.settlerAccountId, cfg.relayerAccountId, cfg.playersParentId], { lowNear: cfg.fundsLowNear }) : null;
 const snapshots = remote ? startSnapshots({ db: store.db, path: cfg.dbPath, key: cfg.gameContractId, remote, everyMinutes: cfg.snapshotMinutes, settledThrough: () => game.settlement.settledThrough() }) : null;
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -61,6 +64,7 @@ const { server } = createApp({
   currentBlockHeight: cfg.chainMode === 'mock' ? async () => 0n : blockHeightSource(cfg),
   clientDir: join(here, '../../client'),
   snapshot: snapshots ?? undefined,
+  funds: funds ?? undefined,
 });
 server.listen(cfg.port, () => {
   if (cfg.devLogin) console.log('DEV_LOGIN is on (mock chain only): tokens "dev:<name>" are accepted.');

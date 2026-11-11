@@ -29,6 +29,8 @@ export interface Config {
   /** Neon Postgres (direct connection string): keeps a copy of the SQLite database for hosts without a disk (snapshot.ts). */
   databaseUrl: string | null;
   snapshotMinutes: number;
+  /** Warn when a server account (settler, relayer, players' parent) has less than this many NEAR left for gas (funds.ts). */
+  fundsLowNear: number;
   chainMode: 'testnet' | 'mock';
   devLogin: boolean; // mock chain only: accept idToken "dev:<name>" so tests run without a Google account
   // Merchant dialogue via NEAR AI Cloud (optional; local lines without a key). Base URL: near-ai-cloud skill / docs.near.ai.
@@ -89,6 +91,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // the direct string when `neon env pull` / `neon deploy` wrote both (Neon: one long-lived client, session-level SQL)
     databaseUrl: env.DATABASE_URL_UNPOOLED?.trim() || env.DATABASE_URL?.trim() || null,
     snapshotMinutes: Math.max(1, Number(env.SNAPSHOT_MINUTES ?? 5) || 5),
+    fundsLowNear: Number(env.FUNDS_LOW_NEAR ?? 0.25) || 0.25,
     chainMode,
     devLogin: chainMode === 'mock' && env.DEV_LOGIN === '1',
     worldSeed: Number(env.WORLD_SEED ?? 20261114) >>> 0,
