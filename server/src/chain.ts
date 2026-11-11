@@ -14,6 +14,8 @@ export interface ListingInfo { id: number; seller: string; token_id: string; amo
 export interface Chain {
   readonly mode: 'testnet' | 'mock';
   createPlayerAccount(accountId: string, ownerPk: string, sessionPk: string): Promise<TxResult>;
+  /** null when the account does not exist; otherwise whether `publicKey` is one of its access keys. */
+  accountHasKey(accountId: string, publicKey: string): Promise<boolean | null>;
   registerPlayer(accountId: string): Promise<TxResult>;
   settleDay(day: number, chunk: number, entries: DeltaEntry[], root: string, active: number): Promise<TxResult>;
   isChunkApplied(day: number, chunk: number): Promise<boolean>;
@@ -96,6 +98,15 @@ export class TestnetChain implements Chain {
       ],
     });
     return toResult(o as unknown as Outcome);
+  }
+
+  async accountHasKey(accountId: string, publicKey: string): Promise<boolean | null> {
+    try { await this.provider.viewAccount({ accountId }); } catch (e) {
+      const err = e as { message?: string; type?: string };
+      if (/does not exist|UNKNOWN_ACCOUNT|AccountDoesNotExist/i.test(`${err?.type ?? ''} ${err?.message ?? e}`)) return null;
+      throw e;
+    }
+    try { await this.provider.viewAccessKey({ accountId, publicKey: PublicKey.from(publicKey) }); return true; } catch { return false; }
   }
 
   async spendableNear(accountId: string): Promise<bigint> {
@@ -206,9 +217,17 @@ export class MockChain implements Chain {
     for (const [t, a] of Object.entries(start)) this.add(account, t, BigInt(a));
   }
 
-  async createPlayerAccount(accountId: string): Promise<TxResult> {
-    if (this.accounts.has(accountId)) return { txHash: this.hash(), ok: false, error: 'AccountAlreadyExists' };
+  /** Access keys per created account (mirrors the account on chain, which outlives the server's database). */
+  keys = new Map<string, Set<string>>();
+  async createPlayerAccount(accountId: string, ownerPk?: string, sessionPk?: string): Promise<TxResult> {
+    if (this.accounts.has(accountId) || this.keys.has(accountId)) return { txHash: this.hash(), ok: false, error: 'AccountAlreadyExists' };
+    this.keys.set(accountId, new Set([ownerPk, sessionPk].filter((k): k is string => !!k)));
     return { txHash: this.hash(), ok: true };
+  }
+  async accountHasKey(accountId: string, publicKey: string): Promise<boolean | null> {
+    const k = this.keys.get(accountId);
+    if (k) return k.has(publicKey);
+    return this.accounts.has(accountId) ? false : null;
   }
   async registerPlayer(accountId: string): Promise<TxResult> { this.accounts.add(accountId); return { txHash: this.hash(), ok: true }; }
 

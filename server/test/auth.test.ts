@@ -40,6 +40,28 @@ test('register: verifies token, uses the server-derived owner key, creates accou
   assert.equal(s.store.playerBySub('google-oauth2|43'), undefined, 'no account created');
 });
 
+test('register: an account already on chain but missing from a fresh database is adopted, not created again', async () => {
+  const s = setup();
+  const iss = await issuer(s.cfg.fastAuth.domain, s.cfg.fastAuth.clientId);
+  const verify = auth0Verifier(s.cfg, iss.jwks);
+  const session = near.KeyPair.fromRandom('ed25519').getPublicKey().toString();
+  const first = await register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|77'), sessionPublicKey: session });
+  assert.equal(first.created, true);
+  // the server redeploys with an empty database; the chain (and the account on it) stays
+  const fresh = { ...setup(), chain: s.chain };
+  // same browser: its session key is on the account already, so the player is straight back in
+  const back = await register({ ...fresh, verify }, { idToken: await iss.sign('google-oauth2|77'), sessionPublicKey: session });
+  assert.deepEqual([back.accountId, back.created, back.needsKey], [first.accountId, false, undefined]);
+  assert.equal(fresh.store.sessionKeyOwner(session), first.accountId);
+  // another browser on yet another fresh database: the new-device flow adds its key with the owner key
+  const other = near.KeyPair.fromRandom('ed25519').getPublicKey().toString();
+  const fresh2 = { ...setup(), chain: s.chain };
+  const nd = await register({ ...fresh2, verify }, { idToken: await iss.sign('google-oauth2|77'), sessionPublicKey: other });
+  assert.deepEqual([nd.accountId, nd.created, nd.needsKey, nd.ownerPublicKey], [first.accountId, false, true, await s.chain.derivedOwnerKey('google-oauth2|77')]);
+  assert.equal(fresh2.store.playerBySub('google-oauth2|77')?.account_id, first.accountId);
+  assert.equal(fresh2.store.sessionKeyOwner(other), undefined);
+});
+
 test('register: rejects wrong issuer, wrong audience, garbage token, bad session key', async () => {
   const s = setup();
   const iss = await issuer(s.cfg.fastAuth.domain, s.cfg.fastAuth.clientId);

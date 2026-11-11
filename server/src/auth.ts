@@ -96,15 +96,47 @@ export async function register(
   if (deps.store.sessionKeyOwner(body.sessionPublicKey)) throw new HttpError(409, 'session key already belongs to another account');
   const ownerPk = await deps.chain.derivedOwnerKey(sub);
   const accountId = playerAccountId(sub, deps.cfg.playersParentId);
-  const created = await deps.chain.createPlayerAccount(accountId, ownerPk, body.sessionPublicKey);
-  if (!created.ok) throw new HttpError(502, 'account creation failed: ' + created.error);
+  // The account name comes from the login, so the account can already be on chain while this server's database has
+  // no row for it (a fresh database after a redeploy, or another server on the same parent). Adopt it instead of
+  // trying to create it again, which fails with AccountAlreadyExists on every login.
+  const onChain = await deps.chain.accountHasKey(accountId, body.sessionPublicKey);
+  if (onChain !== null) return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, onChain);
+  let created: Awaited<ReturnType<Chain['createPlayerAccount']>>;
+  try { created = await deps.chain.createPlayerAccount(accountId, ownerPk, body.sessionPublicKey); } catch (e) {
+    // created in between (two logins at once): adopt it like above
+    if (!/already exists|AccountAlreadyExists/i.test(String((e as Error)?.message ?? e))) throw e;
+    return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, !!(await deps.chain.accountHasKey(accountId, body.sessionPublicKey)));
+  }
+  if (!created.ok) {
+    if (/AccountAlreadyExists|already exists/i.test(created.error ?? '')) return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, !!(await deps.chain.accountHasKey(accountId, body.sessionPublicKey)));
+    throw new HttpError(502, 'account creation failed: ' + created.error);
+  }
   deps.store.addPlayer(accountId, sub, ownerPk);
   deps.store.addSessionKey(body.sessionPublicKey, accountId);
-  deps.store.addHistory(accountId, 'account', 'Akun dibuat (kunci NEAR Auth + kunci sesi game)', deps.chain.mode === 'mock' ? 'mock' : 'ok', created.txHash);
+  deps.store.addHistory(accountId, 'account', 'Account created (NEAR Auth key + game session key)', deps.chain.mode === 'mock' ? 'mock' : 'ok', created.txHash);
   const reg = await deps.chain.registerPlayer(accountId);
-  deps.store.addHistory(accountId, 'storage', 'Terdaftar di kontrak game', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
+  deps.store.addHistory(accountId, 'storage', 'Registered in the game contract', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
   deps.onNewPlayer?.(accountId);
   return { accountId, created: true, txHashes: [created.txHash, reg.txHash] };
+}
+
+// An account that exists on chain but not in this database. Its name and its owner key both come from the login, so it
+// is this player's. With the browser's session key already on it the player is back in at once; otherwise the browser
+// adds the key with the NEAR Auth owner key, like any new device (needsKey).
+async function adopt(
+  deps: { chain: Chain; store: Store },
+  sub: string, accountId: string, ownerPk: string, sessionPk: string, hasKey: boolean,
+): Promise<RegisterResult> {
+  deps.store.addPlayer(accountId, sub, ownerPk);
+  const txHashes: string[] = [];
+  if (!(await deps.chain.isRegistered(accountId))) {
+    const reg = await deps.chain.registerPlayer(accountId);
+    txHashes.push(reg.txHash);
+    deps.store.addHistory(accountId, 'storage', 'Registered in the game contract', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
+  }
+  if (!hasKey) return { accountId, created: false, txHashes, needsKey: true, ownerPublicKey: ownerPk };
+  deps.store.addSessionKey(sessionPk, accountId);
+  return { accountId, created: false, txHashes };
 }
 
 export class HttpError extends Error {
