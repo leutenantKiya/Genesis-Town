@@ -2,6 +2,7 @@
  * party.js - parties (client of server/src/game/party.ts): up to 4 players who play together.
  *  - Press G for the Party panel: members, invite by name#tag, leave, and (leader) remove.
  *  - "Ajak party" on another player's card; "/party nama#tag" in chat (handled by players.js through GT_PARTY.invite).
+ *  - Mates show as green tags, minimap dots (onMinimap) and edge arrows (players.js); /p text is the party chat (server social.ts).
  *  - An incoming invite pops up once with Terima / Tolak / Nanti.
  * The party state rides on the presence poll (GT_PLAYERS.onPresence), so there is no extra polling.
  */
@@ -29,6 +30,24 @@
   function isMate(account) { return !!(view.party && view.party.members.some(function (m) { return m.account === account; })); }
   function full() { var s = S(), max = s && s.cfg && s.cfg.econ && s.cfg.econ.party && s.cfg.econ.party.max; return !!(view.party && max && view.party.members.length >= max); }
 
+  // where a mate is: "Desa", a Homeland (mine, an invited one, or just "Homeland"), or offline
+  function placeOf(m) {
+    if (!m.online || !m.world) return $t('offline');
+    if (m.world === 'public') return $t('Desa');
+    var H = window.GT_HOME && GT_HOME.state && GT_HOME.state();
+    if (H && H.world === m.world) return $t('Homelandmu');
+    var v = H && (H.invited || []).filter(function (i) { return i.world === m.world; })[0];
+    return v && v.owner_name ? $t('Homeland {0}', [v.owner_name]) : $t('Homeland');
+  }
+  // green dots on the map sheet (M) for mates in my world: the server sends x, y only for them
+  function onMinimap(g, C) {
+    if (!view.party) return;
+    g.fillStyle = '#000';
+    view.party.members.forEach(function (m) { if (m.x != null && m.account !== me()) g.fillRect(Math.round(m.x * C) - 1, Math.round(m.y * C) - 1, 4, 4); });
+    g.fillStyle = '#4fd36b';
+    view.party.members.forEach(function (m) { if (m.x != null && m.account !== me()) g.fillRect(Math.round(m.x * C), Math.round(m.y * C), 2, 2); });
+  }
+
   /* ---------------------------------------------------------------- actions */
   function invite(to) {
     if (!signedIn()) { GT.toast($t('Masuk dulu.')); return Promise.resolve(); }
@@ -48,6 +67,7 @@
       p.members.forEach(function (m) {
         var row = $('div', 'tr-lot'), tx = $('div', 'tr-lot-t');
         tx.appendChild($('div', 'tr-lot-n', m.name + '#' + m.tag + (m.leader ? ' · ' + $t('Ketua') : '') + (m.account === me() ? ' · ' + $t('kamu') : '')));
+        tx.appendChild($('div', 'chain-dim', m.account === me() ? placeOf({ online: true, world: (GT.worldId && GT.worldId()) || 'public' }) : placeOf(m)));
         row.appendChild(tx);
         if (isLeader() && m.account !== me()) {
           var kick = $('button', 'mbtn', $t('Keluarkan')); kick.type = 'button';
@@ -131,5 +151,5 @@
     }
     window.GT_PARTY = { invite: invite, open: openPanel, view: function () { return view; }, isMate: isMate };
   }
-  GT.register({ id: 'party', init: init, onKey: onKey });
+  GT.register({ id: 'party', init: init, onKey: onKey, onMinimap: onMinimap });
 })();

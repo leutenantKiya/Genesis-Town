@@ -217,6 +217,8 @@ html.gt-phone .gt-fight{left:6px;right:6px;bottom:6px}
 .gt-chat-line b{font-weight:600;color:var(--gold)}
 .gt-chat-line.private{border-left:3px solid var(--accent)}
 .gt-chat-line.private b{color:var(--hud-ink)}
+.gt-chat-line.party{border-left:3px solid var(--good,#2f7d4a)}
+.gt-chat-line.party b{color:var(--good,#7fd58f)}
 .gt-chat-line.note{color:var(--hud-dim);font-style:italic}
 .gt-chat-line.old{opacity:0}
 .gt-chat-form{display:none;margin-top:4px}

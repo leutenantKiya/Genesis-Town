@@ -133,10 +133,22 @@ export function createApp(deps: AppDeps) {
   };
 
   // Homelands: only the owner and invited guests may report, chat or show up there.
+  social.partyOf = (a) => game.party.idOf(a);
+  social.mates = (a) => game.party.mates(a);
   social.access = (a, w) => {
     if (w === 'public') return true;
     try { game.worldFor(a, w, false); return true; } catch { return false; }
   };
+  /** The party view plus where each member is: `world` and `online` from presence (last 15 s); `x`, `y` only for a mate outdoors in `w`. */
+  function partyWithPlaces(acct: string, w: string) {
+    const v = game.party.view(acct), now = social.now();
+    if (!v.party) return v;
+    const members = v.party.members.map((m) => {
+      const s = social.seen.get(m.account), fresh = !!s && now - s.t <= 15_000;
+      return { ...m, online: fresh, world: fresh ? s!.world : null, ...(fresh && s!.world === w && s!.scene === 'out' && m.account !== acct ? { x: s!.x, y: s!.y } : {}) };
+    });
+    return { ...v, party: { ...v.party, members } };
+  }
   const chatIpLimiter = new RateLimiter(30, 2000);
   const worldOf = (v: unknown) => (v == null || v === '' ? 'public' : worldIdOk(v) ? v : (() => { throw new HttpError(400, 'bad world'); })());
   /** The world a presence or chat request is about: it must be one the player may be in AND the one the server has them in. */
@@ -342,9 +354,9 @@ export function createApp(deps: AppDeps) {
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
         if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, false).map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
         if (onTile) social.report(acct, w, b);
-        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : { title: titleFor(bazaar.points(s.account)) }) }));
+        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
-        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: game.party.view(acct) });
+        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w) });
       }
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);

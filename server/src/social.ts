@@ -6,12 +6,12 @@
 import { HttpError } from './auth.ts';
 import { RateLimiter } from './relayer.ts';
 
-export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string }
+export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean }
 /** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
 export interface Npc { id: string; account: string; name: string; look: number; x: number; y: number; title: string }
 export const NPC_TAG = 'NPC';
-export interface ChatMsg { id: number; t: number; from: string; fromTag: string; to: string | null; toTag: string | null; text: string }
-interface Stored extends ChatMsg { fromAcc: string; toAcc: string | null; world: string }
+export interface ChatMsg { id: number; t: number; from: string; fromTag: string; to: string | null; toTag: string | null; text: string; party?: true }
+interface Stored extends ChatMsg { fromAcc: string; toAcc: string | null; world: string; party: true | undefined; partyId: number | null }
 
 /** The slice of Store that names need (src/db.ts). */
 export interface NameStore {
@@ -38,7 +38,7 @@ export function cleanText(s: string) {
   // no control characters, one line, trimmed, and rude words masked
   return s.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u2028-\u202e]/g, ' ').replace(/\s+/g, ' ').trim().replace(ROUGH_RE, (w) => w[0] + '*'.repeat(w.length - 1));
 }
-function strip(m: Stored): ChatMsg { return { id: m.id, t: m.t, from: m.from, fromTag: m.fromTag, to: m.to, toTag: m.toTag, text: m.text }; }
+function strip(m: Stored): ChatMsg { return { id: m.id, t: m.t, from: m.from, fromTag: m.fromTag, to: m.to, toTag: m.toTag, text: m.text, ...(m.party ? { party: true as const } : {}) }; }
 /** What an account without a chosen name is shown as. */
 export function defaultNick(account: string) { return `Player_${account.replace(/^p/, '').slice(0, 4)}`; }
 
@@ -54,6 +54,10 @@ export class Social {
   /** Gate set by the app: may this account be in this world? (Homelands: owner and invited guests only.) */
   access: (account: string, world: string) => boolean = () => true;
 
+  /** Set by the app (game.party): the party an account is in, and its other members. Party mates are shown at any distance and share /p chat. */
+  partyOf: (a: string) => number | null = () => null;
+  mates: (a: string) => string[] = () => [];
+
   npcs: Npc[] = [];
   /** Set by the app: a player wrote to a merchant. May throw HttpError (rate limit); the answer comes later through npcSay. */
   onNpcMsg?: (npc: Npc, fromAccount: string, text: string) => void;
@@ -68,7 +72,7 @@ export class Social {
   }
   /** A merchant's private answer to one player. */
   npcSay(npc: Npc, toAccount: string, text: string): ChatMsg {
-    const msg: Stored = { id: ++this.seq, t: this.now(), from: npc.name, fromTag: NPC_TAG, to: this.nick(toAccount), toTag: this.tag(toAccount), text: cleanText(text).slice(0, 280), fromAcc: npc.account, toAcc: toAccount, world: 'public' };
+    const msg: Stored = { id: ++this.seq, t: this.now(), from: npc.name, fromTag: NPC_TAG, to: this.nick(toAccount), toTag: this.tag(toAccount), text: cleanText(text).slice(0, 280), fromAcc: npc.account, toAcc: toAccount, world: 'public', party: undefined, partyId: null };
     this.chat.push(msg);
     if (this.chat.length > 300) this.chat.splice(0, this.chat.length - 300);
     return strip(msg);
@@ -119,7 +123,7 @@ export class Social {
   }
   /** Other players outdoors in the same world within `radius` tiles who reported in the last 15 seconds. */
   nearby(account: string, world: string, radius = 30, maxAge = 15_000) {
-    const me = this.seen.get(account), now = this.now(), out: Seen[] = [];
+    const me = this.seen.get(account), now = this.now(), out: Seen[] = [], mates = new Set(this.mates(account));
     if (world === 'public') {
       for (const n of this.npcs) {
         if (me && (Math.abs(n.x - me.x) > radius || Math.abs(n.y - me.y) > radius)) continue;
@@ -130,10 +134,11 @@ export class Social {
       if (now - s.t > maxAge) { this.seen.delete(s.account); continue; }
       if (s.account === account || s.scene !== 'out' || s.world !== world) continue;
       if (!this.access(s.account, world)) continue; // an uninvited guest vanishes from the Homeland at once
-      if (me && (Math.abs(s.x - me.x) > radius || Math.abs(s.y - me.y) > radius)) continue;
-      out.push(s);
+      const mate = mates.has(s.account); // party mates skip the radius: you can always find them
+      if (!mate && me && (Math.abs(s.x - me.x) > radius || Math.abs(s.y - me.y) > radius)) continue;
+      out.push(mate ? { ...s, party: true } : s);
     }
-    return out.slice(0, 60);
+    return out.sort((p, q) => (q.party ? 1 : 0) - (p.party ? 1 : 0)).slice(0, 60);
   }
   online() { const now = this.now(); let n = 0; for (const s of this.seen.values()) if (now - s.t <= 15_000) n++; return n; }
 
@@ -142,7 +147,7 @@ export class Social {
     if (typeof raw !== 'string') throw new HttpError(400, 'Empty message.');
     if (!worldIdOk(world)) throw new HttpError(400, 'bad world');
     if (raw.length > 400) throw new HttpError(400, `Message too long (max ${CHAT_MAX} characters).`);
-    let text = cleanText(raw), to: string | null = null, toTag: string | null = null, toAcc: string | null = null, toNpc: Npc | null = null;
+    let text = cleanText(raw), party = false, to: string | null = null, toTag: string | null = null, toAcc: string | null = null, toNpc: Npc | null = null;
     const pm = /^\/(msg|w|pm)\b\s*([\s\S]*)$/i.exec(text);
     if (pm) {
       // the name may contain spaces: take the longest run of words that is a player's name
@@ -167,7 +172,11 @@ export class Social {
         if (toAcc === account) throw new HttpError(400, 'That\'s your own name.');
         to = this.nick(toAcc); toTag = this.tag(toAcc);
       }
-    } else if (text.startsWith('/')) throw new HttpError(400, 'Commands: /msg name message · /block name · /unblock name · /name NewName · /help');
+    } else if (/^\/(p|party)(\s|$)/i.test(text)) {
+      // "/p text": a line for the whole party, in any world
+      if (this.partyOf(account) === null) throw new HttpError(409, 'You are not in a party.');
+      party = true; text = text.replace(/^\/(p|party)\s*/i, '');
+    } else if (text.startsWith('/')) throw new HttpError(400, 'Commands: /msg name message · /p message · /block name · /unblock name · /name NewName · /help');
     if (!text) throw new HttpError(400, 'Empty message.');
     if (Array.from(text).length > CHAT_MAX) throw new HttpError(400, `Message too long (max ${CHAT_MAX} characters).`);
     const now = this.now(), last = this.lastSay.get(account);
@@ -176,13 +185,14 @@ export class Social {
     this.lastSay.set(account, now);
     if (this.lastSay.size > 5000) for (const [a, t] of this.lastSay) if (now - t > CHAT_GAP_MS) this.lastSay.delete(a);
     if (toNpc) this.onNpcMsg?.(toNpc, account, text); // may throw 429 before anything is stored
-    const msg: Stored = { id: ++this.seq, t: now, from: this.nick(account), fromTag: this.tag(account), to, toTag, text, fromAcc: account, toAcc: toAcc ?? toNpc?.account ?? null, world };
+    const msg: Stored = { id: ++this.seq, t: now, from: this.nick(account), fromTag: this.tag(account), to, toTag, text, fromAcc: account, toAcc: toAcc ?? toNpc?.account ?? null, world, party: party ? true : undefined, partyId: party ? this.partyOf(account) : null };
     this.chat.push(msg);
     if (this.chat.length > 300) this.chat.splice(0, this.chat.length - 300);
     return strip(msg);
   }
   /** Lines after `since` that this player may read in `world`: the world's public lines, plus private lines to or from them. */
   since(account: string, world: string, since: number) {
-    return this.chat.filter((m) => m.id > since && (m.toAcc ? m.toAcc === account || m.fromAcc === account : m.world === world)).slice(-CHAT_KEEP).map(strip);
+    const pid = this.partyOf(account);
+    return this.chat.filter((m) => m.id > since && (m.party ? pid !== null && m.partyId === pid : m.toAcc ? m.toAcc === account || m.fromAcc === account : m.world === world)).slice(-CHAT_KEEP).map(strip);
   }
 }

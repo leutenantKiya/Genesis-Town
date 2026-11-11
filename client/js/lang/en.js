@@ -655,7 +655,7 @@
     "{0} → kamu": "{0} → you",
     "Masuk dulu untuk mengobrol.": "Sign in first to chat.",
     "Pilih namamu dulu di layar karakter.": "Choose your name on the character screen first.",
-    "Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama | /party nama#tag · ajak ke party": "Chat only reaches players in the same world (max 80 characters, 1 message / 2 seconds). /msg name message · private message (across worlds) | /block name · hide their messages | /unblock name | /name NewName · change name | /party name#tag · invite to a party",
+    "Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /p pesan · pesan ke party (dari dunia mana pun) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama | /party nama#tag · ajak ke party": "Chat only reaches players in the same world (max 80 characters, 1 message / 2 seconds). /msg name message · private message (across worlds) | /p message · message your party from any world | /block name · hide their messages | /unblock name | /name NewName · change name | /party name#tag · invite to a party",
     "Ada beberapa pemain bernama {0}. Pakai nama#tag.": "Several players are named {0}. Use name#tag.",
     "Pemain {0} belum terlihat. Pakai nama#tag.": "Player {0} isn't visible yet. Use name#tag.",
     "{0} disembunyikan di browser ini.": "{0} is hidden in this browser.",
@@ -1325,6 +1325,10 @@
     "Kamu keluar dari party.": "You left the party.",
     "Ajakan party": "Party invite",
     "{0}#{1} mengajakmu ke party": "{0}#{1} invites you to a party",
-    "Ajak party": "Invite to party"
+    "Ajak party": "Invite to party",
+    "offline": "offline",
+    "Homelandmu": "Your Homeland",
+    "Homeland {0}": "{0}'s Homeland",
+    "[Party] {0}": "[Party] {0}"
   });
 })();

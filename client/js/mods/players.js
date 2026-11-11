@@ -49,7 +49,7 @@
         var o = others[q.account];
         if (!o) o = others[q.account] = { fx: q.x, fy: q.y, x: q.x, y: q.y, t0: now };
         if (o.x !== q.x || o.y !== q.y) { o.fx = curX(o, now); o.fy = curY(o, now); o.x = q.x; o.y = q.y; o.t0 = now; }
-        o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.merchant = q.merchant; o.dir = q.dir; o.account = q.account; o.seen = now;
+        o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.merchant = q.merchant; o.dir = q.dir; o.account = q.account; o.party = !!q.party; o.seen = now;
       });
       Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
       (r.chat || []).forEach(addLine);
@@ -101,7 +101,7 @@
       var x = GT.snap(at.x + T / 2), y = GT.snap(at.y - 3 - (o.npc && Math.round(cx) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
       ctx.font = '7px "Pixelify Sans", sans-serif';
       var text = o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
-      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.npc ? 'accent' : 'dark', k: key(o.nick, o.tag) });
+      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.npc ? 'accent' : o.party ? 'party' : 'dark', k: key(o.nick, o.tag) });
     });
     tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
     tags.forEach(function (t) {
@@ -125,7 +125,26 @@
       bp.push(b);
       bubble(ctx, TH, b, W);
     });
+    arrows(ctx, TH, W, T, now);
     ctx.restore();
+  }
+  // a small arrow on the screen edge towards each party mate who is off screen (GT.at projects in 2D and 2.5D alike)
+  function arrows(ctx, TH, W, T, now) {
+    var H = ctx.canvas.height / (ctx.getTransform().d || 1), m = 10;
+    Object.keys(others).forEach(function (a) {
+      var o = others[a]; if (!o.party) return;
+      var at = GT.at(curX(o, now), curY(o, now)), x = at.x + T / 2, y = at.y + T / 2;
+      if (x >= 0 && x <= W && y >= 0 && y <= H) return;
+      var cx = W / 2, cy = H / 2, dx = x - cx, dy = y - cy, k = Math.min((W / 2 - m) / (Math.abs(dx) || 1e-6), (H / 2 - m) / (Math.abs(dy) || 1e-6));
+      var ex = GT.snap(cx + dx * k), ey = GT.snap(cy + dy * k), ang = Math.atan2(dy, dx);
+      ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = TH.get('good') || '#2f7d4a'; ctx.beginPath(); ctx.moveTo(4.5, 0); ctx.lineTo(-3, -3.5); ctx.lineTo(-3, 3.5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      ctx.textAlign = ex > W / 2 ? 'right' : 'left'; ctx.textBaseline = 'bottom'; ctx.font = '7px "Pixelify Sans", sans-serif';
+      TH.label(ctx, o.nick, Math.max(24, Math.min(W - 24, ex)), Math.max(18, Math.min(H - 4, ey - 8)), { tone: 'party' });
+      ctx.textAlign = 'center';
+    });
   }
   function bubble(ctx, TH, b, W) {
     var x = Math.max(Math.ceil(b.w / 2) + 1, Math.min(W - Math.ceil(b.w / 2) - 1, b.x)); // keep it on screen
@@ -163,7 +182,7 @@
     if (!m.note && isBlocked(m.from, m.fromTag)) return;
     lines.push(m);
     if (lines.length > 60) lines.shift();
-    if (!m.to) bubbles[key(m.from, m.fromTag)] = { text: m.text, t: performance.now() };
+    if (!m.to && !m.party) bubbles[key(m.from, m.fromTag)] = { text: m.text, t: performance.now() };
     renderList();
   }
   function note(text) { lines.push({ id: 0, t: Date.now(), from: '', to: null, text: text, note: true }); renderList(); }
@@ -172,12 +191,12 @@
     list.textContent = '';
     var mine = key(me || '', meTag);
     lines.slice(-30).forEach(function (m) {
-      var row = el('div', 'gt-chat-line' + (m.to ? ' private' : '') + (m.note ? ' note' : ''));
+      var row = el('div', 'gt-chat-line' + (m.to ? ' private' : '') + (m.party ? ' party' : '') + (m.note ? ' note' : ''));
       row.dataset.t = String(m.t || Date.now());
       if (m.note) row.textContent = m.text;
       else {
         var from = m.from + (m.fromTag ? '#' + m.fromTag : ''), to = m.to ? m.to + (m.toTag ? '#' + m.toTag : '') : '';
-        var who = m.to ? (key(m.from, m.fromTag) === mine ? $t('kamu → {0}', [to]) : $t('{0} → kamu', [from])) : from;
+        var who = m.party ? $t('[Party] {0}', [from]) : m.to ? (key(m.from, m.fromTag) === mine ? $t('kamu → {0}', [to]) : $t('{0} → kamu', [from])) : from;
         row.appendChild(el('b', null, who + ': '));
         row.appendChild(document.createTextNode(m.text));
       }
@@ -212,7 +231,7 @@
     var text = String(raw || '').trim();
     if (!text) { closeChat(); return; }
     var m;
-    if (/^\/help$/i.test(text)) { note($t('Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama | /party nama#tag · ajak ke party')); input.value = ''; return; }
+    if (/^\/help$/i.test(text)) { note($t('Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /p pesan · pesan ke party (dari dunia mana pun) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama | /party nama#tag · ajak ke party')); input.value = ''; return; }
     if ((m = /^\/(block|unblock)\s+(.+)$/i.exec(text))) {
       var target = m[2].trim(), tm = /^(.+)#(\d{5})$/.exec(target), tk;
       if (tm) tk = key(tm[1], tm[2]);

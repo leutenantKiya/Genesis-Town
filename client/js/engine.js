@@ -8,6 +8,7 @@
  *                           tileType is the faced tile ('door' for door tiles, 'npc' is NOT used: look at ctx.npc).
  *                           For casino dice_table the dealer is ctx.npc; for the mart counter the keeper is ctx.npc.
  *                         onKey(e) is only called while no modal is open; return true to swallow the key.
+ *                         mod.onMinimap(g, C) runs on the map sheet (M) after the player marker: g = its 2D context, C = canvas pixels per tile (2).
  *                         v2.3 draw hooks: mod.onDraw(ctx, camX, camY, T) runs after the world + night overlay; GT.charDraw = fn(ctx, npc|null(player), x, y, pal, dir, step)
  *                         -> true if it drew the character itself (combat.js: flash / KO pose). npc.bubble.shake = true shakes the speech bubble.
  *  GT.modal(opts)         {title, body:Element|string(plain text, \n = new paragraph), actions:[{label,primary,id,disabled,onClick(handle,ev),close}],
@@ -1729,6 +1730,7 @@ function drawMinimap(){
   var blink = REDUCE ? true : Math.floor(timeAcc * 3) % 2 === 0;
   g.fillStyle = '#000'; g.fillRect(Math.round(px*C) - 3, Math.round(py*C) - 3, 6, 6);
   g.fillStyle = blink ? '#ff3b3b' : '#ffffff'; g.fillRect(Math.round(px*C) - 2, Math.round(py*C) - 2, 4, 4);
+  callMods('onMinimap', [g, C]);
 }
 
 /* ---------- transitions ---------- */

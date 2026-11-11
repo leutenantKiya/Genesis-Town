@@ -146,3 +146,31 @@ test('/msg to a merchant from a Homeland answers 409 and asks nobody', () => {
   assert.throws(() => social.say(A, 'HL-1', '/msg Sari harga ikan?'), (e: any) => e.status === 409 && /Merchants are in the public area\./.test(e.message));
   assert.equal(called, 0);
 });
+
+test('party mates show beyond the radius and are flagged', () => {
+  const { social } = world();
+  social.setNick(A, 'Ani'); social.setNick(B, 'Budi_2'); social.setNick(C, 'Cici');
+  social.partyOf = (a) => (a === A || a === B ? 1 : null);
+  social.mates = (a) => (a === A ? [B] : a === B ? [A] : []);
+  social.report(A, P, { x: 10, y: 10, scene: 'out' });
+  social.report(B, P, { x: 60, y: 10, scene: 'out' });
+  social.report(C, P, { x: 60, y: 12, scene: 'out' });
+  const seen = social.nearby(A, P).filter((s) => !s.npc);
+  assert.deepEqual(seen.map((s) => [s.account, !!s.party]), [[B, true]], 'the mate 50 tiles away shows, the stranger does not');
+  assert.equal(social.nearby(C, P).filter((s) => !s.npc).length, 1, 'strangers still use the radius: C sees only B, who is 0 tiles away, and not A');
+  assert.ok(!social.nearby(C, P).some((s) => s.party));
+});
+
+test('party chat reaches mates in other worlds only', () => {
+  const { social, tick } = world();
+  social.setNick(A, 'Ani'); social.setNick(B, 'Budi_2'); social.setNick(C, 'Cici');
+  assert.throws(() => social.say(A, P, '/p halo'), /not in a party/);
+  social.partyOf = (a) => (a === A || a === B ? 1 : null);
+  tick(2100);
+  const m = social.say(A, P, '/p halo tim');
+  assert.equal(m.party, true);
+  assert.equal(m.text, 'halo tim');
+  assert.deepEqual(social.since(B, 'HL-1', 0).map((x) => [x.text, x.party]), [['halo tim', true]], 'a mate in another world reads it');
+  assert.equal(social.since(C, P, 0).length, 0, 'a stranger in the same world does not');
+  assert.equal(social.since(A, P, 0).length, 1);
+});

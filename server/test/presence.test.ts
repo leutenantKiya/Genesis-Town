@@ -107,3 +107,29 @@ test('presence on the own Homeland spawn moves a player there (reload lands at h
     assert.equal((await r.post(P2, '/api/presence', { ...body, world: `HL-${r.game.homelands.ensure(P2).id}`, x: spawn.x + 1 })).status, 409);
   } finally { r.close(); }
 });
+
+test('presence carries the party roster with positions only in the same world', async () => {
+  const r = await rig();
+  try {
+    await r.post(P1, '/api/name', { name: 'Ayu' });
+    await r.post(P2, '/api/name', { name: 'Bude' });
+    const tag2 = r.s.store.tagOf(P2);
+    assert.equal((await r.post(P1, '/api/party/invite', { to: `Bude#${tag2}` })).status, 200);
+    assert.equal((await r.post(P2, '/api/party/accept', { from: P1 })).status, 200);
+    const at = { world: 'public', x: r.sp.x, y: r.sp.y, dir: 'down', scene: 'out', since: 0 };
+    await r.post(P2, '/api/presence', { ...at, x: r.sp.x + 1 });
+    const poll = await r.post(P1, '/api/presence', at);
+    const bude = poll.json.party.party.members.find((m: any) => m.account === P2);
+    assert.equal(bude.online, true);
+    assert.equal(bude.world, 'public');
+    assert.equal(bude.x, r.sp.x + 1);
+    assert.ok(poll.json.players.some((p: any) => p.account === P2 && p.party === true));
+    const mine = poll.json.party.party.members.find((m: any) => m.account === P1);
+    assert.equal(mine.x, undefined, 'no position for yourself');
+    // a mate indoors or who never reported has no position
+    await r.post(P2, '/api/presence', { ...at, scene: 'in' });
+    const indoor = (await r.post(P1, '/api/presence', at)).json.party.party.members.find((m: any) => m.account === P2);
+    assert.equal(indoor.online, true);
+    assert.equal(indoor.x, undefined);
+  } finally { r.close(); }
+});

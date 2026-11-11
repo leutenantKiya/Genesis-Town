@@ -28,7 +28,7 @@ export const EXACT: Record<string, string> = {
  "Merchants are in the public area.": "Pedagang ada di area publik.",
  "Usage: /msg name message": "Cara pakai: /msg nama pesan",
  "That's your own name.": "Itu namamu sendiri.",
- "Commands: /msg name message · /block name · /unblock name · /name NewName · /help": "Perintah: /msg nama pesan · /block nama · /unblock nama · /nama NamaBaru · /help",
+ "Commands: /msg name message · /p message · /block name · /unblock name · /name NewName · /help": "Perintah: /msg nama pesan · /p pesan · /block nama · /unblock nama · /nama NamaBaru · /help",
  "Slow down, too fast.": "Pelan-pelan, terlalu cepat.",
  "Slow down, too many messages.": "Pelan-pelan, terlalu banyak pesan.",
  "The amount must be a whole number greater than 0.": "Jumlah harus bilangan bulat lebih dari 0.",
