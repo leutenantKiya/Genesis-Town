@@ -53,6 +53,10 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS consign_lots (account TEXT NOT NULL, token TEXT NOT NULL, qty INTEGER NOT NULL, min_price INTEGER NOT NULL,
         sold INTEGER NOT NULL DEFAULT 0, earned INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, token));
       CREATE TABLE IF NOT EXISTS homeland_invites (id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));
+      CREATE TABLE IF NOT EXISTS parties (id INTEGER PRIMARY KEY AUTOINCREMENT, leader TEXT NOT NULL, created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS party_members (account TEXT PRIMARY KEY, party INTEGER NOT NULL, joined_at INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS party_members_by_party ON party_members(party);
+      CREATE TABLE IF NOT EXISTS party_invites (from_acct TEXT NOT NULL, account TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (from_acct, account));
     `);
     const jc = (this.db.prepare('PRAGMA table_info(homeland_jobs)').all() as Array<{ name: string }>).map((c) => c.name);
     const bc = (this.db.prepare('PRAGMA table_info(homeland_bots)').all() as Array<{ name: string }>).map((c) => c.name);

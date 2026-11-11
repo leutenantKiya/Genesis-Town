@@ -218,6 +218,24 @@ export function createApp(deps: AppDeps) {
     return true;
   }
 
+  /** Party: GET /api/party, POST /api/party/{invite,accept,decline,leave,kick}. Every answer is the caller's party view. */
+  async function partyApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
+    if (p !== '/api/party' && !p.startsWith('/api/party/')) return false;
+    if (req.method === 'GET' && p === '/api/party') return send(res, 200, game.party.view(accountOf(req, url))), true;
+    if (req.method !== 'POST') throw new HttpError(404, 'no such route');
+    const raw = await readRaw(req);
+    const acct = accountOf(req, url, raw);
+    if (!actLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+    const b = parseJson(raw);
+    if (p === '/api/party/invite') send(res, 200, game.party.invite(acct, b.to));
+    else if (p === '/api/party/accept') send(res, 200, game.party.accept(acct, b.from));
+    else if (p === '/api/party/decline') send(res, 200, game.party.decline(acct, b.from));
+    else if (p === '/api/party/leave') send(res, 200, game.party.leave(acct));
+    else if (p === '/api/party/kick') send(res, 200, game.party.kick(acct, b.account));
+    else throw new HttpError(404, 'no such route');
+    return true;
+  }
+
   const boardCache = new Map<string, { at: number; body: unknown }>(); // Papan Juara: one heavy query per period and caller per 30 s
   /** Public-area economy: POST /api/trade/{offer,accept,cancel}, GET /api/trade, GET|POST /api/consign, POST /api/consign/withdraw, GET /api/leaderboard. */
   async function tradeApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
@@ -261,6 +279,7 @@ export function createApp(deps: AppDeps) {
     if (p.startsWith('/api/')) {
       if (cors(req, res)) return;
       if (await homelandApi(req, res, url, p)) return;
+      if (await partyApi(req, res, url, p)) return;
       if (await tradeApi(req, res, url, p)) return;
       if (req.method === 'GET' && p === '/api/config') {
         return send(res, 200, {
@@ -325,7 +344,7 @@ export function createApp(deps: AppDeps) {
         if (onTile) social.report(acct, w, b);
         const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : { title: titleFor(bazaar.points(s.account)) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
-        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq });
+        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: game.party.view(acct) });
       }
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);

@@ -15,6 +15,7 @@ import { MockChain } from '../chain.ts';
 import { Monsters } from './monsters.ts';
 import { worldIdOk } from '../social.ts';
 import { Trade } from './trade.ts';
+import { Parties } from './party.ts';
 import { Consign } from './consign.ts';
 import { leaderboard } from './leaderboard.ts';
 
@@ -35,6 +36,7 @@ export class Game {
   monsters: Monsters | null = null;
   homelands: Homelands;
   trade: Trade;
+  party: Parties;
   consign: Consign;
   now: () => number;
   store: Store;
@@ -60,6 +62,10 @@ export class Game {
       econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, now: this.now, history: hist, assertActive: (a) => this.assertActive(a),
       names: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) },
       where: (a) => (this.positions ? { world: this.positions.worldOf(a), pos: this.positions.last.get(a) ?? null } : null),
+    });
+    this.party = new Parties({
+      econ: this.econ, gs: this.gs, now: this.now, assertActive: (a) => this.assertActive(a),
+      names: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) },
     });
     this.consign = new Consign({
       econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, market: this.market, town: o.town, history: hist,

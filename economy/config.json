@@ -131,6 +131,7 @@
     { "id": "pos-ronda", "name": "Watch Post in the North Forest", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 }, "retired": "Monsters now live in each player's Homeland, so the village forest no longer needs guarding." }
   ],
   "trade": { "expireSecs": 120, "maxLines": 4 },
+  "party": { "max": 4, "inviteSecs": 120, "maxPendingInvites": 5 },
   "consign": { "merchant": "Granny Daisy", "feeBps": 500, "maxPerItem": 50, "sellPerGameHour": 3 },
   "homeland": {
     "builders": 1,

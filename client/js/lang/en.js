@@ -655,7 +655,7 @@
     "{0} → kamu": "{0} → you",
     "Masuk dulu untuk mengobrol.": "Sign in first to chat.",
     "Pilih namamu dulu di layar karakter.": "Choose your name on the character screen first.",
-    "Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama": "Chat only reaches players in the same world (max 80 characters, 1 message / 2 seconds). /msg name message · private message (across worlds) | /block name · hide their messages | /unblock name | /name NewName · change name",
+    "Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama | /party nama#tag · ajak ke party": "Chat only reaches players in the same world (max 80 characters, 1 message / 2 seconds). /msg name message · private message (across worlds) | /block name · hide their messages | /unblock name | /name NewName · change name | /party name#tag · invite to a party",
     "Ada beberapa pemain bernama {0}. Pakai nama#tag.": "Several players are named {0}. Use name#tag.",
     "Pemain {0} belum terlihat. Pakai nama#tag.": "Player {0} isn't visible yet. Use name#tag.",
     "{0} disembunyikan di browser ini.": "{0} is hidden in this browser.",
@@ -1308,6 +1308,23 @@
     "Kode ini tidak cocok dengan akun mana pun atau sudah tidak berlaku.": "This code does not match any account or no longer works.",
     "Akun dipindahkan ke perangkat ini. Selamat datang kembali!": "Account moved to this device. Welcome back!",
     "Kode ini berlaku 10 menit. Siapa pun yang memegang kode ini bisa bermain sebagai kamu; jangan dibagikan.": "This code works for 10 minutes. Anyone who has it can play as you; do not share it.",
-    "Kode sudah kedaluwarsa atau sudah dipakai. Buat kode baru di perangkat lain.": "This code has expired or was already used. Make a new one on the other device."
+    "Kode sudah kedaluwarsa atau sudah dipakai. Buat kode baru di perangkat lain.": "This code has expired or was already used. Make a new one on the other device.",
+    "Party": "Party",
+    "Tulis nama#tag pemain yang mau diajak.": "Type the name#tag of the player you want to invite.",
+    "Ajakan party terkirim ke {0}.": "Party invite sent to {0}.",
+    "Kamu belum punya party. Ajak pemain lain lewat nama#tag atau lewat kartu namanya (klik pemainnya).": "You have no party yet. Invite other players by name#tag or from their name card (click the player).",
+    "Ketua": "Leader",
+    "Keluarkan": "Remove",
+    "{0} dikeluarkan dari party.": "{0} was removed from the party.",
+    "Ajak (nama#tag)": "Invite (name#tag)",
+    "Ajak": "Invite",
+    "Hanya ketua yang bisa mengajak dan mengeluarkan anggota.": "Only the leader can invite and remove members.",
+    "Ajakan masuk": "Incoming invites",
+    "Kamu masuk party.": "You joined the party.",
+    "Keluar dari party": "Leave party",
+    "Kamu keluar dari party.": "You left the party.",
+    "Ajakan party": "Party invite",
+    "{0}#{1} mengajakmu ke party": "{0}#{1} invites you to a party",
+    "Ajak party": "Invite to party"
   });
 })();

@@ -54,6 +54,7 @@
       Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
       (r.chat || []).forEach(addLine);
       last = r.last || last;
+      presenceFns.forEach(function (f) { try { f(r); } catch (e) { /* a listener must not break the loop */ } });
       renderHead();
     }, function () { backoff = Math.min(8, backoff + 1); }).then(function () { busy = false; });
   }
@@ -211,7 +212,7 @@
     var text = String(raw || '').trim();
     if (!text) { closeChat(); return; }
     var m;
-    if (/^\/help$/i.test(text)) { note($t('Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama')); input.value = ''; return; }
+    if (/^\/help$/i.test(text)) { note($t('Obrolan hanya dengan pemain di pulau yang sama (maks 80 huruf, 1 pesan / 2 detik). /msg nama pesan · pesan pribadi (lintas pulau) | /block nama · sembunyikan pesannya | /unblock nama | /nama NamaBaru · ganti nama | /party nama#tag · ajak ke party')); input.value = ''; return; }
     if ((m = /^\/(block|unblock)\s+(.+)$/i.exec(text))) {
       var target = m[2].trim(), tm = /^(.+)#(\d{5})$/.exec(target), tk;
       if (tm) tk = key(tm[1], tm[2]);
@@ -224,6 +225,11 @@
       if (m[1].toLowerCase() === 'block') b.push(tk);
       setBlocked(b); note(m[1].toLowerCase() === 'block' ? $t('{0} disembunyikan di browser ini.', [target]) : $t('{0} terlihat lagi.', [target]));
       input.value = ''; return;
+    }
+    if ((m = /^\/(party|ajak)\s+(.+)$/i.exec(text))) {
+      input.value = '';
+      if (window.GT_PARTY) GT_PARTY.invite(m[2].trim()).then(function () { closeChat(); });
+      return;
     }
     if ((m = /^\/(nama|name|nick)\s+(.+)$/i.exec(text))) {
       C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; meTag = r.tag || meTag; named = r.named !== false; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note($t('Namamu sekarang {0}#{1}.', [r.name, r.tag])); }, function (e) { note(e.message); });
@@ -239,6 +245,7 @@
     Object.keys(others).forEach(function (a) { var o = others[a]; if (Math.round(curX(o, now)) === t.x && Math.round(curY(o, now)) === t.y) hit = o; });
     return hit;
   }
+  var presenceFns = []; // other mods listen to each successful presence answer
   var cardActions = []; // other mods add buttons: fn(player) -> {label, onClick(handle)} | null
   function card(o) {
     var body = el('div', 'gt-pcard');
@@ -284,6 +291,6 @@
   }
 
   function refresh() { others = {}; curWorld = null; backoff = 0; tick(); } // after sailing: forget the old world's players at once
-  window.GT_PLAYERS = { addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
+  window.GT_PLAYERS = { onPresence: function (f) { presenceFns.push(f); }, addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
   GT.register({ id: 'players', init: function (g) { init(g); g.register({ id: 'players-labels', onDraw: onDraw }); }, onEntities: onEntities, onKey: onKey }); // tags and bubbles register last from init, so they draw over every other mod's signs
 })();

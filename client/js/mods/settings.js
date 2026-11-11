@@ -21,6 +21,7 @@
     { id: 'market', canon: 'KeyK', label: $t('Pasar Pemain'), keys: ['KeyK'] },
     { id: 'chat', canon: 'KeyC', label: $t('Chat dengan pemain lain'), keys: ['KeyC'] },
     { id: 'map', canon: 'KeyM', label: $t('Peta'), keys: ['KeyM'] },
+    { id: 'party', canon: 'KeyG', label: $t('Party'), keys: ['KeyG'] },
     { id: 'profile', canon: 'KeyP', label: $t('Profil'), keys: ['KeyP'] },
     { id: 'fullscreen', canon: 'KeyF', label: $t('Layar penuh'), keys: ['KeyL'] },
     { id: 'settings', canon: 'KeyO', label: $t('Pengaturan'), keys: ['KeyO'] }
@@ -169,6 +170,7 @@
     var opts = [];
     if (document.getElementById('simbtn')) opts.push({ label: $t('Simulasi 1 minggu'), onPick: function () { press('simbtn'); } });
     opts.push({ label: $t('Pengaturan'), onPick: openSettings });
+    opts.push({ label: $t('Party'), onPick: function () { if (window.GT_PARTY) GT_PARTY.open(); } });
     if (GT.openProfile) opts.push({ label: $t('Profil'), onPick: function () { GT.openProfile(); } });
     if (document.getElementById('btnJiwa')) opts.push({ label: $t('Jiwa'), onPick: function () { press('btnJiwa'); } });
     if (GT.interact) opts.push({ label: $t('Pesan ke NPC di depanmu'), onPick: function () { GT.interact('message'); } });

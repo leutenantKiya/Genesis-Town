@@ -56,6 +56,7 @@ export interface Econ {
   monsters: MonsterConfig;
   homeland: HomelandConfig;
   trade: { expireSecs: number; maxLines: number };
+  party: { max: number; inviteSecs: number; maxPendingInvites: number };
   consign: { merchant: string; feeBps: number; maxPerItem: number; sellPerGameHour: number };
 }
 

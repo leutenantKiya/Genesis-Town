@@ -20,7 +20,7 @@
 
 ## STATUS (tick one row per step, in the same commit as the step)
 
-- [ ] Step 1: Party core: create, invite, accept or decline, leave, kick; panel and name-card button
+- [x] Step 1: Party core: create, invite, accept or decline, leave, kick; panel and name-card button
 - [ ] Step 2: Party everywhere: green tags, minimap dots, off-screen arrows, party chat `/p`
 - [ ] Step 3: Party in Homelands: owner's party may visit; portal entries, "Ikut" follow, safe leave and kick
 - [ ] Step 4: Homeland roles (Pengunjung / Pembantu / Tukang) and gathering plus night fights for helpers
