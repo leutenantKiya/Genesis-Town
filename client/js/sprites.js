@@ -905,6 +905,14 @@
       ['.kppk.kppk..', '.kbbk.kbbk..']]
   };
   LEGS.up = LEGS.down;
+  // sitting (step 'sit'): these three rows replace the hip row and the leg rows. Seen from the front the thighs come
+  // toward the viewer with the shins hanging down; from behind the legs are hidden in front of the body; from the
+  // side the thighs run forward and the shin hangs at the front.
+  var SIT = {
+    down: ['.kppppppppk.', '..kpk..kpk..', '..kbk..kbk..'],
+    up:   ['.kppppppppk.', '............', '............'],
+    left: ['kppppppppk..', 'kpk.........', 'kbbk........']
+  };
 
   function mirrorRows(rows) {
     return rows.map(function (r) { return r.split('').reverse().join(''); });
@@ -918,7 +926,7 @@
       t: p.shirt, T: shade(p.shirt, 0.78), p: p.pants, b: '#4a3028'
     };
     var src = dir === 'right' ? 'left' : dir;
-    var rows = HEAD[src].concat(BODY, LEGS[src][step]);
+    var rows = step === 'sit' ? HEAD[src].concat(BODY.slice(0, 3), SIT[src]) : HEAD[src].concat(BODY, LEGS[src][step]);
     if (p.police) {
       pal.v = '#141c46'; pal.y = '#f8d838'; pal.H = '#3c52a0'; pal.T = '#1e2e6c';
       rows = rows.slice();
@@ -936,7 +944,7 @@
   function drawCharacter(ctx, x, y, palette, dir, step) {
     var pi = ((Math.floor(palette) || 0) % 9 + 9) % 9;
     var d = (dir === 'up' || dir === 'left' || dir === 'right') ? dir : 'down';
-    var s = (step === 1 || step === 2) ? step : 0;
+    var s = step === 'sit' ? 'sit' : (step === 1 || step === 2) ? step : 0;
     var key = pi + d + s;
     var c = charCache[key] || (charCache[key] = buildChar(pi, d, s));
     ctx.drawImage(c, Math.round(x), Math.round(y) - 2);

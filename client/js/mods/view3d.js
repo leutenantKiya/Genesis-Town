@@ -441,9 +441,10 @@
         var x = mx(e.px / T + 0.5), z = mz(e.py / T + 0.5);
         // sitting: standing still on a bench (village v2) lowers the sprite onto the seat, facing out
         var tm = o.house ? o.map : (o.out || o.map), tx = Math.floor(e.px / T + 0.5), ty = Math.floor(e.py / T + 0.5);
-        var sit = !(e.step | 0) && tm.tiles && tm.tiles[ty * tm.w + tx] === 'bench';
-        a.actor.set(x, z, sit ? screenDir('down') : screenDir(e.dir || 'down'), e.step | 0); a.outdoor = !o.house;
-        if (!(e.me && drop)) { if (sit) a.actor.pose(-0.14, 0, 0.84); else if (a.sat) a.actor.pose(0, 0, 1); }
+        // (or on a chair indoors: the engine puts the player on the chair tile and says so with e.sit)
+        var onChair = !!e.sit, sit = onChair || (!(e.step | 0) && tm.tiles && tm.tiles[ty * tm.w + tx] === 'bench');
+        a.actor.set(x, z, sit ? screenDir(onChair ? (e.dir || 'down') : 'down') : screenDir(e.dir || 'down'), sit ? 'sit' : e.step | 0); a.outdoor = !o.house;
+        if (!(e.me && drop)) { if (sit) a.actor.pose((onChair ? 0.35 : 0.41) - 3 * GT3.PX, 0, 1); else if (a.sat) a.actor.pose(0, 0, 1); }
         a.sat = sit;
         a.actor.group.visible = !e.hidden; // the character screen's throw is drawing the player until it lands
         seen.add(key);

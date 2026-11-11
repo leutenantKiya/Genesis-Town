@@ -71,7 +71,7 @@
       },
       set: function (x, z, d, s) {
         group.position.set(x, 0, z);
-        d = d || dir; s = s | 0;
+        d = d || dir; s = s === 'sit' ? 'sit' : s | 0;
         if (d !== dir || s !== step) { dir = d; step = s; mat.map = frame(pal, dir, step); mat.needsUpdate = true; }
       },
       // turn to the camera and lean back by its pitch, pivoting at the feet: from the high game camera an upright card

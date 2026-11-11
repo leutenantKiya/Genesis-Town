@@ -137,12 +137,27 @@ function fbLamp(g, x, y){   // simple stand-in street lamp when sprites.js has n
   g.fillStyle = '#f8d838'; g.fillRect(x + 5, y + 1, 2, 2);
   g.fillStyle = '#8a8c9c'; g.fillRect(x + 5, y + 5, 1, 5);
 }
+// sitting on a chair indoors (client-only, draw-only): the player stays on the walkable tile beside the chair for the
+// server and every mod; only the drawing puts the character on the chair. Any movement, a talk key or a scene change stands up.
+var sitSpot = null; // {x, y, dir, scene} the chair tile and the way the character faces
+function sitDown(cx, cy){
+  var m = scene.map, dir = 'down', hit = false;
+  [['up', 0, -1], ['left', -1, 0], ['right', 1, 0], ['down', 0, 1]].forEach(function(q){
+    if (hit) return;
+    var tt = inb(m, cx + q[1], cy + q[2]) ? m.tiles[(cy + q[2])*m.w + cx + q[1]] : '';
+    if (tt === 'table' || tt === 'card_table' || tt === 'dice_table'){ dir = q[0]; hit = true; }
+  });
+  sitSpot = { x:cx, y:cy, dir:dir, scene:scene };
+  P.dir = dir;
+}
+function selfPos(){ return sitSpot ? { px:sitSpot.x * T, py:sitSpot.y * T } : lerpPos(P); }
 function drawChar(g, x, y, pal, dir, step){
   if (SPRITES.charShadow && scene && scene.kind === 'out') SPRITES.charShadow(g, x, y);
   // sitting: standing still on a bench (the public square, village v2) sets the sprite down on the seat, facing out
-  if (!step && scene && scene.kind === 'out'){
-    var m = scene.map, tx = Math.round((x + camX) / T), ty = Math.round((y + camY) / T);
-    if (inb(m, tx, ty) && m.tiles[ty*m.w + tx] === 'bench'){ y += 3; dir = 'down'; }
+  if (!step && scene){
+    var m = scene.map, tx = Math.round((x + camX) / T), ty = Math.round((y + camY) / T), st = inb(m, tx, ty) ? m.tiles[ty*m.w + tx] : '';
+    if (scene.kind === 'out' && st === 'bench'){ y -= 3; dir = 'down'; step = 'sit'; }
+    else if (st === 'chair' && sitSpot && sitSpot.x === tx && sitSpot.y === ty){ y -= 3; dir = sitSpot.dir; step = 'sit'; }
   }
   try { SPRITES.drawCharacter(g, x, y, pal, dir, step); }
   catch(e){ SPRITES.drawCharacter(g, x, y, (pal | 0) % 6, dir, step); }
@@ -1794,6 +1809,7 @@ function interact(mode){
   if (mapOpen){ setMap(false); return; }
   if (D){ advanceDialog(); return; }
   if (P.moving) return;
+  if (sitSpot){ sitSpot = null; return; }
   var m = scene.map, f = facingTile();
   if (!inb(m, f.x, f.y)) return;
   var idx = f.y*m.w + f.x, tt = m.tiles[idx];
@@ -1806,6 +1822,7 @@ function interact(mode){
     locked:!!(door && !(door.kind === 'mart' || door.kind === 'casino' || door.invited)) };
   if (npc) engage(npc);
   if (callModsBool('onInteract', [ctx])) return;
+  if (tt === 'chair' && !npc && scene.kind !== 'out' && mode !== 'message'){ sitDown(f.x, f.y); return; }
   if (mode === 'message'){
     if (npc) openDialog('(' + npc.name + ' belum punya jiwa. Pasang di menu Jiwa.)', '', npc);
     else toast('Hadapi seseorang lalu tekan E untuk kirim pesan.');
@@ -1971,6 +1988,7 @@ function update(dt){
   if (unfoldT > 0) unfoldT -= dt;
   if (mapOpen){ drawMinimap(); return; }
   updateDialog(dt);
+  if (sitSpot && (sitSpot.scene !== scene || tr || held.length || stick || P.moving)) sitSpot = null;
   updatePlayer(dt);
   if (!tr || tr.ph === 1){
     if (playerFx.bubble){ playerFx.bubble.t -= dt; if (playerFx.bubble.t <= 0) playerFx.bubble = null; }
@@ -2013,7 +2031,7 @@ function render3d(pp){
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, elCv.width, elCv.height); ctx.setTransform(S, 0, 0, S, 0, 0);
   var ents = [];
   scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n, pal:n.pal, dir:n.dir, step:charStep(n)}); });
-  ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true, hidden:playerHidden});
+  ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true, hidden:playerHidden, sit:!!sitSpot});
   callMods('onEntities', [ents, ctx, camX, camY, T]); // mods add {px, py, pal, dir, step, id}; their draw() is not called
   var outside = scene.kind === 'out', g = outside ? view3d.groundCtx(scene.map) : null;
   if (g) { g.clearRect(0, 0, g.canvas.width, g.canvas.height); callMods('onDrawGround', [g, 0, 0, T]); }
@@ -2035,7 +2053,7 @@ function render3d(pp){
 }
 function render(){
   var m = scene.map, mw = m.w * T, mh = m.h * T;
-  var pp = lerpPos(P);
+  var pp = selfPos();
   if (v3on()) return render3d(pp);
   if (view3d) view3d.idle();
   ctx.fillStyle = '#0b0c14'; ctx.fillRect(0, 0, VW, VH);
@@ -2557,7 +2575,7 @@ var GT = {
   // where the player's feet are on #screen (CSS px) and how big one art pixel of their sprite is there, in 2D and 2.5D,
   // so an effect drawn over the view (the character screen's throw) can land exactly on the real sprite
   playerScreen: function(){
-    var pp = lerpPos(P);
+    var pp = selfPos();
     if (v3on()){ var p = view3d.toScreen(pp.px / T + 0.5, pp.py / T + 0.5, 0); return { x:p.x * S, y:p.y * S, scale:view3d.artScale(S) }; }
     return { x:(pp.px + 6 - camX) * S, y:(pp.py + 12 - camY) * S, scale:S };
   },
@@ -2577,6 +2595,7 @@ Object.defineProperties(GT, {
   scene: { get: function(){ return scene; } },
   outScene: { get: function(){ return outScene; } },
   player: { get: function(){ return { x:P.x, y:P.y, dir:P.dir, moving:P.moving }; } },
+  sitting: { get: function(){ return sitSpot ? { x:sitSpot.x, y:sitSpot.y, dir:sitSpot.dir } : null; } },
   time: { get: function(){ return clockInfo(); } },
   buildings: { get: function(){ return world ? world.buildings : []; } },
   seed: { get: function(){ return seed; } }
