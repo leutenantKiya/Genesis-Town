@@ -109,7 +109,7 @@
       tick++; paint(prev, look, dirs[Math.floor(tick / 4) % dirs.length], tick % 2 ? 1 : 0);
     }, 300);
     paint(prev, look, 'down', 0);
-    sw.forEach(function (b, k) { b.addEventListener('mouseenter', function () { paint(prev, k, 'down', 0); }); b.addEventListener('mouseleave', function () { paint(prev, look, 'down', 0); }); });
+    // the look only changes on click/tap or Enter/Space on a swatch (pick above); hovering just outlines it (CSS)
     grid.addEventListener('click', function () { paint(prev, look, 'down', 0); });
 
     function fail(text) { msg.textContent = text; busy = false; go.disabled = false; }

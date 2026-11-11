@@ -235,4 +235,9 @@ html.gt-phone .gt-chat-input{min-height:44px;font-size:16px}
 }
 
 /* "Masuk" chooser: Google renders its own button inside this slot */
+.gt-code-entry{margin-top:14px;padding-top:10px;border-top:var(--line) solid var(--paper-dim)}
+.gt-code-input{display:block;width:100%;box-sizing:border-box;margin:6px 0;padding:8px 10px;font:inherit;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);background:var(--paper-hi,#fff);color:var(--paper-ink)}
+.gt-code-box{display:block;width:100%;box-sizing:border-box;margin:8px 0;padding:8px 10px;font:12px/1.4 ui-monospace,Consolas,monospace;word-break:break-all;overflow-wrap:anywhere;resize:none;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);background:var(--paper-2);color:var(--paper-ink)}
+.gt-code-msg{min-height:1.2em;color:var(--bad,#b3261e)}
+.chain-warn{margin:10px 0 0;color:var(--bad,#b3261e)}
 .gt-login-google{display:flex;justify-content:center;align-items:center;min-height:44px;margin:12px 0 4px}

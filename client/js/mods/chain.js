@@ -227,20 +227,21 @@
         if (r === null) return;
         if (r.needsKey) {
           // Adding a key for a new device needs the owner key, which only NEAR Auth can use.
+          // returns true when it has shown the explanation window (Google sign-in) and the login should simply stop here
           var needProvider = function () {
-            if (provider) return;
-            if (via === 'google') throw new Error($t('Akun ini sudah dipakai di perangkat lain. Perangkat baru perlu persetujuan NEAR Auth, yang belum aktif di alamat ini; main dulu dari perangkat pertamamu.'));
+            if (provider) return false;
+            if (via === 'google') { approveDeviceWindow(); return true; }
             throw new Error($t('Akun ini perlu kunci baru; masuk dengan NEAR Auth.'));
           };
           // a key for this account from an earlier sign-in in this browser: use it instead of adding a new one
           var known = keyOf(r.accountId);
           if (known && known.getPublicKey().toString() !== kp.getPublicKey().toString()) {
             return reg(known.getPublicKey().toString()).then(function (r2) {
-              if (r2.needsKey) { needProvider(); return newDevice(provider, r, idToken).then(function () { signedIn(r.accountId, sessionKey(), $t('Kunci baru ditambahkan. Selamat datang kembali!')); }); }
+              if (r2.needsKey) { if (needProvider()) return; return newDevice(provider, r, idToken).then(function () { signedIn(r.accountId, sessionKey(), $t('Kunci baru ditambahkan. Selamat datang kembali!')); }); }
               return signedIn(r2.accountId, known, $t('Selamat datang kembali!'));
             });
           }
-          needProvider();
+          if (needProvider()) return;
           return newDevice(provider, r, idToken).then(function () { return signedIn(r.accountId, sessionKey(), $t('Kunci baru ditambahkan. Selamat datang kembali!')); });
         }
         keepKey(r.accountId, kp);
@@ -248,6 +249,92 @@
         GT.toast(r.created ? $t('Akun dibuat! Paket awal: 100 koin, 1 Alat, 3 Roti, 3 Gandum.') : $t('Selamat datang kembali!'));
         return refresh(true);
       });
+  }
+
+  // A Google sign-in for an account that exists but has no key in this browser. Adding a key needs the player's NEAR
+  // Auth key: where NEAR Auth works, one button runs its login (which ends in the new-device step); where it does not
+  // (an address it does not allow-list), the window explains why, in full.
+  function approveDeviceWindow() {
+    var usable = !!(window.NearLib && S.cfg && S.cfg.fastAuth);
+    var body = $('div');
+    if (usable) {
+      body.appendChild($('p', null, $t('Perangkat ini perlu disetujui satu kali dengan NEAR Auth sebelum bisa bermain dengan akunmu.')));
+      body.appendChild(codeEntry(function () { hh.close('code'); }));
+      var hh = GT.modal({ title: $t('Perangkat baru'), body: body, actions: [{ label: $t('Setujui dengan NEAR Auth'), primary: true, onClick: function (h) { h.close('near'); nearLogin(); return true; } }] });
+    } else {
+      body.appendChild($('p', null, $t('Akun ini sudah dipakai di perangkat lain. Perangkat baru perlu persetujuan NEAR Auth, yang belum aktif di alamat ini; main dulu dari perangkat pertamamu.')));
+      body.appendChild(codeEntry(function () { hn.close('code'); }));
+      var hn = GT.modal({ title: $t('Perangkat baru'), body: body });
+    }
+  }
+
+  /* ---- Move to another device (client only): a one-time code holding the account id and this browser's game key.
+     The key is already an access key on the account (function calls on the game contract only), so the server needs
+     no change. The code works for ten minutes and must be treated like a password. ---- */
+  var CODE_PREFIX = 'gt1.', CODE_MS = 10 * 60 * 1000;
+  function b64url(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function unb64url(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
+  function makeTransferCode() {
+    var kp = S.account && window.NearLib && keyOf(S.account);
+    if (!kp) return null;
+    return CODE_PREFIX + b64url(JSON.stringify({ a: S.account, k: kp.toString(), exp: Date.now() + CODE_MS }));
+  }
+  function parseTransferCode(text) {
+    var bad = new Error($t('Kode tidak valid. Salin seluruh kode dari perangkat lain.'));
+    var t = String(text || '').replace(/\s+/g, '');
+    if (t.indexOf(CODE_PREFIX) !== 0 || !window.NearLib) throw bad;
+    var o; try { o = JSON.parse(unb64url(t.slice(CODE_PREFIX.length))); } catch (e) { throw bad; }
+    if (!o || typeof o.a !== 'string' || typeof o.k !== 'string' || typeof o.exp !== 'number' || !/^[a-z0-9][a-z0-9._-]{1,63}$/.test(o.a) || o.a.indexOf('.') < 0 || o.k.indexOf('ed25519:') !== 0) throw bad;
+    if (o.exp < Date.now()) throw new Error($t('Kode sudah kedaluwarsa. Buat kode baru di perangkat lain.'));
+    var kp; try { kp = window.NearLib.KeyPair.fromString(o.k); } catch (e) { throw bad; }
+    return { account: o.a, kp: kp };
+  }
+  // keeps the key only if the server accepts a signed request with it
+  function redeemTransferCode(text) {
+    var c; try { c = parseTransferCode(text); } catch (e) { return Promise.reject(e); }
+    var prev = S.account, had = keyRing()[c.account];
+    keepKey(c.account, c.kp); S.account = c.account;
+    return api('/state').then(function () {
+      return signedIn(c.account, c.kp, $t('Akun dipindahkan ke perangkat ini. Selamat datang kembali!'));
+    }, function () {
+      var r = keyRing(); if (had) r[c.account] = had; else delete r[c.account];
+      lsSet(LS_KEYS, JSON.stringify(r)); S.account = prev;
+      throw new Error($t('Kode ini tidak cocok dengan akun mana pun atau sudah tidak berlaku.'));
+    });
+  }
+  // the "I have a code" field for the sign-in windows; done() runs after a successful sign-in
+  function codeEntry(done) {
+    var box = $('div', 'gt-code-entry');
+    box.appendChild($('h4', 'chain-h', $t('Aku punya kode dari perangkat lain')));
+    var input = $('input', 'gt-code-input'); input.type = 'text'; input.placeholder = $t('Tempel kode di sini'); input.autocomplete = 'off'; input.spellcheck = false;
+    input.setAttribute('aria-label', $t('Aku punya kode dari perangkat lain'));
+    var msg = $('p', 'mnote gt-code-msg'); msg.setAttribute('role', 'alert');
+    var go = button($t('Masuk dengan kode'), function () {
+      msg.textContent = ''; go.disabled = true;
+      redeemTransferCode(input.value).then(function () { done(); }, function (e) { msg.textContent = e.message; go.disabled = false; });
+    }, 'primary');
+    box.appendChild(input); box.appendChild(go); box.appendChild(msg);
+    return box;
+  }
+  // signed in: shows the code to type or paste on the other device
+  function transferWindow() {
+    var code = makeTransferCode();
+    if (!code) { GT.toast($t('Gagal.')); return; }
+    var body = $('div');
+    body.appendChild($('p', null, $t('Di perangkat lain: pilih "Aku punya kode dari perangkat lain" saat masuk, lalu tempel kode ini.')));
+    var ta = $('textarea', 'gt-code-box'); ta.readOnly = true; ta.rows = 5; ta.value = code; ta.spellcheck = false;
+    ta.setAttribute('aria-label', $t('Pindahkan ke perangkat lain'));
+    ta.addEventListener('focus', function () { ta.select(); });
+    body.appendChild(ta);
+    var note = $('p', 'mnote');
+    var copy = button($t('Salin'), function () {
+      var ok = function () { note.textContent = $t('Tersalin!'); };
+      var fallback = function () { ta.focus(); ta.select(); try { if (document.execCommand('copy')) ok(); } catch (e) { /* select-all is enough */ } };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(ok, fallback); else fallback();
+    }, 'primary');
+    body.appendChild(copy); body.appendChild(note);
+    body.appendChild($('p', 'chain-warn', $t('Kode ini berlaku 10 menit. Siapa pun yang memegang kode ini bisa bermain sebagai kamu; jangan dibagikan.')));
+    GT.modal({ title: $t('Pindahkan ke perangkat lain'), body: body });
   }
 
   function signedIn(account, kp, msg) {
@@ -306,6 +393,7 @@
     body.appendChild($('p', null, $t('Pilih cara masuk. Akunmu tetap akun NEAR testnet; tanpa dompet, tanpa biaya gas.')));
     var slot = $('div', 'gt-login-google'); slot.appendChild($('p', 'mnote', $t('Memuat tombol Google…')));
     body.appendChild(slot);
+    body.appendChild(codeEntry(function () { h.close('code'); }));
     var actions = [];
     if (window.NearLib) actions.push({ label: $t('Masuk dengan NEAR Auth (Google/email)'), onClick: function (h) { h.close('near'); nearLogin(); return true; } });
     var h = GT.modal({ title: $t('Masuk'), body: body, actions: actions, onClose: function () { onGoogle = null; } });
@@ -1121,6 +1209,7 @@
     wrap.appendChild($('p', 'chain-dim', $t('{0}Barang "hari ini" tersimpan permanen pukul 06:00{1}', [document.documentElement.classList.contains('gt-phone') ? $t('Ketuk barang untuk melihat, lalu Pegang. ') : $t('Klik untuk melihat, klik kanan untuk memegang. '), chainUI() ? $t(' (di NEAR).') : '.'])));
     if (S.account) wrap.appendChild($('p', 'chain-dim', $t('Akun: {0}', [S.account])));
     wrap.appendChild(button($t('Semua riwayat'), function () { open('history'); }));
+    if (S.account && window.NearLib) wrap.appendChild(button($t('Pindahkan ke perangkat lain'), transferWindow));
     wrap.appendChild(button($t('Keluar (ganti akun)'), function () { signOut(); }));
     return wrap;
   }
@@ -1554,6 +1643,12 @@
       renderBanner(); return refresh(true);
     }).then(schedulePoll);
     renderBanner();
+    // a live language switch: the server translates names and messages, so fetch them again, then redraw what is open
+    if (window.GT_I18N) GT_I18N.onChange(function () {
+      renderBanner(); renderGoals();
+      if (S.mode === 'offline') { renderHud(); redraw(); return; }
+      api('/config').then(function (cfg) { S.cfg = cfg; renderHud(); redraw(); }, function () { /* keep the old names */ }).then(function () { return refresh(true); });
+    });
   }
 
   // keys while fighting: F / Space / Enter attack, Esc runs; nothing else moves the player

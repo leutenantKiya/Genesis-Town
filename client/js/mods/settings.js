@@ -208,7 +208,7 @@
     var lg = $('div', 'mseg');
     [['en', 'English'], ['id', 'Bahasa Indonesia']].forEach(function (o) {
       var lab = $('label'); var inp = $('input'); inp.type = 'radio'; inp.name = 'gt-lang'; inp.value = o[0]; inp.checked = window.GT_LANG === o[0];
-      inp.addEventListener('change', function () { if (window.GT_I18N && window.GT_LANG !== o[0]) GT_I18N.setLang(o[0]); });
+      inp.addEventListener('change', function () { if (window.GT_I18N && window.GT_LANG !== o[0]) GT_I18N.setLang(o[0]); }); // live: no reload, the game stays where it is
       lab.appendChild(inp); lab.appendChild($('span', null, o[1])); lg.appendChild(lab);
     });
     wrap.appendChild(lg);
@@ -332,6 +332,9 @@
   window.addEventListener('keydown', onKey, true);
   window.addEventListener('keyup', onKey, true);
   applyLayout();
+
+  // a language switch: rebuild this window and the key hint line in the new language
+  if (window.GT_I18N) GT_I18N.onChange(function () { redraw(); rebuild(); });
 
   window.GT_SETTINGS = { label: label, keyName: keyName, open: openSettings, toggleFullscreen: toggleFullscreen, _state: st };
   GT.register({

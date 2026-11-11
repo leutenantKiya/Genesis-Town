@@ -159,6 +159,14 @@ table). Check once before relying on it: on localhost sign in with one Google ac
 confirm both land on the same `p….players` account. A Google player on a second device needs the owner key (NEAR
 Auth) to add a game key, so that step waits for NEAR Auth to accept the domain.
 
+**Workaround: move to another device with a code** (client only, `client/js/mods/chain.js`). Signed in, the bag has
+"Move to another device": a one-time code (`gt1.` + base64url of the account id, this browser's game key and an
+expiry 10 minutes away). On the other device, choose "I have a code from another device" on the sign-in window (or in
+the "new device" window) and paste it; the client keeps the key only if the server accepts a signed request with it.
+The game key is a function-call key on the game contract (it cannot move NEAR), but the 10 minutes are only checked by
+the game page: the key itself stays valid, so anyone who sees the code can play as that player. Treat a leaked code
+like a leaked game key and never post it anywhere.
+
 ## Updating
 
 Push to the branch the host deploys from; the service rebuilds and restarts. A restart is safe at any time: missed

@@ -1294,6 +1294,20 @@
     "pagi": "morning",
     "siang": "afternoon",
     "sore": "evening",
-    "Sosial": "Social"
+    "Sosial": "Social",
+    "Perangkat ini perlu disetujui satu kali dengan NEAR Auth sebelum bisa bermain dengan akunmu.": "This device must be approved once with NEAR Auth before it can play on your account.",
+    "Setujui dengan NEAR Auth": "Approve with NEAR Auth",
+    "Pindahkan ke perangkat lain": "Move to another device",
+    "Di perangkat lain: pilih \"Aku punya kode dari perangkat lain\" saat masuk, lalu tempel kode ini.": "On the other device: choose \"I have a code from another device\" when signing in, then paste this code.",
+    "Salin": "Copy",
+    "Tersalin!": "Copied!",
+    "Aku punya kode dari perangkat lain": "I have a code from another device",
+    "Tempel kode di sini": "Paste the code here",
+    "Masuk dengan kode": "Sign in with code",
+    "Kode tidak valid. Salin seluruh kode dari perangkat lain.": "Invalid code. Copy the whole code from the other device.",
+    "Kode sudah kedaluwarsa. Buat kode baru di perangkat lain.": "This code has expired. Make a new one on the other device.",
+    "Kode ini tidak cocok dengan akun mana pun atau sudah tidak berlaku.": "This code does not match any account or no longer works.",
+    "Akun dipindahkan ke perangkat ini. Selamat datang kembali!": "Account moved to this device. Welcome back!",
+    "Kode ini berlaku 10 menit. Siapa pun yang memegang kode ini bisa bermain sebagai kamu; jangan dibagikan.": "This code works for 10 minutes. Anyone who has it can play as you; do not share it."
   });
 })();
