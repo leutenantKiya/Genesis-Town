@@ -514,7 +514,9 @@
   }
   function drawHat(ctx, n, name, camX, camY, T, sick) {
     var d = name && H.cosmetics && H.cosmetics[name]; if (!d || !n) return;
-    var ha = GT.at(n.x, n.y), sx = GT.snap(ha.x), sy = GT.snap(ha.y);
+    // where the sprite is now: a walking NPC's x, y is already the next tile, so the hat would run ahead of the head
+    var k = n.moving ? Math.min(1, n.t || 0) : 1, nx = n.moving ? n.fx + (n.x - n.fx) * k : n.x, ny = n.moving ? n.fy + (n.y - n.fy) * k : n.y;
+    var ha = GT.at(nx, ny), sx = GT.snap(ha.x), sy = GT.snap(ha.y);
     if (sick) { if (name === 'syal') return; sx -= 2; sy += 5; } // a collapsed worker lies down: the hat goes on the lying head
     ctx.fillStyle = '#2a2430';
     if (name === 'syal') { ctx.fillRect(sx + 3, sy + 7, 10, 3); ctx.fillStyle = d.color; ctx.fillRect(sx + 4, sy + 8, 8, 1); ctx.fillRect(sx + 9, sy + 8, 2, 4); return; }
