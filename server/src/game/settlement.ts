@@ -332,7 +332,7 @@ export class Settlement {
    */
   async relief(day: number) {
     const { gs, chain, town, econ } = this.d;
-    const shops = await chain.listShops();
+    const shops = this.ourShops(await chain.listShops());
     if (!shops.length || shops.some((s) => s.open) || gs.meta('relief.day') === String(day)) return [];
     gs.setMeta('relief.day', String(day));
     const reserve = (econ.starter.coin ?? 100) * 5;
@@ -360,8 +360,13 @@ export class Settlement {
     }
   }
 
+  /** Only the merchants in economy/config.json: after a merchant rename the contract still lists the old shops (docs/merchant-rename.md). */
+  ourShops<T extends { account_id: string }>(shops: T[]): T[] {
+    return shops.filter((s) => this.d.econ.merchants[s.account_id.split('.')[0]] !== undefined);
+  }
+
   async refreshShops() {
-    const shops = await this.d.chain.listShops();
+    const shops = this.ourShops(await this.d.chain.listShops());
     this.d.market.closed = new Set(shops.filter((s) => !s.open).map((s) => s.account_id));
     this.d.gs.setMeta('coin.supply', await this.d.chain.coinSupply());
     return shops;

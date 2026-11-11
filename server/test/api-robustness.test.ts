@@ -90,7 +90,7 @@ test('ids that exist on Object.prototype are unknown, not a crash', async () => 
   const h = await harness();
   try {
     for (const bad of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
-      for (const q of [`merchant=${bad}&token=fish`, `merchant=sari&token=${bad}`]) {
+      for (const q of [`merchant=${bad}&token=fish`, `merchant=sarah&token=${bad}`]) {
         const r = await h.raw('GET', `/api/quote?${q}&qty=1`);
         assert.ok(r.status >= 400 && r.status < 500, `quote ${q} -> ${r.status}`);
       }
@@ -98,8 +98,8 @@ test('ids that exist on Object.prototype are unknown, not a crash', async () => 
       assert.equal(t.status, 404, `talk ${bad}`);
       const pos = { x: 1, y: 1 };
       for (const body of [
-        { action: 'sell', merchant: bad, token: 'fish', qty: 1, pos }, { action: 'buy', merchant: 'sari', token: bad, qty: 1, pos },
-        { action: 'sell', merchant: 'sari', token: bad, qty: 1, pos }, { action: 'ship', token: bad, qty: 1, pos },
+        { action: 'sell', merchant: bad, token: 'fish', qty: 1, pos }, { action: 'buy', merchant: 'sarah', token: bad, qty: 1, pos },
+        { action: 'sell', merchant: 'sarah', token: bad, qty: 1, pos }, { action: 'ship', token: bad, qty: 1, pos },
         { action: 'eat', token: bad, pos }, { action: 'craft', recipe: bad, pos },
       ]) {
         const r = await h.call('POST', '/api/act', JSON.stringify(body));
@@ -124,15 +124,15 @@ test('quote and trade quantities must be positive integers within the limit', as
   try {
     const max = h.game.econ.pricing.maxQuoteQty;
     for (const qty of ['Infinity', '1e308', 'NaN', '', 'null', '0', '-1', '1.5', String(max + 1), 'abc', ' 1 ']) {
-      const r = await h.raw('GET', `/api/quote?merchant=sari&token=fish&qty=${encodeURIComponent(qty)}`);
+      const r = await h.raw('GET', `/api/quote?merchant=sarah&token=fish&qty=${encodeURIComponent(qty)}`);
       assert.equal(r.status, 400, `qty=${JSON.stringify(qty)}`);
     }
-    assert.equal((await h.raw('GET', '/api/quote?merchant=sari&token=fish&qty=2')).status, 200);
-    assert.equal((await h.raw('GET', '/api/quote?merchant=sari&token=fish')).status, 200, 'qty defaults to 1');
+    assert.equal((await h.raw('GET', '/api/quote?merchant=sarah&token=fish&qty=2')).status, 200);
+    assert.equal((await h.raw('GET', '/api/quote?merchant=sarah&token=fish')).status, 200, 'qty defaults to 1');
     const spawn = h.game.map!.layout.spawn;
     for (const qty of [null, true, [1], ' 1 ', '1', 1.5, 0, -1, {}]) {
       for (const action of ['sell', 'buy', 'ship']) {
-        const r = await h.call('POST', '/api/act', JSON.stringify({ action, merchant: 'sari', token: 'fish', qty, pos: spawn }));
+        const r = await h.call('POST', '/api/act', JSON.stringify({ action, merchant: 'sarah', token: 'fish', qty, pos: spawn }));
         assert.equal(r.status, 400, `${action} qty=${JSON.stringify(qty)} -> ${r.status} ${JSON.stringify(r.json)}`);
       }
     }

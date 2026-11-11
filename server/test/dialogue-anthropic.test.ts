@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { Dialogue, resolveProvider } from '../src/dialogue.ts';
 import type { MerchantView } from '../src/game/market.ts';
 
-const sari: MerchantView = {
-  id: 'sari', account: 'sari.gt.test', name: 'Sarah', shop: "Sarah's Fish Stall", open: true, cash: 600, rent: 40,
+const sarah: MerchantView = {
+  id: 'sarah', account: 'sarah.gt.test', name: 'Sarah', shop: "Sarah's Fish Stall", open: true, cash: 600, rent: 40,
   items: [{ token: 'fish', name: 'Fish', stock: 50, target: 20, ask: 9, bid: 6, mid: 7.5, changePct: -10, reason: 'Stok ikan saya 50, targetnya 20.' }],
 };
 const base = { baseUrl: 'https://example.invalid/v1', timeoutMs: 1000 };
@@ -27,7 +27,7 @@ test('anthropic provider sends model claude-sonnet-5-5 at low effort and returns
   }) as typeof fetch;
   const d = new Dialogue(cfg, f);
   assert.equal(d.enabled, true);
-  const r = await d.reply(sari, 'fair', 'harga ikan?');
+  const r = await d.reply(sarah, 'fair', 'harga ikan?');
   assert.equal(r.source, 'anthropic');
   assert.equal(r.line, 'Ikan murah, aku beli 6 koin.');
   assert.equal(r.model, 'claude-sonnet-5-5');
@@ -46,7 +46,7 @@ test('anthropic provider sends model claude-sonnet-5-5 at low effort and returns
 test('DIALOGUE_MODEL overrides the model', async () => {
   let model = '';
   const f = (async (_u: string, init?: RequestInit) => { model = JSON.parse(String(init?.body)).model; return Response.json({ content: [{ type: 'text', text: 'ok' }] }); }) as typeof fetch;
-  const r = await new Dialogue({ ...cfg, anthropicModel: 'claude-haiku-5-5' }, f).reply(sari, 'fair', 'hai');
+  const r = await new Dialogue({ ...cfg, anthropicModel: 'claude-haiku-5-5' }, f).reply(sarah, 'fair', 'hai');
   assert.equal(model, 'claude-haiku-5-5');
   assert.equal(r.source, 'anthropic');
 });
@@ -60,7 +60,7 @@ test('anthropic error, refusal, empty text or timeout falls back to a local line
     ((_u: string, init?: RequestInit) => new Promise((_res, rej) => { init?.signal?.addEventListener('abort', () => rej(new Error('timeout'))); })) as typeof fetch,
   ];
   for (const f of cases) {
-    const r = await new Dialogue({ ...cfg, timeoutMs: 50 }, f).reply(sari, 'fair', 'ikan?');
+    const r = await new Dialogue({ ...cfg, timeoutMs: 50 }, f).reply(sarah, 'fair', 'ikan?');
     assert.equal(r.source, 'local');
     assert.match(r.line, /^Fish:/);
   }
@@ -70,6 +70,6 @@ test('no key uses local and makes no request', async () => {
   let calls = 0;
   const d = new Dialogue({ ...base, provider: 'anthropic' }, (async () => { calls++; return new Response('{}'); }) as typeof fetch);
   assert.equal(d.enabled, false);
-  assert.equal((await d.reply(sari, 'fair', 'ikan?')).source, 'local');
+  assert.equal((await d.reply(sarah, 'fair', 'ikan?')).source, 'local');
   assert.equal(calls, 0);
 });

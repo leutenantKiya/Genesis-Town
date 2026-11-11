@@ -146,7 +146,7 @@ test('demo path: gather wood at home x5, build kolam, advance 45 s, collect afte
   const at = standNear(game.map!, { x: stall.x, y: stall.y + 1 }, 2);
   w.adv(60_000);
   const coin0 = game.gs.balance(P, 'coin');
-  const sold = game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 1, world: 'public', pos: at }) as any;
+  const sold = game.act(P, { action: 'sell', merchant: 'sarah', token: 'fish', qty: 1, world: 'public', pos: at }) as any;
   assert.ok(sold.toast);
   assert.ok(game.gs.balance(P, 'coin') > coin0, 'the fish paid coin');
   assert.equal(game.gs.balance(P, 'fish'), fish0);

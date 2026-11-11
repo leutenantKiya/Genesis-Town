@@ -132,7 +132,7 @@
 > - **Homeland, phase B**: at the Town Hall you hire **worker bots** for coin (Tukang = a second builder,
 >   Petani = faster crops, Nelayan = faster Kolam Ikan, Penebang = +1 wood per tree); bots stay in your Homeland, never hold
 >   items or coin and never trade. In the public area the four **merchants walk around as NPC players** (name tag `NPC`) and
->   answer private messages (`/msg Sari harga ikan?`) through **Claude** (`claude-sonnet-5-5`, low effort), or NEAR AI Cloud,
+>   answer private messages (`/msg Sarah harga ikan?`) through **Claude** (`claude-sonnet-5-5`, low effort), or NEAR AI Cloud,
 >   or a local line when no key is set; the model's text is display-only. Players can **trade face to face** (items and coin,
 >   both must be in the public area within 3 tiles; atomic accept, off-chain ledger rows settled daily). **Titip Jual**: leave
 >   goods with Mbok Darmi and a minimum price; she sells a few units each game hour, even while you are offline, for a 5% fee.
@@ -230,8 +230,11 @@ Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [wo
 | Relayer (pays players' gas, NEP-366) | [`relayer.genesistown.testnet`](https://testnet.nearblocks.io/address/relayer.genesistown.testnet) | |
 | Settler (function-call key: `settle_day`, `register_player`, `close_shop`, `pay_dividend` only) | [`minter.genesistown.testnet`](https://testnet.nearblocks.io/address/minter.genesistown.testnet) | runs the daily settlement |
 | Town treasury (starter kits, initial shop shares) | [`town.genesistown.testnet`](https://testnet.nearblocks.io/address/town.genesistown.testnet) | |
-| Merchants Sari, Budi, Wati, Joko | [`sari`](https://testnet.nearblocks.io/address/sari.genesistown.testnet) · [`budi`](https://testnet.nearblocks.io/address/budi.genesistown.testnet) · [`wati`](https://testnet.nearblocks.io/address/wati.genesistown.testnet) · [`joko`](https://testnet.nearblocks.io/address/joko.genesistown.testnet) `.genesistown.testnet` | real accounts holding their own coin and stock as NEP-245 balances. The merchants don't sign: the server holds no keys for them, and the settler applies their trades by the contract's settlement rules |
+| Merchants Sarah, Ben, Wendy, Jack | [`sarah`](https://testnet.nearblocks.io/address/sarah.genesistown.testnet) · [`ben`](https://testnet.nearblocks.io/address/ben.genesistown.testnet) · [`wendy`](https://testnet.nearblocks.io/address/wendy.genesistown.testnet) · [`jack`](https://testnet.nearblocks.io/address/jack.genesistown.testnet) `.genesistown.testnet` | real accounts holding their own coin and stock as NEP-245 balances. The merchants don't sign: the server holds no keys for them, and the settler applies their trades by the contract's settlement rules |
 | Player accounts | `p<hash>.players.genesistown.testnet` | full-access key = the player's NEAR Auth key; plus a game-only session key |
+
+> On the `merchant-rename` branch the merchant ids are `sarah`, `ben`, `wendy`, `jack`; the accounts in this row exist on chain only after the migration in [docs/merchant-rename.md](docs/merchant-rename.md). `main` still uses `sari`, `budi`, `wati`, `joko`. Past transaction links below refer to the old accounts.
+
 
 Contract methods: NEP-245 `mt_transfer`, `mt_batch_transfer`, `mt_transfer_call`, `mt_batch_transfer_call`,
 `mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`; NEP-145 `storage_*`. Game methods:
@@ -245,11 +248,11 @@ Example transactions from the M2 end-to-end run (`node server/scripts/e2e-testne
   https://testnet.nearblocks.io/txns/GPBpcDqWgXxQdhkkNEFZJhaFAeFHwPPn2LKZHXJ9DDXq
 - player A sends 1 Ikan to B, signed with A's session key and relayed gas-free:
   https://testnet.nearblocks.io/txns/HGh8cA8oYj7ACBSUPszmoXgPEdwARS4jtiuTgSRZ3bEn
-- A pledges 200 coin, 10 Bijih and 5 Kayu to Budi's restoration board; the shop reopens and A gets shares:
+- A pledges 200 coin, 10 Bijih and 5 Kayu to Ben's restoration board; the shop reopens and A gets shares:
   https://testnet.nearblocks.io/txns/DDVwUrvu9XB1AqWNLW2W5ynGLdUU92mL17pVbmvzfTQM
 
-The run forced Budi's bankruptcy with ledger rows labelled `scripted` so the whole cycle fits in one run. In normal
-play, bankruptcy comes from trading, which the simulator shows (Joko, day 4).
+The run forced Ben's bankruptcy with ledger rows labelled `scripted` so the whole cycle fits in one run. In normal
+play, bankruptcy comes from trading, which the simulator shows (Jack, day 4).
 
 Contract upgrades were deployed in place with a `migrate` init call, keeping every balance, shop, share and listing:
 - v3 (player market) over v2: https://testnet.nearblocks.io/txns/JnFKDYgGjvZUwCjHJ4S9WsZaMQMb7YwQoxg2Mb1kqDN
@@ -311,7 +314,7 @@ A shop pays its 40-coin rent only on days when someone plays (no customers, no r
 those days, so a quiet town keeps its shops. If every shop is closed anyway, nobody can sell for coin, so the town
 treasury pledges the coin part of each restoration board on chain at the next settlement (the town gets shares like
 any contributor); players still bring the goods. First run on testnet, 2026-11-03, all four boards:
-https://testnet.nearblocks.io/txns/BrYLXT6iUNQQKhaaHyZAAwzuehrpFtDqrGPHVBX9eMBT (Joko) and three more in Riwayat.
+https://testnet.nearblocks.io/txns/BrYLXT6iUNQQKhaaHyZAAwzuehrpFtDqrGPHVBX9eMBT (Jack) and three more in Riwayat.
 
 ### Weather
 
@@ -342,7 +345,7 @@ Run locally (below), open http://localhost:3000.
 2. Click the pond (or face the water and press **F**; the on-screen **A** button on touch screens), wait for the
    "!", press, and hold to keep the fish in the green zone → `+1 Ikan`. A hint at the bottom of the screen always shows which key does what for the tile you face. The hotbar at the bottom shows every item with its count; press **E** (or the round E button on phones) to open the **Tas** → it shows "+1 hari ini" (off-chain,
    today).
-3. Walk to the market plaza next to your house and face **Sari's** stall (or Budi, Wati, Joko) → her goods on top, your items below with her price. Click
+3. Walk to the market plaza next to your house and face **Sarah's** stall (or Ben, Wendy, Jack) → her goods on top, your items below with her price. Click
    your fish to sell one.
 4. Inside your house, press F at the table to craft (2 Gandum → Roti, costs 5 energy), and at the chest to use the Kotak Kirim.
    Outside, in the fenced field next to your house, press F on a plot to till, plant (press twice) and water wheat
@@ -354,7 +357,7 @@ Run locally (below), open http://localhost:3000.
    Riwayat says the items are kept on NEAR testnet.
    The Dev panel only appears on the machine running the server (`DEV_TOOLS=1` and a direct local request).
 6. Press **Simulasi** → 7 game days play in about 60 seconds: price charts per item, merchant cash, money supply.
-   Joko goes bankrupt on day 4 and players restore him on day 6 (off-chain simulation of the same game code, labelled).
+   Jack goes bankrupt on day 4 and players restore him on day 6 (off-chain simulation of the same game code, labelled).
 7. When a shop shows TUTUP, talk to its merchant → restoration board → **Sumbang** (on-chain) → the shop reopens and
    your shares appear in the shop window.
 8. Press **Pasar** (K) → list an item for other players (on-chain escrow), or buy someone's listing.

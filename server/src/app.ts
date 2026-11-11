@@ -110,7 +110,7 @@ export function createApp(deps: AppDeps) {
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
   // Merchants walk the public area as players tagged NPC: behind their stall (as the client draws them); "/msg Sari ..." asks them through the dialogue provider.
-  const MERCHANT_LOOK: Record<string, number> = { sari: 3, budi: 2, wati: 5, joko: 4 };
+  const MERCHANT_LOOK: Record<string, number> = { sarah: 3, ben: 2, wendy: 5, jack: 4 };
   const stalls = game.map?.layout.market.stalls ?? [];
   social.setNpcs(game.market.ids().flatMap((id, k) => stalls[k] ? [{ id, account: game.market.account(id), name: game.econ.merchants[id].name, look: MERCHANT_LOOK[id] ?? k % 8, x: stalls[k].x, y: stalls[k].y - 1, title: game.econ.merchants[id].shop }] : []));
   social.onNpcMsg = (npc, from, text) => {

@@ -1,7 +1,7 @@
 [
   {
-    "account_id": "sari.genesistown.testnet",
-    "name": "Lapak Ikan Sari",
+    "account_id": "sarah.genesistown.testnet",
+    "name": "Sarah's Fish Stall",
     "restore": [
       {
         "token_id": "coin",
@@ -36,8 +36,8 @@
     ]
   },
   {
-    "account_id": "budi.genesistown.testnet",
-    "name": "Bengkel Budi",
+    "account_id": "ben.genesistown.testnet",
+    "name": "Ben's Workshop",
     "restore": [
       {
         "token_id": "coin",
@@ -72,8 +72,8 @@
     ]
   },
   {
-    "account_id": "wati.genesistown.testnet",
-    "name": "Toko Roti Wati",
+    "account_id": "wendy.genesistown.testnet",
+    "name": "Wendy's Bakery",
     "restore": [
       {
         "token_id": "coin",
@@ -100,8 +100,8 @@
     ]
   },
   {
-    "account_id": "joko.genesistown.testnet",
-    "name": "Toko Serba Ada Joko",
+    "account_id": "jack.genesistown.testnet",
+    "name": "Jack's General Store",
     "restore": [
       {
         "token_id": "coin",
@@ -119,7 +119,7 @@
     "start": [
       {
         "token_id": "coin",
-        "amount": "600"
+        "amount": "350"
       },
       {
         "token_id": "wood",

@@ -6,8 +6,8 @@ top block of `README.md`.
 ## What it is
 
 Browser pixel-art market-town life sim for NEAR HACKATHON (Nov 1–14, 2026), track "Games With Real Economies".
-Players gather (fish, ore, wood, wheat), craft (bread, meal, tool), trade with 4 AI merchants (sari, budi, wati,
-joko) whose prices react to stock/demand/cash. Items + `coin` are NEP-245 tokens in one NEAR contract. Login via
+Players gather (fish, ore, wood, wheat), craft (bread, meal, tool), trade with 4 AI merchants (sarah, ben, wendy,
+jack) whose prices react to stock/demand/cash. Items + `coin` are NEP-245 tokens in one NEAR contract. Login via
 NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play. In-game text is English by default and Bahasa Indonesia is selectable (Settings > Language, `?lang=id`, saved in localStorage `gt.lang`). The code's source strings are the Indonesian originals and act as translation KEYS: `$t('Tas')` gives 'Bag' (`client/js/i18n.js`, English table `client/js/lang/en.js`, `{0}` placeholders). Server text is English; `X-GT-Lang: id` makes `server/src/lang.ts` translate responses (`server/src/i18n-id.ts`). Config display names are English in `economy/config.json`.
 
 ## Layout

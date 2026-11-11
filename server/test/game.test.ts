@@ -138,22 +138,22 @@ test('farm: with no Gandum left the village gives a few seeds a day, so farming 
 test('selling to a merchant moves items and coin, prices react with a reason, daily cap holds', async () => {
   const { game, clock } = await world();
   for (let i = 0; i < 3; i++) for (let k = 0; k < 4; k++) game.act(P, { action: 'gather', tile: 'water', x: i, y: 9 });
-  const before = game.merchants().find((m) => m.id === 'sari')!.items.find((i) => i.token === 'fish')!;
-  const r = game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 10 }) as { toast: string };
+  const before = game.merchants().find((m) => m.id === 'sarah')!.items.find((i) => i.token === 'fish')!;
+  const r = game.act(P, { action: 'sell', merchant: 'sarah', token: 'fish', qty: 10 }) as { toast: string };
   assert.match(r.toast, /Sold 10 Fish to Sarah/);
   assert.equal(bal(game, P, 'fish'), 2);
-  assert.equal(bal(game, 'sari.gt.test', 'fish'), 30);
+  assert.equal(bal(game, 'sarah.gt.test', 'fish'), 30);
   assert.ok(bal(game, P, 'coin') > 100);
   clock.advanceHours(1);
   await game.step();
-  const after = game.merchants().find((m) => m.id === 'sari')!.items.find((i) => i.token === 'fish')!;
+  const after = game.merchants().find((m) => m.id === 'sarah')!.items.find((i) => i.token === 'fish')!;
   assert.ok(after.mid < before.mid, `${after.mid} < ${before.mid}`);
   assert.match(after.reason, /Price down/);
   // Sari buys at most 2 x target (40) fish a day.
   game.gs.add(game.clock.time().settleDay, P, 'fish', 40, 'test');
-  for (let i = 0; i < 3; i++) game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 10 });
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 1 }), /has bought enough/);
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'fish', qty: 1 }), /doesn't buy/);
+  for (let i = 0; i < 3; i++) game.act(P, { action: 'sell', merchant: 'sarah', token: 'fish', qty: 10 });
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'sarah', token: 'fish', qty: 1 }), /has bought enough/);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wendy', token: 'fish', qty: 1 }), /doesn't buy/);
 });
 
 test('town demand creates new coin only within the faucet', async () => {
@@ -170,7 +170,7 @@ test('town demand creates new coin only within the faucet', async () => {
 test('settlement writes net deltas on chain in chunks, matches off-chain balances, and is retry-safe', async () => {
   const { game, chain, store, clock } = await world();
   for (let k = 0; k < 4; k++) game.act(P, { action: 'gather', tile: 'water', x: 3, y: 3 });
-  game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty: 2 });
+  game.act(P, { action: 'sell', merchant: 'sarah', token: 'fish', qty: 2 });
   game.act(Q, { action: 'ship', token: 'bread', qty: 2 });
   const day = game.clock.time().settleDay;
   const offP = { coin: bal(game, P, 'coin'), fish: bal(game, P, 'fish') };
@@ -202,33 +202,33 @@ test('a merchant that cannot pay rent closes; a restoration board reopens it and
   game.gs.add(day, P, 'ore', 150, 'test');
   game.gs.add(day, P, 'wood', 10, 'test');
   let sold = 0;
-  for (let i = 0; i < 3; i++) { try { game.act(P, { action: 'sell', merchant: 'budi', token: 'ore', qty: 10 }); sold++; } catch { break; } }
+  for (let i = 0; i < 3; i++) { try { game.act(P, { action: 'sell', merchant: 'ben', token: 'ore', qty: 10 }); sold++; } catch { break; } }
   // Leave Budi 10 coin (< rent) and no tools, so the town cannot buy from him during the skipped hours.
-  game.gs.add(day, 'budi.gt.test', 'coin', -(bal(game, 'budi.gt.test', 'coin') - 10), 'test');
-  game.gs.add(day, 'budi.gt.test', 'tool', -bal(game, 'budi.gt.test', 'tool'), 'test');
+  game.gs.add(day, 'ben.gt.test', 'coin', -(bal(game, 'ben.gt.test', 'coin') - 10), 'test');
+  game.gs.add(day, 'ben.gt.test', 'tool', -bal(game, 'ben.gt.test', 'tool'), 'test');
   await game.devSettle();
-  const budi = (await chain.listShops()).find((s) => s.account_id === 'budi.gt.test')!;
-  assert.equal(budi.open, false, 'closed after failing rent');
-  assert.ok(game.market.closed.has('budi.gt.test'));
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'budi', token: 'ore', qty: 1 }), /CLOSED/);
+  const ben = (await chain.listShops()).find((s) => s.account_id === 'ben.gt.test')!;
+  assert.equal(ben.open, false, 'closed after failing rent');
+  assert.ok(game.market.closed.has('ben.gt.test'));
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'ben', token: 'ore', qty: 1 }), /CLOSED/);
   // Restore through the (mock) chain as the relayer would.
   const call = (m: string, a: object) => chain.relay({ delegateAction: { actions: [{ functionCall: { methodName: m, args: Buffer.from(JSON.stringify(a)) } }] } }, P);
-  const res = await call('restore_contribute', { merchant: 'budi.gt.test', contribution: [{ token_id: 'coin', amount: '200' }, { token_id: 'ore', amount: '10' }, { token_id: 'wood', amount: '5' }] });
+  const res = await call('restore_contribute', { merchant: 'ben.gt.test', contribution: [{ token_id: 'coin', amount: '200' }, { token_id: 'ore', amount: '10' }, { token_id: 'wood', amount: '5' }] });
   assert.ok(res.ok, res.error);
   await game.settlement.refreshShops();
-  assert.equal(game.market.closed.has('budi.gt.test'), false, 'reopened');
-  assert.ok(Number((await chain.holding('budi.gt.test', P)).shares) > 0);
+  assert.equal(game.market.closed.has('ben.gt.test'), false, 'reopened');
+  assert.ok(Number((await chain.holding('ben.gt.test', P)).shares) > 0);
   assert.ok(sold > 0);
 });
 
 test('profitable shops pay dividends to shareholders', async () => {
   const { game, chain } = await world();
   const day = game.clock.time().settleDay;
-  game.gs.add(day, 'wati.gt.test', 'coin', 500, 'trade'); // a good day for Wati
+  game.gs.add(day, 'wendy.gt.test', 'coin', 500, 'trade'); // a good day for Wati
   game.gs.add(day, P, 'coin', -50, 'test');
   game.gs.add(day, TOWN, 'coin', -450, 'test');
   await game.devSettle();
-  const h = await chain.holding('wati.gt.test', 'town');
+  const h = await chain.holding('wendy.gt.test', 'town');
   assert.ok(Number(h.claimable) > 0, 'town treasury holds the initial shares and earns dividends');
 });
 
@@ -354,12 +354,12 @@ test('positions: actions happen where the player stands, and nobody jumps across
   // at home: craft is fine; selling from home is not
   now += 1000;
   game.act(P, { action: 'ship', token: 'bread', qty: 1, pos: door });
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: door }), /merchants' stalls/);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wendy', token: 'wheat', qty: 1, pos: door }), /merchants' stalls/);
   // jumping from the house to the market in one second is refused; walking there (a minute later) is fine
   now += 1000;
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: front }), /jumped too far/);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'wendy', token: 'wheat', qty: 1, pos: front }), /jumped too far/);
   now += 60_000;
-  game.act(P, { action: 'sell', merchant: 'wati', token: 'wheat', qty: 1, pos: front });
+  game.act(P, { action: 'sell', merchant: 'wendy', token: 'wheat', qty: 1, pos: front });
   // crafting needs the house, farming needs the plot
   now += 1000;
   assert.throws(() => game.act(P, { action: 'craft', recipe: 'bread', pos: front }), /Workbench/);
@@ -401,10 +401,10 @@ test('when every shop is closed, the village relief fund pledges the coin part o
   }
   assert.ok(JSON.parse(game.gs.meta('relief.last')!).pledges.length === shops.length);
   // players now only bring the goods; one board completes and the shop reopens
-  const sari = shops.find((s) => s.account_id === 'sari.gt.test')!;
-  for (const l of sari.need) if (l.token_id !== 'coin') chain.add(P, l.token_id, BigInt(l.amount));
-  const lines = sari.need.filter((l) => l.token_id !== 'coin');
-  const r = await chain.relay({ delegateAction: { actions: [{ functionCall: { methodName: 'restore_contribute', args: Buffer.from(JSON.stringify({ merchant: sari.account_id, contribution: lines })) } }] } }, P);
+  const sarah = shops.find((s) => s.account_id === 'sarah.gt.test')!;
+  for (const l of sarah.need) if (l.token_id !== 'coin') chain.add(P, l.token_id, BigInt(l.amount));
+  const lines = sarah.need.filter((l) => l.token_id !== 'coin');
+  const r = await chain.relay({ delegateAction: { actions: [{ functionCall: { methodName: 'restore_contribute', args: Buffer.from(JSON.stringify({ merchant: sarah.account_id, contribution: lines })) } }] } }, P);
   assert.ok(r.ok, r.error);
-  assert.equal((await chain.listShops()).find((s) => s.account_id === 'sari.gt.test')!.open, true, 'Sari reopened');
+  assert.equal((await chain.listShops()).find((s) => s.account_id === 'sarah.gt.test')!.open, true, 'Sari reopened');
 });

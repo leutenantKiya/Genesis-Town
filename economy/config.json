@@ -47,7 +47,7 @@
     "dingin": { "yield": { "fish": 0.6, "ore": 1.0, "wood": 1.0 }, "demand": { "bread": 1.0, "meal": 1.4, "tool": 1.0, "wood": 1.8 } }
   },
   "merchants": {
-    "sari": {
+    "sarah": {
       "name": "Sarah", "shop": "Sarah's Fish Stall", "personality": "fair",
       "buys": ["fish", "wood"], "sells": ["fish", "meal"],
       "target": { "fish": 20, "wood": 10, "meal": 8 },
@@ -55,7 +55,7 @@
       "startCash": 600, "startStock": { "fish": 20, "wood": 10, "meal": 8 },
       "restore": { "coin": 200, "items": { "fish": 6, "wood": 4 } }
     },
-    "budi": {
+    "ben": {
       "name": "Ben", "shop": "Ben's Workshop", "personality": "fair",
       "buys": ["ore", "wood"], "sells": ["tool"],
       "target": { "ore": 15, "wood": 10, "tool": 4 },
@@ -63,7 +63,7 @@
       "startCash": 600, "startStock": { "ore": 15, "wood": 10, "tool": 4 },
       "restore": { "coin": 200, "items": { "ore": 10, "wood": 5 } }
     },
-    "wati": {
+    "wendy": {
       "name": "Wendy", "shop": "Wendy's Bakery", "personality": "greedy",
       "buys": ["wheat"], "sells": ["bread", "wheat"],
       "target": { "wheat": 30, "bread": 12 },
@@ -71,7 +71,7 @@
       "startCash": 600, "startStock": { "wheat": 30, "bread": 12 },
       "restore": { "coin": 200, "items": { "wheat": 12 } }
     },
-    "joko": {
+    "jack": {
       "name": "Jack", "shop": "Jack's General Store", "personality": "generous",
       "buys": ["wood", "wheat", "fish"], "sells": ["wood", "bread"],
       "target": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },

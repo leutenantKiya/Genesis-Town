@@ -10,7 +10,7 @@ fn settler() -> AccountId { acc("settler.testnet") }
 fn town() -> AccountId { acc("town.testnet") }
 fn alice() -> AccountId { acc("alice.testnet") }
 fn bob() -> AccountId { acc("bob.testnet") }
-fn budi() -> AccountId { acc("budi.testnet") }
+fn ben() -> AccountId { acc("ben.testnet") }
 const ROOT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ROOT2: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -64,7 +64,7 @@ fn d(a: AccountId, t: &str, n: i128) -> Delta {
 fn setup() -> Contract {
     ctx(owner(), 0);
     let mut c = Contract::new(owner(), settler(), town(), tokens(), limits(), U128(5000));
-    c.register_merchant(budi(), "Bengkel Budi".into(), vec![line("coin", 200), line("ore", 10), line("wood", 5)], vec![line("coin", 600), line("ore", 15)]);
+    c.register_merchant(ben(), "Bengkel Budi".into(), vec![line("coin", 200), line("ore", 10), line("wood", 5)], vec![line("coin", 600), line("ore", 15)]);
     ctx(settler(), 0);
     assert!(c.register_player(alice()));
     assert!(c.register_player(bob()));
@@ -86,24 +86,24 @@ fn bal(c: &Contract, a: AccountId, t: &str) -> u128 {
 fn init_mints_treasury_and_merchant_stock() {
     let c = setup();
     assert_eq!(bal(&c, town(), "coin"), 5000);
-    assert_eq!(bal(&c, budi(), "coin"), 600);
-    assert_eq!(bal(&c, budi(), "ore"), 15);
+    assert_eq!(bal(&c, ben(), "coin"), 600);
+    assert_eq!(bal(&c, ben(), "ore"), 15);
     assert_eq!(c.mt_supply("coin".into()).unwrap().0, 5600);
-    assert_eq!(c.get_holding(budi(), town()).shares.0, 1000);
+    assert_eq!(c.get_holding(ben(), town()).shares.0, 1000);
 }
 
 #[test]
 fn settlement_applies_net_deltas_and_stores_root() {
     let mut c = setup();
-    // Day 1: starter kit from the treasury, alice gathered 6 fish and sold 4 to budi for 24 coin.
+    // Day 1: starter kit from the treasury, alice gathered 6 fish and sold 4 to ben for 24 coin.
     settle(&mut c, 1, 0, vec![
         d(town(), "coin", -100), d(alice(), "coin", 100 + 24), d(alice(), "fish", 2),
-        d(budi(), "fish", 4), d(budi(), "coin", -24),
+        d(ben(), "fish", 4), d(ben(), "coin", -24),
     ]);
     assert_eq!(bal(&c, alice(), "coin"), 124);
     assert_eq!(bal(&c, alice(), "fish"), 2);
-    assert_eq!(bal(&c, budi(), "fish"), 4);
-    assert_eq!(bal(&c, budi(), "coin"), 576);
+    assert_eq!(bal(&c, ben(), "fish"), 4);
+    assert_eq!(bal(&c, ben(), "coin"), 576);
     assert_eq!(c.get_day_root(1).as_deref(), Some(ROOT));
     assert!(c.is_chunk_applied(1, 0));
     assert_eq!(c.mt_supply("coin".into()).unwrap().0, 5600, "coin only moved, none created");
@@ -163,7 +163,7 @@ fn player_gain_cap_per_day() {
 #[test]
 fn gain_cap_resets_next_day_and_does_not_apply_to_merchants() {
     let mut c = setup();
-    settle(&mut c, 1, 0, vec![d(alice(), "fish", 50), d(budi(), "fish", 500)]);
+    settle(&mut c, 1, 0, vec![d(alice(), "fish", 50), d(ben(), "fish", 500)]);
     settle(&mut c, 2, 0, vec![d(alice(), "fish", 50)]);
     assert_eq!(bal(&c, alice(), "fish"), 100);
 }
@@ -184,14 +184,14 @@ fn faucet_shrinks_as_supply_grows_and_stops_at_the_cap() {
 fn new_coin_beyond_the_faucet_is_refused() {
     let mut c = setup();
     // 931 allowed today (see above); merchants may receive new coin from the town, players are capped separately.
-    settle(&mut c, 1, 0, vec![d(budi(), "coin", 900)]);
-    settle(&mut c, 1, 1, vec![d(budi(), "coin", 32)]);
+    settle(&mut c, 1, 0, vec![d(ben(), "coin", 900)]);
+    settle(&mut c, 1, 1, vec![d(ben(), "coin", 32)]);
 }
 
 #[test]
 fn coin_moving_between_accounts_is_not_new_money() {
     let mut c = setup();
-    settle(&mut c, 1, 0, vec![d(budi(), "coin", -500), d(alice(), "coin", 500)]);
+    settle(&mut c, 1, 0, vec![d(ben(), "coin", -500), d(alice(), "coin", 500)]);
     assert_eq!(c.faucet_status(1, 1).minted_today.0, 0);
 }
 
@@ -199,10 +199,10 @@ fn coin_moving_between_accounts_is_not_new_money() {
 fn faucet_counts_day_net_across_chunks() {
     let mut c = setup();
     c.limits.faucet_w0 = U128(400); // allowed today = 310, below the 498 that moves
-    settle(&mut c, 1, 0, vec![d(budi(), "coin", -498)]);
+    settle(&mut c, 1, 0, vec![d(ben(), "coin", -498)]);
     settle(&mut c, 1, 1, vec![d(alice(), "coin", 498)]);
     assert_eq!(c.faucet_status(1, 1).minted_today.0, 0);
-    assert_eq!(bal(&c, budi(), "coin"), 102);
+    assert_eq!(bal(&c, ben(), "coin"), 102);
 }
 
 #[test]
@@ -210,8 +210,8 @@ fn faucet_counts_day_net_across_chunks() {
 fn faucet_still_caps_real_minting() {
     let mut c = setup();
     c.limits.faucet_w0 = U128(1200);
-    settle(&mut c, 1, 0, vec![d(budi(), "coin", 900)]);
-    settle(&mut c, 1, 1, vec![d(budi(), "coin", 1100)]);
+    settle(&mut c, 1, 0, vec![d(ben(), "coin", 900)]);
+    settle(&mut c, 1, 1, vec![d(ben(), "coin", 1100)]);
 }
 
 #[test]
@@ -228,9 +228,9 @@ fn settle_skips_unregistered_account() {
 
 fn bankrupt_budi(c: &mut Contract) {
     // Budi pays 570 coin to alice for ore over the day, then rent: 600 - 570 - 0 = 30 < 40.
-    settle(c, 1, 0, vec![d(budi(), "coin", -570), d(alice(), "coin", 570), d(alice(), "ore", 20), d(alice(), "wood", 10)]);
+    settle(c, 1, 0, vec![d(ben(), "coin", -570), d(alice(), "coin", 570), d(alice(), "ore", 20), d(alice(), "wood", 10)]);
     ctx(settler(), 0);
-    c.close_shop(budi());
+    c.close_shop(ben());
 }
 
 #[test]
@@ -238,39 +238,39 @@ fn bankrupt_budi(c: &mut Contract) {
 fn healthy_shop_cannot_be_closed() {
     let mut c = setup();
     ctx(settler(), 0);
-    c.close_shop(budi());
+    c.close_shop(ben());
 }
 
 #[test]
 fn restoration_pledges_reopen_the_shop_and_issue_shares() {
     let mut c = setup();
     bankrupt_budi(&mut c);
-    assert!(!c.get_shop(budi()).open);
+    assert!(!c.get_shop(ben()).open);
 
     // Alice pledges 100 coin and 25 ore: only the missing 10 ore are accepted.
     ctx(alice(), 0);
-    c.restore_contribute(budi(), vec![line("coin", 100), line("ore", 25)]);
+    c.restore_contribute(ben(), vec![line("coin", 100), line("ore", 25)]);
     assert_eq!(bal(&c, alice(), "ore"), 10);
-    let shop = c.get_shop(budi());
+    let shop = c.get_shop(ben());
     assert!(!shop.open);
     assert_eq!(shop.contributors, 1);
 
     // Bob is registered but has nothing settled; the settler gives him coin first.
     settle(&mut c, 2, 0, vec![d(alice(), "coin", -100), d(bob(), "coin", 100)]);
     ctx(bob(), 0);
-    c.restore_contribute(budi(), vec![line("coin", 100)]);
+    c.restore_contribute(ben(), vec![line("coin", 100)]);
     // Wood still missing.
-    assert!(!c.get_shop(budi()).open);
+    assert!(!c.get_shop(ben()).open);
     ctx(alice(), 0);
-    c.restore_contribute(budi(), vec![line("wood", 5)]);
+    c.restore_contribute(ben(), vec![line("wood", 5)]);
 
-    let shop = c.get_shop(budi());
+    let shop = c.get_shop(ben());
     assert!(shop.open, "board complete -> reopened");
-    assert_eq!(bal(&c, budi(), "ore"), 25, "15 left + 10 pledged");
-    assert_eq!(bal(&c, budi(), "coin"), 230, "30 left + 200 pledged");
+    assert_eq!(bal(&c, ben(), "ore"), 25, "15 left + 10 pledged");
+    assert_eq!(bal(&c, ben(), "coin"), 230, "30 left + 200 pledged");
     // Book at close: 30 coin + 15 ore * 12 = 210 for 1000 shares. Alice's pledge was worth 100 + 120 + 30 = 250.
-    assert_eq!(c.get_holding(budi(), alice()).shares.0, 250 * 1000 / 210);
-    assert_eq!(c.get_holding(budi(), bob()).shares.0, 100 * 1000 / 210);
+    assert_eq!(c.get_holding(ben(), alice()).shares.0, 250 * 1000 / 210);
+    assert_eq!(c.get_holding(ben(), bob()).shares.0, 100 * 1000 / 210);
     assert_eq!(shop.total_shares.0, 1000 + 1190 + 476);
 }
 
@@ -279,11 +279,11 @@ fn withdrawing_a_pledge_returns_it() {
     let mut c = setup();
     bankrupt_budi(&mut c);
     ctx(alice(), 0);
-    c.restore_contribute(budi(), vec![line("coin", 50)]);
+    c.restore_contribute(ben(), vec![line("coin", 50)]);
     assert_eq!(bal(&c, alice(), "coin"), 520);
-    c.restore_withdraw(budi());
+    c.restore_withdraw(ben());
     assert_eq!(bal(&c, alice(), "coin"), 570);
-    assert_eq!(c.get_shop(budi()).contributors, 0);
+    assert_eq!(c.get_shop(ben()).contributors, 0);
 }
 
 #[test]
@@ -292,7 +292,7 @@ fn cannot_pledge_to_an_open_shop() {
     let mut c = setup();
     settle(&mut c, 1, 0, vec![d(alice(), "ore", 5)]);
     ctx(alice(), 0);
-    c.restore_contribute(budi(), vec![line("ore", 5)]);
+    c.restore_contribute(ben(), vec![line("ore", 5)]);
 }
 
 #[test]
@@ -300,22 +300,22 @@ fn dividends_are_paid_pro_rata_and_once_per_day() {
     let mut c = setup();
     bankrupt_budi(&mut c);
     ctx(alice(), 0);
-    c.restore_contribute(budi(), vec![line("coin", 200), line("ore", 10), line("wood", 5)]);
-    let total = c.get_shop(budi()).total_shares.0;
-    let alice_shares = c.get_holding(budi(), alice()).shares.0;
+    c.restore_contribute(ben(), vec![line("coin", 200), line("ore", 10), line("wood", 5)]);
+    let total = c.get_shop(ben()).total_shares.0;
+    let alice_shares = c.get_holding(ben(), alice()).shares.0;
     ctx(settler(), 0);
-    c.pay_dividend(budi(), 3, U128(100));
+    c.pay_dividend(ben(), 3, U128(100));
     let expected = 100 * alice_shares / total;
-    let claimable = c.get_holding(budi(), alice()).claimable.0;
+    let claimable = c.get_holding(ben(), alice()).claimable.0;
     assert!(claimable + 1 >= expected && claimable <= expected, "{claimable} vs {expected}");
     let before = bal(&c, alice(), "coin");
     ctx(alice(), 0);
-    assert_eq!(c.claim_dividends(budi()).0, claimable);
+    assert_eq!(c.claim_dividends(ben()).0, claimable);
     assert_eq!(bal(&c, alice(), "coin"), before + claimable);
-    assert_eq!(c.claim_dividends(budi()).0, 0, "nothing left to claim");
+    assert_eq!(c.claim_dividends(ben()).0, 0, "nothing left to claim");
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         ctx(settler(), 0);
-        c.pay_dividend(budi(), 3, U128(10));
+        c.pay_dividend(ben(), 3, U128(10));
     }));
     assert!(r.is_err(), "second dividend on the same day must fail");
 }
@@ -340,7 +340,7 @@ fn send_item_to_merchant_rejected() {
     let mut c = setup();
     settle(&mut c, 1, 0, vec![d(alice(), "fish", 5)]);
     ctx(alice(), 0);
-    c.send_item(budi(), "fish".into(), U128(1));
+    c.send_item(ben(), "fish".into(), U128(1));
 }
 
 #[test]

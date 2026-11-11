@@ -59,7 +59,7 @@ Not general code. A JSON list of allowed actions with parameters, for example:
 ```json
 { "on": "morning", "do": [
   { "harvest": "all" },
-  { "sell": "wheat", "to": "wati", "keep": 5, "minPrice": 8 },
+  { "sell": "wheat", "to": "wendy", "keep": 5, "minPrice": 8 },
   { "craft": "bread", "max": 2 } ] }
 ```
 

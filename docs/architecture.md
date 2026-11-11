@@ -68,7 +68,7 @@ exact name will be picked when it is created in M1.
 | `relayer.genesistown.testnet` | NEAR for gas | full-access keys (the reference relayer requires them), rate limited and spend monitored |
 | `minter.genesistown.testnet` | nothing; the contract only trusts it to mint gathered items | function-call key → `game` only |
 | `town.genesistown.testnet` | treasury coins, initial merchant shares | function-call key → `game` only |
-| `sari.…`, `budi.…`, `wati.…`, `joko.…` | merchant balances inside the contract | function-call key → `game` only; balances change through the daily settlement (no quote key needed any more) |
+| `sarah.…`, `ben.…`, `wendy.…`, `jack.…` | merchant balances inside the contract | function-call key → `game` only; balances change through the daily settlement (no quote key needed any more) |
 | `players.genesistown.testnet` | parent of player accounts, a small NEAR float for account creation | full-access key (account creation needs one), only small balances kept |
 | `<id>.players.genesistown.testnet` | a player | the server keeps **no** key for players |
 

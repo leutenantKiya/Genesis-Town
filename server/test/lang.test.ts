@@ -36,7 +36,7 @@ test('the language header only accepts id', () => {
 });
 
 const m: MerchantView = {
-  id: 'sari', account: 'sari.gt.test', name: 'Sarah', shop: "Sarah's Fish Stall", open: true, cash: 600, rent: 40,
+  id: 'sarah', account: 'sarah.gt.test', name: 'Sarah', shop: "Sarah's Fish Stall", open: true, cash: 600, rent: 40,
   items: [{ token: 'fish', name: 'Fish', stock: 50, target: 20, ask: 9, bid: 6, mid: 7.5, changePct: -10, reason: 'My fish stock is 50, target 20. Price down 10%.' }],
 };
 

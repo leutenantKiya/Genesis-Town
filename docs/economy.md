@@ -58,12 +58,12 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 
   | Merchant | Shop | Buys | Sells | Personality |
   | --- | --- | --- | --- | --- |
-  | Sari | fish stall | fish, wood | fish, meal | fair: spread 20%, watches cash |
-  | Budi | smithy | ore, wood | tool | fair: spread 20%, watches cash |
-  | Wati | bakery | wheat | bread, wheat | greedy: spread 30%, slow to raise bids |
-  | Joko | general store | wood, wheat, fish | wood, bread | generous: spread 12%, never bids under 90% of base, buys up to 3× target a day, ignores his cash; starts with 350 coin |
+  | Sarah | fish stall | fish, wood | fish, meal | fair: spread 20%, watches cash |
+  | Ben | smithy | ore, wood | tool | fair: spread 20%, watches cash |
+  | Wendy | bakery | wheat | bread, wheat | greedy: spread 30%, slow to raise bids |
+  | Jack | general store | wood, wheat, fish | wood, bread | generous: spread 12%, never bids under 90% of base, buys up to 3× target a day, ignores his cash; starts with 350 coin |
 
-  Merchants also craft: Wati bakes bread from wheat she holds, Sari cooks meals, and Budi forges tools. Each merchant
+  Merchants also craft: Wendy bakes bread from wheat she holds, Sarah cooks meals, and Ben forges tools. Each merchant
   has a daily crafting capacity (default 10 crafts per day), and crafting uses the same recipes as players. Merchants pay a 2-coin fee per craft
   (`craft.merchantFee`); players pay energy for food (Roti 5, Ikan Bakar 8) and coin for tools (Alat 3).
 - **Town (townsfolk).** These are not individual accounts. The `town` account buys finished goods from open merchants
@@ -157,14 +157,14 @@ tooltip. For example:
 - the tick clamp was hit: *"…(dibatasi 10% per jam)."*
 - `fc` < 1: *"Kas saya tipis, jadi saya hanya bisa menawar rendah."*
 
-### Worked example: a player floods Sari with fish
+### Worked example: a player floods Sarah with fish
 
-Sari's fish: base 8, target 20, price 8, cash 600 (so fc = 1). A player sells her 30 fish. Her stock goes 20 → 50,
+Sarah's fish: base 8, target 20, price 8, cash 600 (so fc = 1). A player sells her 30 fish. Her stock goes 20 → 50,
 recent buys B ≈ 30, recent sales S ≈ 4.
 
 - fs = √(20/50) = 0.63, fd = 1 + 0.4 · (4 − 30)/39 = 0.73, so the target price = 8 × 0.63 × 0.73 = **3.71**.
 - The ±10% clamp spreads the fall over game hours: 8.00 → 7.20 → 6.48 → 5.83 → 5.25 → 4.72 → 4.25 → 3.83 → 3.71.
-- With a 20% spread, Sari's ask/bid go from 9/7 to 8/6 after one tick and 8/5 after two.
+- With a 20% spread, Sarah's ask/bid go from 9/7 to 8/6 after one tick and 8/5 after two.
 - Tooltip: *"Stok ikan saya 50 (target 20) dan banyak yang jual ke saya. Harga turun 10% (dibatasi 10% per jam)."*
 - As she sells meals to the town and the buy volume decays, fs and fd rise and the price recovers. Nobody had to
   patch anything.
@@ -195,10 +195,10 @@ stake. That makes rescue rational, not charity.
 
 | Shop | Coins | Goods |
 | --- | --- | --- |
-| Sari (fish) | 200 | 6 Ikan, 4 Kayu |
-| Budi (smithy) | 200 | 10 Bijih, 5 Kayu |
-| Wati (bakery) | 200 | 12 Gandum |
-| Joko (general) | 200 | 6 Kayu, 6 Gandum |
+| Sarah (fish) | 200 | 6 Ikan, 4 Kayu |
+| Ben (smithy) | 200 | 10 Bijih, 5 Kayu |
+| Wendy (bakery) | 200 | 12 Gandum |
+| Jack (general) | 200 | 6 Kayu, 6 Gandum |
 
 Contributions are on-chain pledges held in the contract. Item contributions are valued at base price for shares.
 When every line is met, the pledges turn into shares at the share price fixed when the shop closed, the goods join
@@ -207,7 +207,7 @@ the shop's stock, and the shop reopens. A pledge withdrawn before completion is 
 **Shop health in the UI.** Shown on the notice board, the shop dialog and Profile: cash, days of rent covered (C / R),
 7-day profit, status, and your share percentage.
 
-**Expected first bankruptcy (confirmed by the simulator).** Joko is generous: he never bids under 90% of base value,
+**Expected first bankruptcy (confirmed by the simulator).** Jack is generous: he never bids under 90% of base value,
 buys up to 3× his target stock a day, and ignores his own cash. His general store buys fish, wood and wheat but resells
 only wood and bread, so stock piles up and the storage fees eat his cash. In the 7-day, 25-player simulation he closes
 on day 4 and players restore him on day 6; see [sim-report-30d.md](sim-report-30d.md) for the 30-day run. Fair and

@@ -20,10 +20,10 @@
   var LS_KEYS = 'gt.chain.keys', LS_FORCE = 'gt.chain.chooseAccount';
   var TILE_ITEM = { water: 'fish', rock: 'ore', tree: 'wood' };
   var MERCHANTS = [
-    { id: 'sari', pal: 3, dx: 3, dy: 2, tag: $t('Sari · Ikan') },
-    { id: 'budi', pal: 2, dx: 5, dy: 2, tag: $t('Budi · Bengkel') },
-    { id: 'wati', pal: 5, dx: -3, dy: 2, tag: $t('Wati · Roti') },
-    { id: 'joko', pal: 4, dx: -5, dy: 2, tag: $t('Joko · Serba Ada') }
+    { id: 'sarah', pal: 3, dx: 3, dy: 2, tag: $t('Sari · Ikan') },
+    { id: 'ben', pal: 2, dx: 5, dy: 2, tag: $t('Budi · Bengkel') },
+    { id: 'wendy', pal: 5, dx: -3, dy: 2, tag: $t('Wati · Roti') },
+    { id: 'jack', pal: 4, dx: -5, dy: 2, tag: $t('Joko · Serba Ada') }
   ];
   var S = { mode: 'loading', cfg: null, account: null, st: null, market: null, shops: null, history: [], busy: false, poll: 0, modal: null, plots: [], npcs: {} };
 

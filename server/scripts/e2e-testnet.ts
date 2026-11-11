@@ -70,7 +70,7 @@ const B = await newPlayer('B');
 
 step('off-chain play by A: gather, sell to Sari, craft, ship (instant, no transactions)');
 for (let i = 0; i < 4; i++) console.log('  ' + game.act(A.accountId, { action: 'gather', tile: 'water', x: 900, y: 900 + i % 1 }).toast);
-console.log('  ' + game.act(A.accountId, { action: 'sell', merchant: 'sari', token: 'fish', qty: 2 }).toast);
+console.log('  ' + game.act(A.accountId, { action: 'sell', merchant: 'sarah', token: 'fish', qty: 2 }).toast);
 console.log('  ' + game.act(A.accountId, { action: 'craft', recipe: 'bread' }).toast);
 console.log('  ' + game.act(A.accountId, { action: 'ship', token: 'bread', qty: 1 }).toast);
 for (let i = 0; i < 10; i++) game.act(A.accountId, { action: 'gather', tile: 'rock', x: 800 + i, y: 800 });
@@ -78,12 +78,12 @@ for (let i = 0; i < 5; i++) game.act(A.accountId, { action: 'gather', tile: 'tre
 console.log(`  +10 Bijih, +5 Kayu (energy left ${game.state(A.accountId).energy})`);
 
 step('scripted: drain Budi so he cannot pay rent (labelled rows, demo only)');
-const budi = game.market.account('budi');
+const ben = game.market.account('ben');
 const day = game.clock.time().settleDay;
-const drain = game.gs.balance(budi, 'coin') - 10;
-game.gs.add(day, budi, 'coin', -drain, 'scripted', 'e2e bankruptcy demo');
+const drain = game.gs.balance(ben, 'coin') - 10;
+game.gs.add(day, ben, 'coin', -drain, 'scripted', 'e2e bankruptcy demo');
 game.gs.add(day, A.accountId, 'coin', drain, 'scripted', 'e2e bankruptcy demo');
-game.gs.add(day, budi, 'tool', -game.gs.balance(budi, 'tool'), 'scripted', 'e2e bankruptcy demo');
+game.gs.add(day, ben, 'tool', -game.gs.balance(ben, 'tool'), 'scripted', 'e2e bankruptcy demo');
 const offA = offBal(A.accountId);
 
 step('daily settlement (Dev: jump to 06:00 and settle)');
@@ -98,7 +98,7 @@ const stored = (await provider.callFunction({ contractId: cfg.gameContractId, me
 const { leafHash, merkleRoot } = await import('../src/game/merkle.ts');
 check(`ledger root on chain matches the published ledger (${ledger.length} rows)`, stored === merkleRoot(ledger.map(leafHash)));
 const shops = await chain.listShops();
-check('Budi closed on chain after failing rent', shops.find((x) => x.account_id === budi)?.open === false);
+check('Budi closed on chain after failing rent', shops.find((x) => x.account_id === ben)?.open === false);
 
 step('A sends 1 fish to B: session-key delegate, relayed gas-free (on-chain immediately)');
 const sent = await signedCall(A, 'send_item', { receiver_id: B.accountId, token_id: 'fish', amount: '1' });
@@ -106,11 +106,11 @@ console.log(`  ${sent.status} ${link(sent.txHash)}`);
 check('B received the fish', (await chainBal(B.accountId)).fish === 1);
 
 step('A restores Budi: pledges 200 coin, 10 Bijih, 5 Kayu on chain');
-const pledge = await signedCall(A, 'restore_contribute', { merchant: budi, contribution: [{ token_id: 'coin', amount: '200' }, { token_id: 'ore', amount: '10' }, { token_id: 'wood', amount: '5' }] });
+const pledge = await signedCall(A, 'restore_contribute', { merchant: ben, contribution: [{ token_id: 'coin', amount: '200' }, { token_id: 'ore', amount: '10' }, { token_id: 'wood', amount: '5' }] });
 console.log(`  ${pledge.status} ${link(pledge.txHash)} ${pledge.error ?? ''}`);
 const after = await chain.listShops();
-check('Budi reopened', after.find((x) => x.account_id === budi)?.open === true);
-const h = await chain.holding(budi, A.accountId);
+check('Budi reopened', after.find((x) => x.account_id === ben)?.open === true);
+const h = await chain.holding(ben, A.accountId);
 check(`A holds shares in Budi (${h.shares} of ${h.total_shares})`, Number(h.shares) > 0);
 
 console.log(ok ? '\nE2E PASS' : '\nE2E FAIL');

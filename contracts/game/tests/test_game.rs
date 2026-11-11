@@ -20,7 +20,7 @@ async fn game_contract_flows() -> testresult::TestResult<()> {
     let owner = create_subaccount(&sandbox, "owner.sandbox").await?;
     let settler = create_subaccount(&sandbox, "settler.sandbox").await?;
     let town = create_subaccount(&sandbox, "town.sandbox").await?;
-    let budi = create_subaccount(&sandbox, "budi.sandbox").await?;
+    let ben = create_subaccount(&sandbox, "ben.sandbox").await?;
     let alice = create_subaccount(&sandbox, "alice.sandbox").await?;
     let bob = create_subaccount(&sandbox, "bob.sandbox").await?;
     let contract = create_subaccount(&sandbox, "game.sandbox").await?.as_contract();
@@ -54,7 +54,7 @@ async fn game_contract_flows() -> testresult::TestResult<()> {
     };
     let root = "a".repeat(64);
 
-    call("register_merchant", json!({"account_id": budi.account_id(), "name": "Bengkel Budi",
+    call("register_merchant", json!({"account_id": ben.account_id(), "name": "Bengkel Budi",
         "restore": [{"token_id": "coin", "amount": "200"}, {"token_id": "ore", "amount": "10"}],
         "start": [{"token_id": "coin", "amount": "600"}, {"token_id": "ore", "amount": "15"}]}), &owner, 0)
         .send_to(&net).await?.assert_success();
@@ -63,13 +63,13 @@ async fn game_contract_flows() -> testresult::TestResult<()> {
     }
     call("register_player", json!({"account_id": "mallory.sandbox"}), &alice, 0).send_to(&net).await?.assert_failure();
 
-    // Day 1 settlement: starter coin from the treasury, 3 fish gathered, budi pays alice 570 coin for 20 ore.
+    // Day 1 settlement: starter coin from the treasury, 3 fish gathered, ben pays alice 570 coin for 20 ore.
     let day1 = json!([
         {"account_id": town.account_id(), "token_id": "coin", "delta": "-100"},
         {"account_id": alice.account_id(), "token_id": "coin", "delta": "670"},
         {"account_id": alice.account_id(), "token_id": "fish", "delta": "3"},
         {"account_id": alice.account_id(), "token_id": "ore", "delta": "20"},
-        {"account_id": budi.account_id(), "token_id": "coin", "delta": "-570"}
+        {"account_id": ben.account_id(), "token_id": "coin", "delta": "-570"}
     ]);
     let settle = |entries: &Value, chunk: u32| call("settle_day", json!({"day": 1, "chunk": chunk, "entries": entries, "ledger_root": root, "active_players": 2}), &settler, 0);
     settle(&day1, 0).send_to(&net).await?.assert_success();
@@ -91,7 +91,7 @@ async fn game_contract_flows() -> testresult::TestResult<()> {
         }
     };
     assert_eq!(balance(alice.account_id().clone(), "coin").await, 670);
-    assert_eq!(balance(budi.account_id().clone(), "coin").await, 30);
+    assert_eq!(balance(ben.account_id().clone(), "coin").await, 30);
 
     // send_item works with no deposit; mt_transfer requires exactly 1 yoctoNEAR.
     call("send_item", json!({"receiver_id": bob.account_id(), "token_id": "fish", "amount": "1"}), &alice, 0).send_to(&net).await?.assert_success();
@@ -104,13 +104,13 @@ async fn game_contract_flows() -> testresult::TestResult<()> {
     assert_eq!(balance(bob.account_id().clone(), "fish").await, 2);
 
     // Budi cannot pay rent (30 < 40): the settler closes the shop; alice restores it and gets shares.
-    call("close_shop", json!({"merchant": budi.account_id()}), &settler, 0).send_to(&net).await?.assert_success();
-    call("restore_contribute", json!({"merchant": budi.account_id(), "contribution": [
+    call("close_shop", json!({"merchant": ben.account_id()}), &settler, 0).send_to(&net).await?.assert_success();
+    call("restore_contribute", json!({"merchant": ben.account_id(), "contribution": [
         {"token_id": "coin", "amount": "200"}, {"token_id": "ore", "amount": "10"}]}), &alice, 0).send_to(&net).await?.assert_success();
-    let shop: near_api::Data<Value> = contract.call_function("get_shop", json!({"merchant": budi.account_id()})).read_only().fetch_from(&net).await?;
+    let shop: near_api::Data<Value> = contract.call_function("get_shop", json!({"merchant": ben.account_id()})).read_only().fetch_from(&net).await?;
     assert_eq!(shop.data["open"], json!(true), "restored shop reopens");
-    let holding: near_api::Data<Value> = contract.call_function("get_holding", json!({"merchant": budi.account_id(), "holder": alice.account_id()})).read_only().fetch_from(&net).await?;
+    let holding: near_api::Data<Value> = contract.call_function("get_holding", json!({"merchant": ben.account_id(), "holder": alice.account_id()})).read_only().fetch_from(&net).await?;
     assert!(holding.data["shares"].as_str().unwrap().parse::<u128>().unwrap() > 0);
-    assert_eq!(balance(budi.account_id().clone(), "coin").await, 230);
+    assert_eq!(balance(ben.account_id().clone(), "coin").await, 230);
     Ok(())
 }

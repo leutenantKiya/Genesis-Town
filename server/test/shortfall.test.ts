@@ -39,19 +39,19 @@ async function world(opts: { seed?: number; rng?: () => number } = {}) {
 type W = Awaited<ReturnType<typeof world>>;
 
 const quiet = () => { const o = console.error; const lines: string[] = []; console.error = (...a: unknown[]) => { lines.push(a.join(' ')); }; return { lines, restore: () => { console.error = o; } }; };
-const sell = (w: W, qty = 10) => w.game.act(P, { action: 'sell', merchant: 'sari', token: 'fish', qty });
+const sell = (w: W, qty = 10) => w.game.act(P, { action: 'sell', merchant: 'sarah', token: 'fish', qty });
 const gather = (w: W) => w.game.act(P, { action: 'gather', tile: 'water', x: 0, y: 9 });
 
 test('mt_transfer_after_offchain_sale_does_not_block_settlement', async () => {
   const w = await world();
   const day = w.game.clock.time().settleDay;
-  const sariFish = Number(w.chain.get('sari.gt.test', 'fish'));
+  const sariFish = Number(w.chain.get('sarah.gt.test', 'fish'));
   sell(w);
   w.chain.add(P, 'fish', -10n); // the player moves the fish away on chain with mt_transfer
   const q = quiet();
   try { await w.game.devSettle(); } finally { q.restore(); }
   assert.equal(w.game.settlement.settledThrough(), day, 'day completes');
-  assert.equal(Number(w.chain.get('sari.gt.test', 'fish')), sariFish + 10, 'sari still receives the fish');
+  assert.equal(Number(w.chain.get('sarah.gt.test', 'fish')), sariFish + 10, 'sarah still receives the fish');
   assert.equal(Number(w.chain.get(P, 'fish')), 0);
   const f = w.game.gs.shortfalls().find((x) => x.account === P && x.token === 'fish')!;
   assert.ok(f, 'shortfall recorded');
@@ -63,20 +63,20 @@ test('mt_transfer_after_offchain_sale_does_not_block_settlement', async () => {
   assert.throws(() => sell(w), (e: any) => e.status === 403 && FROZEN.test(e.message));
   assert.throws(() => gather(w), (e: any) => e.status === 403);
   assert.equal(w.game.gs.dayRows(day).filter((r) => !r.settled).length, 0, 'rows settled');
-  await w.game.settlement.refresh([P, 'sari.gt.test']);
-  assert.equal(w.game.gs.settledBalance('sari.gt.test', 'fish'), Number(w.chain.get('sari.gt.test', 'fish')));
+  await w.game.settlement.refresh([P, 'sarah.gt.test']);
+  assert.equal(w.game.gs.settledBalance('sarah.gt.test', 'fish'), Number(w.chain.get('sarah.gt.test', 'fish')));
 });
 
 test('unregistered_account_entries_dropped_and_frozen', async () => {
   const w = await world();
   const day = w.game.clock.time().settleDay;
-  const sariFish = Number(w.chain.get('sari.gt.test', 'fish'));
+  const sariFish = Number(w.chain.get('sarah.gt.test', 'fish'));
   sell(w);
   w.chain.accounts.delete(P); // storage_unregister
   const q = quiet();
   try { await w.game.devSettle(); } finally { q.restore(); }
   assert.equal(w.game.settlement.settledThrough(), day);
-  assert.equal(Number(w.chain.get('sari.gt.test', 'fish')), sariFish + 10);
+  assert.equal(Number(w.chain.get('sarah.gt.test', 'fish')), sariFish + 10);
   const rows = w.game.gs.shortfalls().filter((x) => x.account === P);
   assert.ok(rows.length >= 1);
   assert.ok(rows.every((r) => r.applied === 0));
@@ -220,7 +220,7 @@ test('cap_clamp_in_preflight_is_recorded_without_freezing', async () => {
 test('shortfall_withholds_the_accounts_credits', async () => {
   const w = await world();
   const day = w.game.clock.time().settleDay;
-  const sariFish = Number(w.chain.get('sari.gt.test', 'fish'));
+  const sariFish = Number(w.chain.get('sarah.gt.test', 'fish'));
   const coinBefore = Number(w.chain.get(P, 'coin'));
   const cacheBefore = w.game.gs.settledBalance(P, 'coin');
   sell(w); // fish -10, coin +N off-chain
@@ -231,7 +231,7 @@ test('shortfall_withholds_the_accounts_credits', async () => {
   assert.equal(Number(w.chain.get(P, 'coin')), coinBefore, 'no coin credited on chain');
   await w.game.settlement.refresh([P]);
   assert.equal(w.game.gs.settledBalance(P, 'coin'), cacheBefore, 'cache matches');
-  assert.equal(Number(w.chain.get('sari.gt.test', 'fish')), sariFish + 10, 'sari still gets the fish');
+  assert.equal(Number(w.chain.get('sarah.gt.test', 'fish')), sariFish + 10, 'sarah still gets the fish');
   const rows = w.game.gs.shortfalls().filter((x) => x.account === P);
   assert.ok(rows.some((x) => x.token === 'fish' && x.kind === 'shortfall'));
   const wh = rows.find((x) => x.token === 'coin' && x.kind === 'withheld')!;

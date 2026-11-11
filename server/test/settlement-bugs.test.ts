@@ -59,13 +59,13 @@ test('mock chain applies the contract rules: gain caps and the coin faucet; unre
 test('chunks list coin payers first, so six sellers settle under a faucet smaller than the gross transfers', async () => {
   const ps = [1, 2, 3, 4, 5, 6].map((i) => `p${i}.players.test`);
   const { game, chain } = await world(ps, 5);
-  chain.add('sari.gt.test', 'coin', 2000n);
-  chain.add('joko.gt.test', 'coin', 2000n);
+  chain.add('sarah.gt.test', 'coin', 2000n);
+  chain.add('jack.gt.test', 'coin', 2000n);
   for (const p of ps) chain.add(p, 'fish', 3n);
-  await game.settlement.refresh(['sari.gt.test', 'joko.gt.test', ...ps]);
+  await game.settlement.refresh(['sarah.gt.test', 'jack.gt.test', ...ps]);
   const day = game.clock.time().settleDay;
   ps.forEach((p, i) => {
-    const m = i % 2 ? 'joko.gt.test' : 'sari.gt.test';
+    const m = i % 2 ? 'jack.gt.test' : 'sarah.gt.test';
     game.gs.add(day, p, 'fish', -3, 'trade');
     game.gs.add(day, p, 'coin', 150, 'trade');
     game.gs.add(day, m, 'coin', -150, 'trade');
@@ -137,7 +137,7 @@ test('a failing settlement is retried with backoff (30 s, doubling) and logged o
 test('dividends are planned before settling and paid once, even after a crash or a failed payment', async () => {
   const { game, chain, clock } = await world(['p1.players.test']);
   const day = game.clock.time().settleDay;
-  game.gs.add(day, 'wati.gt.test', 'coin', 500, 'trade');
+  game.gs.add(day, 'wendy.gt.test', 'coin', 500, 'trade');
   game.gs.add(day, TOWN, 'coin', -500, 'test');
   const paid: number[] = [];
   const orig = chain.payDividend.bind(chain);
@@ -161,12 +161,12 @@ test('dividends are planned before settling and paid once, even after a crash or
   restore();
   assert.equal(game.settlement.settledThrough(), day);
   const share = game.econ.shops.dividendShare;
-  const profit = game.gs.dayRows(day).filter((r) => r.account === 'wati.gt.test' && r.token === 'coin').reduce((s, r) => s + r.delta, 0);
+  const profit = game.gs.dayRows(day).filter((r) => r.account === 'wendy.gt.test' && r.token === 'coin').reduce((s, r) => s + r.delta, 0);
   assert.ok(profit >= 460);
   assert.deepEqual(paid, [Math.floor(profit * share)],'the planned dividend was paid exactly once');
-  const h = await chain.holding('wati.gt.test', 'town');
+  const h = await chain.holding('wendy.gt.test', 'town');
   assert.ok(Number(h.claimable) > 0);
-  assert.equal(String(game.gs.settledBalance('wati.gt.test', 'coin')), String(chain.get('wati.gt.test', 'coin')));
+  assert.equal(String(game.gs.settledBalance('wendy.gt.test', 'coin')), String(chain.get('wendy.gt.test', 'coin')));
 });
 
 test('days on which nothing happened close without a transaction, so a server that was off does not spend gas on them', async () => {

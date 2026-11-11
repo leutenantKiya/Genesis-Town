@@ -64,7 +64,7 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
    the townsfolk who buy food, tools and firewood every day. A glut in one item pushes players toward another.
 2. **Restore a failing shop.** A merchant whose cash cannot cover the day's rent closes its shop: the door gets a
    TUTUP sign and the keeper explains why. A **restoration board** inside lists what it needs to reopen: coins plus a
-   small bundle of goods (for Budi's smithy: 200 coins, 10 Bijih, 5 Kayu). Any player can contribute coins or items.
+   small bundle of goods (for Ben's smithy: 200 coins, 10 Bijih, 5 Kayu). Any player can contribute coins or items.
    When the board is complete the shop reopens, and every contributor holds shares, valued at base price, that pay a
    cut of the shop's daily profit. Contributions and shares are on-chain right away.
 3. **Use the player market.** List goods for other players at your own price (escrowed in the contract), or buy
@@ -80,12 +80,12 @@ The prototype's clock and Dev panel time controls stay; they drive both modes.
    first 06:00 settlement.
 3. Walk to the pond (the minimap marks it) and press A four times: `+1 Ikan` ×4, the node empties and starts its
    respawn timer. This is instant and off-chain.
-4. Walk to Sari's fish stall. Her bid for Ikan is shown with a tooltip. Sell 4 Ikan: coins go up, Sari's stock goes up,
+4. Walk to Sarah's fish stall. Her bid for Ikan is shown with a tooltip. Sell 4 Ikan: coins go up, Sarah's stock goes up,
    and next game hour her price ticks down a little, with the reason in the tooltip.
-5. Chop wood (uses the Alat), cook Ikan Bakar at your workbench, and sell it to Sari for more than the raw fish.
-6. The notice board shows Joko's general store at 2 days of rent left and falling: he buys everything and pays storage
+5. Chop wood (uses the Alat), cook Ikan Bakar at your workbench, and sell it to Sarah for more than the raw fish.
+6. The notice board shows Jack's general store at 2 days of rent left and falling: he buys everything and pays storage
    on what he can't resell. Next morning his stall reads TUTUP.
-7. Open Joko's restoration board and contribute 50 coins and the 6 Kayu you chopped. When the board is complete
+7. Open Jack's restoration board and contribute 50 coins and the 6 Kayu you chopped. When the board is complete
    (in the judge scenario the remaining gap is small), the shop reopens and your shares appear in Profile. The
    contribution has its own explorer link right away.
 8. Press **Settle sekarang** (Dev panel) to run the daily settlement now: Riwayat shows one on-chain settlement

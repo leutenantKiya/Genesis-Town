@@ -110,7 +110,7 @@ test('the off-chain daily gain cap refuses items and coin past what the contract
   // coin: a sale that would push today's net coin gain over the cap
   game.gs.add(day, P, 'coin', 4990, 'test');
   game.gs.add(day, P, 'wheat', 10, 'test');
-  assert.throws(() => game.act(P, { action: 'sell', merchant: 'sari', token: 'wheat', qty: 10 }), (e: { status: number }) => e.status === 409);
+  assert.throws(() => game.act(P, { action: 'sell', merchant: 'sarah', token: 'wheat', qty: 10 }), (e: { status: number }) => e.status === 409);
 });
 
 test('starter coin comes from the treasury only when it can pay; otherwise goods only', async () => {
