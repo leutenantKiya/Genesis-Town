@@ -172,6 +172,10 @@
 >   Split setup also ready: client on Vercel (`vercel.json`, `GT_API_BASE`), server on Railway (`railway.json`,
 >   volume at `/data`, `CORS_ORIGINS`), browser calls the server directly.
 >   Waiting on: the host (owner's account) and NEAR Auth accepting the public domain.
+>   **Landing page** (2026-11-12, `client/landing/`, served at `/landing/`): plain HTML in English. Its hero shows the
+>   live 2.5D Homeland (`client/landing/world.js`), which turns, runs the day and goes through the seasons by itself.
+>   A drag or Q / E turns it, and a small pill opens the season and day controls. The page also has the merchants'
+>   live shelves, a recipe value calculator and clickable island markers. It reads `/api/market` and `/api/time`.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026). Track: **Games With Real Economies** (`games`). Possible secondary track:
 Agent Economy (`agents`), decided at submission.
