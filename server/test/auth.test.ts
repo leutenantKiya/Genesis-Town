@@ -127,3 +127,18 @@ test('Google login: rejects other audiences, other issuers, a NEAR Auth token, a
   await assert.rejects(register(deps, { idToken: await g.sign('1'), sessionPublicKey: session, provider: 'apple' }), (e: { status: number }) => e.status === 400);
   assert.equal(s.chain.accounts.size, 0);
 });
+
+test('register: a player whose contract registration failed at creation is registered on the next login', async () => {
+  const s = setup();
+  const iss = await issuer(s.cfg.fastAuth.domain, s.cfg.fastAuth.clientId);
+  const verify = auth0Verifier(s.cfg, iss.jwks);
+  const session = near.KeyPair.fromRandom('ed25519').getPublicKey().toString();
+  const orig = s.chain.registerPlayer.bind(s.chain);
+  let failOnce = true;
+  s.chain.registerPlayer = async (a: string) => { if (failOnce) { failOnce = false; return { txHash: '', ok: false, error: 'rpc hiccup' }; } return orig(a); };
+  const r = await register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|900'), sessionPublicKey: session });
+  assert.equal(await s.chain.isRegistered(r.accountId), false, 'half-registered after the failed call');
+  const again = await register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|900'), sessionPublicKey: session });
+  assert.equal(again.created, false);
+  assert.equal(await s.chain.isRegistered(r.accountId), true, 'second login registered the account');
+});

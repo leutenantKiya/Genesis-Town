@@ -73,6 +73,25 @@ function requireFreshLogin(iat: number | undefined, now = Date.now()) {
   if (iat !== undefined && now / 1000 - iat > FRESH_LOGIN_SECS) throw new HttpError(401, 'Please sign in again.');
 }
 
+// Accounts known to be registered in the contract, per chain, so the on-chain check runs at most once per account per run.
+const knownRegistered = new WeakMap<object, Set<string>>();
+
+/** A player row can exist without the contract registration (registerPlayer failed after the account was created). Retry on later logins. */
+export async function ensureRegistered(deps: { chain: Chain; store: Store }, accountId: string): Promise<string[]> {
+  let known = knownRegistered.get(deps.chain);
+  if (!known) { known = new Set(); knownRegistered.set(deps.chain, known); }
+  if (known.has(accountId)) return [];
+  const txHashes: string[] = [];
+  try {
+    if (await deps.chain.isRegistered(accountId)) { known.add(accountId); return txHashes; }
+    const reg = await deps.chain.registerPlayer(accountId);
+    txHashes.push(reg.txHash);
+    deps.store.addHistory(accountId, 'storage', 'Registered in the game contract', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
+    if (reg.ok) known.add(accountId);
+  } catch { /* RPC hiccup: the next login tries again */ }
+  return txHashes;
+}
+
 export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsChainApproval?: boolean; ownerPublicKey?: string }
 
 export async function register(
@@ -98,6 +117,7 @@ export async function register(
     if (owner && owner !== existing.account_id) throw new HttpError(409, 'session key already belongs to another account');
     if (!owner) { requireFreshLogin(iat); deps.store.addSessionKey(body.sessionPublicKey, existing.account_id, false); }
     deps.store.setActiveKey(existing.account_id, body.sessionPublicKey);
+    await ensureRegistered(deps, existing.account_id);
     if (deps.store.sessionKeyOnchain(body.sessionPublicKey)) return { accountId: existing.account_id, created: false, txHashes: [] };
     return { accountId: existing.account_id, created: false, txHashes: [], needsChainApproval: true, ownerPublicKey: existing.owner_pk };
   }
@@ -126,6 +146,7 @@ export async function register(
   deps.store.addHistory(accountId, 'account', 'Account created (NEAR Auth key + game session key)', deps.chain.mode === 'mock' ? 'mock' : 'ok', created.txHash);
   const reg = await deps.chain.registerPlayer(accountId);
   deps.store.addHistory(accountId, 'storage', 'Registered in the game contract', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
+  if (reg.ok) { let k = knownRegistered.get(deps.chain); if (!k) knownRegistered.set(deps.chain, k = new Set()); k.add(accountId); }
   deps.onNewPlayer?.(accountId);
   return { accountId, created: true, txHashes: [created.txHash, reg.txHash] };
 }
@@ -139,12 +160,7 @@ async function adopt(
 ): Promise<RegisterResult> {
   if (!hasKey) requireFreshLogin(iat);
   deps.store.addPlayer(accountId, sub, ownerPk);
-  const txHashes: string[] = [];
-  if (!(await deps.chain.isRegistered(accountId))) {
-    const reg = await deps.chain.registerPlayer(accountId);
-    txHashes.push(reg.txHash);
-    deps.store.addHistory(accountId, 'storage', 'Registered in the game contract', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
-  }
+  const txHashes = await ensureRegistered(deps, accountId);
   deps.store.setActiveKey(accountId, sessionPk);
   if (!hasKey) {
     deps.store.addSessionKey(sessionPk, accountId, false);
