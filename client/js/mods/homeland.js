@@ -187,7 +187,8 @@
   function openPortal() {
     if (travelling || !loggedIn()) return;
     if (!nearPortal()) { GT.toast($t('Pergi ke portal dulu.')); return; }
-    load(true).then(function () {
+    // the menu opens even when the Homeland refresh fails (a party mate's world): the public area is always on it
+    load(true).catch(function () {}).then(function () {
       var cur = wid(), opts = [];
       if (cur !== 'public') opts.push({ label: $t('Area Publik (pasar)'), onPick: function () { travel('public'); } });
       if (H && cur !== H.world) opts.push({ label: $t('Rumahku'), onPick: function () { travel(H.world); } });

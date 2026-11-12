@@ -18,7 +18,7 @@
   var bubbles = {};       // nick (lower) -> { text, t }
   var box = null, list = null, input = null, head = null;
   var LS_BLOCK = 'gt.chat.blocked';
-  var STEP_MS = 700;
+  var STEP_MS = 450; // poll and ease time: other players look about 0.5 s behind; the server allows 2.4 reports a second (app.ts presenceLimiter)
 
   function C() { return window.GT_CHAIN; }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
