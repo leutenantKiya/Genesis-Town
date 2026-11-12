@@ -174,10 +174,11 @@
     opts.push({ label: $t('Party'), onPick: function () { if (window.GT_PARTY) GT_PARTY.open(); } });
     if (window.GT_CHARSCREEN) opts.push({ label: $t('Ubah karakter'), onPick: function () { GT_CHARSCREEN.open(true); } });
     if (GT.openProfile) opts.push({ label: $t('Profil'), onPick: function () { GT.openProfile(); } });
-    if (document.getElementById('btnJiwa')) opts.push({ label: $t('Jiwa'), onPick: function () { press('btnJiwa'); } });
     if (GT.interact) opts.push({ label: $t('Pesan ke NPC di depanmu'), onPick: function () { GT.interact('message'); } });
     if (document.getElementById('devbtn')) opts.push({ label: 'Dev', onPick: function () { press('devbtn'); } });
-    GT.menu($t('Lainnya'), opts);
+    // signing out lives here, with the other account settings (it used to sit at the foot of the Bag)
+    if (window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account) opts.push({ label: $t('Keluar (ganti akun)'), onPick: function () { GT_CHAIN.signOut(); } });
+    GT.menu($t('Pengaturan'), opts);
   }
   function buildTabbar() {
     if (tabbar) return;
@@ -188,7 +189,7 @@
      ['tab-market', $t('Pasar'), function () { press('pasarbtn'); }],
      ['tab-map', $t('Peta'), function () { press('mapbtn'); }],
      ['tab-chat', $t('Chat'), function () { if (window.GT_PLAYERS) GT_PLAYERS.openChat(''); }],
-     ['tab-more', $t('Lainnya'), moreSheet]].forEach(function (t) {
+     ['tab-more', $t('Pengaturan'), moreSheet]].forEach(function (t) {
       var b = $('button', 'gt-tab', t[1]); b.type = 'button'; b.id = t[0];
       b.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) t[2](); });
       tabbar.appendChild(b);
@@ -347,7 +348,7 @@
       GT.addHudButton({ id: 'setbtn', label: $t('Atur'), onClick: openSettings, secondary: false });
       // A calmer HUD: Tas, Pasar, Peta and Simulasi stay in view; everything else lives in Lainnya
       // (css/phone.css hides the rest). Their keyboard shortcuts still work.
-      GT.addHudButton({ id: 'gt-morebtn', label: $t('Lainnya'), onClick: moreSheet, secondary: false });
+      GT.addHudButton({ id: 'gt-morebtn', label: $t('Pengaturan'), onClick: moreSheet, secondary: false });
       renderHelp();
       applyLayout();
     }

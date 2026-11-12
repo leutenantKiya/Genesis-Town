@@ -2360,10 +2360,12 @@ function pressDir(d, id, world){
   if (canControl() && !P.moving && !waitRelease && P.dir !== wd){ P.dir = wd; P.turnT = TURN_T; }
 }
 function releaseDir(id){ for (var i = held.length - 1; i >= 0; i--) if (held[i].id === id) held.splice(i, 1); }
+function typingIn(t){ return !!(t && (t.isContentEditable || (t.tagName === 'INPUT' && !/^(button|checkbox|radio|range|submit)$/i.test(t.type)) || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')); }
 function onButton(e){ return !!(e.target && e.target.closest && e.target.closest('button')); }
 function setupInput(){
   window.addEventListener('keydown', function(e){
     if ((e.code === 'F2' || e.code === 'Backquote') && devKey(e)) return;
+    if (typingIn(e.target)) return; // letters typed into chat or a form never walk the player
     if (modals.length){ modalKey(e); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (callModsBool('onKey', [e])){ e.preventDefault(); return; }
@@ -2387,6 +2389,8 @@ function setupInput(){
     else if ((e.code === 'Space' || e.code === 'Enter') && !modals.length && !onButton(e)) e.preventDefault();
   });
   window.addEventListener('blur', function(){ held.length = 0; stick = null; });
+  // a text field taking focus (chat opened with / or C while walking) swallows the key's keyup: stop walking now
+  document.addEventListener('focusin', function(e){ if (typingIn(e.target)){ held.length = 0; stick = null; } });
   document.addEventListener('visibilitychange', function(){ if (document.hidden) held.length = 0; });
   document.addEventListener('focusin', function(e){
     if (!modals.length) return;

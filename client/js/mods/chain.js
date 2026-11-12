@@ -330,15 +330,21 @@
     body.appendChild($('p', null, $t('Pilih cara masuk. Akunmu tetap akun NEAR testnet; tanpa dompet, tanpa biaya gas.')));
     var slot = $('div', 'gt-login-google'); slot.appendChild($('p', 'mnote', $t('Memuat tombol Google…')));
     body.appendChild(slot);
-    var actions = [];
-    if (window.NearLib) actions.push({ label: $t('Masuk dengan NEAR Auth (Google/email)'), onClick: function (h) { h.close('near'); nearLogin(); return true; } });
-    var h = GT.modal({ title: $t('Masuk'), body: body, actions: actions, onClose: function () { onGoogle = null; } });
+    var h;
+    if (window.NearLib) {
+      body.appendChild($('p', 'gt-login-or', $t('atau')));
+      var nb = $('button', 'gt-login-near', $t('Masuk dengan NEAR Auth (Google/email)')); nb.type = 'button';
+      nb.addEventListener('click', function () { h.close('near'); nearLogin(); });
+      body.appendChild(nb);
+    }
+    h = GT.modal({ title: $t('Masuk'), body: body, actions: [], onClose: function () { onGoogle = null; } });
     onGoogle = function (res) {
       if (!res || !res.credential) { GT.toast($t('Google tidak memberi token')); return; }
       h.close('google'); onGoogle = null; S.busy = true;
+      var ring = busyRing();
       finishLogin(res.credential, false, null, 'google')
         .catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e && e.message || e])); })
-        .then(function () { S.busy = false; });
+        .then(function () { S.busy = false; ring(); });
     };
     loadGsi().then(function (id) {
       if (h.closed) return;
@@ -352,6 +358,7 @@
     if (S.busy) return;
     if (!window.NearLib) { GT.toast($t('Pustaka NEAR belum dimuat (jalankan build klien).')); return; }
     S.busy = true;
+    var ring = busyRing();
     var provider = new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: S.cfg.fastAuth.clientId });
     var choose = lsGet(LS_FORCE) === '1';
     provider.login(undefined, choose)
@@ -361,7 +368,15 @@
         return finishLogin(claims.__raw, false, provider);
       })
       .catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e && e.message || e])); })
-      .then(function () { S.busy = false; });
+      .then(function () { S.busy = false; ring(); });
+  }
+
+  /* a loading ring over the game while a sign-in runs; returns the function that takes it away */
+  function busyRing() {
+    var el = $('div', 'gt-busy'); el.setAttribute('role', 'status');
+    el.appendChild($('span', 'gt-busy-ring')); el.appendChild($('span', 'gt-busy-text', $t('Sedang masuk…')));
+    document.body.appendChild(el);
+    return function () { if (el.parentNode) el.parentNode.removeChild(el); };
   }
 
   function devLogin() {
@@ -373,7 +388,8 @@
       var v = String(input.value || '').trim().toLowerCase();
       if (!/^[a-z0-9_-]{1,32}$/.test(v)) { GT.toast($t('Nama: huruf kecil, angka, - atau _')); return false; }
       h.close('ok'); S.busy = true;
-      finishLogin('dev:' + v).catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e.message])); }).then(function () { S.busy = false; });
+      var ring = busyRing();
+      finishLogin('dev:' + v).catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e.message])); }).then(function () { S.busy = false; ring(); });
       return true;
     } }] });
     setTimeout(function () { input.focus(); }, 50);
@@ -1154,7 +1170,6 @@
     wrap.appendChild($('p', 'chain-dim', $t('{0}Barang "hari ini" tersimpan permanen pukul 06:00{1}', [document.documentElement.classList.contains('gt-phone') ? $t('Ketuk barang untuk melihat, lalu Pegang. ') : $t('Klik untuk melihat, klik kanan untuk memegang. '), chainUI() ? $t(' (di NEAR).') : '.'])));
     if (S.account) wrap.appendChild($('p', 'chain-dim', $t('Akun: {0}', [S.account])));
     wrap.appendChild(button($t('Semua riwayat'), function () { open('history'); }));
-    wrap.appendChild(button($t('Keluar (ganti akun)'), function () { signOut(); }));
     return wrap;
   }
   var USE = {

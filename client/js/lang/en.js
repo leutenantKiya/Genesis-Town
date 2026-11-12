@@ -67,6 +67,8 @@
     "Rumah Pekerja": "Workers' House",
     "Rumah Sakit": "Hospital",
     "Penggergajian": "Sawmill",
+    "atau": "or",
+    "Sedang masuk…": "Signing in…",
     "Kincir Angin": "Windmill",
     "Gudang": "Storehouse",
     "Menaikkan {0}": "Upgrading the {0}",
