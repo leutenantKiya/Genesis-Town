@@ -15,6 +15,7 @@
   'use strict';
   var C = null;                          // GT_CHAIN
   var H = null;                          // last GET /api/homeland: the view plus `invited`
+  var HV = null;                         // the view of the Homeland we stand in when it is someone else's (GET /api/homeland?world=), with our `role`
   var layoutSig = '';                    // signature of the generator inputs the current map was built from
   var loading = null, lastLoad = 0, pollT = 0, jobPing = 0;
   var travelling = false, hintShown = false, nearHint = false, hintT = 0;
@@ -53,6 +54,11 @@
   function wid() { return (GT.worldId && GT.worldId()) || 'public'; }
   function isHL(w) { return /^HL-\d+$/.test(w); }
   function inOwnHome() { return !!(H && wid() === H.world); }
+  /* the Homeland we are looking at: our own, or the host's when we are a guest */
+  function V() { return inOwnHome() ? H : (isHL(wid()) ? HV : null); }
+  function role() { if (inOwnHome()) return 'owner'; var h = S() && S().st && S().st.here; return (HV && HV.role) || (h && h.role) || 'visitor'; }
+  function hostName() { var h = S() && S().st && S().st.here; return (h && h.owner_name) || $t('pemilik'); }
+  function assistCost() { var c = S() && S().cfg && S().cfg.econ && S().cfg.econ.coop; return (c && c.assistEnergy) || 10; }
   function itemName(t) {
     if (t === 'coin') return $t('Koin');
     var c = S() && S().cfg && S().cfg.econ && S().cfg.econ.items[t];
@@ -71,7 +77,7 @@
   }
   function layoutOf() { return GT.world && GT.world.layout; }
   function lotById(id) { var L = layoutOf(), r = null; if (L && L.lots) L.lots.forEach(function (l) { if (l.id === id) r = l; }); return r; }
-  function builtOf(lot) { var r = null; if (H) H.built.forEach(function (b) { if (b.lot === lot) r = b; }); return r; }
+  function builtOf(lot) { var r = null, v = V(); if (v) v.built.forEach(function (b) { if (b.lot === lot) r = b; }); return r; }
   function chunkName(id) {
     var r = id, L = layoutOf();
     if (L && L.chunks) L.chunks.forEach(function (c) { if (c.id === id) r = c.name; });
@@ -91,6 +97,10 @@
       if (inOwnHome() && signature(H) !== layoutSig) rebuild();
       builderSig = ''; placeBuilder(); placeBots();
     }, function () { /* keep the old numbers */ })
+      .then(function () {
+        if (!(H && isHL(wid()) && wid() !== H.world)) { HV = null; return; }
+        return C.api('/homeland?world=' + encodeURIComponent(wid())).then(function (v) { HV = v; builderSig = ''; placeBuilder(); }, function () { /* keep the old numbers */ });
+      })
       .then(function () { loading = null; redrawWin(); return H; });
     return loading;
   }
@@ -190,7 +200,7 @@
     if (ae && ae.tagName === 'INPUT' && win.h.el && win.h.el.contains(ae)) return;
     win.h.setBody(bodyFor(win));
   }
-  function busyJob() { return H && H.builders && H.builders.busy >= H.builders.total; }
+  function busyJob() { var v = V(); return v && v.builders && v.builders.busy >= v.builders.total; }
 
   function run(body, after) {
     if (!loggedIn() || (win && win.busy)) return;
@@ -240,22 +250,43 @@
   }
   function jobLine(j) { return $t('{0} · sisa {1}', [jobWhat(j), clock(endMs(j) - Date.now())]); }
 
+  /* the running jobs of the Homeland we look at; helpers and up get the "Bantu tukang" button on each */
+  function jobRows(parent, v, rl) {
+    v.jobs.forEach(function (j) {
+      var r = $('div', 'hl-row'); r.appendChild($('span', 'hl-grow', jobWhat(j))); r.appendChild($('span', 'hl-k', 'sisa')); r.appendChild($('b', 'hl-n hl-time', clock(endMs(j) - Date.now()))); parent.appendChild(r);
+      if (rl !== 'visitor') acts(parent).appendChild(btn($t('Bantu tukang (−{0} energi)', [assistCost()]), function () { run({ action: 'assist', target: j.target }); }, '', isBusy()));
+    });
+  }
+  /* ---- Balai Kota of someone else's Homeland ---- */
+  function guestHall(wrap) {
+    var v = V(), rl = role();
+    if (!v) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
+    var stats = $('div', 'hl-stats');
+    [[$t('Balai Kota'), $t('level {0}', [v.th])], [$t('Wilayah terbuka'), $t('{0} dari 9', [v.open.length + 1])]].forEach(function (kv) { var s = $('div', 'hl-stat'); s.appendChild($('span', 'hl-k', kv[0])); s.appendChild($('b', 'hl-n', kv[1])); stats.appendChild(s); });
+    wrap.appendChild(stats);
+    wrap.appendChild($('p', 'hl-p', $t('Kamu: {0} di dunia ini', [ROLE_NAME[rl] || ROLE_NAME.visitor])));
+    var bs = cell($t('Pembangun'), $t('{0} dari {1} sibuk', [v.builders.busy, v.builders.total]));
+    if (v.jobs.length) jobRows(bs, v, rl); else bs.appendChild($('p', 'chain-dim', $t('Pembangun menganggur.')));
+    wrap.appendChild(bs);
+    if (rl !== 'builder') { wrap.appendChild($('p', 'hl-p', $t('Hanya pemilik dan Tukang yang bisa membangun di sini.'))); return wrap; }
+    var busy = busyJob(), th = v.next && v.next.th;
+    if (th) {
+      var short = shortOf(th.cost), can = !busy && !short.length;
+      wrap.appendChild(stepBlock($t('Naikkan ke level {0}', [th.level]), $t('Dibayar dari tasmu; bangunannya milik {0}.', [hostName()]), th, can, busy ? $t('Pembangun sedang bekerja.') : null, $t('Naikkan ke level {0}', [th.level]), function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
+    }
+    return wrap;
+  }
   /* ---- Balai Kota ---- */
   function hallBody() {
     var wrap = $('div', 'gt-isl hl');
     if (!H) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     var owner = inOwnHome();
+    if (!owner) return guestHall(wrap);
     var stats = $('div', 'hl-stats');
     function stat(k, v) { var s = $('div', 'hl-stat'); s.appendChild($('span', 'hl-k', k)); s.appendChild($('b', 'hl-n', v)); stats.appendChild(s); }
     stat($t('Balai Kota'), $t('level {0}', [H.th]));
     stat($t('Wilayah terbuka'), $t('{0} dari 9', [H.open.length + 1]));
     wrap.appendChild(stats);
-    if (!owner) {
-      wrap.appendChild($('p', 'hl-p', $t('Ini Balai Kota milik pemilik dunia ini. Hanya pemiliknya yang bisa membangun.')));
-      var here = S() && S().st && S().st.here;
-      if (here) wrap.appendChild($('p', 'hl-p', $t('Kamu: {0} di dunia ini', [ROLE_NAME[here.role] || ROLE_NAME.visitor])));
-      return wrap;
-    }
 
     var bs = cell($t('Pembangun'), $t('{0} dari {1} sibuk', [H.builders.busy, H.builders.total]));
     if (H.jobs.length) H.jobs.forEach(function (j) {
@@ -386,14 +417,14 @@
   function lotBody(lotId) {
     var wrap = $('div', 'gt-isl hl'), lot = lotById(lotId);
     if (!H || !lot) { wrap.appendChild($('p', null, H ? $t('Lahan ini tidak ada.') : $t('Memuat…'))); return wrap; }
-    var owner = inOwnHome(), b = builtOf(lotId), name = KIND_NAME[lot.kind] || lot.kind;
-    var def = H.next && H.next.buildings && H.next.buildings[lot.kind];
+    var owner = inOwnHome(), rl = role(), v = V() || H, b = builtOf(lotId), name = KIND_NAME[lot.kind] || lot.kind;
+    var def = v.next && v.next.buildings && v.next.buildings[lot.kind];
     var stats = $('div', 'hl-stats'), st1 = $('div', 'hl-stat');
     st1.appendChild($('span', 'hl-k', name)); st1.appendChild($('b', 'hl-n', chunkName(lot.chunk))); stats.appendChild(st1);
     wrap.appendChild(stats);
-    if (!owner) { wrap.appendChild($('p', 'hl-p', b ? $t('Bangunan milik pemilik dunia ini.') : $t('Lahan kosong milik pemilik dunia ini.'))); return wrap; }
     var job = null;
-    H.jobs.forEach(function (j) { if (j.kind === 'build' && j.target === lotId) job = j; });
+    v.jobs.forEach(function (j) { if (j.kind === 'build' && j.target === lotId) job = j; });
+    if (!owner && b && def && (def.cooks || def.furniture || def.healGameHours)) { wrap.appendChild($('p', 'hl-p', $t('Bangunan milik pemilik dunia ini.'))); return wrap; }
     if (b && def && def.cooks) { wrap.appendChild(restoranBody(lotId)); return wrap; }
     if (b && def && def.furniture) { wrap.appendChild(houseBody(lotId)); return wrap; }
     if (b && def && def.healGameHours) { wrap.appendChild(hospitalBody(lotId)); return wrap; }
@@ -402,21 +433,25 @@
       var box = cell($t('{0} · menghasilkan {1}', [name, prod]), b.stored + ' / ' + b.capacity);
       box.appendChild(bar(b.stored, b.capacity, b.stored >= b.capacity ? 'full' : ''));
       box.appendChild($('p', 'hl-p', $t('Tersimpan {0} dari {1}. Kalau penuh, hasil berhenti bertambah.', [b.stored, b.capacity])));
-      acts(box).appendChild(btn($t('Ambil hasil ({0})', [b.stored]), function () { collect(lotId); }, 'primary', b.stored <= 0 || isBusy()));
+      if (rl === 'visitor') box.appendChild($('p', 'chain-dim', $t('Bangunan milik pemilik dunia ini.')));
+      else acts(box).appendChild(btn(owner ? $t('Ambil hasil ({0})', [b.stored]) : $t('Ambil untuk pemilik ({0})', [b.stored]), function () { collect(lotId); }, 'primary', b.stored <= 0 || isBusy()));
       wrap.appendChild(box);
       return wrap;
     }
     if (job) {
       var jc = cell(jobWhat(job)); var jr = $('div', 'hl-row'); jr.appendChild($('span', 'hl-grow hl-k', 'sisa')); jr.appendChild($('b', 'hl-n hl-time', clock(endMs(job) - Date.now()))); jc.appendChild(jr);
+      if (rl !== 'visitor') acts(jc).appendChild(btn($t('Bantu tukang (−{0} energi)', [assistCost()]), function () { run({ action: 'assist', target: job.target }); }, '', isBusy()));
       wrap.appendChild(jc); return wrap;
     }
     if (!def) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
+    if (rl !== 'owner' && rl !== 'builder') { wrap.appendChild($('p', 'hl-p', $t('Lahan kosong milik pemilik dunia ini.'))); return wrap; }
     // `can`/`why` in the view describe the first lot of this kind; for another lot the server decides when we press the button.
     var sameLot = def.lot === lotId, short = shortOf(def.cost), why = sameLot ? def.why : null;
     if (!why && busyJob()) why = $t('Pembangun sedang bekerja.');
     if (!why && short.length) why = $t('Kurang {0}.', [short.map(itemName).join(', ')]);
     var can = !why && (!sameLot || def.can);
     var blurb = def.furniture ? $t('Satu kasur untuk satu pekerja. Tambah kasur supaya lebih banyak pekerja muat, tambah hiburan supaya mereka semangat. Perlu Balai Kota level {0}.', [def.th]) : def.healGameHours ? $t('Merawat Tukang yang tumbang karena kelelahan, makin tinggi levelnya makin cepat sembuh. Perlu Balai Kota level {0}.', [def.th]) : def.cooks ? $t('Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level {0}.', [def.th]) : $t('Menghasilkan {0} terus-menerus, simpan sampai {1}. Perlu Balai Kota level {2}.', [itemName(def.produces), def.capacity, def.th]);
+    if (!owner) blurb = $t('Dibayar dari tasmu; bangunannya milik {0}.', [hostName()]) + ' ' + blurb;
     wrap.appendChild(stepBlock($t('Bangun {0}', [def.name || name]), blurb,
       def, can, why, $t('Bangun · {0}', [secsLine(def.secs)]), function () { run({ action: 'build', kind: 'build', target: lotId }); }, true));
     return wrap;
@@ -491,8 +526,9 @@
 
   /* ------------------------------------------------------------ builder NPC */
   function jobFocus() {
-    if (!H || !H.jobs.length || !inOwnHome()) return null;
-    var j = H.jobs[0], L = layoutOf(), m = GT.world;
+    var v = V();
+    if (!v || !v.jobs.length || !isHL(wid())) return null;
+    var j = v.jobs[0], L = layoutOf(), m = GT.world;
     if (!L || !m) return null;
     if (j.kind === 'th') { var t = L.buildings[0]; return { tx: t.dx + 2, ty: t.dy + 1, fx: t.x + t.w / 2, fy: t.y + t.h / 2, job: j }; }
     if (j.kind === 'build') {
@@ -517,7 +553,7 @@
   }
   function placeBuilder() {
     var L = layoutOf();
-    if (!inOwnHome() || !L || !L.buildings || !L.buildings[0] || !GT.getScene) {
+    if (!isHL(wid()) || !V() || !L || !L.buildings || !L.buildings[0] || !GT.getScene) {
       if (builder) { GT.removeNpc(builder); builder = null; }
       return;
     }
@@ -532,7 +568,7 @@
     if (f) { var dx = f.fx - x, dy = f.fy - y; dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down'); }
     if (alive) GT.moveNpc(builder, 'out', x, y);
     else builder = GT.addNpc('out', { name: $t('Tukang'), pal: 3, x: x, y: y, key: 'homeland:builder', dir: dir, lines: [[$t('Pembangunnya lagi semangat!'), $t('Beri aku pekerjaan lewat Balai Kota.')], [$t('Palu, paku, dan kayu. Cukup.')]] });
-    if (builder) { builder.dir = dir; builder.working = !!f; var tw = H && H.workers && H.workers[0]; builder.tired = tw ? tw.fatigue / 100 : 0; }
+    if (builder) { builder.dir = dir; builder.working = !!f; var tw = inOwnHome() && H && H.workers && H.workers[0]; builder.tired = tw ? tw.fatigue / 100 : 0; }
   }
 
   /* ---- cosmetics drawn on the Tukang and the bots, in the cosmetic's colour ---- */
@@ -645,8 +681,8 @@
       if (C && S() && S().account && S().mode !== 'offline' && !travelling) load(true);
     }
     // a job just ran out: ask the server right away so the new building or chunk shows up
-    if (H && H.jobs && H.jobs.length && now - jobPing > 2500) {
-      var due = H.jobs.some(function (j) { return endMs(j) <= now; });
+    if (V() && V().jobs && V().jobs.length && now - jobPing > 2500) {
+      var due = V().jobs.some(function (j) { return endMs(j) <= now; });
       if (due) { jobPing = now; load(true); }
     }
     hintT -= dt; if (hintT > 0) return; hintT = 0.5;
@@ -673,15 +709,16 @@
         ctx.fillRect(Math.round(px + 6 + Math.sin(a) * 2.5 * (big ? 2.4 : 1) + (big ? (k % 2 ? 3 : -3) : 0)), Math.round(yy), 1, 2);
       }
     }
-    if (inOwnHome() && H && L) {
+    if (isHL(wid()) && V() && L) {
       // "+n" over finished production
-      H.built.forEach(function (b) {
+      V().built.forEach(function (b) {
         if (!(b.stored > 0)) return;
         var lot = lotById(b.lot); if (!lot) return;
         var la = GT.at(lot.x + lot.w / 2, lot.y), x = la.x, y = la.y - 3 + Math.sin(tt * 3 + lot.x) * 1.5;
         GT_THEME.label(ctx, '+' + b.stored, x, y + 5, { tone: b.stored >= b.capacity ? 'accent' : 'paper', size: 7, bold: true });
       });
-      // hats (a sick worker's hat is drawn on the lying figure below)
+      // hats (a sick worker's hat is drawn on the lying figure below); the owner's crew only
+      if (inOwnHome()) {
       if (builder && !isSick(0)) drawHat(ctx, builder, H.workers && H.workers[0] && H.workers[0].cosmetic, camX, camY, T);
       botNpcs.forEach(function (q) { (H.bots || []).forEach(function (b) { if (q.key === 'homeland:bot:' + b.id && !isSick(b.id)) drawHat(ctx, q.npc, b.cosmetic, camX, camY, T); }); });
       // a collapsed contractor lies down under a blanket with a red cross over the head
@@ -703,6 +740,7 @@
         ctx.fillStyle = '#d83c3c'; ctx.fillRect(Math.round(sx + T / 2 - 1), cy2, 2, 6); ctx.fillRect(Math.round(sx + T / 2 - 3), cy2 + 2, 6, 2);
         drawHat(ctx, n, wk.cosmetic, camX, camY, T, true);
       });
+      }
       // builder at work: hammer swing, sparks and the countdown over the target
       var f = jobFocus();
       if (f && builder) {

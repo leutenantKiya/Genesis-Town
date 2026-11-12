@@ -41,6 +41,8 @@ export const EXACT: Record<string, string> = {
  "No consignments to collect.": "Tidak ada titipan yang bisa diambil.",
  "The Homeland world isn't active yet.": "Dunia Homeland belum aktif.",
  "This isn't your Homeland. Guests can only look around.": "Ini bukan Homeland-mu. Tamu hanya boleh jalan-jalan.",
+ "Nothing is being built there.": "Tidak ada yang sedang dibangun di sana.",
+ "This job can't go any faster.": "Pekerjaan ini tidak bisa lebih cepat lagi.",
  "Ask the owner to make you a Helper.": "Minta pemilik menjadikanmu Pembantu.",
  "Leave the last one for the owner.": "Sisakan yang terakhir untuk pemilik.",
  "Only the owner or a Builder can build here.": "Hanya pemilik atau Tukang yang bisa membangun di sini.",
@@ -340,6 +342,22 @@ export const PATTERNS: Array<[string, string]> = [
  [
   "Hospital level {0}",
   "Rumah Sakit level {0}"
+ ],
+ [
+  "{0}: the builder starts working (paid by you).",
+  "{0}: pembangun mulai bekerja (dibayar olehmu)."
+ ],
+ [
+  "You helped the builder ({0} s faster).",
+  "Kamu membantu pembangun ({0} dtk lebih cepat)."
+ ],
+ [
+  "+{0} {1} goes to {2}.",
+  "+{0} {1} untuk {2}."
+ ],
+ [
+  "{0} collected {1} {2} for you.",
+  "{0} mengambil {1} {2} untukmu."
  ],
  [
   "{0}: the builder starts working.",

@@ -1340,6 +1340,12 @@
     "Dunia {0} (party)": "World {0} (party)",
     "Ketua pindah ke {0}. Ikut?": "The leader moved to {0}. Follow?",
     "Ikut": "Follow",
-    "[Party] {0}": "[Party] {0}"
+    "[Party] {0}": "[Party] {0}",
+    "Bantu tukang (−{0} energi)": "Help the builder (−{0} energy)",
+    "Ambil untuk pemilik ({0})": "Collect for the owner ({0})",
+    "Dibayar dari tasmu; bangunannya milik {0}.": "Paid from your bag; the building belongs to {0}.",
+    "Hanya pemilik dan Tukang yang bisa membangun di sini.": "Only the owner and Builders can build here.",
+    "Pembangun menganggur.": "The builder is idle.",
+    "pemilik": "the owner"
   });
 })();

@@ -208,8 +208,12 @@ export function createApp(deps: AppDeps) {
   async function homelandApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
     if (p !== '/api/homeland' && !p.startsWith('/api/homeland/')) return false;
     if (req.method === 'GET' && p === '/api/homeland') {
-      const acct = accountOf(req, url);
-      send(res, 200, { ...game.homelands.view(acct), invited: game.homelands.invitedTo(acct) });
+      const acct = accountOf(req, url), w = url.searchParams.get('world');
+      const id = w ? parseHome(w) : null;
+      if (w && id === null) throw new HttpError(400, 'Unknown world.');
+      const acc = id === null ? null : game.homelands.access(acct, id);
+      if (acc && !acc.owner) send(res, 200, { ...game.homelands.guestView(acc.row.account, acct), role: acc.role });
+      else send(res, 200, { ...game.homelands.view(acct), invited: game.homelands.invitedTo(acct), role: 'owner' });
     } else if (req.method === 'GET' && p === '/api/homeland/layout') {
       const acct = accountOf(req, url), w = url.searchParams.get('world') ?? '';
       const id = parseHome(w);
@@ -314,7 +318,7 @@ export function createApp(deps: AppDeps) {
           devTools: devAllowed(req),
           dialogue: dialogue.provider,
           world: game.map?.view() ?? null,
-          econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time },
+          econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time, coop: game.econ.coop },
           monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, homelandRoaming: game.econ.monsters.homeland?.roaming ?? game.econ.monsters.roaming, reach: game.econ.monsters.reach, publicMonsters: !game.econ.homeland.publicTradeOnly } : null,
         });
       }

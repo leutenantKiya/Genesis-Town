@@ -21,13 +21,13 @@ import { leaderboard } from './leaderboard.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
   gather: 'help', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
-  travel: 'visit', build: 'build', collect: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
+  travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
 export class Game {
@@ -238,7 +238,7 @@ export class Game {
     const home = this.econ.homeland;
     if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
     if (w.row && a === 'ship') throw new HttpError(409, 'The Shipping Box is only in the public area.');
-    if ((a === 'build' || a === 'collect' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Build and harvest in your own Homeland.');
+    if ((a === 'build' || a === 'collect' || a === 'assist' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Build and harvest in your own Homeland.');
     let pos: Pos | null = null;
     if (this.map && this.positions && w.map) {
       pos = this.positions.report(account, body.pos, this.now(), wid, w.map, this.homeFor(account, wid));
@@ -247,9 +247,10 @@ export class Game {
       if ((a === 'sell' || a === 'buy') && !w.map.nearStall(pos)) far('Buying and selling happens at the merchants\' stalls in the market.');
       if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Stand next to your garden plot.');
       if ((a === 'craft' || a === 'ship') && !w.map.atOwnHouse(pos)) far(a === 'craft' ? 'The Workbench is in your Town Hall.' : 'The Shipping Box is at your house.');
-      if (a === 'build' && w.map instanceof HomelandMap) {
-        if (s('kind') === 'build' || s('kind') === 'furniture' || s('kind') === 'upgrade') { if (!w.map.nearLot(pos, s('target').split(':')[0])) far('Stand near that lot.'); }
-        else if (!w.map.atOwnHouse(pos)) far('Stand in front of the Town Hall.');
+      if ((a === 'build' || a === 'assist') && w.map instanceof HomelandMap) {
+        const kind = a === 'build' ? s('kind') : this.gs.homelandJobs(w.row!.account).find((j) => j.target === s('target'))?.kind ?? '';
+        if (kind === 'build' || kind === 'furniture' || kind === 'upgrade') { if (!w.map.nearLot(pos, s('target').split(':')[0])) far('Stand near that lot.'); }
+        else if (kind !== '' && !w.map.atOwnHouse(pos)) far('Stand in front of the Town Hall.'); // no such job: assist answers itself
       }
       if (a === 'cook' || a === 'stock') {
         const lot = this.homelands.restoranLot(account);
@@ -299,13 +300,23 @@ export class Game {
         break;
       }
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
-      case 'build': res = this.homelands.start(account, s('kind') as 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay); break;
+      case 'build': res = this.homelands.start(w.row!.account, s('kind') as 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay, account); break;
+      case 'assist': res = this.homelands.assist(w.row!.account, s('target'), (cost) => this.world.useEnergy(account, cost)); break;
       case 'dress': res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay); break;
       case 'hire': res = this.homelands.hire(account, s('job'), this.clock.time().settleDay); break;
       case 'forage': res = this.homelands.forage(account, this.clock.time().settleDay, (acc, t, q) => this.world.checkGain(acc, t, q)); break;
       case 'cook': res = this.homelands.cook(account, body.qty, this.clock.time().settleDay); break;
       case 'stock': res = this.homelands.stock(account, s('token'), body.qty, this.clock.time().settleDay); break;
-      case 'collect': res = this.homelands.collect(account, s('lot'), this.clock.time().settleDay, (acc, t, q) => this.world.checkGain(acc, t, q)); break;
+      case 'collect': {
+        const owner = w.row!.account;
+        res = this.homelands.collect(owner, s('lot'), this.clock.time().settleDay, (acc, t, q) => this.world.checkGain(acc, t, q), account);
+        if (owner !== account) {
+          const token = Object.keys(res.gained!)[0], n0 = res.gained![token], nm = this.econ.items[token]?.name ?? token, who = this.store.nameOf(account) ?? account.split('.')[0];
+          this.store.addHistory(owner, 'collect', `${who} collected ${n0} ${nm} for you.`, 'offchain', null, null, [token]);
+          res = { toast: `+${n0} ${nm} goes to ${this.store.nameOf(owner) ?? owner.split('.')[0]}.`, tags: [] };
+        }
+        break;
+      }
       case 'ship': res = this.world.ship(account, s('token'), n('qty')); break;
       case 'sell': {
         // the coin earned counts toward the daily coin gain cap (same as the contract's settlement check)

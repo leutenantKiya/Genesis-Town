@@ -38,6 +38,13 @@ export class World {
     return p;
   }
 
+  /** Takes energy from a player outside their own actions (a helper speeding up someone's build). 409 and no change when short. */
+  useEnergy(account: string, cost: number) {
+    const p = this.state(account);
+    this.spendEnergy(p, cost);
+    this.gs.savePlayer(p);
+  }
+
   private spendEnergy(p: PlayerState, cost: number) {
     if (p.energy < cost) throw new HttpError(409, 'Out of energy. Eat Bread or Grilled Fish, or rest.');
     p.energy -= cost;

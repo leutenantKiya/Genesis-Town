@@ -11,7 +11,7 @@ export interface MarketRow { merchant: string; token: string; mid: number; bough
 
 export interface HomelandRow { account: string; id: number; seed: number; gen: number; th: number; open: string[]; created_at: number; party_role?: string | null }
 export interface HomelandBuildingRow { account: string; lot: string; kind: string; last_collect: number }
-export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade'; ends_at: number; worker: number; base_secs: number; started_at: number }
+export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade'; ends_at: number; worker: number; base_secs: number; started_at: number; assisted: number }
 export interface WorkerRow { account: string; slot: number; fatigue: number; updated_at: number; sick_until: number }
 
 export class GameStore {
@@ -67,7 +67,7 @@ export class GameStore {
     if (!hc.includes('party_role')) this.db.exec('ALTER TABLE homelands ADD COLUMN party_role TEXT');
     if (!ic.includes('role')) this.db.exec("ALTER TABLE homeland_invites ADD COLUMN role TEXT NOT NULL DEFAULT 'visitor'");
     if (!bc.includes('house')) this.db.exec("ALTER TABLE homeland_bots ADD COLUMN house TEXT NOT NULL DEFAULT ''");
-    for (const c of ['worker', 'base_secs', 'started_at']) if (!jc.includes(c)) this.db.exec(`ALTER TABLE homeland_jobs ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
+    for (const c of ['worker', 'base_secs', 'started_at', 'assisted']) if (!jc.includes(c)) this.db.exec(`ALTER TABLE homeland_jobs ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
   }
 
   /** Runs `fn` in one sqlite transaction (joins an outer one); any throw undoes every row. */
@@ -306,6 +306,10 @@ export class GameStore {
   }
   addHomelandJob(account: string, target: string, kind: string, endsAt: number, worker = 0, baseSecs = 0, startedAt = 0) {
     this.db.prepare('INSERT INTO homeland_jobs (account, target, kind, ends_at, worker, base_secs, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(account, target, kind, endsAt, worker, baseSecs, startedAt);
+  }
+  /** An assist: the job ends `cut` ms sooner and remembers how much was cut. */
+  assistJob(account: string, target: string, cut: number) {
+    this.db.prepare('UPDATE homeland_jobs SET ends_at = ends_at - ?, assisted = assisted + ? WHERE account = ? AND target = ?').run(cut, cut, account, target);
   }
   /** True when this call removed the job (so exactly one caller applies its result). */
   deleteHomelandJob(account: string, target: string): boolean {

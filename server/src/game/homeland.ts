@@ -418,7 +418,7 @@ export class Homelands {
     return { toast: `${def.name} hired (-${def.price} coins).`, tags: ['coin'] };
   }
 
-  collect(account: string, lot: string, day: number, checkGain: (a: string, t: string, n: number) => void): { toast: string; tags: string[]; gained: Record<string, number> } {
+  collect(account: string, lot: string, day: number, checkGain: (a: string, t: string, n: number) => void, actor = account): { toast: string; tags: string[]; gained: Record<string, number> } {
     this.settle(account);
     const gs = this.d.gs;
     const b = gs.homelandBuildings(account).find((x) => x.lot === lot);
@@ -429,7 +429,7 @@ export class Homelands {
     if (stored <= 0) throw new HttpError(409, 'No output yet.');
     checkGain(account, def.produces, stored); // throws on a full daily cap; nothing has changed yet
     const world = homeWorld(gs.homelandOf(account)!.id);
-    gs.add(day, account, def.produces, stored, 'collect', `${world}:${lot}`);
+    gs.add(day, account, def.produces, stored, 'collect', actor === account ? `${world}:${lot}` : `coop:${actor}`);
     const full = stored >= (def.capacity ?? 0);
     gs.setHomelandCollect(account, lot, full ? this.now() : Math.round(b.last_collect + (stored / this.rateOf(account, def)) * this.msPerHour()));
     return { toast: `+${stored} ${this.name(def.produces)}`, tags: [def.produces], gained: { [def.produces]: stored } };
@@ -453,7 +453,7 @@ export class Homelands {
     return { lot: parts[0], item: parts[1] };
   }
 
-  private plan(row: HomelandRow, kind: string, target: string): { cost: Cost; secs: number; label: string; job: string } {
+  private plan(row: HomelandRow, kind: string, target: string, payer = row.account): { cost: Cost; secs: number; label: string; job: string } {
     const gs = this.d.gs, account = row.account;
     const furn = kind === 'furniture' ? this.furnParts(target) : null; // names are checked before anything else
     const jobs = gs.homelandJobs(account);
@@ -498,7 +498,7 @@ export class Homelands {
       plan = { cost: step.cost, secs: step.secs, label: `Hospital level ${h.level + 1}`, job: same(`${h.lot}:up`) };
     } else throw new HttpError(400, 'Unknown building type.');
     for (const [t, n] of Object.entries(plan.cost)) {
-      const have = gs.balance(account, t);
+      const have = gs.balance(payer, t);
       if (have < n) throw new HttpError(409, `Not enough ${this.name(t)} (have ${have}, need ${n}).`);
     }
     return plan;
@@ -512,21 +512,35 @@ export class Homelands {
     return free[0] ?? null;
   }
 
-  start(account: string, kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', target: string, day: number): { toast: string; tags: string[]; ends_at: number } {
+  start(account: string, kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', target: string, day: number, payer = account): { toast: string; tags: string[]; ends_at: number } {
     this.settle(account);
     const row = this.ensure(account);
-    const plan = this.plan(row, kind, String(target));
+    const plan = this.plan(row, kind, String(target), payer);
     const gs = this.d.gs;
     const ref = `${homeWorld(row.id)}:${kind}:${target}`;
     for (const [t, n] of Object.entries(plan.cost)) {
-      gs.add(day, account, t, -n, 'build', ref);
+      gs.add(day, payer, t, -n, 'build', ref);
       if (t === 'coin') gs.add(day, this.d.town, 'coin', n, 'build', ref);
     }
     const w = this.pickWorker(account)!;
     const secs = Math.ceil(plan.secs * (1 + this.cfg.fatigue.slowdownAt100 * w.fatigue / 100) / this.motivationFactor(account, w.slot) - 1e-9);
     const ends_at = this.now() + secs * 1000;
     gs.addHomelandJob(account, plan.job, kind, ends_at, w.slot, plan.secs, this.now());
-    return { toast: `${plan.label}: the builder starts working.`, tags: Object.keys(plan.cost), ends_at };
+    return { toast: payer === account ? `${plan.label}: the builder starts working.` : `${plan.label}: the builder starts working (paid by you).`, tags: Object.keys(plan.cost), ends_at };
+  }
+
+  /** A helper's energy shortens a running job (never below half of it): no ledger rows, the cost is energy only. */
+  assist(owner: string, target: string, spend: (cost: number) => void): { toast: string; tags: string[]; ends_at: number } {
+    this.settle(owner);
+    const gs = this.d.gs, co = this.d.econ.coop;
+    const j = gs.homelandJobs(owner).find((x) => x.target === String(target));
+    if (!j) throw new HttpError(409, 'Nothing is being built there.');
+    const span = j.started_at ? j.ends_at - j.started_at + j.assisted : j.base_secs * 1000;
+    const cut = Math.min(co.assistSecs * 1000, Math.floor(span * co.assistMaxShare) - j.assisted, j.ends_at - this.now());
+    if (cut <= 0) throw new HttpError(409, 'This job can\'t go any faster.');
+    spend(co.assistEnergy); // throws when short; nothing has changed yet
+    gs.assistJob(owner, j.target, cut);
+    return { toast: `You helped the builder (${Math.round(cut / 1000)} s faster).`, tags: [], ends_at: j.ends_at - cut };
   }
 
   /* ------------------------------------------------------------ view */
@@ -542,7 +556,7 @@ export class Homelands {
     };
   }
 
-  view(account: string): HomelandView {
+  view(account: string, viewer = account): HomelandView {
     this.settle(account);
     const row = this.ensure(account);
     const gs = this.d.gs;
@@ -554,7 +568,7 @@ export class Homelands {
       const lot = m.layout.lots.find((l) => l.kind === kind)?.id ?? null;
       let why: string | null = null;
       if (!lot) why = 'Lot not available.';
-      else { try { this.plan(row, 'build', lot); } catch (e) { why = (e as Error).message; } }
+      else { try { this.plan(row, 'build', lot, viewer); } catch (e) { why = (e as Error).message; } }
       buildings[kind] = { ...def, lot, can: why === null, why };
     }
     return {
@@ -585,6 +599,12 @@ export class Homelands {
       guests: gs.homelandInviteRoles(row.id).map((g) => ({ account: g.account, name: this.d.players?.nameOf(g.account) ?? g.account, tag: this.d.players?.tagOf(g.account) ?? '', role: roleOf(g.role) })),
       party_role: row.party_role ?? this.d.econ.coop.partyRoleDefault,
     };
+  }
+
+  /** What a guest may see of someone's Homeland: no hire list, no cosmetics, guests as a count; build checks are against the viewer's own bag. */
+  guestView(owner: string, viewer: string) {
+    const { hire: _h, cosmetics: _c, guests, ...rest } = this.view(owner, viewer);
+    return { ...rest, guests: { count: guests.length } };
   }
 
   /* ------------------------------------------------------------ guests */
