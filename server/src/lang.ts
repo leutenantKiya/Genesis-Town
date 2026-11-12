@@ -7,6 +7,24 @@ export type Lang = 'en' | 'id';
 
 export function langOf(header: unknown): Lang { return header === 'id' ? 'id' : 'en'; }
 
+/** Each account's last language, for merchant chat replies. The account header is not verified when this is written, so
+ *  only 'id' is kept (English is the default and needs no row), the key must look like an account id, and the oldest
+ *  rows are dropped past `cap`: made-up ids can never grow it without bound. */
+export class LangMemory {
+  private m = new Map<string, Lang>();
+  private cap: number;
+  constructor(cap = 5000) { this.cap = cap; }
+  note(who: unknown, lang: Lang): void {
+    if (typeof who !== 'string' || who.length < 2 || who.length > 64 || !/^[a-z0-9._-]+$/.test(who)) return;
+    this.m.delete(who); // re-inserting moves it to the newest end
+    if (lang === 'en') return;
+    this.m.set(who, lang);
+    while (this.m.size > this.cap) this.m.delete(this.m.keys().next().value as string);
+  }
+  get(who: string): Lang { return this.m.get(who) ?? 'en'; }
+  get size(): number { return this.m.size; }
+}
+
 const NAME_LOWER = new Map<string, string>(Object.entries(NAMES).map(([en, id]) => [en.toLowerCase(), id.toLowerCase()]));
 export function mapName(s: string): string {
   const hit = NAMES[s];

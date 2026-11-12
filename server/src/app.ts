@@ -9,7 +9,7 @@ import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
 import { spendGuard } from './spend.ts';
 import { Dialogue } from './dialogue.ts';
-import { langOf, localizeJson, type Lang } from './lang.ts';
+import { langOf, localizeJson, LangMemory, type Lang } from './lang.ts';
 import { TransferStore } from './transfer.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
@@ -118,10 +118,10 @@ export function createApp(deps: AppDeps) {
   social.setNpcs(game.market.ids().flatMap((id, k) => stalls[k] ? [{ id, account: game.market.account(id), name: game.econ.merchants[id].name, look: MERCHANT_LOOK[id] ?? k % 8, x: stalls[k].x, y: stalls[k].y - 1, title: game.econ.merchants[id].shop }] : []));
   social.onNpcMsg = (npc, from, text) => {
     if (!talkLimiter.take(from)) throw new HttpError(429, 'The merchant is busy serving customers. Try again in a moment.');
-    void dialogue.reply(game.market.view(npc.id), game.econ.merchants[npc.id].personality, text, acctLang.get(from) ?? 'en')
+    void dialogue.reply(game.market.view(npc.id), game.econ.merchants[npc.id].personality, text, acctLang.get(from))
       .then((r) => { social.npcSay(npc, from, r.line); }, () => { /* the player simply gets no answer */ });
   };
-  const acctLang = new Map<string, Lang>(); // last language each account played in (merchant chat replies follow it)
+  const acctLang = new LangMemory(); // last language each account played in (merchant chat replies follow it)
   const presenceLimiter = new RateLimiter(240, 100_000); // about 2 reports a second per account
   const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
     const accts = [sender, ...extra];
@@ -631,8 +631,7 @@ export function createApp(deps: AppDeps) {
   const server = createServer((req, res) => {
     const lang = langOf(req.headers['x-gt-lang']);
     resLang.set(res, lang);
-    const who = req.headers['x-account-id'];
-    if (typeof who === 'string' && who.length < 80) acctLang.set(who, lang);
+    acctLang.note(req.headers['x-account-id'], lang);
     handle(req, res).catch((e) => {
       const status = e instanceof HttpError ? e.status : 500;
       if (status === 500) console.error(e);

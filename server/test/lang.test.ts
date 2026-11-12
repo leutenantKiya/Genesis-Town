@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toId, localizeJson, langOf } from '../src/lang.ts';
+import { toId, localizeJson, langOf, LangMemory } from '../src/lang.ts';
 import { localLine, rulesFor } from '../src/dialogue.ts';
 import type { MerchantView } from '../src/game/market.ts';
 
@@ -48,4 +48,21 @@ test('merchant dialogue: English by default, Indonesian rules carry the Indonesi
   assert.match(id, /Sarah = Sari/);
   assert.match(id, /Fish = Ikan/);
   assert.equal(toId(localLine(m, 'fish?')), 'Ikan: aku beli 6, aku jual 9 koin. Stok ikan saya 50, targetnya 20. Harga turun 10%.');
+});
+
+test('the per-account language memory keeps only Indonesian rows, valid ids, and stays under its cap', () => {
+  const m = new LangMemory(3);
+  m.note('p1.players.test', 'id');
+  assert.equal(m.get('p1.players.test'), 'id');
+  m.note('p1.players.test', 'en');
+  assert.equal(m.get('p1.players.test'), 'en');
+  assert.equal(m.size, 0, 'English needs no row');
+  for (const bad of [undefined, 42, '', 'x', 'A'.repeat(65), 'has space', 'UPPER.case', '<script>']) m.note(bad, 'id');
+  assert.equal(m.size, 0, 'header values that are not account ids are ignored');
+  for (let i = 0; i < 10; i++) m.note(`p${i}.players.test`, 'id');
+  assert.equal(m.size, 3);
+  assert.equal(m.get('p9.players.test'), 'id');
+  assert.equal(m.get('p0.players.test'), 'en', 'oldest row dropped');
+  assert.equal(langOf('ID'), 'en');
+  assert.equal(langOf(['id']), 'en');
 });
