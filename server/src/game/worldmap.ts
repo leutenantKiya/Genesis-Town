@@ -31,7 +31,7 @@ interface VillageApi {
   landmarks(L: Layout): { consign: Pos; board: Pos };
   weather(seed: number, day: number, season: string): Weather; monstersAt(L: Layout, hour: number, counts?: Record<string, number>): MonsterSpot[];
 }
-export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos } }).GTVillage;
+export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos; ferryOf(L: Layout): { a: Pos; b: Pos; wa: Pos; wb: Pos } | null } }).GTVillage;
 
 /** A player's Homeland (client/js/world/homeland.js): the same generator the browser runs. */
 export interface HomelandProgress { open: string[]; th: number; built: Array<{ kind: string; lot: string }>; gen?: number }

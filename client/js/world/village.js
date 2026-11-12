@@ -567,6 +567,58 @@
     return best;
   }
 
+  /* The ferry to the island in the bottom-right corner (the 'danau' chunk), whose land no path reaches: a boat on the
+     mainland shore (a) and one on the island (b), the closest pair of shore tiles across the water; wa / wb are the
+     water tiles the boats float on. Derived from the finished layout only (no RNG, no tile changed); null when every
+     part of the island can be walked to. Shared by the browser (drawing, the prompt) and the server (the 'boat' act). */
+  function ferryOf(L) {
+    if (L._ferry !== undefined) return L._ferry;
+    var w = L.w, h = L.h, walk = new Uint8Array(w * h), i, x, y, D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (i = 0; i < w * h; i++) walk[i] = SOLID[L.tiles[i]] ? 0 : 1;
+    L.buildings.forEach(function (b) { for (var yy = b.y; yy < b.y + b.h; yy++) for (var xx = b.x; xx < b.x + b.w; xx++) walk[yy * w + xx] = 0; });
+    for (i = 0; i < w * h; i++) if (walk[i] && !chunkOf(L, i % w, (i / w) | 0).open) walk[i] = 0;
+    function flood(sx, sy, mark, id) {
+      var q = [sx, sy], head = 0, n = 0; mark[sy * w + sx] = id;
+      while (head < q.length) {
+        var cx = q[head++], cy = q[head++]; n++;
+        for (var d = 0; d < 4; d++) {
+          var nx = cx + D4[d][0], ny = cy + D4[d][1], ni = ny * w + nx;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h || mark[ni] || !walk[ni]) continue;
+          mark[ni] = id; q.push(nx, ny);
+        }
+      }
+      return n;
+    }
+    var mark = new Int32Array(w * h);
+    flood(L.spawn.x, L.spawn.y, mark, 1);
+    // the biggest walkable patch of the danau chunk that the mainland does not reach
+    var best = 0, bestN = 0, id = 2;
+    for (y = 0; y < h; y++) for (x = 0; x < w; x++) {
+      i = y * w + x;
+      if (!walk[i] || mark[i] || chunkOf(L, x, y).id !== 'danau') continue;
+      var n = flood(x, y, mark, id);
+      if (n > bestN) { bestN = n; best = id; }
+      id++;
+    }
+    if (!best || bestN < 12) { L._ferry = null; return null; }
+    function shore(want) {
+      var out = [];
+      for (var k = 0; k < w * h; k++) {
+        if (mark[k] !== want) continue;
+        var kx = k % w, ky = (k / w) | 0;
+        for (var d = 0; d < 4; d++) { var wx = kx + D4[d][0], wy = ky + D4[d][1]; if (wx >= 0 && wy >= 0 && wx < w && wy < h && L.tiles[wy * w + wx] === 'water') { out.push({ x: kx, y: ky, wx: wx, wy: wy }); break; } }
+      }
+      return out;
+    }
+    var land = shore(1), isle = shore(best), pick = null, bd = 1e9;
+    for (var a = 0; a < land.length; a++) for (var b = 0; b < isle.length; b++) {
+      var dd = Math.abs(land[a].x - isle[b].x) + Math.abs(land[a].y - isle[b].y);
+      if (dd < bd) { bd = dd; pick = [land[a], isle[b]]; }
+    }
+    L._ferry = pick ? { a: { x: pick[0].x, y: pick[0].y }, wa: { x: pick[0].wx, y: pick[0].wy }, b: { x: pick[1].x, y: pick[1].y }, wb: { x: pick[1].wx, y: pick[1].wy } } : null;
+    return L._ferry;
+  }
+
   // Fixed public-area spots next to the market, derived only from market.stalls (no RNG, no tile changed): the Titip Jual
   // stall stands in the gap between the 2nd and 3rd merchant stall, the Papan Juara board just east of the last stall.
   // Both are plaza tiles in the stall row; people stand in front (south) of them.
@@ -575,6 +627,6 @@
     return { consign: { x: s[1].x + 1, y: y }, board: { x: s[s.length - 1].x + 1, y: y } };
   }
 
-  var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf };
+  var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf, ferryOf: ferryOf };
   root.GTVillage = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

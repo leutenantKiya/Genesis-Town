@@ -8,7 +8,7 @@ import { Clock } from './clock.ts';
 import { World, type Rng } from './world.ts';
 import { Market } from './market.ts';
 import { Settlement } from './settlement.ts';
-import { WorldMap, Positions, HomelandMap, type GameMap, type Pos } from './worldmap.ts';
+import { WorldMap, Positions, HomelandMap, Village, type GameMap, type Pos } from './worldmap.ts';
 import { Homelands, homeWorld, parseHome } from './homeland.ts';
 import type { HomelandRow } from './gamestore.ts';
 import { MockChain } from '../chain.ts';
@@ -21,12 +21,12 @@ import { leaderboard } from './leaderboard.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', boat: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -147,6 +147,18 @@ export class Game {
     const arrive = target.row ? target.map!.layout.spawn : this.map.portal();
     this.positions.setWorld(account, to, arrive, this.now());
     return { toast: target.row ? (target.row.account === account ? 'Arrived at your Homeland.' : 'Arrived at your friend\'s Homeland.') : 'Arrived in the public area.', world: to, arrive };
+  }
+
+  /** The ferry to the island in the village's bottom-right corner: from beside one boat to the other shore. */
+  private boat(account: string, wid: string, pos: Pos): { toast: string; world: string; arrive: Pos } {
+    if (!this.map || !this.positions || wid !== 'public') throw new HttpError(409, 'The boat is in the public village.');
+    const f = Village.ferryOf(this.map.layout);
+    if (!f) throw new HttpError(409, 'There is no boat here.');
+    const near = (p: Pos) => Math.abs(pos.x - p.x) + Math.abs(pos.y - p.y) <= 1;
+    const arrive = near(f.a) ? f.b : near(f.b) ? f.a : null;
+    if (!arrive) throw new HttpError(409, 'Stand next to the boat.');
+    this.positions.setWorld(account, 'public', arrive, this.now());
+    return { toast: arrive === f.b ? 'You row across to the island.' : 'You row back to the mainland.', world: 'public', arrive };
   }
 
   /** Dev tool (mock chain only): moves coin that already exists from the town treasury to a player's settled balance. */
@@ -305,6 +317,7 @@ export class Game {
         break;
       }
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
+      case 'boat': res = this.boat(account, wid, pos ?? { x: -9, y: -9 }); break;
       case 'build': res = this.homelands.start(w.row!.account, s('kind') as 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay, account); break;
       case 'assist': res = this.homelands.assist(w.row!.account, s('target'), (cost) => this.world.useEnergy(account, cost)); break;
       case 'dress': res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay); break;
