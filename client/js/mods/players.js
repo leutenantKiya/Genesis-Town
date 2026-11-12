@@ -44,6 +44,8 @@
     }).then(function (r) {
       if (c.state.account) return; // signed in meanwhile: the account loop takes over
       curWorld = 'public'; me = r.me; online = r.online; meTag = '';
+      // the server picks a guest's look: draw it on our side too, so the guest sees what everyone else sees
+      if (window.GT_CHARSCREEN && r.look != null) window.GT_CHARSCREEN.setMine(r.me, '', r.look, false);
       applyPlayers(r.players || []);
       renderHead();
     }, function (e) {

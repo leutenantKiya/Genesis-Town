@@ -55,6 +55,21 @@ test('names: one table, 3-16 characters, repeatable (name#tag is unique), frozen
   } finally { r.close(); }
 });
 
+test('the look a player picks is the look the others get, also when it changes after they were seen', async () => {
+  const r = await rig();
+  try {
+    await r.post(P1, '/api/name', { name: 'Ayu', look: 6 });
+    await r.post(P2, '/api/name', { name: 'Bude' });
+    const at = { world: 'public', x: r.sp.x, y: r.sp.y, dir: 'down', scene: 'out', since: 0 };
+    const mine = await r.post(P1, '/api/presence', at);
+    assert.equal(mine.json.look, 6, 'P1 is told its own look');
+    const ayu = async () => (await r.post(P2, '/api/presence', at)).json.players.find((p: any) => p.account === P1);
+    assert.equal((await ayu()).look, 6);
+    await r.post(P1, '/api/name', { look: 0 }); // look 0 is a real choice, not "unset"
+    assert.equal((await ayu()).look, 0);
+  } finally { r.close(); }
+});
+
 test('chat needs a name and shows up in presence polls of the same world only', async () => {
   const r = await rig();
   try {
