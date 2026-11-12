@@ -176,28 +176,29 @@
     buildUnder();
 
     /* --- waterfalls: wherever water reaches an island's edge it pours over into the sky */
-    var fcv = GT3.canvas(8, 32), fg = fcv.getContext('2d'), ftex = GT3.tex(fcv, true);
-    function paintFall() {
+    var fcv = GT3.canvas(8, 24), fg = fcv.getContext('2d'), ftex = GT3.tex(fcv, true);
+    function paintFall() { // the pool's own colours, as vertical streaks; 8 px per tile both ways, so the pixels stay square
       var P = GT3.pal().water, r = GT3.rng(5);
-      fg.clearRect(0, 0, 8, 32);
-      for (var yy = 0; yy < 32; yy++) for (var xx = 0; xx < 8; xx++) {
-        var k = r(); R(fg, xx, yy, 1, 1, k < 0.25 ? P[3] : k < 0.6 ? P[2] : P[1]);
+      R(fg, 0, 0, 8, 24, P[1]);
+      for (var xx = 0; xx < 8; xx++) {
+        if (r() < 0.5) R(fg, xx, 0, 1, 24, P[2]);
+        for (var k = 0; k < 3; k++) R(fg, xx, Math.floor(r() * 22), 1, 1 + Math.floor(r() * 3), r() < 0.5 ? P[0] : P[3]);
       }
       ftex.needsUpdate = true;
     }
     paintFall();
-    var falls = [];
+    var falls = [], FO = 0.02;     // FO: just in front of the island's side wall, which has the same depth
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
       if (ground[y * W + x] !== 'water') continue;
-      var fb = bottom(x, y) - 2.5;
-      if (!solidAt(x, y + 1)) falls.push({ geo: GT3.quad([x, fb, y + 1.04], [x + 1, fb, y + 1.04], [x + 1, -SINK, y + 1.04], [x, -SINK, y + 1.04], [0, 0, 1, 3]) });
-      if (!solidAt(x, y - 1)) falls.push({ geo: GT3.quad([x + 1, fb, y - 0.04], [x, fb, y - 0.04], [x, -SINK, y - 0.04], [x + 1, -SINK, y - 0.04], [0, 0, 1, 3]) });
-      if (!solidAt(x + 1, y)) falls.push({ geo: GT3.quad([x + 1.04, fb, y + 1], [x + 1.04, fb, y], [x + 1.04, -SINK, y], [x + 1.04, -SINK, y + 1], [0, 0, 1, 3]) });
-      if (!solidAt(x - 1, y)) falls.push({ geo: GT3.quad([x - 0.04, fb, y], [x - 0.04, fb, y + 1], [x - 0.04, -SINK, y + 1], [x - 0.04, -SINK, y], [0, 0, 1, 3]) });
+      var fb = bottom(x, y), hv = (-SINK - fb) / 3;
+      if (!solidAt(x, y + 1)) falls.push({ geo: GT3.quad([x, fb, y + 1 + FO], [x + 1, fb, y + 1 + FO], [x + 1, -SINK, y + 1 + FO], [x, -SINK, y + 1 + FO], [0, hv, 1, 0]) });
+      if (!solidAt(x, y - 1)) falls.push({ geo: GT3.quad([x + 1, fb, y - FO], [x, fb, y - FO], [x, -SINK, y - FO], [x + 1, -SINK, y - FO], [0, hv, 1, 0]) });
+      if (!solidAt(x + 1, y)) falls.push({ geo: GT3.quad([x + 1 + FO, fb, y + 1], [x + 1 + FO, fb, y], [x + 1 + FO, -SINK, y], [x + 1 + FO, -SINK, y + 1], [0, hv, 1, 0]) });
+      if (!solidAt(x - 1, y)) falls.push({ geo: GT3.quad([x - FO, fb, y], [x - FO, fb, y + 1], [x - FO, -SINK, y + 1], [x - FO, -SINK, y], [0, hv, 1, 0]) });
     }
     var fall = null;
     if (falls.length) {
-      fall = new THREE.Mesh(GT3.merge(falls), new THREE.MeshBasicMaterial({ map: ftex, vertexColors: true, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+      fall = new THREE.Mesh(GT3.merge(falls), new THREE.MeshBasicMaterial({ map: ftex, vertexColors: true, transparent: true, opacity: 0.92, side: THREE.DoubleSide }));
       fall.name = 'waterfalls'; group.add(fall);
     }
 
