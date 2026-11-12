@@ -268,7 +268,7 @@ export function createApp(deps: AppDeps) {
     if (!isTrade && !isConsign && p !== '/api/leaderboard') return false;
     if (req.method === 'GET') {
       const acct = p === '/api/leaderboard' ? (() => { try { return accountOf(req, url); } catch { return null; } })() : accountOf(req, url);
-      if (p === '/api/trade') return send(res, 200, game.trade.list(acct!)), true;
+      if (p === '/api/trade') { game.trade.finishDue(); return send(res, 200, { ...game.trade.list(acct!), session: game.trade.session(acct!), invites: game.trade.invites(acct!) }), true; }
       if (p === '/api/consign') return send(res, 200, { lots: game.consign.lots(acct!), merchant: game.econ.consign.merchant, feeBps: game.econ.consign.feeBps, maxPerItem: game.econ.consign.maxPerItem }), true;
       if (p === '/api/leaderboard') {
         const period = url.searchParams.get('period') ?? 'day';
@@ -288,7 +288,19 @@ export function createApp(deps: AppDeps) {
     if (!actLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
     game.assertActive(acct);
     const b = parseJson(raw);
-    if (b.pos !== undefined) game.reportPosition(acct, b.pos as { x: number; y: number }, 'public'); // the client's tile, checked like any report
+    const isSession = /^\/api\/trade\/(open|join|set|ready|close)$/.test(p);
+    const tw = isSession ? worldOf(b.world) : 'public'; // live sessions run in any world the player stands in; the old offers stay public
+    if (b.pos !== undefined) game.reportPosition(acct, b.pos as { x: number; y: number }, tw); // the client's tile, checked like any report
+    if (isSession) {
+      game.trade.finishDue();
+      const out = (session: unknown) => send(res, 200, { session, state: game.state(acct) });
+      if (p === '/api/trade/open') out(game.trade.open(acct, b));
+      else if (p === '/api/trade/join') out(game.trade.join(acct, b.id));
+      else if (p === '/api/trade/set') out(game.trade.set(acct, b.id, b));
+      else if (p === '/api/trade/ready') out(game.trade.ready(acct, b.id, b));
+      else out(game.trade.close(acct, b.id));
+      return true;
+    }
     if (p === '/api/trade/offer') send(res, 200, game.trade.offer(acct, b));
     else if (p === '/api/trade/accept') send(res, 200, { ...game.trade.accept(acct, b.id), state: game.state(acct) });
     else if (p === '/api/trade/cancel') send(res, 200, game.trade.cancel(acct, b.id));
@@ -454,7 +466,9 @@ export function createApp(deps: AppDeps) {
         const acct = accountOf(req, url);
         const token = url.searchParams.get('token') ?? undefined;
         if (token && !has(game.econ.items, token)) throw new HttpError(400, 'unknown item');
-        return send(res, 200, { history: deps.store.history(acct, 50, token), explorerTxUrl: deps.cfg.explorerTxUrl });
+        const kind = url.searchParams.get('kind') ?? undefined;
+        if (kind && !/^[a-z_]{1,24}$/.test(kind)) throw new HttpError(400, 'bad kind');
+        return send(res, 200, { history: deps.store.history(acct, 50, token, kind), explorerTxUrl: deps.cfg.explorerTxUrl });
       }
       const m = /^\/api\/ledger\/(\d+)$/.exec(p);
       if (req.method === 'GET' && m) {

@@ -183,7 +183,11 @@ export class Store {
     this.db.prepare("UPDATE history SET status = ?, tx_hash = ? WHERE account_id = ? AND status = 'offchain'").run(status, txHash, accountId);
   }
 
-  history(accountId: string, limit = 50, token?: string): HistoryRow[] {
+  history(accountId: string, limit = 50, token?: string, kind?: string): HistoryRow[] {
+    if (kind) {
+      if (token) return this.db.prepare('SELECT * FROM history WHERE account_id = ? AND kind = ? AND tokens LIKE ? ORDER BY id DESC LIMIT ?').all(accountId, kind, `%,${token},%`, limit) as unknown as HistoryRow[];
+      return this.db.prepare('SELECT * FROM history WHERE account_id = ? AND kind = ? ORDER BY id DESC LIMIT ?').all(accountId, kind, limit) as unknown as HistoryRow[];
+    }
     if (token) {
       return this.db.prepare('SELECT * FROM history WHERE account_id = ? AND tokens LIKE ? ORDER BY id DESC LIMIT ?')
         .all(accountId, `%,${token},%`, limit) as unknown as HistoryRow[];

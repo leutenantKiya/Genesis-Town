@@ -55,7 +55,7 @@ export interface Econ {
   projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number>; /** why it was stopped: no new pledges, withdrawals still work */ retired?: string }>;
   monsters: MonsterConfig;
   homeland: HomelandConfig;
-  trade: { expireSecs: number; maxLines: number };
+  trade: { expireSecs: number; maxLines: number; inviteSecs: number; sessionIdleSecs: number; countdownMs: number };
   party: { max: number; inviteSecs: number; maxPendingInvites: number };
   coop: { partyRoleDefault: 'none' | 'visitor' | 'helper' | 'builder'; guestGatherPerHostDay: number; guestLeavesCharges: number; guestPlotsPerHost: number; assistEnergy: number; assistSecs: number; assistMaxShare: number };
   consign: { merchant: string; feeBps: number; maxPerItem: number; sellPerGameHour: number };

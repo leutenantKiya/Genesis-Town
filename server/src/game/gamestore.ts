@@ -50,6 +50,12 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS homeland_forage (account TEXT PRIMARY KEY, last INTEGER NOT NULL, carry REAL NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS trade_offers (id INTEGER PRIMARY KEY AUTOINCREMENT, from_acct TEXT NOT NULL, to_acct TEXT NOT NULL,
         give TEXT NOT NULL, want TEXT NOT NULL, expires_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS trade_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, a TEXT NOT NULL, b TEXT NOT NULL, world TEXT NOT NULL,
+        a_lines TEXT NOT NULL DEFAULT '{}', b_lines TEXT NOT NULL DEFAULT '{}', a_ok INTEGER NOT NULL DEFAULT 0, b_ok INTEGER NOT NULL DEFAULT 0,
+        version INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'invite', swap_at INTEGER NOT NULL DEFAULT 0, note TEXT,
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS trade_sessions_a ON trade_sessions(a, status);
+      CREATE INDEX IF NOT EXISTS trade_sessions_b ON trade_sessions(b, status);
       CREATE TABLE IF NOT EXISTS consign_lots (account TEXT NOT NULL, token TEXT NOT NULL, qty INTEGER NOT NULL, min_price INTEGER NOT NULL,
         sold INTEGER NOT NULL DEFAULT 0, earned INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, token));
       CREATE TABLE IF NOT EXISTS homeland_invites (id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));

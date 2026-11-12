@@ -137,6 +137,12 @@ export const EXACT: Record<string, string> = {
  "Offer not found.": "Tawaran tidak ditemukan.",
  "The offer is already done.": "Tawaran sudah selesai.",
  "The offer expired.": "Tawaran kedaluwarsa.",
+ "Stand close together in the same place (party members: anywhere in the same world).": "Berdirilah berdekatan di tempat yang sama (anggota party: di mana saja di dunia yang sama).",
+ "The trade changed. Check it again.": "Dagangnya berubah. Periksa lagi.",
+ "Empty trade.": "Dagang kosong.",
+ "Trade not found.": "Dagang tidak ditemukan.",
+ "The trade is already over.": "Dagang sudah selesai.",
+ "You are already trading.": "Kamu sedang berdagang.",
  "Who do you mean?": "Siapa yang kamu maksud?",
  "You can't invite yourself.": "Kamu tidak bisa mengajak dirimu sendiri.",
  "That player is already in a party.": "Pemain itu sudah ada di party.",
@@ -506,6 +512,10 @@ export const PATTERNS: Array<[string, string]> = [
  [
   "{0} isn't open yet.",
   "{0} belum dibuka."
+ ],
+ [
+  "{0} is already trading.",
+  "{0} sedang berdagang."
  ],
  [
   "Trade with {0}: receive {1}, give {2}",

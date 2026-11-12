@@ -64,9 +64,9 @@ export class Game {
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
     this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, clock: this.clock, party: { same: (a, b) => this.party.same(a, b), mates: (a) => this.party.mates(a) }, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
-    const hist = (a: string, summary: string, tokens: string[]) => { store.addHistory(a, 'trade', summary, 'offchain', null, null, tokens.filter((t) => t in this.econ.items)); };
+    const hist = (a: string, summary: string, tokens: string[], ref: string | null = null) => { store.addHistory(a, 'trade', summary, 'offchain', null, ref, tokens.filter((t) => t in this.econ.items)); };
     this.trade = new Trade({
-      econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, now: this.now, history: hist, assertActive: (a) => this.assertActive(a),
+      econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, now: this.now, history: hist, assertActive: (a) => this.assertActive(a), party: { same: (a, b) => this.party.same(a, b) },
       names: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) },
       where: (a) => (this.positions ? { world: this.positions.worldOf(a), pos: this.positions.last.get(a) ?? null } : null),
     });
@@ -198,6 +198,7 @@ export class Game {
         this.consign.tick();
       }
       this.gs.setMeta('clock.hour', String(now));
+      this.trade.finishDue();
       await this.settlement.settleDue();
     } finally {
       this.ticking = false;
