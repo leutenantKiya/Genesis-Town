@@ -160,8 +160,11 @@
 >   fishing, chopping and mining (`homeland.publicGather`, `publicOpenAll`) and a **boat** to its bottom-right island
 >   (`GTVillage.ferryOf`, act `boat`); mining swings a **pickaxe**; the fishing rod has a spinning reel; a **hoe** (Cangkul) tills
 >   grass inside a Homeland farm fence (act `hoe`, table `homeland_tilled`).
->   *(planned)*: a gambling corner for goods, bot items and a Mall for bot stats, riding the carousel with a cinematic
->   camera, more icons, starter missions, richer house interiors, a separate look for Homeland buildings, a Pickaxe token.
+>   Also: icons on the top bar and phone tabs; Homeland buildings with a stone base and flower boxes; a nine-step
+>   **mission** chain; a **Luck Table** by the market (stake 1-5 goods, 45% to double, the stake burned otherwise, 20 bets a
+>   day, never coin; act `gamble`); a **Mall** stand selling worker gear (new Work Gloves, Work Boots, Hard Hat; act `mall`);
+>   riding the **carousel** with a cinematic camera, letterbox and colour grade (`mods/ride.js`); house furniture to use
+>   (nap, tips, TV news, `mods/interior.js`). *(planned)*: a Pickaxe token, the Upgrade button on phones.
 >
 > - **Work buildings** (2026-11-12, after Kingshot's resource buildings): every Homeland has a **Penggergajian** (sawmill,
 >   wood) on a forest island, a **Kincir Angin** (windmill, wheat) with sails that turn in the 2.5D view, and a **Gudang**

@@ -1828,7 +1828,7 @@ function interact(mode){
   if (callModsBool('onInteract', [ctx])) return;
   if (tt === 'chair' && !npc && scene.kind !== 'out' && mode !== 'message'){ sitDown(f.x, f.y); return; }
   if (mode === 'message'){
-    if (npc) openDialog($t('({0} belum punya jiwa. Pasang di menu Jiwa.)', [npc.name]), '', npc);
+    if (npc) openDialog($t('({0} sedang sibuk dan belum bisa membalas pesan.)', [npc.name]), '', npc);
     else toast($t('Hadapi seseorang lalu tekan E untuk kirim pesan.'));
     return;
   }

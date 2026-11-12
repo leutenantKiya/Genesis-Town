@@ -121,6 +121,10 @@ html.gt-riding canvas{filter:contrast(1.1) saturate(1.3) sepia(.14) brightness(1
 .gt-ride-bars i{position:absolute;left:0;right:0;height:11vh;background:#000;animation:gt-bars .6s ease-out both}
 .gt-ride-bars i:first-child{top:0}.gt-ride-bars i:last-child{bottom:0}
 @keyframes gt-bars{from{height:0}}
+/* a nap in a house bed (interior.js): the room dims, then wakes */
+.gt-nap{position:fixed;inset:0;z-index:35;pointer-events:none;background:#0a0c1c;opacity:0;animation:gt-nap .6s ease-out forwards}
+.gt-nap.wake{animation:gt-wake .7s ease-in forwards}
+@keyframes gt-nap{to{opacity:.82}}@keyframes gt-wake{from{opacity:.82}to{opacity:0}}
 #dlg.on{display:block;z-index:20} /* over the 2.5D key hint (.gt3d-hint, z 5) and the action hint */
 #dtxt{display:block;white-space:pre-wrap;overflow-wrap:anywhere}
 #dtxt .h{visibility:hidden}
