@@ -1,5 +1,5 @@
 /*
- * charscreen.js - the character screen shown after every login (and on page load when already signed in):
+ * charscreen.js - the character screen for accounts without a name yet (a named account goes straight in, the name is asked once; Lainnya > Ubah karakter reopens it):
  * a big preview of your character, your name with its fixed #tag above it, 8 look swatches and a big "Mulai" button.
  * "Mulai" saves name + look (POST /api/name {name?, look?} -> {name, tag, look, named}), plays a ~1.6 s animation
  * (the character is thrown up from the bottom of the screen, spins, falls with a dust puff; reduced motion = a fade)
@@ -49,7 +49,27 @@
   function pixelCanvas() { var cv = document.createElement('canvas'); cv.width = 16; cv.height = 20; return cv; }
 
   /* ---------------------------------------------------------------- the screen */
-  function open() {
+  // force: the player asked for it (Lainnya > Ubah karakter). Otherwise a named account skips the screen and goes
+  // straight to the Homeland, so the name is asked only once; the server (/api/name named:true) is the memory.
+  var skipping = false;
+  function open(force) {
+    if (root || !active()) return;
+    if (force !== true) {
+      if (skipping) return;
+      skipping = true;
+      C().api('/name', { method: 'POST', body: {} }).then(function (r) {
+        skipping = false;
+        if (r && r.named) {
+          mine = { name: r.name, tag: r.tag, look: r.look | 0, named: true };
+          if (GT.setPlayerName) GT.setPlayerName(r.name);
+          if (window.GT_HOME && GT_HOME.enter) { try { GT_HOME.enter(); } catch (e) { console.error(e); } }
+        } else openScreen();
+      }, function () { skipping = false; openScreen(); });
+      return;
+    }
+    openScreen();
+  }
+  function openScreen() {
     if (root || !active()) return;
     var c = C(), look = 0;
     root = el('div', 'gt-cs'); root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', $t('Karakter'));
@@ -228,6 +248,6 @@
   }
   function onKey() { return !!root; }
 
-  window.GT_CHARSCREEN = { open: open, setMine: setMine, _mine: function () { return mine; } };
+  window.GT_CHARSCREEN = { open: function (force) { return open(force === true); }, setMine: setMine, _mine: function () { return mine; } };
   GT.register({ id: 'charscreen', init: wrapCharDraw, onFrame: onFrame, onKey: onKey });
 })();

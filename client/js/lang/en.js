@@ -704,6 +704,7 @@
     "Jiwa": "Soul",
     "Pesan ke NPC di depanmu": "Message the NPC in front of you",
     "Lainnya": "More",
+    "Ubah karakter": "Change character",
     "Menu utama": "Main menu",
     "Chat": "Chat",
     "Ukuran teks": "Text size",

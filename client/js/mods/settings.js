@@ -172,6 +172,7 @@
     opts.push({ label: $t('Pengaturan'), onPick: openSettings });
     if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push({ label: $t('Admin'), onPick: function () { GT_ADMIN.open(); } });
     opts.push({ label: $t('Party'), onPick: function () { if (window.GT_PARTY) GT_PARTY.open(); } });
+    if (window.GT_CHARSCREEN) opts.push({ label: $t('Ubah karakter'), onPick: function () { GT_CHARSCREEN.open(true); } });
     if (GT.openProfile) opts.push({ label: $t('Profil'), onPick: function () { GT.openProfile(); } });
     if (document.getElementById('btnJiwa')) opts.push({ label: $t('Jiwa'), onPick: function () { press('btnJiwa'); } });
     if (GT.interact) opts.push({ label: $t('Pesan ke NPC di depanmu'), onPick: function () { GT.interact('message'); } });
