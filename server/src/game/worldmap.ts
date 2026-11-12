@@ -34,7 +34,7 @@ interface VillageApi {
 export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos } }).GTVillage;
 
 /** A player's Homeland (client/js/world/homeland.js): the same generator the browser runs. */
-export interface HomelandProgress { open: string[]; th: number; built: Array<{ kind: string; lot: string }>; gen?: number }
+export interface HomelandProgress { open: string[]; th: number; built: Array<{ kind: string; lot: string }>; gen?: number; light?: number }
 export interface HomelandLot { id: string; kind: string; chunk: string; x: number; y: number; w: number; h: number; door: Pos }
 export interface HomelandLayout extends Omit<Layout, 'projects'> { portal: Pos; lots: HomelandLot[] }
 interface HomelandApi {
@@ -51,6 +51,8 @@ export interface GameMap {
   nearStall(p: Pos, d?: number): boolean;
   nearPlot(p: Pos, idx: number): boolean;
   atOwnHouse(p: Pos): boolean;
+  /** In front of a building with the player's Workbench: the house in the village; the Town Hall or Rumahmu in a Homeland. */
+  atWorkbench(p: Pos): boolean;
   checkGather(tile: string, x: number, y: number): void;
   portal(): Pos;
 }
@@ -94,6 +96,7 @@ export class WorldMap implements GameMap, MonsterMap {
   nearLandmark(p: Pos, which: 'consign' | 'board', d = 3) { const l = this.landmarks()[which]; return dist(p, l) <= d || dist(p, { x: l.x, y: l.y + 1 }) <= d; }
   nearPlot(p: Pos, idx: number) { const q = this.layout.farm.plots[idx]; return !!q && dist(p, q) <= 1; }
   atOwnHouse(p: Pos) { const h = this.layout.buildings.find((b) => b.own); return !!h && dist(p, { x: h.dx, y: h.dy + 1 }) <= 1; }
+  atWorkbench(p: Pos) { return this.atOwnHouse(p); }
   checkGather(tile: string, x: number, y: number) {
     const t = this.tileAt(x, y);
     if (t === null) throw new HttpError(400, 'bad tile');
@@ -130,6 +133,8 @@ export class HomelandMap implements GameMap, MonsterMap {
   nearStall() { return false; } // no merchants in a Homeland
   nearPlot(p: Pos, idx: number) { const q = this.layout.farm.plots[idx]; return !!q && dist(p, q) <= 1; }
   atOwnHouse(p: Pos) { const h = this.layout.buildings.find((b) => b.kind === 'townhall'); return !!h && dist(p, { x: h.dx, y: h.dy + 1 }) <= 1; }
+  // the client shows the Workbench in every building marked `own`: the Town Hall and, since homeland v3, Rumahmu
+  atWorkbench(p: Pos) { return this.layout.buildings.some((b) => b.own && dist(p, { x: b.dx, y: b.dy + 1 }) <= 1); }
   checkGather(tile: string, x: number, y: number) {
     const t = this.tileAt(x, y);
     if (t === null) throw new HttpError(400, 'bad tile');

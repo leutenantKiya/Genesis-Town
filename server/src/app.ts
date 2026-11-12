@@ -259,7 +259,7 @@ export function createApp(deps: AppDeps) {
       const { row } = game.homelands.access(acct, id);
       game.homelands.settle(row.account);
       const built = game.gs.homelandBuildings(row.account).map((b) => ({ lot: b.lot, kind: b.kind }));
-      send(res, 200, { world: homeWorld(row.id), seed: row.seed, gen: row.gen, th: row.th, open: row.open, built });
+      send(res, 200, { world: homeWorld(row.id), seed: row.seed, gen: row.gen, th: row.th, open: row.open, light: game.homelands.lightLevel(row.account), built });
     } else if (req.method === 'POST' && p === '/api/homeland/invite') {
       const raw = await readRaw(req);
       const acct = accountOf(req, url, raw);

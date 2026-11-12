@@ -17,6 +17,8 @@ export interface SeasonDef { yield: Record<string, number>; demand: Record<strin
 export type Cost = Record<string, number>;
 export interface TownhallStep { level: number; cost: Cost; secs: number }
 export interface ChunkStep { n: number; th: number; cost: Cost; secs: number }
+/** The Town Hall's Lighting project: level 1 lamps on the centre island, level 2 on every open island (homeland.js places them). */
+export interface LightStep { level: number; name: string; th: number; cost: Cost; secs: number; covers: 'centre' | 'open' }
 export interface BuildingDef { name: string; th: number; cost: Cost; secs: number; produces?: string; perGameHour?: number; capacity?: number; cooks?: string; needsChunk?: boolean; furniture?: Record<string, FurnitureDef>; maxLevel?: number; healGameHours?: number[]; upgrade?: Array<{ cost: Cost; secs: number }> }
 export interface FurnitureDef { name: string; max: number; names?: string[]; levels: Array<{ cost: Cost; secs: number }> }
 export interface ForageDef { items: string[]; perGameHour: number; capacity: number; winterFactor: number }
@@ -31,6 +33,7 @@ export interface HomelandConfig {
   publicTradeOnly: boolean;
   townhall: TownhallStep[];
   chunks: ChunkStep[];
+  lighting?: LightStep[];
   buildings: Record<string, BuildingDef>;
 }
 

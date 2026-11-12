@@ -11,7 +11,7 @@ export interface MarketRow { merchant: string; token: string; mid: number; bough
 
 export interface HomelandRow { account: string; id: number; seed: number; gen: number; th: number; open: string[]; created_at: number; party_role?: string | null }
 export interface HomelandBuildingRow { account: string; lot: string; kind: string; last_collect: number }
-export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade'; ends_at: number; worker: number; base_secs: number; started_at: number; assisted: number }
+export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'light' | 'build' | 'furniture' | 'upgrade'; ends_at: number; worker: number; base_secs: number; started_at: number; assisted: number }
 export interface WorkerRow { account: string; slot: number; fatigue: number; updated_at: number; sick_until: number }
 
 export class GameStore {

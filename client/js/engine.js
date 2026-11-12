@@ -691,6 +691,7 @@ function fromLayout(L){
   for (y = L.farm.y0; y <= L.farm.y1 + 1; y++) for (x = L.farm.x0; x <= L.farm.x1; x++) reserved.add(y*m.w + x);
   m.buildings.forEach(function(b){ reserved.add((b.dy + 1)*m.w + b.dx); });
   if (!homeLayout) placeLamps(m, L.seed, L.attempt, reserved); // Homelands stay lamp-free so the server's walk map matches
+  else m.lamps = (L.lamps || []).map(function(q){ return {x:q.x, y:q.y}; }); // the Lighting project's lamps come from the shared generator
   var reach = bfs(m, m.spawn.x, m.spawn.y);
   m.reach = reach;
   m.doorFront = new Set();

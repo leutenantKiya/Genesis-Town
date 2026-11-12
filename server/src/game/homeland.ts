@@ -6,7 +6,10 @@
 // item costs are burned (negative rows, kind 'build'), coin costs move to the town treasury, gains go through the
 // daily caps the caller passes in (World.checkGain). Timers are absolute timestamps; a job that ended while nobody
 // looked (or the server was down) is applied the next time the Homeland is read, exactly once.
-import type { BuildingDef, ChunkStep, Cost, Econ, ForageDef, TownhallStep } from './econ.ts';
+import type { BuildingDef, ChunkStep, Cost, Econ, ForageDef, LightStep, TownhallStep } from './econ.ts';
+
+/** Job target and furniture-table key of the Town Hall's Lighting project. */
+export const LIGHT_KEY = 'light';
 import type { GameStore, HomelandRow, WorkerRow } from './gamestore.ts';
 import { HttpError } from '../auth.ts';
 import { gameTime } from '../../../economy/time.ts';
@@ -29,7 +32,8 @@ export interface HomelandView {
   built: Array<{ lot: string; kind: string; stored: number; capacity: number }>;
   jobs: Array<{ target: string; kind: string; ends_at: number }>;
   builders: { total: number; busy: number };
-  next: { th: TownhallStep | null; chunk: ChunkStep | null; buildings: Record<string, BuildingOption> };
+  light: number;
+  next: { th: TownhallStep | null; chunk: ChunkStep | null; light: LightStep | null; buildings: Record<string, BuildingOption> };
   guests: Array<{ account: string; name: string; tag: string; role: Role }>;
   party_role: string;
   bots: Array<{ id: number; job: string; name: string; house: string | null; cosmetic: string | null }>;
@@ -108,6 +112,7 @@ export class Homelands {
         if (!row) continue;
         if (j.kind === 'th') gs.setHomelandTh(account, row.th + 1);
         else if (j.kind === 'chunk') { if (!row.open.includes(j.target)) gs.setHomelandOpen(account, [...row.open, j.target]); }
+        else if (j.kind === 'light') gs.setFurnitureLevel(account, LIGHT_KEY, gs.furnitureLevel(account, LIGHT_KEY) + 1);
         else if (j.kind === 'furniture') gs.setFurnitureLevel(account, j.target, gs.furnitureLevel(account, j.target) + 1);
         else if (j.kind === 'upgrade') { const lot = j.target.split(':')[0]; gs.setFurnitureLevel(account, lot, Math.max(1, gs.furnitureLevel(account, lot)) + 1); }
         else gs.addHomelandBuilding(account, j.target, j.target.split('-')[0], j.ends_at);
@@ -224,13 +229,13 @@ export class Homelands {
   }
 
   private progress(row: HomelandRow): HomelandProgress {
-    return { open: row.open, th: row.th, gen: row.gen, built: this.d.gs.homelandBuildings(row.account).map((b) => ({ kind: b.kind, lot: b.lot })) };
+    return { open: row.open, th: row.th, gen: row.gen, light: this.lightLevel(row.account), built: this.d.gs.homelandBuildings(row.account).map((b) => ({ kind: b.kind, lot: b.lot })) };
   }
 
   /** The map as it is now (progress decides what is open and built; cached per progress key). */
   map(row: HomelandRow): HomelandMap {
     const prog = this.progress(row);
-    const key = `${row.id}:${row.th}:${row.open.join(',')}:${prog.built.map((b) => b.lot).sort().join(',')}`;
+    const key = `${row.id}:${row.th}:${row.open.join(',')}:${prog.built.map((b) => b.lot).sort().join(',')}:L${prog.light ?? 0}`;
     let m = this.maps.get(key);
     if (!m) {
       for (const k of this.maps.keys()) if (k.startsWith(`${row.id}:`)) this.maps.delete(k);
@@ -440,6 +445,12 @@ export class Homelands {
   private chunkStep(row: HomelandRow): ChunkStep | null {
     return this.cfg.chunks.find((c) => c.n === row.open.length + 1) ?? null;
   }
+  /** The Lighting project's level (0 = no lamps), kept in the furniture table under its own key. */
+  lightLevel(account: string): number { return this.d.gs.furnitureLevel(account, LIGHT_KEY); }
+  private lightStep(row: HomelandRow): LightStep | null {
+    const lvl = this.lightLevel(row.account);
+    return (this.cfg.lighting ?? []).find((s) => s.level === lvl + 1) ?? null;
+  }
   private thStep(row: HomelandRow): TownhallStep | null {
     return this.cfg.townhall.find((s) => s.level === row.th + 1) ?? null;
   }
@@ -473,6 +484,11 @@ export class Homelands {
       if (!NEIGHBOURS[target].some((n) => mine.has(n))) throw new HttpError(409, 'That chunk is not next to your territory.');
       if (row.th < step.th) throw new HttpError(409, `Town Hall needs level ${step.th}.`);
       plan = { cost: step.cost, secs: step.secs, label: 'New region', job: same(target) };
+    } else if (kind === 'light') {
+      const step = this.lightStep(row);
+      if (!step) throw new HttpError(409, 'The street lights are already at the highest level.');
+      if (row.th < step.th) throw new HttpError(409, `Town Hall needs level ${step.th}.`);
+      plan = { cost: step.cost, secs: step.secs, label: step.name, job: same(LIGHT_KEY) };
     } else if (kind === 'build') {
       const lot = this.map(row).layout.lots.find((l) => l.id === target);
       const def = lot && this.cfg.buildings[lot.kind];
@@ -512,7 +528,7 @@ export class Homelands {
     return free[0] ?? null;
   }
 
-  start(account: string, kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', target: string, day: number, payer = account): { toast: string; tags: string[]; ends_at: number } {
+  start(account: string, kind: 'th' | 'chunk' | 'light' | 'build' | 'furniture' | 'upgrade', target: string, day: number, payer = account): { toast: string; tags: string[]; ends_at: number } {
     this.settle(account);
     const row = this.ensure(account);
     const plan = this.plan(row, kind, String(target), payer);
@@ -579,7 +595,8 @@ export class Homelands {
       }),
       jobs: jobs.map((j) => ({ target: j.target, kind: j.kind, ends_at: j.ends_at })),
       builders: { total: this.builderSlots(account), busy: jobs.length },
-      next: { th: this.thStep(row), chunk: this.chunkStep(row), buildings },
+      light: this.lightLevel(account),
+      next: { th: this.thStep(row), chunk: this.chunkStep(row), light: this.lightStep(row), buildings },
       bots: this.bots(account),
       workers: this.contractorSlots(account).map((slot) => {
         const w = this.workerOf(account, slot), busy = jobs.some((j) => j.worker === slot);

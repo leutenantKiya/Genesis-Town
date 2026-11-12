@@ -289,12 +289,57 @@
 
     var open = ['c'];
     (prog.open || []).forEach(function (id) { if (CHUNKS.indexOf(id) >= 0 && open.indexOf(id) < 0) open.push(id); });
+
+    // Street lights (the Town Hall's Lighting project, `prog.light` = its level). Level 1 lights the centre island,
+    // level 2 every open island. A lamp stands on grass beside a path (on an outer island, beside its grass cross), never on a lot, the field, a bridge or in front of
+    // a door, at least three tiles from the next lamp, and only where everything stays reachable from the spawn.
+    // Picked in a fixed order from the seed, so the same progress always gives the same lamps on server and client.
+    var lamps = [], info = {}, light = Math.max(0, Math.min(2, prog.light | 0));
+    if (light > 0) {
+      var lampOk = {}; (light >= 2 ? open : ['c']).forEach(function (id) { lampOk[id] = 1; });
+      var keepOut = new Uint8Array(W * H);
+      function out(x0, y0, x1, y1) { rect(Math.max(0, x0), Math.max(0, y0), Math.min(W - 1, x1), Math.min(H - 1, y1), function (xx, yy) { keepOut[I(xx, yy)] = 1; }); }
+      // a lot or building's own ground, and the three tiles in front of its door
+      lots.forEach(function (l) { out(l.x, l.y, l.x + l.w - 1, l.y + l.h - 1); out(l.door.x - 1, l.door.y + 1, l.door.x + 1, l.door.y + 1); });
+      buildings.forEach(function (b) { out(b.x, b.y, b.x + b.w - 1, b.y + b.h - 1); out(b.dx - 1, b.dy + 1, b.dx + 1, b.dy + 1); });
+      out(fx0, fy0, fx1, fy1); out(gate.x - 1, gate.y - 1, gate.x + 1, gate.y + 1);
+      out(spawn.x - 1, spawn.y - 1, spawn.x + 1, spawn.y + 1); out(portal.x - 1, portal.y - 1, portal.x + 1, portal.y + 1);
+      var lampWalk = new Uint8Array(W * H);
+      for (i = 0; i < W * H; i++) lampWalk[i] = SOLID[tiles[i]] || !isOpen[chunkId(i % W, Math.floor(i / W))] ? 0 : 1;
+      buildings.forEach(function (b) { rect(b.x, b.y, b.x + b.w - 1, b.y + b.h - 1, function (xx, yy) { lampWalk[I(xx, yy)] = 0; }); });
+      function reachCount(seen0) { var n = 0; for (var k = 0; k < seen0.length; k++) n += seen0[k]; return n; }
+      var musts = [portal, gate].concat(buildings.map(function (b) { return { x: b.dx, y: b.dy + 1 }; }));
+      lots.forEach(function (l) { if (isOpen[l.chunk]) musts.push({ x: l.door.x, y: l.door.y + 1 }); });
+      var base = reachCount(bfs(lampWalk, spawn.x, spawn.y));
+      var cands = [];
+      for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
+        var kk = I(x, y), tt = tiles[kk];
+        if ((tt !== 'grass' && tt !== 'flower' && tt !== 'tallgrass' && tt !== 'sand') || keepOut[kk] || bridgeAt[kk] || !lampOk[chunkId(x, y)] || !lampWalk[kk]) continue;
+        // beside a path or bridge; on an outer island (no paths) along the edges of its grass cross (rows/columns 7-8)
+        var road = function (q) { return tiles[q] === 'path' || tiles[q] === 'bridge'; };
+        var lx4 = x % CH, ly4 = y % CH, crossEdge = chunkId(x, y) !== 'c' && (lx4 === 6 || lx4 === 9 || ly4 === 6 || ly4 === 9) && !onCross(lx4, ly4);
+        if (!crossEdge && !road(kk - 1) && !road(kk + 1) && !road(kk - W) && !road(kk + W)) continue;
+        cands.push({ x: x, y: y, k: kk, h: hash3(x, y, ns + 59) });
+      }
+      cands.sort(function (a, b) { return a.h - b.h; });
+      var perChunk = {}, cap = { c: 8 };
+      for (i = 0; i < cands.length; i++) {
+        var cd = cands[i], cid4 = chunkId(cd.x, cd.y);
+        if ((perChunk[cid4] || 0) >= (cap[cid4] || 4)) continue;
+        if (lamps.some(function (l) { return Math.max(Math.abs(l.x - cd.x), Math.abs(l.y - cd.y)) < 3; })) continue;
+        lampWalk[cd.k] = 0;
+        var seenL = bfs(lampWalk, spawn.x, spawn.y);
+        if (reachCount(seenL) !== base - lamps.length - 1 || musts.some(function (q) { return !seenL[I(q.x, q.y)]; })) { lampWalk[cd.k] = 1; continue; }
+        tiles[cd.k] = 'lamp'; info[cd.k] = $t('Tiang listrik. Lampunya menyala saat malam.');
+        lamps.push({ x: cd.x, y: cd.y }); perChunk[cid4] = (perChunk[cid4] || 0) + 1;
+      }
+    }
     var chunks = CHUNKS.map(function (cid, ci) {
       return { id: cid, name: cid === 'c' ? $t('Pusat Desa') : NAMES[biomes[cid]], cx: ci % N, cy: Math.floor(ci / N), biome: cid === 'c' ? 'center' : biomes[cid], open: open.indexOf(cid) >= 0, project: null };
     });
     return {
       version: VERSION, seed: seed, attempt: att, w: W, h: H, chunk: CH, riverX1: null,
-      tiles: tiles, info: {}, buildings: buildings, market: { stalls: [] },
+      tiles: tiles, info: info, lamps: lamps, light: light, buildings: buildings, market: { stalls: [] },
       farm: { plots: plots, gate: gate, x0: fx0, y0: fy0, x1: fx1, y1: fy1 },
       plaza: { x0: spawn.x, y0: spawn.y, x1: spawn.x, y1: spawn.y },
       mine: null, spawn: spawn, portal: portal, dock: portal,
