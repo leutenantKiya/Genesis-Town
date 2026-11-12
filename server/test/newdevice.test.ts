@@ -98,3 +98,29 @@ test('MPC result parsing follows FastAuthSignature (base64 JSON with a 64-byte s
   assert.deepEqual(Array.from(parseMpcSignature(Buffer.from(JSON.stringify({ scheme: 'Ed25519', signature: sig })).toString('base64'))), sig);
   assert.throws(() => parseMpcSignature(Buffer.from(JSON.stringify({ signature: [1, 2] })).toString('base64')), /unexpected/);
 });
+
+test('one live session: logging in on B supersedes A, logging in on A supersedes B (requests and relay)', async () => {
+  const { s } = world();
+  const hdrFor = (kp: near.KeyPair) => {
+    const ts = String(Date.now() + Math.floor(Math.random() * 1000));
+    const sig = kp.sign(new TextEncoder().encode(requestMessage('GET', '/api/state', ts, ''))).signature;
+    return { 'x-account-id': ACC, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') };
+  };
+  const rd = { sessionKeyOwner: (k: string) => s.store.sessionKeyOwner(k), isSuperseded: (k: string, a: string) => s.store.isSuperseded(k, a), replay: new ReplayCache() };
+  const A = near.KeyPair.fromRandom('ed25519'), B = near.KeyPair.fromRandom('ed25519');
+  s.store.addSessionKey(A.getPublicKey().toString(), ACC); s.store.addSessionKey(B.getPublicKey().toString(), ACC);
+  const isSup = (e: { status: number; code?: string }) => e.status === 409 && e.code === 'superseded';
+  assert.equal(verifyRequest(rd, hdrFor(A), 'GET', '/api/state', ''), ACC, 'no active key yet: any key of the account works');
+  s.store.setActiveKey(ACC, A.getPublicKey().toString());
+  assert.equal(verifyRequest(rd, hdrFor(A), 'GET', '/api/state', ''), ACC);
+  s.store.setActiveKey(ACC, B.getPublicKey().toString()); // login on B
+  assert.throws(() => verifyRequest(rd, hdrFor(A), 'GET', '/api/state', ''), isSup);
+  assert.equal(verifyRequest(rd, hdrFor(B), 'GET', '/api/state', ''), ACC);
+  s.chain.accounts.add(ACC); s.chain.accounts.add('p2.players.test'); s.chain.bal.set(ACC + '|fish', 5n);
+  const rdeps = { ...s, limiter: new RateLimiter(30, 1000), currentBlockHeight: async () => 100n };
+  await assert.rejects(relay(rdeps, { signedDelegate: signedDelegateB64({ sender: ACC, key: A }).b64 }), isSup);
+  assert.equal((await relay(rdeps, { signedDelegate: signedDelegateB64({ sender: ACC, key: B }).b64 })).status, 'mock');
+  s.store.setActiveKey(ACC, A.getPublicKey().toString()); // login on A again
+  assert.throws(() => verifyRequest(rd, hdrFor(B), 'GET', '/api/state', ''), isSup);
+  assert.equal(verifyRequest(rd, hdrFor(A), 'GET', '/api/state', ''), ACC);
+});

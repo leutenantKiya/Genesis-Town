@@ -56,10 +56,20 @@
     })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; if (j.code) e.code = j.code; throw e; }
+          if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; if (j.code) e.code = j.code; if (e.code === 'superseded') onSuperseded(); throw e; }
           return j;
         });
       });
+  }
+
+  // One live session per account: a newer login elsewhere makes the server answer 409 'superseded'. Stop polling and
+  // block the screen until the player signs in again here ("Main di sini"), which makes this device's key active again.
+  function onSuperseded() {
+    if (S.superseded) return;
+    S.superseded = true;
+    var body = $('div');
+    body.appendChild($('p', null, $t('Akunmu sedang dimainkan di perangkat lain. Satu akun hanya bisa aktif di satu perangkat. Tekan "Main di sini" untuk masuk lagi dan mengambil alih.')));
+    GT.modal({ title: $t('Akunmu dibuka di perangkat lain'), body: body, closable: false, actions: [{ label: $t('Main di sini'), primary: true, onClick: function (h) { h.close('action'); login(); return true; } }] });
   }
 
   /* ------------------------------------------------------------ offline (browser only, gathering) */
@@ -229,7 +239,7 @@
         var enter = function (res, key) {
           lsSet(LS_OWNER, res.needsChainApproval && res.ownerPublicKey ? res.ownerPublicKey : null);
           keepKey(res.accountId, key);
-          S.account = res.accountId; lsSet(LS_ACC, res.accountId); renderBanner();
+          S.account = res.accountId; S.superseded = false; lsSet(LS_ACC, res.accountId); renderBanner();
           GT.toast(res.created ? $t('Akun dibuat! Paket awal: 100 koin, 1 Alat, 3 Roti, 3 Gandum.') : $t('Selamat datang kembali!'));
           return refresh(true);
         };
@@ -371,6 +381,7 @@
 
   /* ------------------------------------------------------------ state refresh + clock sync */
   function refresh(full) {
+    if (S.superseded) return Promise.resolve();
     if (S.mode === 'offline') { var d = OFF.load(); S.history = d.hist; redraw(); return Promise.resolve(); }
     var jobs = [api('/market').then(function (m) { S.market = m.merchants; })];
     if (S.account) {

@@ -6,6 +6,7 @@ export const EXACT: Record<string, string> = {
  "The merchant is busy serving customers. Try again in a moment.": "Pedagangnya sedang sibuk melayani. Coba sebentar lagi.",
  "You can't go there.": "Kamu tidak boleh ke sana.",
  "This device must be approved with NEAR Auth first.": "Perangkat ini harus disetujui dengan NEAR Auth dulu.",
+ "Your account was opened on another device.": "Akunmu dibuka di perangkat lain.",
  "You are not in that world.": "Kamu tidak ada di dunia itu.",
  "Unknown world.": "Dunia tidak dikenal.",
  "Slow down… too many actions": "Pelan-pelan… terlalu banyak aksi",

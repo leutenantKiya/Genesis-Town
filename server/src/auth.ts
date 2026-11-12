@@ -91,6 +91,7 @@ export async function register(
     const owner = deps.store.sessionKeyOwner(body.sessionPublicKey);
     if (owner && owner !== existing.account_id) throw new HttpError(409, 'session key already belongs to another account');
     if (!owner) deps.store.addSessionKey(body.sessionPublicKey, existing.account_id, false);
+    deps.store.setActiveKey(existing.account_id, body.sessionPublicKey);
     if (deps.store.sessionKeyOnchain(body.sessionPublicKey)) return { accountId: existing.account_id, created: false, txHashes: [] };
     return { accountId: existing.account_id, created: false, txHashes: [], needsChainApproval: true, ownerPublicKey: existing.owner_pk };
   }
@@ -115,6 +116,7 @@ export async function register(
   }
   deps.store.addPlayer(accountId, sub, ownerPk);
   deps.store.addSessionKey(body.sessionPublicKey, accountId);
+  deps.store.setActiveKey(accountId, body.sessionPublicKey);
   deps.store.addHistory(accountId, 'account', 'Account created (NEAR Auth key + game session key)', deps.chain.mode === 'mock' ? 'mock' : 'ok', created.txHash);
   const reg = await deps.chain.registerPlayer(accountId);
   deps.store.addHistory(accountId, 'storage', 'Registered in the game contract', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
@@ -136,6 +138,7 @@ async function adopt(
     txHashes.push(reg.txHash);
     deps.store.addHistory(accountId, 'storage', 'Registered in the game contract', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
   }
+  deps.store.setActiveKey(accountId, sessionPk);
   if (!hasKey) {
     deps.store.addSessionKey(sessionPk, accountId, false);
     return { accountId, created: false, txHashes, needsChainApproval: true, ownerPublicKey: ownerPk };

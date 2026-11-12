@@ -31,13 +31,14 @@ export class ReplayCache {
   }
 }
 
-export interface ReqAuthDeps { sessionKeyOwner(key: string): string | undefined; replay: ReplayCache; now?: () => number }
+export interface ReqAuthDeps { sessionKeyOwner(key: string): string | undefined; isSuperseded?(key: string, account: string): boolean; replay: ReplayCache; now?: () => number }
 
 /** Verifies a signed request and returns the account it acts for. */
 export function verifyRequest(d: ReqAuthDeps, h: IncomingHttpHeaders, method: string, pathQuery: string, body: string): string {
   const account = h['x-account-id'], key = h['x-gt-key'], ts = h['x-gt-ts'], sig = h['x-gt-sig'];
   if (typeof account !== 'string' || typeof key !== 'string' || typeof ts !== 'string' || typeof sig !== 'string') throw new HttpError(401, 'not signed in');
   if (d.sessionKeyOwner(key) !== account) throw new HttpError(401, 'unknown session key for this account');
+  if (d.isSuperseded?.(key, account)) throw new HttpError(409, 'Your account was opened on another device.', 'superseded');
   const now = (d.now ?? Date.now)();
   const t = Number(ts);
   if (!Number.isFinite(t) || Math.abs(now - t) > SKEW_MS) throw new HttpError(401, 'request expired: check your clock');

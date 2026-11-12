@@ -35,6 +35,11 @@ export class Store {
         account_id TEXT NOT NULL REFERENCES players(account_id),
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS active_keys (
+        account_id TEXT PRIMARY KEY,
+        public_key TEXT NOT NULL,
+        at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         account_id TEXT NOT NULL,
@@ -163,6 +168,18 @@ export class Store {
     this.db.prepare('INSERT OR IGNORE INTO session_keys (public_key, account_id, created_at, onchain) VALUES (?, ?, ?, ?)')
       .run(publicKey, accountId, Date.now(), onchain ? 1 : 0);
     if (onchain) this.db.prepare('UPDATE session_keys SET onchain = 1 WHERE public_key = ? AND account_id = ?').run(publicKey, accountId);
+  }
+
+  /** One live session per account: the newest login's key. Accounts with no row (older data) accept any of their keys. */
+  setActiveKey(accountId: string, publicKey: string) {
+    this.db.prepare('INSERT INTO active_keys (account_id, public_key, at) VALUES (?, ?, ?) ON CONFLICT(account_id) DO UPDATE SET public_key = excluded.public_key, at = excluded.at')
+      .run(accountId, publicKey, Date.now());
+  }
+
+  /** True when `accountId` has an active key and it is not `publicKey`. */
+  isSuperseded(publicKey: string, accountId: string): boolean {
+    const r = this.db.prepare('SELECT public_key FROM active_keys WHERE account_id = ?').get(accountId) as { public_key: string } | undefined;
+    return !!r && r.public_key !== publicKey;
   }
 
   sessionKeyOnchain(publicKey: string): boolean {

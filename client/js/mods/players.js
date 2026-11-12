@@ -29,7 +29,7 @@
   function isBlocked(nick, tag) { return blocked().indexOf(key(nick, tag)) >= 0; }
   function tagsOfName(name) { var n = String(name).toLowerCase(), t = {}; Object.keys(others).forEach(function (a) { var o = others[a]; if (String(o.nick).toLowerCase() === n && o.tag) t[o.tag] = 1; }); lines.forEach(function (m) { if (m.fromTag && String(m.from).toLowerCase() === n && m.from !== me) t[m.fromTag] = 1; }); return Object.keys(t); }
   function pal(nick) { var h = 0; for (var i = 0; i < nick.length; i++) h = (h * 31 + nick.charCodeAt(i)) | 0; return Math.abs(h) % 9; }
-  function active() { var c = C(); return !!(c && c.state.account && c.state.mode !== 'offline' && c.state.mode !== 'loading'); }
+  function active() { var c = C(); return !!(c && c.state.account && c.state.mode !== 'offline' && c.state.mode !== 'loading' && !c.state.superseded); }
 
   /* ---------------------------------------------------------------- presence loop */
   function tick() {

@@ -165,7 +165,7 @@ export function createApp(deps: AppDeps) {
   // Off-chain play is signed with the player's session key (src/reqauth.ts); the account header alone proves nothing.
   const replay = new ReplayCache();
   function accountOf(req: IncomingMessage, url: URL, raw = ''): string {
-    return verifyRequest({ sessionKeyOwner: (k) => deps.store.sessionKeyOwner(k), replay }, req.headers, req.method ?? 'GET', url.pathname + url.search, raw);
+    return verifyRequest({ sessionKeyOwner: (k) => deps.store.sessionKeyOwner(k), isSuperseded: (k, a) => deps.store.isSuperseded(k, a), replay }, req.headers, req.method ?? 'GET', url.pathname + url.search, raw);
   }
 
   /** Dev tools (clock jump, forced settlement) only answer the owner's own machine: DEV_TOOLS=1 and a direct loopback
