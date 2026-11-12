@@ -118,7 +118,7 @@
     if (kind === 'hall' || kind === 'townhall') {
       // two columns beside the door and a flag pole on the roof
       R(g, cx - 9, h - 16, 3, 13, '#fafaf0'); R(g, cx + 6, h - 16, 3, 13, '#fafaf0');
-      R(g, w - 8, 0, 1, roofRows - 2, '#6a6a6a'); R(g, w - 7, 1, 5, 2, '#d83c3c'); R(g, w - 7, 3, 5, 2, '#f8f8f8');
+      R(g, w - 8, 0, 1, roofRows - 2, '#6a6a6a'); R(g, w - 7, 1, 7, 5, '#00ec97'); R(g, w - 6, 2, 1, 3, '#000'); R(g, w - 2, 2, 1, 3, '#000'); R(g, w - 5, 2, 1, 1, '#000'); R(g, w - 4, 3, 1, 1, '#000'); R(g, w - 3, 4, 1, 1, '#000');
     }
     if (kind === 'kolam') { R(g, 2, h - 6, w - 4, 2, '#3d7fc2'); R(g, 2, h - 6, w - 4, 1, '#9ad8ff'); }
     sign(g, cx, h - 24, st, ICON[kind]);

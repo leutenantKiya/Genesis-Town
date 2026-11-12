@@ -49,6 +49,21 @@
     if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
     return t;
   };
+  /** The NEAR flag cloth: NEAR green with the black N, one shared 16 x 11 texture. cx, cy: centre; w, h: size. */
+  var nearTex = null;
+  GT3.nearFlag = function (cx, cy, cz, w, h) {
+    if (!nearTex) {
+      var c = GT3.canvas(16, 11), g = c.getContext('2d');
+      g.fillStyle = '#00ec97'; g.fillRect(0, 0, 16, 11);
+      g.fillStyle = '#000';
+      g.fillRect(4, 2, 2, 7); g.fillRect(10, 2, 2, 7);        // the two uprights
+      g.fillRect(6, 3, 1, 2); g.fillRect(7, 4, 1, 2); g.fillRect(8, 5, 1, 2); g.fillRect(9, 6, 1, 2); // the diagonal
+      nearTex = GT3.tex(c);
+    }
+    var m = new THREE.Mesh(GT3.quad([cx - w / 2, cy - h / 2, cz], [cx + w / 2, cy - h / 2, cz], [cx + w / 2, cy + h / 2, cz], [cx - w / 2, cy + h / 2, cz]), GT3.mat({ map: nearTex, side: THREE.DoubleSide }));
+    m.name = 'near-flag';
+    return m;
+  };
   /** One tile of the 2D art (without its grass base) as a 12 x 12 canvas. */
   GT3.tileCanvas = function (type, frame) {
     var c = GT3.canvas(TILE, TILE), g = c.getContext('2d');

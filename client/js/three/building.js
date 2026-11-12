@@ -121,8 +121,7 @@
     if (kind === 'hall' || kind === 'townhall') {
       var px = x1 - 5 * PX;
       trim.push(box(1 * PX, 14 * PX, 1 * PX, px, ridge + 7 * PX, zc, '#6a6a6a'));
-      trim.push(box(6 * PX, 2 * PX, 0.6 * PX, px + 3.5 * PX, ridge + 12.5 * PX, zc, '#d83c3c'));
-      trim.push(box(6 * PX, 2 * PX, 0.6 * PX, px + 3.5 * PX, ridge + 10.5 * PX, zc, '#f8f8f8'));
+      extras.push(GT3.nearFlag(px + 5 * PX, ridge + 11.5 * PX, zc, 8 * PX, 5.5 * PX));
     }
     if (kind === 'church') {
       // bell tower over the door: its front is the tower painted in the 2D art

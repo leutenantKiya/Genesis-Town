@@ -18,7 +18,7 @@
   var THREE = GT3.THREE, R = GT3.R;
   var C = {
     fence: '#d0a060', fenceD: '#8a6038', sign: '#d0a060', signFace: '#f2e2c4', ink: '#5a3c28',
-    mail: '#d84848', mailD: '#9c2c30', post: '#8a6038', flag: '#f8d838',
+    mail: '#d84848', mailD: '#9c2c30', post: '#8a6038', flag: '#00ec97',
     lamp: '#6a6c7c', lampD: '#4a4c5c', bulb: '#fff4a8',
     barrel: '#8e5a30', barrelL: '#b07840', ring: '#5a5a6e', crate: '#c08848', crateD: '#8e5a2c', crateL: '#dcaa64',
     stall: '#c08848', stallD: '#8e5a2c', stallL: '#e2b06a'
