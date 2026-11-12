@@ -153,6 +153,16 @@
 >   house lot per chunk and a hospital lot. Numbers: `economy/config.json` -> `homeland`; details: [docs/world.md](docs/world.md);
 >   plan: [phase C](docs/superpowers/plans/2026-11-09-homeland-phase-c.md).
 >
+> - **Playtest fixes** (2026-11-12, branch `perbaikan-feedback`): chat no longer leaves the character walking; dialogue sits
+>   above the key hints; sign-in buttons line up with a loading ring; More is **Settings** (Sign Out inside, no player Soul);
+>   in a Homeland an **Upgrade** button opens the Town Hall, the guest role list stays open, waterfalls pour down, and standing
+>   in a portal takes you through after a dizzy wait; other players lag about 0.5 s; the public village is all open with
+>   fishing, chopping and mining (`homeland.publicGather`, `publicOpenAll`) and a **boat** to its bottom-right island
+>   (`GTVillage.ferryOf`, act `boat`); mining swings a **pickaxe**; the fishing rod has a spinning reel; a **hoe** (Cangkul) tills
+>   grass inside a Homeland farm fence (act `hoe`, table `homeland_tilled`).
+>   *(planned)*: a gambling corner for goods, bot items and a Mall for bot stats, riding the carousel with a cinematic
+>   camera, more icons, starter missions, richer house interiors, a separate look for Homeland buildings, a Pickaxe token.
+>
 > - **Work buildings** (2026-11-12, after Kingshot's resource buildings): every Homeland has a **Penggergajian** (sawmill,
 >   wood) on a forest island, a **Kincir Angin** (windmill, wheat) with sails that turn in the 2.5D view, and a **Gudang**
 >   (storehouse, 3 levels) that lets every producing building hold 50% to 150% more. The Town Hall window names what its
