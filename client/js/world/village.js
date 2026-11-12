@@ -625,7 +625,7 @@
   function landmarks(L) {
     var s = L.market.stalls, y = s[0].y;
     // the luck table (Meja Untung) two tiles west of the first stall
-    return { consign: { x: s[1].x + 1, y: y }, board: { x: s[s.length - 1].x + 1, y: y }, gamble: { x: s[0].x - 2, y: y } };
+    return { consign: { x: s[1].x + 1, y: y }, board: { x: s[s.length - 1].x + 1, y: y }, gamble: { x: s[0].x - 2, y: y }, mall: { x: s[s.length - 1].x + 3, y: y } };
   }
 
   var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf, ferryOf: ferryOf };

@@ -21,12 +21,12 @@ import { leaderboard } from './leaderboard.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -342,6 +342,12 @@ export class Game {
       }
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
       case 'boat': res = this.boat(account, wid, pos ?? { x: -9, y: -9 }); break;
+      case 'mall': {
+        // the Mall in the market sells gear for your own workers, wherever they are (the same purchase as at the Town Hall)
+        if (!this.map || wid !== 'public' || !this.map.nearLandmark(pos ?? { x: -9, y: -9 }, 'mall', 2)) throw new HttpError(409, 'Come to the Mall at the market.');
+        res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay);
+        break;
+      }
       case 'gamble': res = this.gamble(account, wid, pos ?? { x: -9, y: -9 }, s('token'), n('qty')); break;
       case 'hoe': {
         if (!w.row) throw new HttpError(409, 'Use the hoe in a Homeland farm.');

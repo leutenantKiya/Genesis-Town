@@ -648,6 +648,9 @@
     if (sick) { if (name === 'syal') return; sx -= 2; sy += 5; } // a collapsed worker lies down: the hat goes on the lying head
     ctx.fillStyle = '#2a2430';
     if (name === 'syal') { ctx.fillRect(sx + 3, sy + 7, 10, 3); ctx.fillStyle = d.color; ctx.fillRect(sx + 4, sy + 8, 8, 1); ctx.fillRect(sx + 9, sy + 8, 2, 4); return; }
+    if (name === 'sarungtangan') { ctx.fillRect(sx + 1, sy + 9, 4, 4); ctx.fillRect(sx + 11, sy + 9, 4, 4); ctx.fillStyle = d.color; ctx.fillRect(sx + 2, sy + 10, 2, 2); ctx.fillRect(sx + 12, sy + 10, 2, 2); return; }
+    if (name === 'sepatu') { ctx.fillRect(sx + 3, sy + 13, 4, 3); ctx.fillRect(sx + 9, sy + 13, 4, 3); ctx.fillStyle = d.color; ctx.fillRect(sx + 4, sy + 14, 2, 1); ctx.fillRect(sx + 10, sy + 14, 2, 1); return; }
+    if (name === 'helm') { ctx.fillRect(sx + 3, sy - 1, 10, 4); ctx.fillRect(sx + 2, sy + 2, 12, 2); ctx.fillStyle = d.color; ctx.fillRect(sx + 4, sy, 8, 2); ctx.fillRect(sx + 3, sy + 2, 10, 1); return; }
     if (name === 'mahkota') { ctx.fillRect(sx + 4, sy - 1, 8, 4); ctx.fillStyle = d.color; ctx.fillRect(sx + 5, sy + 1, 6, 2); ctx.fillRect(sx + 5, sy - 1, 1, 2); ctx.fillRect(sx + 7, sy - 2, 2, 3); ctx.fillRect(sx + 10, sy - 1, 1, 2); return; }
     ctx.fillRect(sx + 1, sy + 1, 14, 3); ctx.fillRect(sx + 4, sy - 1, 8, 3); // caping: wide round hat
     ctx.fillStyle = d.color; ctx.fillRect(sx + 2, sy + 2, 12, 1); ctx.fillRect(sx + 5, sy, 6, 2);
@@ -752,8 +755,34 @@
     }
   }
 
+  /* ---- the Mall in the market: gear for your own workers (Tukang and hired bots), bought from anywhere in town ---- */
+  function mallSpot() { var L = GT.world; if (wid() !== 'public' || !L || !L.market || !window.GTVillage || !GTVillage.landmarks) return null; try { return GTVillage.landmarks(L).mall || null; } catch (e) { return null; } }
+  function mallModal() {
+    if (!loggedIn()) { GT.toast($t('Masuk dulu.')); return; }
+    var body = $('div', 'gt-isl hl'), h = GT.modal({ title: '🛍️ ' + $t('Mall'), wide: true, body: body });
+    function paint() {
+      body.textContent = '';
+      if (!H) { body.appendChild($('p', null, $t('Memuat…'))); return; }
+      body.appendChild($('p', 'hl-p', $t('Perlengkapan untuk pekerjamu. Tiap barang menambah tenaga pekerja (tukang lebih cepat, bot menghasilkan lebih banyak). Satu barang per pekerja; membeli yang baru menggantikannya.')));
+      var team = [{ id: 0, name: $t('Tukang Balai Kota'), cosmetic: (H.workers && H.workers[0] && H.workers[0].cosmetic) || null }].concat((H.bots || []).map(function (b) { return { id: b.id, name: b.name, cosmetic: b.cosmetic }; }));
+      team.forEach(function (c) {
+        var cl = cell(c.name, c.cosmetic && H.cosmetics[c.cosmetic] ? H.cosmetics[c.cosmetic].name : $t('tanpa perlengkapan')), ca = acts(cl);
+        Object.keys(H.cosmetics || {}).forEach(function (k) {
+          var d = H.cosmetics[k];
+          ca.appendChild(btn(d.name + ' · ' + d.price + ' · +' + Math.round(d.boost * 100) + '%', function () {
+            C.act({ action: 'mall', bot: c.id, cosmetic: k, world: 'public' }).then(function () { return load(true); }).then(function () { if (h.isOpen()) paint(); }, function () {});
+          }, '', c.cosmetic === k || have('coin') < d.price));
+        });
+        body.appendChild(cl);
+      });
+    }
+    paint(); load(true).then(function () { if (h.isOpen()) paint(); }, function () {});
+  }
+
   function onInteract(ctx) {
     if (ctx.scene.kind !== 'out' || ctx.npc) return false;
+    var ms = mallSpot();
+    if (ms && ctx.mode === 'talk' && ctx.tile.x === ms.x && ctx.tile.y === ms.y) { mallModal(); return true; }
     if (ctx.mode !== 'message' && holdingHoe() && hoeable(ctx.tile.x, ctx.tile.y)) { if (ctx.mode !== 'bump') hoe(ctx.tile); return true; }
     var t = ctx.tile, p = portalPos();
     if (ctx.mode === 'talk' && p && t.x === p.x && t.y === p.y) { openPortal(); return true; }
@@ -826,7 +855,18 @@
   }
 
   /* ---- drawing over the world ---- */
+  function drawMall(ctx, camX, camY, T) {
+    var m = mallSpot(); if (!m) return;
+    var x = m.x * T - camX, y = m.y * T - camY, v3 = GT.view3dOn && GT.view3dOn();
+    if (!v3) {
+      ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 1, y + 5, T - 2, T - 5);
+      for (var i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#fff0f6' : '#d0508a'; ctx.fillRect(x + 1 + i * 3, y + 1, 3, 4); }
+      ctx.fillStyle = '#f2c230'; ctx.fillRect(x + 3, y + 7, 3, 2); ctx.fillStyle = '#e0a050'; ctx.fillRect(x + 7, y + 7, 2, 3);
+    }
+    if (window.GT_THEME && GT_THEME.label) { var a = GT.at(m.x, m.y); GT_THEME.label(ctx, '🛍️ ' + $t('Mall'), a.x + T / 2, a.y + T + 9, { tone: 'paper', size: 6, bold: true }); }
+  }
   function onDraw(ctx, camX, camY, T) {
+    drawMall(ctx, camX, camY, T);
     if (!GT.scene || GT.scene.kind !== 'out') return;
     var now = Date.now(), tt = now / 1000, p = portalPos(), L = layoutOf();
     ctx.save();
