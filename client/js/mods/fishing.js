@@ -57,14 +57,38 @@
     ctx.restore();
   }
 
-  function rodTip(T, camX, camY) {
-    var p = GT.player, off = { up: [8, 0], down: [9, 6], left: [1, 3], right: [11, 3] }[p.dir] || [9, 4], a = GT.at(p.x, p.y);
-    return { x: a.x + off[0], y: a.y + off[1] };
+  /* The rod, drawn like the axe: from the hand, a brown butt with a cork grip and a reel, a slim tip that lifts up and
+     out over the water. While reeling the tip bends toward the fish and the reel's crank turns. */
+  var ROD = { up: [[7, 6], [2, -13]], down: [[8, 8], [4, -9]], left: [[4, 7], [-11, -8]], right: [[8, 7], [11, -8]] };
+  function rodGeom() {
+    var p = GT.player, a = GT.at(p.x, p.y), r = ROD[p.dir] || ROD.right;
+    var hand = { x: a.x + r[0][0], y: a.y + r[0][1] };
+    return { hand: hand, tip: { x: hand.x + r[1][0], y: hand.y + r[1][1] } };
+  }
+  function rodTip() { return rodGeom().tip; }
+  function drawRod(ctx, g, bend, crank) {
+    var h = g.hand, tp = { x: g.tip.x + bend.x, y: g.tip.y + bend.y }, dx = g.tip.x - h.x, dy = g.tip.y - h.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+    var mid = { x: h.x + dx * 0.55 + bend.x * 0.3, y: h.y + dy * 0.55 + bend.y * 0.3 };
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a2a14'; ctx.lineWidth = 2.2; // butt
+    ctx.beginPath(); ctx.moveTo(h.x - ux * 2, h.y - uy * 2); ctx.lineTo(h.x + ux * 4, h.y + uy * 4); ctx.stroke();
+    ctx.strokeStyle = '#d8b07a'; ctx.lineWidth = 2; // cork grip
+    ctx.beginPath(); ctx.moveTo(h.x - ux * 1, h.y - uy * 1); ctx.lineTo(h.x + ux * 2.5, h.y + uy * 2.5); ctx.stroke();
+    ctx.strokeStyle = '#7a4a26'; ctx.lineWidth = 1.3; // the blank, bending toward the fish
+    ctx.beginPath(); ctx.moveTo(h.x + ux * 4, h.y + uy * 4); ctx.quadraticCurveTo(mid.x, mid.y, tp.x, tp.y); ctx.stroke();
+    ctx.fillStyle = '#e8e4d8'; ctx.fillRect(Math.round(tp.x) - 0.5, Math.round(tp.y) - 0.5, 1, 1); // tip ring
+    // the reel under the grip: a spool and a crank that turns while reeling
+    var rx = h.x + ux * 3 - uy * 2.2, ry = h.y + uy * 3 + ux * 2.2;
+    ctx.fillStyle = '#2a2430'; ctx.beginPath(); ctx.arc(rx, ry, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b8bcc8'; ctx.beginPath(); ctx.arc(rx, ry, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2a2430'; ctx.lineWidth = 0.9;
+    ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx + Math.cos(crank) * 2.6, ry + Math.sin(crank) * 2.6); ctx.stroke();
+    return tp;
   }
 
   function onDraw(ctx, camX, camY, T) {
     if (!F) return;
-    var tip = rodTip(T, camX, camY), t = performance.now() / 1000;
+    var g = rodGeom(), t = performance.now() / 1000, tip = g.tip;
     var fa = GT.at(F.tile.x, F.tile.y), bx = fa.x + T / 2, by = fa.y + T / 2;
     if (F.phase === 'cast') { // the float flies in an arc
       var k = Math.min(1, F.t / 0.45);
@@ -73,10 +97,12 @@
     else if (F.phase === 'bite') by += 2;
     else if (F.phase === 'reel') { bx += Math.round(Math.sin(t * 9) * 1.5); by += 1; }
     ctx.save();
-    // rod and line
-    ctx.strokeStyle = '#6a3f22'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(tip.x - 3, tip.y + 4); ctx.lineTo(tip.x + 0.5, tip.y + 0.5); ctx.stroke();
-    ctx.strokeStyle = 'rgba(245,245,235,0.85)';
+    // rod and line: reeling bends the tip toward the float and spins the crank (fast while the button is held)
+    var pull = F.phase === 'reel' ? 1 : F.phase === 'bite' ? 0.5 : 0, bl = Math.hypot(bx - tip.x, by - tip.y) || 1;
+    var bend = { x: (bx - tip.x) / bl * 3 * pull, y: (by - tip.y) / bl * 3 * pull + 1.5 * pull };
+    var crank = F.phase === 'reel' ? t * (F.hold ? 18 : 6) : 0;
+    tip = drawRod(ctx, g, bend, crank);
+    ctx.strokeStyle = 'rgba(245,245,235,0.85)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(tip.x + 0.5, tip.y + 0.5);
     ctx.quadraticCurveTo((tip.x + bx) / 2, Math.max(tip.y, by) + (F.phase === 'reel' ? -2 : 4), bx, by); ctx.stroke();
     // float: red top, white bottom
