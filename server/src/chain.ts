@@ -77,7 +77,7 @@ export class TestnetChain implements Chain {
 
   private async settlerCall(method: string, args: Record<string, unknown>, tgas = '100'): Promise<TxResult> {
     // Wait for FINAL so that the server's next read (possibly from another RPC node) already sees the change.
-    const o = await this.settler.signAndSendTransaction({
+    const o = await this.settler.signAndSendTransaction({ throwOnFailure: false,
       receiverId: this.cfg.gameContractId,
       actions: [actions.functionCall(method, args, teraToGas(tgas as `${number}`), 0n)],
       waitUntil: 'FINAL',
@@ -88,7 +88,7 @@ export class TestnetChain implements Chain {
   async createPlayerAccount(accountId: string, ownerPk: string, sessionPk: string): Promise<TxResult> {
     // The session key may call any method on the game contract (empty method list); the relayer allowlist and the
     // contract's own checks decide what a player can do. It can never move NEAR or attach a deposit.
-    const o = await this.parent.signAndSendTransaction({
+    const o = await this.parent.signAndSendTransaction({ throwOnFailure: false,
       receiverId: accountId,
       actions: [
         actions.createAccount(),
@@ -128,7 +128,7 @@ export class TestnetChain implements Chain {
   async relay(signedDelegate: unknown, _senderId: string): Promise<TxResult> {
     // Same as Account.relayMetaTransaction, but waits for FINAL (see settlerCall).
     const sd = signedDelegate as Parameters<Account['relayMetaTransaction']>[0];
-    const o = await this.relayer.signAndSendTransaction({ receiverId: sd.delegateAction.senderId, actions: [actions.signedDelegate(sd)], waitUntil: 'FINAL' });
+    const o = await this.relayer.signAndSendTransaction({ throwOnFailure: false, receiverId: sd.delegateAction.senderId, actions: [actions.signedDelegate(sd)], waitUntil: 'FINAL' });
     return toResult(o as unknown as Outcome);
   }
 
@@ -142,7 +142,7 @@ export class TestnetChain implements Chain {
   listProjects() { return this.view<ProjectInfo[]>('list_projects', {}); }
   async townPledge(merchant: string, contribution: Array<{ token_id: string; amount: string }>): Promise<TxResult> {
     if (!this.town) return { txHash: '', ok: false, error: 'TOWN_PRIVATE_KEY not set' };
-    const o = await this.town.signAndSendTransaction({
+    const o = await this.town.signAndSendTransaction({ throwOnFailure: false,
       receiverId: this.cfg.gameContractId,
       actions: [actions.functionCall('restore_contribute', { merchant, contribution }, teraToGas('100'), 0n)],
       waitUntil: 'FINAL',
@@ -153,7 +153,7 @@ export class TestnetChain implements Chain {
 
   // NEAR Auth `sign` (docs.auth.near.org/home/guides/sign-transactions.md: 300 Tgas, deposit 1 yoctoNEAR in the example).
   async fastAuthSign(args: { guard_id: string; verify_payload: string; sign_payload: number[]; algorithm: string }) {
-    const o = (await this.relayer.signAndSendTransaction({
+    const o = (await this.relayer.signAndSendTransaction({ throwOnFailure: false,
       receiverId: this.cfg.fastAuth.contractId,
       actions: [actions.functionCall('sign', args, teraToGas('300'), 1n)],
       waitUntil: 'FINAL',

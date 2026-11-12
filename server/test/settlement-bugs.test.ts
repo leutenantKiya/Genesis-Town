@@ -201,3 +201,18 @@ test('an empty day between two busy days is skipped, and the busy day after it s
   assert.ok(chain.settleCalls.some((c) => c.day === d) && chain.settleCalls.some((c) => c.day === d + 2));
   assert.equal(String(chain.get(p, 'fish')), '3');
 });
+
+test('close_shop reporting ok:false (shop already closed, as testnet now returns it) does not block the day', async () => {
+  const p = 'c.players.test';
+  const { game, chain } = await world([p]);
+  const day = game.clock.time().settleDay - 1;
+  game.gs.add(day, p, 'wood', 1, 'gather');
+  game.gs.add(day, 'wati.gt.test', 'coin', -100000, 'test'); // cannot pay the rent: planned to close
+  const calls: string[] = [];
+  chain.closeShop = async (m: string) => { calls.push(m); return { txHash: 'x', ok: false, error: 'shop is already closed' }; };
+  const restore = quiet();
+  await game.devSettle();
+  restore();
+  assert.ok(calls.includes('wati.gt.test'), 'close_shop was attempted');
+  assert.ok(game.settlement.settledThrough() >= day, 'the day still finished');
+});
