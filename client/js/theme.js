@@ -7,7 +7,7 @@
  *   GT_THEME.season()                 -> 'semi' | 'panas' | 'gugur' | 'dingin'
  *   GT_THEME.label(ctx, text, x, y, {tone, size, align, bold})
  *       draws a small chip centred on x with its baseline at y: tone 'dark' (default: HUD chip), 'paper' (ink on
- *       paper), 'party' (green) or 'accent' (ink on the season accent). Returns the chip's width.
+ *       paper), 'party' (green), 'dim' (faint, for guests) or 'accent' (ink on the season accent). Returns the chip's width.
  *   GT_THEME.text(ctx, text, x, y, colour, size)   outlined text with no chip (floating numbers)
  */
 (function () {
@@ -24,6 +24,7 @@
     dark: function () { return { bg: get('hud') || '#14152a', fg: get('hud-ink') || '#dfe8c2', alpha: 0.85 }; },
     paper: function () { return { bg: get('paper') || '#f4f1dc', fg: get('paper-ink') || '#1c1c2c', alpha: 1 }; },
     party: function () { return { bg: get('good') || '#2f7d4a', fg: '#f4fff0', alpha: 0.92 }; },
+    dim: function () { return { bg: get('hud') || '#14152a', fg: get('hud-ink') || '#dfe8c2', alpha: 0.5 }; },
     accent: function () { return { bg: get('accent') || '#f28fb0', fg: get('accent-ink') || '#1c1c2c', alpha: 1 }; }
   };
   // in 2.5D an overlay unit spans several screen pixels: anchor labels on whole screen pixels so they glide with the camera

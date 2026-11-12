@@ -1373,6 +1373,8 @@
     "{0} membatalkan dagang.": "{0} cancelled the trade.",
     "Bertukar dalam {0}…": "Swapping in {0}…",
     "{0} mengajak dagang": "{0} invites you to trade",
-    "Ajakan dagang": "Trade invitation"
+    "Ajakan dagang": "Trade invitation",
+    "Tamu": "Guest",
+    "Desa sedang penuh tamu, coba lagi nanti.": "The village is full of guests, try again later."
   });
 })();

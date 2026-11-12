@@ -109,6 +109,9 @@ export function createApp(deps: AppDeps) {
   const checkSpend = spendGuard(deps.chain, game);
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
+  social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs };
+  const guestHelloLimiter = new RateLimiter(game.econ.guest.helloPerMinute, 200); // new guests per IP
+  const guestPresenceLimiter = new RateLimiter(240, 100_000); // guest position reports per IP
   // Merchants walk the public area as players tagged NPC: behind their stall (as the client draws them); "/msg Sari ..." asks them through the dialogue provider.
   const MERCHANT_LOOK: Record<string, number> = { sari: 3, budi: 2, wati: 5, joko: 4 };
   const stalls = game.map?.layout.market.stalls ?? [];
@@ -376,6 +379,19 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/time') {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null, weather: game.weather() });
       }
+      if (req.method === 'POST' && p === '/api/guest/hello') {
+        // a visitor who has not signed in: no keys, no account. Outside accountOf on purpose; limited per address, bound to it.
+        if (!guestHelloLimiter.take(clientIp(req))) throw new HttpError(429, 'Too many requests, try again shortly.');
+        return send(res, 200, social.guestHello(clientIp(req)));
+      }
+      if (req.method === 'POST' && p === '/api/guest/presence') {
+        const ip = clientIp(req);
+        if (!guestPresenceLimiter.take(ip)) throw new HttpError(429, 'too many presence reports');
+        const b = await readJson(req) as { guest?: unknown; x?: unknown; y?: unknown; dir?: unknown };
+        const g = social.guestReport(b.guest, ip, b, game.map ? (x, y) => game.map!.walkable(x, y) : undefined);
+        const players = social.nearby(g.id, 'public').map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)) }) }));
+        return send(res, 200, { me: g.nick, look: g.look, guest: true, online: social.online() + social.guests.size, world: 'public', players, chat: [], last: 0 });
+      }
       if (req.method === 'POST' && p === '/api/presence') {
         // where I am now -> who else is in my world, and the chat lines since the last call
         const raw = await readRaw(req);
@@ -387,7 +403,7 @@ export function createApp(deps: AppDeps) {
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
         if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, 'visit').map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
         if (onTile) social.report(acct, w, b);
-        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
+        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
         return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w) });
       }

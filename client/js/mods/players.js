@@ -29,10 +29,46 @@
   function isBlocked(nick, tag) { return blocked().indexOf(key(nick, tag)) >= 0; }
   function tagsOfName(name) { var n = String(name).toLowerCase(), t = {}; Object.keys(others).forEach(function (a) { var o = others[a]; if (String(o.nick).toLowerCase() === n && o.tag) t[o.tag] = 1; }); lines.forEach(function (m) { if (m.fromTag && String(m.from).toLowerCase() === n && m.from !== me) t[m.fromTag] = 1; }); return Object.keys(t); }
   function pal(nick) { var h = 0; for (var i = 0; i < nick.length; i++) h = (h * 31 + nick.charCodeAt(i)) | 0; return Math.abs(h) % 9; }
+  // Guests: with no account (and a reachable server) the visitor walks the public village as "Tamu": no keys, no chat.
+  var guestId = '', guestNick = '', guestBusy = false, guestRetryAt = 0, guestToldFull = false;
+  function guestMode() { var c = C(); return !!(c && !c.state.account && c.state.mode !== 'loading' && !/[?&]mode=offline/.test(location.search) && location.protocol !== 'file:'); }
+  function leaveGuest() { if (guestId) { guestId = ''; guestNick = ''; me = null; others = {}; curWorld = null; guestToldFull = false; } }
+  function guestTick() {
+    var c = C(), now = Date.now();
+    if (guestBusy || document.hidden || now < guestRetryAt) return;
+    guestBusy = true;
+    var p = GT.player, pos = c.standPos();
+    var go = guestId ? Promise.resolve() : c.api('/guest/hello', { method: 'POST', body: {} }).then(function (h) { guestId = h.guest; guestNick = h.nick; guestToldFull = false; });
+    go.then(function () {
+      return c.api('/guest/presence', { method: 'POST', body: { guest: guestId, x: pos.x, y: pos.y, dir: p.dir } });
+    }).then(function (r) {
+      if (c.state.account) return; // signed in meanwhile: the account loop takes over
+      curWorld = 'public'; me = r.me; online = r.online; meTag = '';
+      applyPlayers(r.players || []);
+      renderHead();
+    }, function (e) {
+      if (e && e.status === 404) guestId = ''; // expired: say hello again
+      else if (e && e.status === 429 && !guestId) { if (!guestToldFull) { guestToldFull = true; GT.toast($t('Desa sedang penuh tamu, coba lagi nanti.')); } guestRetryAt = Date.now() + 20000; }
+      else guestRetryAt = Date.now() + 5000;
+    }).then(function () { guestBusy = false; });
+  }
+  function applyPlayers(list) {
+    var now = performance.now(), keep = {};
+    list.forEach(function (q) {
+      keep[q.account] = 1;
+      var o = others[q.account];
+      if (!o) o = others[q.account] = { fx: q.x, fy: q.y, x: q.x, y: q.y, t0: now };
+      if (o.x !== q.x || o.y !== q.y) { o.fx = curX(o, now); o.fy = curY(o, now); o.x = q.x; o.y = q.y; o.t0 = now; }
+      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; o.account = q.account; o.party = !!q.party; o.seen = now;
+    });
+    Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
+  }
   function active() { var c = C(); return !!(c && c.state.account && c.state.mode !== 'offline' && c.state.mode !== 'loading' && !c.state.superseded); }
 
   /* ---------------------------------------------------------------- presence loop */
   function tick() {
+    if (guestMode()) { guestTick(); return; }
+    if (guestId) leaveGuest();
     if (busy || !active() || document.hidden) return;
     var c = C(), sc = GT.scene, p = GT.player, pos = c.standPos(), w = (GT.worldId && GT.worldId()) || 'public';
     if (curWorld !== w) { curWorld = w; others = {}; } // other players belong to the world they are in
@@ -43,15 +79,7 @@
       me = r.me; meTag = r.tag || meTag; online = r.online;
       named = r.named !== false; if (named && GT.setPlayerName) GT.setPlayerName(me);
       if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.setMine(r.me, r.tag, r.look, named);
-      var now = performance.now(), keep = {};
-      (r.players || []).forEach(function (q) {
-        keep[q.account] = 1;
-        var o = others[q.account];
-        if (!o) o = others[q.account] = { fx: q.x, fy: q.y, x: q.x, y: q.y, t0: now };
-        if (o.x !== q.x || o.y !== q.y) { o.fx = curX(o, now); o.fy = curY(o, now); o.x = q.x; o.y = q.y; o.t0 = now; }
-        o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.merchant = q.merchant; o.dir = q.dir; o.account = q.account; o.party = !!q.party; o.seen = now;
-      });
-      Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
+      applyPlayers(r.players || []);
       (r.chat || []).forEach(addLine);
       last = r.last || last;
       presenceFns.forEach(function (f) { try { f(r); } catch (e) { /* a listener must not break the loop */ } });
@@ -99,19 +127,20 @@
       var o = others[a], cx = curX(o, now);
       var at = GT.at(cx, curY(o, now)); // in 2.5D this follows the head at any camera turn
       var x = GT.snap(at.x + T / 2), y = GT.snap(at.y - 3 - (o.npc && Math.round(cx) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
-      ctx.font = '7px "Pixelify Sans", sans-serif';
-      var text = o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
-      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.npc ? 'accent' : o.party ? 'party' : 'dark', k: key(o.nick, o.tag) });
+      var small = o.guest || !!guestId, sz = small ? 5 : 7; // a guest's own tag is small and dim; a guest sees everyone's tags small
+      ctx.font = sz + 'px "Pixelify Sans", sans-serif';
+      var text = o.guest ? $t('Tamu') : o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
+      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.party ? 'party' : 'dark', size: sz, k: key(o.nick, o.tag) });
     });
     tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
     tags.forEach(function (t) {
       for (var n = 0; n < 4; n++) { var hit = placed.some(function (p) { return overlaps(p, t); }); if (!hit) break; t.y -= 9; }
       placed.push(t);
-      TH.label(ctx, t.text, t.x, t.y, { tone: t.tone });
+      TH.label(ctx, t.text, t.x, t.y, { tone: t.tone, size: t.size });
       var bt = fitBubble(ctx, t.k, now);
       if (bt) bubs.push({ x: t.x, y: t.y - 10, text: bt, tag: t });
     });
-    if (me) {
+    if (me && !guestId) {
       var p = GT.player, mt = fitBubble(ctx, key(me, meTag), now), ma = GT.at(p.x, p.y);
       if (mt) bubs.push({ x: GT.snap(ma.x + T / 2), y: GT.snap(ma.y - 4), text: mt, mine: true });
     }

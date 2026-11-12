@@ -5,8 +5,12 @@
 // Display names live in the Store `names` table (unique ignoring case); the Homeland invite editor resolves name#tag through it.
 import { HttpError } from './auth.ts';
 import { RateLimiter } from './relayer.ts';
+import { randomBytes } from 'node:crypto';
 
-export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean }
+/** A visitor who has not signed in: in memory only, public village only, no chat. `ip` is who created it. */
+export interface Guest extends Seen { id: string; ip: string; since: number }
+
+export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean; guest?: boolean }
 /** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
 export interface Npc { id: string; account: string; name: string; look: number; x: number; y: number; title: string }
 export const NPC_TAG = 'NPC';
@@ -44,6 +48,9 @@ export function defaultNick(account: string) { return `Player_${account.replace(
 
 export class Social {
   seen = new Map<string, Seen>();
+  /** Visitors without an account (id "g-<random>"). Set from the economy config by the app. */
+  guests = new Map<string, Guest>();
+  guestCfg = { max: 5, idleSecs: 30 };
   chat: Stored[] = [];
   seq = 0;
   chatLimiter = new RateLimiter(8, 600);
@@ -125,7 +132,8 @@ export class Social {
   }
   /** Other players outdoors in the same world within `radius` tiles who reported in the last 15 seconds. */
   nearby(account: string, world: string, radius = 30, maxAge = 15_000) {
-    const me = this.seen.get(account), now = this.now(), out: Seen[] = [], mates = new Set(this.mates(account));
+    const isGuest = this.guests.has(account);
+    const me = this.seen.get(account) ?? this.guests.get(account), now = this.now(), out: Seen[] = [], mates = new Set(isGuest ? [] : this.mates(account));
     if (world === 'public') {
       for (const n of this.npcs) {
         if (me && (Math.abs(n.x - me.x) > radius || Math.abs(n.y - me.y) > radius)) continue;
@@ -140,8 +148,45 @@ export class Social {
       if (!mate && me && (Math.abs(s.x - me.x) > radius || Math.abs(s.y - me.y) > radius)) continue;
       out.push(mate ? { ...s, party: true } : s);
     }
+    if (world === 'public') {
+      this.dropIdleGuests();
+      for (const g of this.guests.values()) {
+        if (g.id === account || now - g.t > maxAge || g.scene !== 'out') continue;
+        if (me && (Math.abs(g.x - me.x) > radius || Math.abs(g.y - me.y) > radius)) continue;
+        out.push({ account: g.account, world, nick: g.nick, tag: '', look: g.look, x: g.x, y: g.y, dir: g.dir, scene: 'out', t: g.t, guest: true });
+      }
+    }
     return out.sort((p, q) => (q.party ? 1 : 0) - (p.party ? 1 : 0)).slice(0, 60);
   }
+
+  /* ---- guests: visitors who have not signed in ---- */
+  dropIdleGuests() { const now = this.now(); for (const [id, g] of this.guests) if (now - g.t > this.guestCfg.idleSecs * 1000) this.guests.delete(id); }
+  /** A new guest, or 429 when `guestCfg.max` guests were seen in the last 15 s. */
+  guestHello(ip: string): { guest: string; nick: string } {
+    this.dropIdleGuests();
+    const now = this.now();
+    let live = 0; for (const g of this.guests.values()) if (now - g.t <= 15_000) live++;
+    if (live >= this.guestCfg.max) throw new HttpError(429, 'The village is full of guests.');
+    const id = 'g-' + randomBytes(9).toString('hex');
+    let nick = '';
+    do { nick = 'Tamu-' + (1000 + Math.floor(Math.random() * 9000)); } while ([...this.guests.values()].some((g) => g.nick === nick));
+    this.guests.set(id, { id, account: id, ip, since: now, world: 'public', nick, tag: '', look: Math.floor(Math.random() * 8), x: 0, y: 0, dir: 'down', scene: 'in', t: now } as Guest);
+    return { guest: id, nick };
+  }
+  /** A guest's position (public village only). The id must belong to `ip`; an unknown or expired id is 404 so the client says hello again. */
+  guestReport(id: unknown, ip: string, p: { x?: unknown; y?: unknown; dir?: unknown }, walkable?: (x: number, y: number) => boolean): Guest {
+    this.dropIdleGuests();
+    const g = typeof id === 'string' ? this.guests.get(id) : undefined;
+    if (!g || g.ip !== ip) throw new HttpError(404, 'Unknown guest.');
+    const x = Number(p.x), y = Number(p.y);
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 999 || y > 999) throw new HttpError(400, 'bad position');
+    g.t = this.now();
+    g.dir = typeof p.dir === 'string' && DIRS.has(p.dir) ? p.dir : 'down';
+    if (!walkable || walkable(x, y)) { g.x = x; g.y = y; g.scene = 'out'; } else g.scene = 'in';
+    return g;
+  }
+  guestList() { this.dropIdleGuests(); return [...this.guests.values()].map((g) => ({ guest: g.id, nick: g.nick, ip: g.ip, since: g.since })); }
+  dropGuest(id: string) { return this.guests.delete(id); }
   online() { const now = this.now(); let n = 0; for (const s of this.seen.values()) if (now - s.t <= 15_000) n++; return n; }
 
   /** A chat line: "/msg name text" (or /w) is private (to one player, any world), anything else is for everyone in `world`. */

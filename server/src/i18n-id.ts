@@ -43,6 +43,8 @@ export const EXACT: Record<string, string> = {
  "No consignments to collect.": "Tidak ada titipan yang bisa diambil.",
  "The Homeland world isn't active yet.": "Dunia Homeland belum aktif.",
  "This isn't your Homeland. Guests can only look around.": "Ini bukan Homeland-mu. Tamu hanya boleh jalan-jalan.",
+ "The village is full of guests.": "Desa sedang penuh tamu.",
+ "Unknown guest.": "Tamu tidak dikenal.",
  "Nothing is being built there.": "Tidak ada yang sedang dibangun di sana.",
  "This job can't go any faster.": "Pekerjaan ini tidak bisa lebih cepat lagi.",
  "Ask the owner to make you a Helper.": "Minta pemilik menjadikanmu Pembantu.",
