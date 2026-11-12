@@ -1,7 +1,7 @@
 // HTTP routes (node:http, no framework). Also serves the static client.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { MARKET_FEE_BPS, type Config } from './config.ts';
 import { MockChain, type Chain } from './chain.ts';
 import type { Store } from './db.ts';
@@ -617,7 +617,8 @@ export function createApp(deps: AppDeps) {
     let decoded: string;
     try { decoded = decodeURIComponent(rel); } catch { throw new HttpError(400, 'bad path'); }
     const file = normalize(join(clientRoot, decoded));
-    if (!file.startsWith(clientRoot)) throw new HttpError(403, 'forbidden');
+    // the trailing separator matters: a bare prefix check would let /../client-secret/ through next to client/
+    if (file !== clientRoot && !file.startsWith(clientRoot + sep)) throw new HttpError(403, 'forbidden');
     try {
       if (!(await stat(file)).isFile()) throw new Error();
       res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache' });

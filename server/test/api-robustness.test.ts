@@ -15,7 +15,7 @@ import { signedDelegateB64 } from './helpers.ts';
 const TOWN = 'town.gt.test';
 const P = 'p1.players.test';
 
-async function harness() {
+async function harness(clientDir = '.') {
   const econ = loadEcon();
   const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: TOWN, MERCHANT_PARENT_ACCOUNT_ID: 'gt.test' } as NodeJS.ProcessEnv);
   const chain = new MockChain();
@@ -32,7 +32,7 @@ async function harness() {
   game.onNewPlayer(P);
   const kp = near.KeyPair.fromRandom('ed25519');
   store.addSessionKey(kp.getPublicKey().toString(), P);
-  const { server } = createApp({ cfg, chain, store, game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+  const { server } = createApp({ cfg, chain, store, game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const port = (server.address() as { port: number }).port;
   const call = async (method: string, path: string, rawBody?: string) => {
@@ -197,4 +197,26 @@ test('a client on another origin listed in CORS_ORIGINS may call the API, others
     const otherPre = await fetch(`${base}/api/act`, { method: 'OPTIONS', headers: { origin: 'https://evil.example' } });
     assert.equal(otherPre.headers.get('access-control-allow-origin'), null);
   } finally { h.close(); }
+});
+
+test('static files never leak from a sibling folder whose name starts with the client folder', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const http = await import('node:http');
+  const root = mkdtempSync(join(tmpdir(), 'gt-static-'));
+  mkdirSync(join(root, 'client')); mkdirSync(join(root, 'client-secret'));
+  writeFileSync(join(root, 'client', 'index.html'), 'ok');
+  writeFileSync(join(root, 'client-secret', 'x.txt'), 'secret');
+  const h = await harness(join(root, 'client'));
+  // %2f survives URL parsing and decodes to ../ afterwards; raw http.get so nothing normalises it first
+  const get = (path: string) => new Promise<{ status: number; body: string }>((res, rej) => {
+    http.get({ host: '127.0.0.1', port: h.port, path }, (r) => { let b = ''; r.on('data', (c) => (b += c)); r.on('end', () => res({ status: r.statusCode ?? 0, body: b })); }).on('error', rej);
+  });
+  try {
+    assert.equal((await get('/')).body, 'ok');
+    const leak = await get('/..%2fclient-secret/x.txt');
+    assert.equal(leak.status, 403);
+    assert.notEqual(leak.body, 'secret');
+  } finally { h.close(); rmSync(root, { recursive: true, force: true }); }
 });
