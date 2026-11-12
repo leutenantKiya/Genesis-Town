@@ -87,3 +87,17 @@ test('RateLimiter: per-day cap and window expiry', () => {
   assert.equal(l.take('a', 3), false);
   assert.ok(l.take('a', 86_400_000 + 10));
 });
+
+test('RateLimiter: memory per key stays bounded by the minute limit, and finished keys are swept', () => {
+  const l = new RateLimiter(240, 100_000);
+  for (let i = 0; i < 5000; i++) l.take('p', i * 250); // 4 a second for about 21 minutes
+  assert.ok(l.hits.get('p')!.recent.length <= 240, 'only the last minute is kept as timestamps');
+  for (let i = 0; i < 50; i++) l.take(`ip${i}`, 1000);
+  assert.equal(l.hits.size, 51);
+  l.take('late', 86_400_000 + 5_000_000);
+  assert.deepEqual([...l.hits.keys()], ['late'], 'keys whose day ended are gone');
+  const m = new RateLimiter(2, 100);
+  assert.ok(m.take('a', 0) && m.take('a', 1));
+  assert.equal(m.take('a', 2), false, 'minute limit still holds');
+  assert.ok(m.take('a', 60_001), 'and frees up after a minute');
+});

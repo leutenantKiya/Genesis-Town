@@ -49,19 +49,35 @@ export function verifyDelegateSignature(sd: DecodedDelegate): boolean {
   return PublicKey.from(delegateKey(sd)).verify(new Uint8Array(msg), Uint8Array.from(sig));
 }
 
+/** Per-key limits: at most `perMinute` in any rolling minute and `perDay` per day window (counted from the key's first
+ *  hit of that day). Memory per key is bounded by `perMinute` timestamps plus a counter, never by `perDay` (presence
+ *  allows 100 000 a day), and keys whose day is over are swept out about once a minute. */
+interface Bucket { recent: number[]; dayStart: number; dayCount: number }
+const DAY_MS = 86_400_000;
 export class RateLimiter {
   perMinute: number;
   perDay: number;
-  hits = new Map<string, number[]>();
+  hits = new Map<string, Bucket>();
+  private lastSweep = 0;
   constructor(perMinute: number, perDay: number) { this.perMinute = perMinute; this.perDay = perDay; }
   take(key: string, now = Date.now()): boolean {
-    const day = 86_400_000;
-    const arr = (this.hits.get(key) ?? []).filter((t) => now - t < day);
-    const lastMinute = arr.filter((t) => now - t < 60_000).length;
-    if (lastMinute >= this.perMinute || arr.length >= this.perDay) { this.hits.set(key, arr); return false; }
-    arr.push(now);
-    this.hits.set(key, arr);
+    this.sweep(now);
+    let b = this.hits.get(key);
+    if (!b) { b = { recent: [], dayStart: now, dayCount: 0 }; this.hits.set(key, b); }
+    if (now - b.dayStart >= DAY_MS) { b.dayStart = now; b.dayCount = 0; }
+    b.recent = b.recent.filter((t) => now - t < 60_000);
+    if (b.recent.length >= this.perMinute || b.dayCount >= this.perDay) return false;
+    b.recent.push(now);
+    b.dayCount++;
     return true;
+  }
+  /** Drops keys whose day window is over and that had nothing in the last minute: their next hit starts fresh anyway. */
+  sweep(now = Date.now()): void {
+    if (now - this.lastSweep < 60_000) return;
+    this.lastSweep = now;
+    for (const [k, b] of this.hits) {
+      if (now - b.dayStart >= DAY_MS && b.recent.every((t) => now - t >= 60_000)) this.hits.delete(k);
+    }
   }
 }
 
