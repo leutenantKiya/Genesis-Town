@@ -11,6 +11,9 @@
  *                         mod.onMinimap(g, C) runs on the map sheet (M) after the player marker: g = its 2D context, C = canvas pixels per tile (2).
  *                         v2.3 draw hooks: mod.onDraw(ctx, camX, camY, T) runs after the world + night overlay; GT.charDraw = fn(ctx, npc|null(player), x, y, pal, dir, step)
  *                         -> true if it drew the character itself (combat.js: flash / KO pose). npc.bubble.shake = true shakes the speech bubble.
+ *                         mod.onDrawGround(ctx, camX, camY, T): on the ground, under characters, lit like the ground (crops, ripples).
+ *                         mod.onDrawMarks(ctx, camX, camY, T): same place, for markers the player must always see (the hoe's squares):
+ *                         in 2.5D they sit on an unlit sheet, so night, rain and the sun's shading never dim them. Return true when it drew.
  *  GT.modal(opts)         {title, body:Element|string(plain text, \n = new paragraph), actions:[{label,primary,id,disabled,onClick(handle,ev),close}],
  *                          wide, closable:false (no X/Esc), backdropClose:true, onClose(reason), onKey(e)->bool (called for keydown while on top)}
  *                         Clicking an action runs onClick and does NOT close the modal unless the action has no onClick, has close:true,
@@ -2041,7 +2044,16 @@ function render3d(pp){
   ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true, hidden:playerHidden, sit:!!sitSpot});
   callMods('onEntities', [ents, ctx, camX, camY, T]); // mods add {px, py, pal, dir, step, id}; their draw() is not called
   var outside = scene.kind === 'out', g = outside ? view3d.groundCtx(scene.map) : null;
-  if (g) { g.clearRect(0, 0, g.canvas.width, g.canvas.height); callMods('onDrawGround', [g, 0, 0, T]); }
+  if (g) {
+    g.clearRect(0, 0, g.canvas.width, g.canvas.height); callMods('onDrawGround', [g, 0, 0, T]);
+    var mk = view3d.marksCtx && view3d.marksCtx();
+    if (mk) {
+      mk.clearRect(0, 0, mk.canvas.width, mk.canvas.height);
+      var drew = false;
+      for (var mi = 0; mi < mods.length; mi++) if (callOne(mods[mi], 'onDrawMarks', [mk, 0, 0, T]) === true) drew = true;
+      view3d.marksDone(drew); // nothing drawn now or last time: no texture upload
+    }
+  }
   var feet = view3d.draw({ ents:ents, VW:VW, VH:VH, S:S, map:scene.map, hour:clockInfo().phase * 24,
     out: outScene.map, house: outside ? null : scene.house, key: outside ? null : scene.key });
   ovK = view3d.artScale(S);
@@ -2084,6 +2096,7 @@ function render(){
   }
   // ground-level mod drawing (crops, markers): under characters and canopies, darkened at night
   callMods('onDrawGround', [ctx, camX, camY, T]);
+  callMods('onDrawMarks', [ctx, camX, camY, T]);
   // entities sorted by y
   var ents = [];
   scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n}); });

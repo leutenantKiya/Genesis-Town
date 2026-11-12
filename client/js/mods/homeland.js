@@ -768,16 +768,20 @@
       ctx.fillStyle = '#6e4a2c'; ctx.fillRect(x, y, T, T);
       ctx.fillStyle = '#4e321c'; for (var k = 2; k < T; k += 3) ctx.fillRect(x + 1, y + k, T - 2, 1);
     });
-    if (!holdingHoe()) return;
-    var f = farmOf(), p = GT.player;
-    if (!f || p.x <= f.x0 - 2 || p.x >= f.x1 + 2 || p.y <= f.y0 - 2 || p.y >= f.y1 + 2) return; // only by the farm
+  }
+  // the hoe's squares: on the marks layer, which the 2.5D view never darkens (no sun shading, night or rain)
+  function onDrawMarks(ctx, camX, camY, T) {
+    if (!GT.scene || GT.scene.kind !== 'out' || !isHL(wid()) || !holdingHoe()) return false;
+    var f = farmOf(), p = GT.player, drew = false;
+    if (!f || p.x <= f.x0 - 2 || p.x >= f.x1 + 2 || p.y <= f.y0 - 2 || p.y >= f.y1 + 2) return false; // only by the farm
     for (var yy = f.y0 + 1; yy < f.y1; yy++) for (var xx = f.x0 + 1; xx < f.x1; xx++) {
       if (!hoeable(xx, yy)) continue;
       var sx = xx * T - camX, sy = yy * T - camY, reach = Math.abs(xx - p.x) + Math.abs(yy - p.y) <= 1;
-      // fairly opaque: in the 2.5D view this layer is lit like the ground, so at night or in rain it must still show
-      ctx.fillStyle = reach ? 'rgba(90,240,120,.6)' : 'rgba(90,240,120,.32)'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2);
+      ctx.fillStyle = reach ? 'rgba(90,240,120,.55)' : 'rgba(90,240,120,.28)'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2);
       ctx.strokeStyle = 'rgba(30,170,70,1)'; ctx.lineWidth = 1; ctx.strokeRect(sx + 1.5, sy + 1.5, T - 3, T - 3);
+      drew = true;
     }
+    return drew;
   }
 
   /* ---- the Mall in the market: gear for your own workers (Tukang and hired bots), bought from anywhere in town ---- */
@@ -1006,5 +1010,5 @@
     if (upBtn) { upBtn.hidden = true; upBtn.title = $t('Naikkan Balai Kota, buka wilayah, dan lihat pembangun'); }
     window.GT_HOME = { hoe: hoe, enter: enter, travel: travel, openPortal: openPortal, refresh: function () { return load(true); }, state: function () { return H; } };
   }
-  GT.register({ id: 'homeland', init: init, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw, onDrawGround: onDrawGround, onWorld: onWorld });
+  GT.register({ id: 'homeland', init: init, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw, onDrawGround: onDrawGround, onDrawMarks: onDrawMarks, onWorld: onWorld });
 })();

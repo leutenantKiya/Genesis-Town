@@ -187,7 +187,8 @@
 >   round action button (`#btnAct`, `GT_ACTBTN.add` for mod probes in `mods/settings.js`) appears with an icon and a verb
 >   only when something in front of you can be used; F (or the action button) opens the portal at once, the dizzy wait
 >   still works; the hoe's green squares show again in 2D and 2.5D (the client now reads the fence from
->   `GT.world.layout.farm`, like the server); merchant name tags sit right above their heads; island waterfalls pour far
+>   `GT.world.layout.farm`, like the server) and in 2.5D they sit on an unlit sheet (new mod hook `onDrawMarks`),
+>   so sun shading, night and rain never dim them; merchant name tags sit right above their heads; island waterfalls pour far
 >   below the island and fade, with a new streaked water texture; F (or the action button) gets you on the carousel
 >   again (it read a `GT.world.fun` the engine never had; now `GT.world.layout.fun`).
 >

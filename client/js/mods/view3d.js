@@ -24,6 +24,7 @@
   var mode = saved() || (phone() ? '2d' : '3d');
   var loading = null, ok = false, failed = false;
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
+  var mctx = null, mtex = null, mDue = false, mAny = false; // the unlit marks sheet (onDrawMarks: the hoe's squares)
   var actors = new Map(), gctx = null, gtex = null, gAt = 0, last = 0, sw = 0, sh = 0, VW = 1, VH = 1;
   var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null, yawWant = 0, zoom = 1;
   var ui = null, drag = null, took = 0, shownWorld = '', snapNext = true, last0 = 0;
@@ -152,6 +153,7 @@
     if (built === m) return;
     if (world) { world.dispose(); world = null; see = null; }
     if (gtex) { scene.remove(gtex.userData.mesh); gtex.userData.mesh.geometry.dispose(); gtex.userData.mesh.material.dispose(); gtex.dispose(); gtex = null; gctx = null; }
+    if (mtex) { scene.remove(mtex.userData.mesh); mtex.userData.mesh.geometry.dispose(); mtex.userData.mesh.material.dispose(); mtex.dispose(); mtex = null; mctx = null; mAny = false; }
     actors.forEach(function (a) { a.actor.dispose(); }); actors.clear();
     built = m; seasonKey = ''; snapNext = true; stumpSynced = false; stumpSt = null; // a new world: its stumps appear, none fall
     var L = m.layout;
@@ -165,6 +167,12 @@
     var mesh = new THREE.Mesh(new THREE.PlaneGeometry(L.w, L.h), GT3.mat({ map: gtex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
     mesh.rotation.x = -Math.PI / 2; mesh.position.set(L.w / 2, 0.02, L.h / 2); mesh.receiveShadow = true; mesh.renderOrder = 1;
     gtex.userData.mesh = mesh; scene.add(mesh);
+    // markers the player must always see go on a second sheet just above, unlit and unfogged: no sun shading, night or rain
+    var mc = GT3.canvas(L.w * T, L.h * T); mctx = mc.getContext('2d'); mctx.imageSmoothingEnabled = false;
+    mtex = GT3.tex(mc); mtex.minFilter = THREE.NearestFilter; mtex.generateMipmaps = false;
+    var mm = new THREE.Mesh(new THREE.PlaneGeometry(L.w, L.h), new THREE.MeshBasicMaterial({ map: mtex, transparent: true, depthWrite: false, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -3 }));
+    mm.rotation.x = -Math.PI / 2; mm.position.set(L.w / 2, 0.03, L.h / 2); mm.renderOrder = 2; mm.visible = false;
+    mtex.userData.mesh = mm; scene.add(mm);
   }
   function size(o) {
     var el = document.getElementById('cv'), w = el.clientWidth, h = el.clientHeight;
@@ -399,7 +407,7 @@
     // the room is bigger than its building, so neighbours (the Town Hall, trees) stand inside its footprint: the village
     // goes once the mist is half drawn, so they never show through the room; the sky colour turns into the mist
     var gone = k > 0.5;
-    world.group.visible = !gone; if (gtex) gtex.userData.mesh.visible = !gone;
+    world.group.visible = !gone; if (gtex) gtex.userData.mesh.visible = !gone; if (mtex) mtex.userData.mesh.visible = !gone && mAny;
     if (k > 0) { scene.background.lerp(mistCol, k); scene.fog.color.copy(scene.background); }
     lamp.position.set(r.ax + (r.room.w / 2 - r.lx) * r.s, 1.5 * r.s, r.az + (r.room.h / 2 - r.lz) * r.s);
     lamp.intensity = (2.5 + 9 * sky.night) * smooth(0.3, 1, P);
@@ -410,7 +418,7 @@
     r.outer.visible = false;
     if (r.g) { setAlpha(r.g.userData.mats, 1); r.g.visible = true; }
     mist.planes.forEach(function (q) { q.visible = false; }); mist.mat.opacity = 0;
-    if (world) world.group.visible = true; if (gtex) gtex.userData.mesh.visible = true;
+    if (world) world.group.visible = true; if (gtex) gtex.userData.mesh.visible = true; if (mtex) mtex.userData.mesh.visible = mAny;
     lamp.intensity = 0;
   }
 
@@ -454,8 +462,15 @@
       ensureWorld(m);
       var now = performance.now();
       if (now - gAt < 120) return null; // crops and ripples change slowly: ~8 uploads a second
-      gAt = now; gtex.needsUpdate = true;
+      gAt = now; gtex.needsUpdate = true; mDue = true;
       return gctx;
+    },
+    /** The unlit marks sheet, on the same beat as groundCtx (null between beats); then marksDone(drew). */
+    marksCtx: function () { if (!mDue || !mctx) return null; mDue = false; return mctx; },
+    marksDone: function (drew) {
+      if (!mtex) return;
+      if (drew || mAny) mtex.needsUpdate = true; // empty now and before: the cleared sheet needs no upload
+      mAny = !!drew; mtex.userData.mesh.visible = mAny && !!(gtex && gtex.userData.mesh.visible);
     },
     draw: function (o) {
       ensureWorld(o.out || o.map);
