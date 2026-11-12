@@ -112,6 +112,25 @@ test('generator v2 and later have a rumah lot per chunk and a rumahsakit lot, al
   }
 });
 
+test('every Homeland has a sawmill on a forest, a windmill on dry land and a storehouse next to the centre, all reachable', () => {
+  const ids = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
+  for (let s = 1; s <= 60; s++) {
+    const L0 = GH.generate(s, base), biome = (id: string) => L0.chunks.find((c: any) => c.id === id).biome;
+    const lot = (k: string) => L0.lots.find((l: any) => l.kind === k);
+    const saw = lot('penggergajian'), mill = lot('kincir'), store = lot('gudang');
+    assert.ok(saw && mill && store, `seed ${s} has all three lots`);
+    assert.equal(biome(saw.chunk), 'forest', `seed ${s} sawmill`);
+    assert.ok(['meadow', 'pond', 'rock', 'forest'].includes(biome(mill.chunk)) && mill.chunk !== saw.chunk, `seed ${s} windmill`);
+    assert.ok(['n', 'w', 'e', 's'].includes(store.chunk) && ['forest', 'meadow', 'rock'].includes(biome(store.chunk)), `seed ${s} storehouse`);
+    // everything built and open: each door is reachable, and no two lots overlap
+    const L = GH.generate(s, { open: ids.filter((i) => i !== 'c'), th: 5, built: L0.lots.map((l: any) => ({ kind: l.kind, lot: l.id })) });
+    const r = reach(L, L.spawn.x, L.spawn.y);
+    for (const l of [saw, mill, store]) assert.ok(r.has((l.door.y + 1) * L.w + l.door.x), `seed ${s} lot ${l.id} reachable`);
+    const cells = new Set<number>();
+    for (const l of L0.lots) for (let y = l.y; y < l.y + l.h; y++) for (let x = l.x; x < l.x + l.w; x++) { assert.ok(!cells.has(y * L.w + x), `seed ${s} lots overlap at ${x},${y}`); cells.add(y * L.w + x); }
+  }
+});
+
 test('a new Homeland (generator 3) has the player\'s own house beside the Town Hall, reachable from the spawn', () => {
   for (const seed of [1, 42, 12345, 987654]) {
     const L = GH.generate(seed, { ...base, gen: 3 });

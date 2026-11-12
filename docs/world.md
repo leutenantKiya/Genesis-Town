@@ -103,6 +103,7 @@ land (deepest furthest from an edge), pours water over edges as waterfalls and f
 Homeland row, with a `gen` version so later generator changes do not move existing worlds). The Town Hall stands in the
 middle chunk with a farm plot, a few trees and rocks, and the portal. Each of the eight outer chunks gets a biome
 (forest, rock, pond or shore); every seed has a forest and water next to the centre. Building lots are fixed per chunk. Generator version 2 (`GTHomeland.VERSION`) adds one `rumah` lot in every chunk (including the centre) and a `rumahsakit` lot in the centre; existing rows keep working. Generator 3 (new Homelands from 2026-11-11, `prog.gen`) adds the player's own house (`kind: 'house', own: true`, 3 x 3) west of the Town Hall, where the centre `rumah` lot was; that lot moves four rows down, its door opening through a gap in the farm's top fence. Worlds made before (gen 2) were given the house as well (owner's choice, 2026-11-11); a built centre Rumah Pekerja moves with its lot.
+Every world (any `gen`, 2026-11-12) also has the land's work buildings, after Kingshot's resource buildings: a `penggergajian` (sawmill) lot north-east of the cross in the first forest chunk, a `kincir` (windmill) lot north-east of the cross in the first meadow chunk (else the first pond, rock or other forest chunk, never the sea), and a `gudang` (storehouse) lot south-west of the cross in the first dry chunk next to the centre, with a path to the cross. Over 4000 seeds these lots change no layout attempt and no tile outside the lots, their one-tile margin and their paths, so nothing a player built moves.
 The browser and the server run the same file, so the server checks positions and gather tiles (`HomelandMap` in
 `worldmap.ts`). Locked chunks are drawn under fog.
 
@@ -123,6 +124,9 @@ All numbers are in `economy/config.json` -> `homeland`.
 | Restoran | 3 | nothing by itself: it keeps a pantry and feeds contractors (see below) |
 | Rumah Pekerja | 1 | beds and entertainment for worker bots (see below) |
 | Rumah Sakit | 2 | heals collapsed contractors (see below) |
+| Penggergajian (Sawmill) | 2, on its forest chunk (open) | wood, 2 per game hour, stores 8 |
+| Kincir Angin (Windmill) | 3, on its chunk (open) | wheat, 3 per game hour, stores 12 |
+| Gudang (Storehouse) | 3, next to the centre (open) | nothing by itself: every producing building stores 50% / 100% / 150% more by level (see below) |
 
 Buildings go on fixed lots. There is one default **Builder** (`builders: 1`, the Tukang who lives in the Town Hall); each hired Tukang adds one more. A contractor takes one job at a time (Town Hall, chunk, building, furniture or upgrade) and is shown at the construction with a hammer while busy. The server stores `ends_at` for the job and
 finishes it when the clock passes it; the client only draws it. Production is lazy: when you collect, the server works
@@ -180,6 +184,14 @@ Each bot lives in the house with a free bed and the best entertainment. Motivati
 Town Hall 2; 30 wood, 10 ore, 60 coin, 180 s; 3 levels (upgrades 30 wood, 15 ore, 100 coin, 240 s and 50 wood, 30 ore,
 200 coin, 480 s). A collapsed contractor is healed after `healGameHours` 3 / 2 / 1 by level, or after
 `sickGameHoursWithoutHospital` (24) without one; fatigue then resets to 0. Another free contractor can take jobs meanwhile.
+
+### Gudang
+
+Town Hall 3; 50 wood, 20 ore, 100 coin, 300 s; 3 levels (upgrades 80 wood, 40 ore, 200 coin, 600 s and 120 wood, 60 ore,
+400 coin, 1200 s), the same `upgrade` job as the Rumah Sakit. Every producing building (Kolam Ikan, Tambang,
+Penggergajian, Kincir Angin) holds `capacity x (1 + storeBonus)` before it stops: 1.5x, 2x, 2.5x. It raises what you can
+leave uncollected, not the rate, and collecting still counts against `caps.dailyGainPerItem`. The Town Hall window says
+what its next level opens, by name ("Level 3 unlocks: Restaurant, Windmill, Storehouse").
 
 ### Cosmetics
 

@@ -48,7 +48,7 @@
         props.lights(px === undefined ? L.w / 2 : px, pz === undefined ? L.h / 2 : pz);
         if (fun) fun.update(t, night, world.concert(hour));
         if (life) life.update(t, night);
-        buildings.forEach(function (g) { g.userData.glow(night * 1.4); });
+        buildings.forEach(function (g) { g.userData.glow(night * 1.4); if (g.userData.tick) g.userData.tick(t); });
       },
       setSeason: function (season, snowy) {
         if (S.setSeason) S.setSeason(season, snowy);

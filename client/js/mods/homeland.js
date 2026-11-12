@@ -29,8 +29,8 @@
     nw: ['n', 'w'], n: ['nw', 'c', 'ne'], ne: ['n', 'e'], w: ['nw', 'c', 'sw'], c: ['n', 'w', 'e', 's'],
     e: ['ne', 'c', 'se'], sw: ['w', 's'], s: ['sw', 'c', 'se'], se: ['s', 'e']
   };
-  var HOME_KINDS = { townhall: 1, kolam: 1, tambang: 1, restoran: 1, rumah: 1, rumahsakit: 1 };
-  var KIND_NAME = { kolam: $t('Kolam Ikan'), tambang: $t('Tambang'), restoran: $t('Restoran'), rumah: $t('Rumah Pekerja'), rumahsakit: $t('Rumah Sakit') };
+  var HOME_KINDS = { townhall: 1, kolam: 1, tambang: 1, restoran: 1, rumah: 1, rumahsakit: 1, penggergajian: 1, kincir: 1, gudang: 1 };
+  var KIND_NAME = { kolam: $t('Kolam Ikan'), tambang: $t('Tambang'), restoran: $t('Restoran'), rumah: $t('Rumah Pekerja'), rumahsakit: $t('Rumah Sakit'), penggergajian: $t('Penggergajian'), kincir: $t('Kincir Angin'), gudang: $t('Gudang') };
 
   var ROLE_NAME = { visitor: $t('Pengunjung'), helper: $t('Pembantu'), builder: $t('Tukang'), none: $t('Tidak boleh') };
   function roleSelect(value, withNone, onPick) {
@@ -250,7 +250,7 @@
   }
 
   function jobWhat(j) {
-    return j.kind === 'th' ? $t('Balai Kota naik level') : j.kind === 'chunk' ? $t('Membuka wilayah {0}', [chunkName(j.target)]) : j.kind === 'furniture' ? $t('Memasang {0}', [/:kasur$/.test(j.target) ? 'kasur' : 'hiburan']) : j.kind === 'upgrade' ? $t('Menaikkan Rumah Sakit') : $t('Membangun {0}', [(lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target]);
+    return j.kind === 'th' ? $t('Balai Kota naik level') : j.kind === 'chunk' ? $t('Membuka wilayah {0}', [chunkName(j.target)]) : j.kind === 'furniture' ? $t('Memasang {0}', [/:kasur$/.test(j.target) ? 'kasur' : 'hiburan']) : j.kind === 'upgrade' ? $t('Menaikkan {0}', [(lotById(j.target.split(':')[0]) && KIND_NAME[lotById(j.target.split(':')[0]).kind]) || $t('Bangunan')]) : $t('Membangun {0}', [(lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target]);
   }
   function jobLine(j) { return $t('{0} · sisa {1}', [jobWhat(j), clock(endMs(j) - Date.now())]); }
 
@@ -277,6 +277,12 @@
     return wrap;
   }
   /* ---- Balai Kota ---- */
+  /* what Town Hall level n opens: the buildings that need it (by name), then the farm plot and the regions */
+  function unlocksAt(n) {
+    var bs = H.next && H.next.buildings || {}, names = [];
+    Object.keys(bs).forEach(function (k) { if (bs[k].th === n) names.push(KIND_NAME[k] || bs[k].name); });
+    return names.length ? $t('Level {0} membuka: {1}. Juga petak kebun dan wilayah baru.', [n, names.join(', ')]) : $t('Level lebih tinggi membuka bangunan baru, petak kebun, dan wilayah.');
+  }
   function hallBody() {
     var wrap = $('div', 'gt-isl hl');
     if (!H) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
@@ -320,7 +326,7 @@
     if (!th) wrap.appendChild(stepBlock($t('Naikkan Balai Kota'), $t('Sudah di level tertinggi.'), null, false, null, null));
     else {
       var short = shortOf(th.cost), can = !busy && !short.length;
-      wrap.appendChild(stepBlock($t('Naikkan ke level {0}', [th.level]), $t('Level lebih tinggi membuka bangunan baru, petak kebun, dan wilayah.'), th, can, why, $t('Naikkan ke level {0}', [th.level]), function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
+      wrap.appendChild(stepBlock($t('Naikkan ke level {0}', [th.level]), unlocksAt(th.level), th, can, why, $t('Naikkan ke level {0}', [th.level]), function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
     }
 
     // neighbouring locked chunks
@@ -424,10 +430,11 @@
     wrap.appendChild(stats);
     var job = null;
     v.jobs.forEach(function (j) { if (j.kind === 'build' && j.target === lotId) job = j; });
-    if (!owner && b && def && (def.cooks || def.furniture || def.healGameHours)) { wrap.appendChild($('p', 'hl-p', $t('Bangunan milik pemilik dunia ini.'))); return wrap; }
+    if (!owner && b && def && (def.cooks || def.furniture || def.healGameHours || def.storeBonus)) { wrap.appendChild($('p', 'hl-p', $t('Bangunan milik pemilik dunia ini.'))); return wrap; }
     if (b && def && def.cooks) { wrap.appendChild(restoranBody(lotId)); return wrap; }
     if (b && def && def.furniture) { wrap.appendChild(houseBody(lotId)); return wrap; }
     if (b && def && def.healGameHours) { wrap.appendChild(hospitalBody(lotId)); return wrap; }
+    if (b && def && def.storeBonus) { wrap.appendChild(storeBody(lotId)); return wrap; }
     if (b) {
       var prod = def && def.produces ? itemName(def.produces) : $t('hasil');
       var box = cell($t('{0} · menghasilkan {1}', [name, prod]), b.stored + ' / ' + b.capacity);
@@ -450,7 +457,7 @@
     if (!why && busyJob()) why = $t('Pembangun sedang bekerja.');
     if (!why && short.length) why = $t('Kurang {0}.', [short.map(itemName).join(', ')]);
     var can = !why && (!sameLot || def.can);
-    var blurb = def.furniture ? $t('Satu kasur untuk satu pekerja. Tambah kasur supaya lebih banyak pekerja muat, tambah hiburan supaya mereka semangat. Perlu Balai Kota level {0}.', [def.th]) : def.healGameHours ? $t('Merawat Tukang yang tumbang karena kelelahan, makin tinggi levelnya makin cepat sembuh. Perlu Balai Kota level {0}.', [def.th]) : def.cooks ? $t('Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level {0}.', [def.th]) : $t('Menghasilkan {0} terus-menerus, simpan sampai {1}. Perlu Balai Kota level {2}.', [itemName(def.produces), def.capacity, def.th]);
+    var blurb = def.storeBonus ? $t('Semua bangunan penghasil menampung {0}% lebih banyak sebelum berhenti, sampai {1}% di level {2}. Perlu Balai Kota level {3}.', [Math.round(def.storeBonus[0] * 100), Math.round(def.storeBonus[def.storeBonus.length - 1] * 100), def.maxLevel || def.storeBonus.length, def.th]) : def.furniture ? $t('Satu kasur untuk satu pekerja. Tambah kasur supaya lebih banyak pekerja muat, tambah hiburan supaya mereka semangat. Perlu Balai Kota level {0}.', [def.th]) : def.healGameHours ? $t('Merawat Tukang yang tumbang karena kelelahan, makin tinggi levelnya makin cepat sembuh. Perlu Balai Kota level {0}.', [def.th]) : def.cooks ? $t('Memasak ikan bakar dan memberi makan Tukang yang lelah dari lemarinya. Perlu Balai Kota level {0}.', [def.th]) : $t('Menghasilkan {0} terus-menerus, simpan sampai {1}. Perlu Balai Kota level {2}.', [itemName(def.produces), def.capacity, def.th]);
     if (!owner) blurb = $t('Dibayar dari tasmu; bangunannya milik {0}.', [hostName()]) + ' ' + blurb;
     wrap.appendChild(stepBlock($t('Bangun {0}', [def.name || name]), blurb,
       def, can, why, $t('Bangun · {0}', [secsLine(def.secs)]), function () { run({ action: 'build', kind: 'build', target: lotId }); }, true));
@@ -493,6 +500,26 @@
       var short = shortOf(hp.next.cost), why = busyJob() ? $t('Pembangun sedang bekerja.') : short.length ? $t('Kurang {0}.', [short.map(itemName).join(', ')]) : null;
       if (why) box.appendChild($('p', 'hl-why', why));
       acts(box).appendChild(btn($t('Naikkan Rumah Sakit · {0}', [secsLine(hp.next.secs)]), function () { run({ action: 'build', kind: 'upgrade', target: lotId }); }, 'primary', !!why || isBusy()));
+    } else box.appendChild($('p', 'chain-dim', $t('Sudah level tertinggi.')));
+    return box;
+  }
+  /* ---- Gudang: its level, the capacity bonus it gives, the next level ---- */
+  function storeBody(lotId) {
+    var sh = H.storehouse;
+    if (!sh) { var l = cell($t('Gudang')); l.appendChild($('p', null, $t('Memuat…'))); return l; }
+    var box = cell($t('Gudang'), $t('level {0} dari {1}', [sh.level, sh.maxLevel]));
+    box.appendChild($('p', 'hl-p', $t('Semua bangunan penghasil menampung {0}% lebih banyak sebelum berhenti.', [Math.round(sh.bonus * 100)])));
+    var made = (H.built || []).filter(function (b) { return b.capacity > 0 && b.kind !== 'gudang'; });
+    made.forEach(function (b) {
+      var r = $('div', 'hl-row'); r.appendChild($('span', 'hl-grow', KIND_NAME[b.kind] || b.kind)); r.appendChild($('b', 'hl-n', b.stored + ' / ' + b.capacity));
+      box.appendChild(r); box.appendChild(bar(b.stored, b.capacity, b.stored >= b.capacity ? 'full' : ''));
+    });
+    if (sh.next) {
+      box.appendChild($('p', 'hl-k', $t('Naik ke level {0}: +{1}%', [sh.level + 1, Math.round((sh.nextBonus || 0) * 100)])));
+      box.appendChild(costRow(sh.next.cost, sh.next.secs));
+      var short = shortOf(sh.next.cost), why = busyJob() ? $t('Pembangun sedang bekerja.') : short.length ? $t('Kurang {0}.', [short.map(itemName).join(', ')]) : null;
+      if (why) box.appendChild($('p', 'hl-why', why));
+      acts(box).appendChild(btn($t('Naikkan Gudang · {0}', [secsLine(sh.next.secs)]), function () { run({ action: 'build', kind: 'upgrade', target: lotId }); }, 'primary', !!why || isBusy()));
     } else box.appendChild($('p', 'chain-dim', $t('Sudah level tertinggi.')));
     return box;
   }

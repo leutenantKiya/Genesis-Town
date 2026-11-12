@@ -364,7 +364,7 @@ function drawLots(g, m){
     var sx = l.door.x*T + 4, sy = l.door.y*T + 3;
     g.fillStyle = '#3d2610'; g.fillRect(sx + 2, sy + 4, 1, 4);
     g.fillStyle = '#2a2430'; g.fillRect(sx - 1, sy - 1, 7, 6); g.fillStyle = '#f2e2c4'; g.fillRect(sx, sy, 5, 4);
-    g.fillStyle = l.kind === 'kolam' ? '#3d7fc2' : l.kind === 'tambang' ? '#6a6678' : '#c8502e'; g.fillRect(sx + 1, sy + 1, 3, 2);
+    g.fillStyle = l.kind === 'kolam' ? '#3d7fc2' : l.kind === 'tambang' ? '#6a6678' : l.kind === 'penggergajian' ? '#4f7a3a' : l.kind === 'kincir' ? '#e0a060' : l.kind === 'gudang' ? '#b4523c' : '#c8502e'; g.fillRect(sx + 1, sy + 1, 3, 2);
   });
 }
 /** The portal: a small stone arch with a swirling oval (the mod adds a shimmer on top). Public village and Homelands both have one;
@@ -648,9 +648,9 @@ function tryWorld(seed, att){
   return m;
 }
 
-var HOME_NAMES = { townhall:$t('Balai Kota'), kolam:$t('Kolam Ikan'), tambang:$t('Tambang'), restoran:$t('Restoran'), rumah:$t('Rumah Pekerja'), rumahsakit:$t('Rumah Sakit') };
-var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1, townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1 };
-var HOME_KINDS = { townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1 };
+var HOME_NAMES = { townhall:$t('Balai Kota'), kolam:$t('Kolam Ikan'), tambang:$t('Tambang'), restoran:$t('Restoran'), rumah:$t('Rumah Pekerja'), rumahsakit:$t('Rumah Sakit'), penggergajian:$t('Penggergajian'), kincir:$t('Kincir Angin'), gudang:$t('Gudang') };
+var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1, townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1, penggergajian:1, kincir:1, gudang:1 };
+var HOME_KINDS = { townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1, penggergajian:1, kincir:1, gudang:1 };
 function layoutChunk(L, x, y){ return homeLayout && window.GTHomeland ? GTHomeland.chunkOf(L, x, y) : GTVillage.chunkOf(L, x, y); }
 function fromLayout(L){
   var R = makeR((L.seed ^ 0x9e3779b9) >>> 0), x, y, i;

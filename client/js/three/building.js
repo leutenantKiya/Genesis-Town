@@ -6,10 +6,12 @@
  * The front wall carries the game's own 2D facade (door, windows, sign, awning: SPRITES.drawPublic / drawHouse), cut
  * below the painted roof band. Side and back walls, the gabled roof and the gables are generated from the same style
  * colours. By kind: a bell tower (church), a flag (hall, townhall), a cloth awning (warung, restoran), a chimney
- * (house styles that have one). Windows glow at night (glow(0..1)).
+ * (house styles that have one), four sails that turn on the front gable (kincir, the windmill), a pile of logs by the
+ * east wall (penggergajian, the sawmill), stacked crates by the door (gudang, the storehouse). Windows glow at night
+ * (glow(0..1)); a building with moving parts turns them in tick(t).
  *
  * Returns a THREE.Group with userData: { building: b, box (THREE.Box3, world space), mats (every material, for the
- * see-through fade), glow(k), door: {x, z} }.
+ * see-through fade), glow(k), tick(t) or null, door: {x, z} }.
  */
 (function () {
   'use strict';
@@ -75,7 +77,7 @@
 
     /* --- the 2D facade, cut below its painted roof band */
     var art = GT3.canvas(pw, ph), ag = art.getContext('2d');
-    if (pub) S.drawPublic(ag, kind, 0, 0, W, D); else S.drawHouse(ag, 0, 0, b.style | 0, false);
+    if (pub) S.drawPublic(ag, kind, 0, 0, W, D, true); else S.drawHouse(ag, 0, 0, b.style | 0, false);
     var inset = pub ? 1 : 2, roofPx = pub ? Math.round(ph * 0.38) + 2 : 16;
     var wallPx = ph - roofPx, Hw = wallPx * PX;
     var face = GT3.crop(art, inset, roofPx, pw - 2 * inset, wallPx);
@@ -139,6 +141,37 @@
       var ay = Hw - 2 * PX, awn = new THREE.Mesh(GT3.quad([x0, ay - 5 * PX, z1 + 6 * PX], [x1, ay - 5 * PX, z1 + 6 * PX], [x1, ay, z1 + 0.2 * PX], [x0, ay, z1 + 0.2 * PX]), M({ map: atex, side: THREE.DoubleSide }));
       extras.push(awn);
     }
+    var rotor = null;
+    if (kind === 'kincir') {
+      // the sails: a spar and a lattice cloth each, on a hub at the front gable; they turn in tick(t)
+      var L = 1.3, blades = [];
+      for (var q = 0; q < 4; q++) {
+        var rz = q * Math.PI / 2;
+        blades.push({ geo: new THREE.BoxGeometry(1.4 * PX, L, 1.2 * PX), matrix: new THREE.Matrix4().makeRotationZ(rz).multiply(GT3.xform(0, L / 2, 0)), color: '#5a3a1e' });
+        blades.push({ geo: new THREE.BoxGeometry(4.2 * PX, L * 0.72, 0.5 * PX), matrix: new THREE.Matrix4().makeRotationZ(rz).multiply(GT3.xform(2.9 * PX, L * 0.6, -0.4 * PX)), color: function (n) { return n.z > 0.5 ? '#f2ead8' : '#d8ccb0'; } });
+        for (var r = 0; r < 4; r++) blades.push({ geo: new THREE.BoxGeometry(4.6 * PX, 0.5 * PX, 1 * PX), matrix: new THREE.Matrix4().makeRotationZ(rz).multiply(GT3.xform(2.9 * PX, L * (0.3 + r * 0.19), 0.2 * PX)), color: '#7a5030' });
+      }
+      blades.push({ geo: new THREE.CylinderGeometry(2.2 * PX, 2.2 * PX, 3 * PX, 10), matrix: GT3.xform(0, 0, 0, 1, 1, 1, 0, Math.PI / 2), color: '#c8a030' });
+      rotor = new THREE.Mesh(GT3.merge(blades), M({ vertexColors: true }));
+      rotor.position.set((x0 + x1) / 2, Hw + rh * 0.7, z1 + o + 2 * PX);
+      trim.push(box(2 * PX, 2 * PX, 4 * PX, (x0 + x1) / 2, Hw + rh * 0.7, z1 + o, '#5a3a1e')); // the axle out of the gable
+      extras.push(rotor);
+    }
+    if (kind === 'penggergajian') {
+      // a log pile against the east wall: three below, two on top, end grain light
+      var lr = 2.2 * PX, ll = D * 0.62, lx = x1 + lr + 0.5 * PX, lz = z1 - ll / 2 - 2 * PX;
+      var grain = function (n) { return Math.abs(n.z) > 0.5 ? '#e0bc80' : '#7a4a26'; }; // the cut ends face along z once laid down
+      [[0, 0], [1, 0], [2, 0], [0.5, 1], [1.5, 1]].forEach(function (p) {
+        trim.push({ geo: new THREE.CylinderGeometry(lr, lr, ll, 8), matrix: GT3.xform(lx + p[0] * lr * 2, lr + p[1] * lr * 1.7, lz, 1, 1, 1, 0, Math.PI / 2), color: grain });
+      });
+    }
+    if (kind === 'gudang') {
+      // crates by the door: two on the ground at the west corner, one on top
+      var cs = 5 * PX, crate = function (n) { return n.y > 0.5 ? '#e0b070' : Math.abs(n.x) > 0.5 ? '#a8723a' : '#c8904c'; };
+      trim.push({ geo: new THREE.BoxGeometry(cs, cs, cs), matrix: GT3.xform(x0 + cs * 0.7, cs / 2, z1 + cs * 0.7), color: crate });
+      trim.push({ geo: new THREE.BoxGeometry(cs, cs, cs), matrix: GT3.xform(x0 + cs * 1.8, cs / 2, z1 + cs * 0.6, 1, 1, 1, 0.2), color: crate });
+      trim.push({ geo: new THREE.BoxGeometry(cs * 0.85, cs * 0.85, cs * 0.85), matrix: GT3.xform(x0 + cs * 1.2, cs * 1.42, z1 + cs * 0.65, 1, 1, 1, -0.3), color: crate });
+    }
     var trimMesh = new THREE.Mesh(GT3.merge(trim), M({ vertexColors: true }));
 
     [front, walls, roof, trimMesh].concat(extras).forEach(function (m) { m.castShadow = true; m.receiveShadow = true; group.add(m); });
@@ -148,7 +181,8 @@
       box: new THREE.Box3(new THREE.Vector3(b.x + x0, 0, b.y + z0), new THREE.Vector3(b.x + x1, ridge, b.y + z1)),
       door: { x: b.dx + 0.5, z: b.dy + 1 },
       height: ridge,
-      glow: function (v) { frontMat.emissiveIntensity = v; }
+      glow: function (v) { frontMat.emissiveIntensity = v; },
+      tick: rotor ? function (t) { rotor.rotation.z = -t * 0.8; } : null
     };
     return group;
   };

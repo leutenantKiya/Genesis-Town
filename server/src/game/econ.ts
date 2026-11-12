@@ -17,7 +17,7 @@ export interface SeasonDef { yield: Record<string, number>; demand: Record<strin
 export type Cost = Record<string, number>;
 export interface TownhallStep { level: number; cost: Cost; secs: number }
 export interface ChunkStep { n: number; th: number; cost: Cost; secs: number }
-export interface BuildingDef { name: string; th: number; cost: Cost; secs: number; produces?: string; perGameHour?: number; capacity?: number; cooks?: string; needsChunk?: boolean; furniture?: Record<string, FurnitureDef>; maxLevel?: number; healGameHours?: number[]; upgrade?: Array<{ cost: Cost; secs: number }> }
+export interface BuildingDef { name: string; th: number; cost: Cost; secs: number; produces?: string; perGameHour?: number; capacity?: number; cooks?: string; needsChunk?: boolean; furniture?: Record<string, FurnitureDef>; maxLevel?: number; healGameHours?: number[]; upgrade?: Array<{ cost: Cost; secs: number }>; storeBonus?: number[] }
 export interface FurnitureDef { name: string; max: number; names?: string[]; levels: Array<{ cost: Cost; secs: number }> }
 export interface ForageDef { items: string[]; perGameHour: number; capacity: number; winterFactor: number }
 export interface BotDef { name: string; rarity: string; price: number; max: number; th?: number; effect: { builders?: number; farmGrowFactor?: number; fishRate?: number; woodBonus?: number; chef?: boolean; forage?: ForageDef } }

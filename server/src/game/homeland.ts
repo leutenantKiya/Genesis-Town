@@ -38,6 +38,7 @@ export interface HomelandView {
   houses: Array<{ lot: string; beds: number; used: number; kasur: number; kasurMax: number; hiburan: number; hiburanMax: number; hiburanName: string | null; motivation: number; nextKasur: { cost: Cost; secs: number } | null; nextHiburan: { cost: Cost; secs: number; name: string | null } | null }>;
   beds: { total: number; used: number };
   hospital: { lot: string; level: number; maxLevel: number; healGameHours: number; next: { cost: Cost; secs: number } | null } | null;
+  storehouse: { lot: string; level: number; maxLevel: number; bonus: number; nextBonus: number | null; next: { cost: Cost; secs: number } | null } | null;
   restoran: { pantry: number; pantryMax: number; nextServeAt: number } | null;
   forage: { stored: Record<string, number>; capacity: number } | null;
   cook: { recipe: { inputs: Record<string, number>; output: string }; can: boolean; why: string | null } | null;
@@ -217,6 +218,26 @@ export class Homelands {
     const def = this.cfg.buildings[b.kind];
     return { lot: b.lot, level: Math.min(def.maxLevel ?? 1, Math.max(1, this.d.gs.furnitureLevel(account, b.lot))), def };
   }
+  /** A built building that levels up (the Hospital, the Storehouse): its lot, level 1..maxLevel and def. */
+  private leveled(account: string, lot: string): { lot: string; level: number; def: BuildingDef } | null {
+    const b = this.d.gs.homelandBuildings(account).find((x) => x.lot === lot);
+    const def = b && Object.hasOwn(this.cfg.buildings, b.kind) ? this.cfg.buildings[b.kind] : undefined;
+    if (!b || !def?.upgrade) return null;
+    return { lot: b.lot, level: Math.min(def.maxLevel ?? 1, Math.max(1, this.d.gs.furnitureLevel(account, b.lot))), def };
+  }
+  /** The Storehouse (Gudang): every producing building holds this much more before it stops (0 without one). */
+  private storehouse(account: string): { lot: string; level: number; def: BuildingDef } | null {
+    const b = this.d.gs.homelandBuildings(account).find((x) => Object.hasOwn(this.cfg.buildings, x.kind) && this.cfg.buildings[x.kind].storeBonus);
+    return b ? this.leveled(account, b.lot) : null;
+  }
+  private storeBonus(account: string): number {
+    const s = this.storehouse(account);
+    return s ? s.def.storeBonus![s.level - 1] ?? 0 : 0;
+  }
+  /** What a producing building holds before it stops: its capacity, raised by the Storehouse. */
+  private capOf(account: string, def: BuildingDef): number {
+    return Math.floor((def.capacity ?? 0) * (1 + this.storeBonus(account)) + 1e-9);
+  }
   /** Game hours a collapsed contractor stays sick: the hospital level decides, no hospital is the long way. */
   private sickHours(account: string): number {
     const h = this.hospital(account);
@@ -249,7 +270,7 @@ export class Homelands {
   private storedOf(account: string, def: BuildingDef, lastCollect: number): number {
     if (!def.produces) return 0;
     const gh = Math.max(0, this.now() - lastCollect) / this.msPerHour();
-    return Math.min(def.capacity ?? 0, Math.floor(this.rateOf(account, def) * gh + 1e-9));
+    return Math.min(this.capOf(account, def), Math.floor(this.rateOf(account, def) * gh + 1e-9));
   }
 
   /* ------------------------------------------------------------ Pemburu (forage) */
@@ -430,7 +451,7 @@ export class Homelands {
     checkGain(account, def.produces, stored); // throws on a full daily cap; nothing has changed yet
     const world = homeWorld(gs.homelandOf(account)!.id);
     gs.add(day, account, def.produces, stored, 'collect', actor === account ? `${world}:${lot}` : `coop:${actor}`);
-    const full = stored >= (def.capacity ?? 0);
+    const full = stored >= this.capOf(account, def);
     gs.setHomelandCollect(account, lot, full ? this.now() : Math.round(b.last_collect + (stored / this.rateOf(account, def)) * this.msPerHour()));
     return { toast: `+${stored} ${this.name(def.produces)}`, tags: [def.produces], gained: { [def.produces]: stored } };
   }
@@ -491,11 +512,14 @@ export class Homelands {
       const label = fd.names ? fd.names[lvl] ?? fd.name : `${fd.name} ke-${lvl + 2}`;
       plan = { cost: fd.levels[lvl].cost, secs: fd.levels[lvl].secs, label, job: same(target) };
     } else if (kind === 'upgrade') {
-      const h = this.hospital(account);
-      if (!h || h.lot !== String(target)) throw new HttpError(409, 'Build the Hospital first.');
+      const lot = this.map(row).layout.lots.find((l) => l.id === String(target));
+      const ldef = lot && Object.hasOwn(this.cfg.buildings, lot.kind) ? this.cfg.buildings[lot.kind] : undefined;
+      if (!lot || !ldef?.upgrade) throw new HttpError(409, 'That building does not level up.');
+      const h = this.leveled(account, lot.id);
+      if (!h) throw new HttpError(409, `Build the ${ldef.name} first.`);
       const step = h.def.upgrade?.[h.level - 1];
-      if (h.level >= (h.def.maxLevel ?? 1) || !step) throw new HttpError(409, 'The Hospital is already at the highest level.');
-      plan = { cost: step.cost, secs: step.secs, label: `Hospital level ${h.level + 1}`, job: same(`${h.lot}:up`) };
+      if (h.level >= (h.def.maxLevel ?? 1) || !step) throw new HttpError(409, `The ${h.def.name} is already at the highest level.`);
+      plan = { cost: step.cost, secs: step.secs, label: `${h.def.name} level ${h.level + 1}`, job: same(`${h.lot}:up`) };
     } else throw new HttpError(400, 'Unknown building type.');
     for (const [t, n] of Object.entries(plan.cost)) {
       const have = gs.balance(payer, t);
@@ -575,7 +599,7 @@ export class Homelands {
       id: row.id, world: homeWorld(row.id), seed: row.seed, gen: row.gen, th: row.th, open: row.open,
       built: built.map((b) => {
         const def = this.cfg.buildings[b.kind];
-        return { lot: b.lot, kind: b.kind, stored: def ? this.storedOf(account, def, b.last_collect) : 0, capacity: def?.capacity ?? 0 };
+        return { lot: b.lot, kind: b.kind, stored: def ? this.storedOf(account, def, b.last_collect) : 0, capacity: def?.produces ? this.capOf(account, def) : def?.capacity ?? 0 };
       }),
       jobs: jobs.map((j) => ({ target: j.target, kind: j.kind, ends_at: j.ends_at })),
       builders: { total: this.builderSlots(account), busy: jobs.length },
@@ -588,6 +612,11 @@ export class Homelands {
       cosmetics: this.cfg.cosmetics ?? {},
       houses: this.houseLots(account).map((lot) => this.houseView(account, lot)),
       beds: this.bedInfo(account),
+      storehouse: (() => {
+        const h = this.storehouse(account); if (!h) return null;
+        const st = h.def.upgrade?.[h.level - 1], up = h.level < (h.def.maxLevel ?? 1) && st;
+        return { lot: h.lot, level: h.level, maxLevel: h.def.maxLevel ?? 1, bonus: h.def.storeBonus![h.level - 1] ?? 0, nextBonus: up ? h.def.storeBonus![h.level] ?? null : null, next: up ? { cost: st.cost, secs: st.secs } : null };
+      })(),
       hospital: (() => { const h = this.hospital(account); if (!h) return null; const st = h.def.upgrade?.[h.level - 1]; return { lot: h.lot, level: h.level, maxLevel: h.def.maxLevel ?? 1, healGameHours: h.def.healGameHours![h.level - 1], next: h.level < (h.def.maxLevel ?? 1) && st ? { cost: st.cost, secs: st.secs } : null }; })(),
       restoran: this.restoranLot(account) ? { pantry: this.pantryOf(account), pantryMax: this.cfg.restoran.pantryMax, nextServeAt: (gs.pantryOf(account)?.tick_at ?? this.now()) + Math.round(this.msPerHour() * Math.min(1, this.serveInterval(account))) } : null,
       forage: (() => { const f = this.forageStored(account); return f ? { stored: f.stored, capacity: f.capacity } : null; })(),

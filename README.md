@@ -153,6 +153,11 @@
 >   house lot per chunk and a hospital lot. Numbers: `economy/config.json` -> `homeland`; details: [docs/world.md](docs/world.md);
 >   plan: [phase C](docs/superpowers/plans/2026-11-09-homeland-phase-c.md).
 >
+> - **Work buildings** (2026-11-12, after Kingshot's resource buildings): every Homeland has a **Penggergajian** (sawmill,
+>   wood) on a forest island, a **Kincir Angin** (windmill, wheat) with sails that turn in the 2.5D view, and a **Gudang**
+>   (storehouse, 3 levels) that lets every producing building hold 50% to 150% more. The Town Hall window names what its
+>   next level opens. Off-chain like the other buildings; details: [docs/world.md](docs/world.md).
+>
 > - **The season is the look** ([DESIGN.md](DESIGN.md)): a dark HUD tray with a band in the season's colour, cream
 >   paper windows with a thick ink outline and a header in the season's tone, one accent colour per season on the next
 >   thing to do (blossom pink, sea teal, pumpkin, ice blue), and the world's grass, trees, water and light to match.

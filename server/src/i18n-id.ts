@@ -99,6 +99,9 @@ export const EXACT: Record<string, string> = {
  "That region isn't open yet.": "Wilayah itu belum dibuka.",
  "Build the Workers' House first.": "Bangun Rumah Pekerja dulu.",
  "Build the Hospital first.": "Bangun Rumah Sakit dulu.",
+ "Build the Storehouse first.": "Bangun Gudang dulu.",
+ "The Storehouse is already at the highest level.": "Gudang sudah level tertinggi.",
+ "That building does not level up.": "Bangunan itu tidak bisa naik level.",
  "The Hospital is already at the highest level.": "Rumah Sakit sudah level tertinggi.",
  "Unknown building type.": "Jenis bangunan tidak dikenal.",
  "Lot not available.": "Lahan tidak tersedia.",
@@ -357,6 +360,10 @@ export const PATTERNS: Array<[string, string]> = [
  [
   "Hospital level {0}",
   "Rumah Sakit level {0}"
+ ],
+ [
+  "Storehouse level {0}",
+  "Gudang level {0}"
  ],
  [
   "{0}: the builder starts working (paid by you).",
@@ -645,6 +652,9 @@ export const NAMES: Record<string, string> = {
  "Bed": "Kasur",
  "Entertainment": "Hiburan",
  "Hospital": "Rumah Sakit",
+ "Sawmill": "Penggergajian",
+ "Windmill": "Kincir Angin",
+ "Storehouse": "Gudang",
  "Wild Boar": "Babi hutan",
  "Mine Bat": "Kelelawar tambang"
 };

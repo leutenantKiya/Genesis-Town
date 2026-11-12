@@ -11,6 +11,9 @@
  * engine), `lots` and `spots`.
  *
  * Chunk ids, row-major: nw n ne / w c e / sw s se. Lot ids are `<kind>-<chunk>`, e.g. 'kolam-c', 'tambang-ne'.
+ * Outer chunks also carry the work buildings of their land: a Penggergajian (sawmill) in the first forest, a Kincir Angin
+ * (windmill) in the first meadow (else the first other dry chunk), both north-east of the chunk's cross, and a Gudang
+ * (storehouse) south-west of the cross in the first dry chunk next to the centre.
  * A lot is a 3 x 3 ground area; its door is the bottom-middle tile, and the tile below the door is the way in.
  *
  * Works as a classic browser script (window.GTHomeland) and as an ES module side effect in Node (globalThis.GTHomeland).
@@ -29,6 +32,9 @@
     "Restoran": "Restaurant",
     "Rumah Pekerja": "Workers' House",
     "Rumah Sakit": "Hospital",
+    "Penggergajian": "Sawmill",
+    "Kincir Angin": "Windmill",
+    "Gudang": "Storehouse",
     "Balai Kota": "Town Hall",
     "Rumahmu": "Your House",
     "Pusat Desa": "Village Center"
@@ -40,7 +46,8 @@
   var ORTHO = ['n', 'w', 'e', 's'];
   var SOLID = { tree: 1, fence: 1, sign: 1, mailbox: 1, rock: 1, water: 1, bush: 1, barrel: 1, crate: 1, stall: 1, lamp: 1, void: 1 };
   var NAMES = { forest: $t('Hutan'), rock: $t('Bukit Batu'), pond: $t('Kolam'), sea: $t('Pantai'), meadow: $t('Padang') };
-  var KIND_NAMES = { kolam: $t('Kolam Ikan'), tambang: $t('Tambang'), restoran: $t('Restoran'), rumah: $t('Rumah Pekerja'), rumahsakit: $t('Rumah Sakit') };
+  var KIND_NAMES = { kolam: $t('Kolam Ikan'), tambang: $t('Tambang'), restoran: $t('Restoran'), rumah: $t('Rumah Pekerja'), rumahsakit: $t('Rumah Sakit'),
+    penggergajian: $t('Penggergajian'), kincir: $t('Kincir Angin'), gudang: $t('Gudang') };
   var MAX_PLOTS = 6;
   var FIELD = [3, 2]; // plots across x down: the fence always encloses the biggest field (6 plots)
 
@@ -134,6 +141,20 @@
     if (rockId) addLot('tambang', rockId, 2, 2);
     // one Rumah Pekerja per outer chunk, beside the chunk's cross path (lot x 10..12, door row 12)
     CHUNKS.forEach(function (cid) { if (cid !== 'c') addLot('rumah', cid, rockId === cid ? 10 : 10, 9); });
+    // work buildings by the land they stand on (lot x 10..12, y 2..4 north-east of the cross, or x 2..4, y 10..12
+    // south-west of it): the sawmill in a forest, the windmill on a meadow (else a pond, rock or other forest chunk,
+    // never the sea), the storehouse next to the centre on dry land (never the pond's corner, never the sea)
+    function firstOf(list, kinds, not) {
+      for (var k = 0; k < kinds.length; k++) for (var q = 0; q < list.length; q++) if (list[q] !== not && biomes[list[q]] === kinds[k]) return list[q];
+      return null;
+    }
+    var outer = CHUNKS.filter(function (cid) { return cid !== 'c'; });
+    var sawId = firstOf(outer, ['forest']);
+    if (sawId) addLot('penggergajian', sawId, 10, 2);
+    var millId = firstOf(outer, ['meadow', 'pond', 'rock', 'forest'], sawId);
+    if (millId) addLot('kincir', millId, 10, 2);
+    var storeId = firstOf(ORTHO, ['forest', 'meadow', 'rock']);
+    if (storeId) addLot('gudang', storeId, 2, 10);
 
     // the Town Hall: 4 x 4, door on the bottom row (third tile), spawn one tile below the door
     var tx = cOx + 6, ty = cOy + 1, tdx = cOx + 8, tdy = cOy + 4;
@@ -180,6 +201,8 @@
       }
       var cOx2 = (CHUNKS.indexOf(l.chunk) % N) * CH;
       for (var xx2 = cOx2 + 8; xx2 <= l.door.x; xx2++) { var k3 = I(xx2, l.door.y + 1); if (SOLID[tiles[k3]] || tiles[k3] === 'water') tiles[k3] = 'path'; }
+      // a lot west of the cross (the storehouse) gets its path east to the cross; the older Tambang lot keeps its ground
+      if (l.kind !== 'tambang') for (var xx4 = l.door.x; xx4 <= cOx2 + 7; xx4++) { var k4 = I(xx4, l.door.y + 1); if (SOLID[tiles[k4]] || tiles[k4] === 'water') tiles[k4] = 'path'; }
     });
 
     // centre chunk: Town Hall ground, paths, farm, then trees and rocks to gather by hand

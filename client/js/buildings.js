@@ -2,7 +2,9 @@
  * buildings.js - pixel art for the village's public buildings and the river bridge (all original, drawn in code).
  * Extends window.SPRITES (after sprites.js and art.js):
  *   SPRITES.drawPublic(g, kind, x, y, wTiles, hTiles)   kinds: hall, church, clinic, post, broker, warung, and the Homeland
- *   buildings townhall (Balai Kota, 4x4), kolam (Kolam Ikan), tambang, restoran (3x3)
+ *   buildings townhall (Balai Kota, 4x4), kolam (Kolam Ikan), tambang, restoran, and the land's work buildings
+ *   penggergajian (sawmill: plank walls, a log pile and a saw blade), kincir (windmill: four sails over the roof) and
+ *   gudang (storehouse: a red barn with wide braced doors and crates) (3x3)
  *   'bridge' ground tile (planks over water), used by the layered world cache.
  * Each building: a roof band, a wall with windows, a sign with a small icon over the door, the door at the bottom of
  * the middle column (where village.js puts it). Light comes from the top-left like the houses.
@@ -27,7 +29,10 @@
     tambang:  { roof: '#5c5868', roofD: '#3a3644', roofL: '#8a8698', wall: '#a8a2a0', wallD: '#847e80', sign: '#ece8e0' },
     restoran: { roof: '#b8422e', roofD: '#7a2a1e', roofL: '#e0705a', wall: '#f6e4c8', wallD: '#dcc09a', sign: '#fff4dc' },
     rumah:      { roof: '#8a4a2c', roofD: '#5a2e1a', roofL: '#b87048', wall: '#e8d4a8', wallD: '#c8b080', sign: '#fff2d4' },
-    rumahsakit: { roof: '#c84a4a', roofD: '#8a2c2c', roofL: '#e88080', wall: '#f8f6f2', wallD: '#dcd8d4', sign: '#ffffff' }
+    rumahsakit: { roof: '#c84a4a', roofD: '#8a2c2c', roofL: '#e88080', wall: '#f8f6f2', wallD: '#dcd8d4', sign: '#ffffff' },
+    penggergajian: { roof: '#4f7a3a', roofD: '#2f4f22', roofL: '#78a858', wall: '#c89a62', wallD: '#a07040', sign: '#fff0d8' },
+    kincir:     { roof: '#b8743a', roofD: '#7a4a22', roofL: '#e0a060', wall: '#f2ead8', wallD: '#d4c8ac', sign: '#fffaf0' },
+    gudang:     { roof: '#56606c', roofD: '#38404a', roofL: '#7c8894', wall: '#b4523c', wallD: '#8e3c2c', sign: '#fff4dc' }
   };
   S.PUBLIC_STYLE = STYLE; // the 3D kit (js/three/building.js) builds its roofs and side walls from the same colours
 
@@ -73,10 +78,13 @@
     rumah: function (g, cx, y) { R(g, cx - 4, y + 3, 8, 3, '#f8f0d8'); R(g, cx - 5, y + 2, 10, 1, '#8a4a2c'); R(g, cx - 3, y + 1, 6, 1, '#8a4a2c'); R(g, cx - 1, y + 4, 2, 2, '#6a4020'); R(g, cx + 2, y + 4, 1, 1, '#7cc8f0'); },
     rumahsakit: function (g, cx, y) { R(g, cx - 1, y, 2, 6, '#d83c3c'); R(g, cx - 3, y + 2, 6, 2, '#d83c3c'); },
     restoran: function (g, cx, y) { R(g, cx - 4, y + 3, 8, 2, '#f8f8f8'); R(g, cx - 3, y + 2, 6, 1, '#d0d0d0'); R(g, cx + 3, y + 1, 1, 5, '#c8c8c8'); R(g, cx - 4, y + 1, 1, 3, '#c8c8c8'); },
+    penggergajian: function (g, cx, y) { R(g, cx - 5, y + 3, 7, 3, '#8a5a30'); R(g, cx - 5, y + 3, 1, 3, '#d8b070'); R(g, cx + 2, y + 1, 4, 4, '#a8b0b8'); R(g, cx + 3, y + 2, 2, 2, '#ffffff'); R(g, cx + 1, y + 2, 1, 2, '#a8b0b8'); },
+    kincir: function (g, cx, y) { R(g, cx - 1, y + 2, 2, 4, '#b8743a'); R(g, cx - 4, y, 2, 2, '#6a4020'); R(g, cx + 2, y, 2, 2, '#6a4020'); R(g, cx - 3, y + 1, 6, 1, '#6a4020'); R(g, cx - 4, y + 3, 2, 2, '#6a4020'); R(g, cx + 2, y + 3, 2, 2, '#6a4020'); },
+    gudang: function (g, cx, y) { R(g, cx - 4, y + 1, 8, 5, '#c8904c'); R(g, cx - 4, y + 1, 8, 1, '#8a5a30'); R(g, cx - 4, y + 5, 8, 1, '#8a5a30'); R(g, cx - 1, y + 1, 1, 5, '#8a5a30'); R(g, cx - 4, y + 3, 8, 1, '#8a5a30'); },
     warung: function (g, cx, y) { R(g, cx - 3, y + 2, 5, 4, '#f8f8f8'); R(g, cx - 3, y + 2, 5, 1, '#6a4020'); R(g, cx + 2, y + 3, 2, 2, '#f8f8f8'); R(g, cx - 2, y + 1, 1, 1, '#c8c8c8'); R(g, cx, y, 1, 1, '#c8c8c8'); }
   };
 
-  function build(kind, wt, ht) {
+  function build(kind, wt, ht, bare) {
     var st = STYLE[kind], w = wt * TILE, h = ht * TILE, cv = mk(w, h), g = cv.getContext('2d');
     var cx = Math.floor(wt / 2) * TILE + TILE / 2; // middle of the door column
     var roofRows = Math.round(h * 0.38), wallTop = roofRows + 2;
@@ -109,6 +117,23 @@
       for (var by = wallTop + 3; by < h - 4; by += 5) for (var bx = 2 + ((by / 5) % 2 ? 3 : 0); bx < w - 6; bx += 7) R(g, bx, by, 6, 1, st.wallD);
       R(g, 4, wallTop + 7, 9, 12, OL); R(g, 5, wallTop + 8, 7, 11, '#14101c'); R(g, 4, wallTop + 6, 9, 1, '#6a4020'); R(g, 3, wallTop + 7, 1, 12, '#6a4020'); R(g, 13, wallTop + 7, 1, 12, '#6a4020');
       R(g, w - 12, wallTop + 14, 8, 4, OL); R(g, w - 11, wallTop + 11, 6, 4, '#b07840'); R(g, w - 11, wallTop + 11, 6, 1, '#d49c5c'); R(g, w - 11, wallTop + 17, 2, 2, '#d0d0d0'); R(g, w - 7, wallTop + 17, 2, 2, '#d0d0d0');
+    } else if (kind === 'penggergajian') {
+      // plank walls, a stack of log ends on the left, a round saw blade on the right
+      for (var px = 4; px < w - 3; px += 3) R(g, px, wallTop + 1, 1, h - wallTop - 5, st.wallD);
+      [[3, wallTop + 11], [8, wallTop + 11], [5, wallTop + 6]].forEach(function (p) {
+        R(g, p[0], p[1], 6, 6, OL); R(g, p[0] + 1, p[1] + 1, 4, 4, '#b07840'); R(g, p[0] + 2, p[1] + 2, 2, 2, '#e0bc80'); R(g, p[0] + 1, p[1] + 1, 1, 1, '#d49c5c');
+      });
+      var bx0 = w - 12, by0 = wallTop + 5;
+      R(g, bx0 + 2, by0, 6, 10, OL); R(g, bx0, by0 + 2, 10, 6, OL); R(g, bx0 + 1, by0 + 1, 8, 8, OL);
+      R(g, bx0 + 3, by0 + 1, 4, 8, '#c8d0d8'); R(g, bx0 + 1, by0 + 3, 8, 4, '#c8d0d8'); R(g, bx0 + 2, by0 + 2, 6, 6, '#c8d0d8');
+      R(g, bx0 + 2, by0 + 2, 2, 1, '#f4f8fc'); R(g, bx0 + 4, by0 + 4, 2, 2, '#6a6678');
+      R(g, bx0 - 1, by0 + 11, 12, 2, OL); R(g, bx0, by0 + 11, 10, 1, '#8a5a30');
+    } else if (kind === 'gudang') {
+      // a red barn: white corner boards, crates at both corners
+      R(g, 2, wallTop, 2, h - wallTop - 3, '#f2ead8'); R(g, w - 4, wallTop, 2, h - wallTop - 3, '#f2ead8');
+      [[4, h - 10], [w - 12, h - 10], [w - 10, h - 16]].forEach(function (p) {
+        R(g, p[0], p[1], 8, 7, OL); R(g, p[0] + 1, p[1] + 1, 6, 5, '#c8904c'); R(g, p[0] + 1, p[1] + 1, 6, 1, '#e0b070'); R(g, p[0] + 1, p[1] + 3, 6, 1, '#8a5a30'); R(g, p[0] + 3, p[1] + 1, 1, 5, '#8a5a30');
+      });
     } else {
       var glass = kind === 'clinic' ? '#c8f0ec' : kind === 'rumahsakit' ? '#c8e8f8' : kind === 'kolam' || kind === 'rumah' ? '#7cc8f0' : null;
       windowAt(g, 5, wallTop + 6, glass);
@@ -122,15 +147,33 @@
     }
     if (kind === 'kolam') { R(g, 2, h - 6, w - 4, 2, '#3d7fc2'); R(g, 2, h - 6, w - 4, 1, '#9ad8ff'); }
     sign(g, cx, h - 24, st, ICON[kind]);
-    door(g, cx, h - 1, kind === 'clinic' || kind === 'rumahsakit' ? '#5cb8b0' : kind === 'rumah' ? '#6a4020' : kind === 'post' ? '#c86028' : null);
+    door(g, cx, h - 1, kind === 'clinic' || kind === 'rumahsakit' ? '#5cb8b0' : kind === 'rumah' ? '#6a4020' : kind === 'post' ? '#c86028' : kind === 'gudang' ? '#f2ead8' : null);
+    if (kind === 'gudang') { R(g, cx - 4, h - 13, 8, 12, '#8e3c2c'); for (var k = 0; k < 12; k++) { R(g, cx - 4 + Math.floor(k * 8 / 12), h - 13 + k, 1, 1, '#f2ead8'); R(g, cx + 3 - Math.floor(k * 8 / 12), h - 13 + k, 1, 1, '#f2ead8'); } }
+    if (kind === 'kincir' && !bare) sails(g, cx, 7, 14);
     return cv;
   }
 
+  /* the windmill's four sails over the roof, as an X: a wooden spar and lattice cloth on each, a hub in the middle;
+     the 2.5D view turns real sails instead (js/three/building.js) and draws the facade below the roof only */
+  function sails(g, cx, cy, len) {
+    for (var d = 0; d < 4; d++) {
+      var sx = d === 0 || d === 3 ? 1 : -1, sy = d < 2 ? -1 : 1;
+      for (var i = 2; i < len; i++) {
+        var x = cx + sx * i, y = cy + sy * i;
+        R(g, x, y, 1, 1, '#5a3a1e');
+        if (i > 3) { R(g, x + sx, y, 1, 1, i % 2 ? '#f2ead8' : '#d8ccb0'); R(g, x + 2 * sx, y, 1, 1, '#f2ead8'); R(g, x + 2 * sx, y - sy, 1, 1, '#d8ccb0'); }
+      }
+    }
+    R(g, cx - 2, cy - 2, 4, 4, OL); R(g, cx - 1, cy - 1, 2, 2, '#c8a030');
+  }
+  S.windmillSails = sails;
+
   var cache = {};
-  S.drawPublic = function (g, kind, x, y, wt, ht) {
+  // bare: without what the 2.5D view models for itself (the windmill's sails)
+  S.drawPublic = function (g, kind, x, y, wt, ht, bare) {
     if (!STYLE[kind]) return S.drawHouse(g, x, y, 0, false);
-    var key = kind + ':' + wt + 'x' + ht;
-    var c = cache[key] || (cache[key] = build(kind, wt, ht));
+    var key = kind + ':' + wt + 'x' + ht + (bare ? ':bare' : '');
+    var c = cache[key] || (cache[key] = build(kind, wt, ht, !!bare));
     g.drawImage(c, Math.round(x), Math.round(y));
   };
 

@@ -176,7 +176,11 @@
           "hiburan": { "name": "Entertainment", "max": 3, "names": ["Radio", "TV", "Gamelan"], "levels": [ { "cost": { "wood": 10, "coin": 30 }, "secs": 60 }, { "cost": { "wood": 20, "ore": 10, "coin": 80 }, "secs": 120 }, { "cost": { "wood": 30, "ore": 20, "coin": 150 }, "secs": 240 } ] }
         } },
       "rumahsakit": { "name": "Hospital", "th": 2, "cost": { "wood": 30, "ore": 10, "coin": 60 }, "secs": 180, "maxLevel": 3, "healGameHours": [3, 2, 1],
-        "upgrade": [ { "cost": { "wood": 30, "ore": 15, "coin": 100 }, "secs": 240 }, { "cost": { "wood": 50, "ore": 30, "coin": 200 }, "secs": 480 } ] }
+        "upgrade": [ { "cost": { "wood": 30, "ore": 15, "coin": 100 }, "secs": 240 }, { "cost": { "wood": 50, "ore": 30, "coin": 200 }, "secs": 480 } ] },
+      "penggergajian": { "name": "Sawmill", "th": 2, "cost": { "wood": 20, "ore": 5, "coin": 40 }, "secs": 150, "produces": "wood", "perGameHour": 2, "capacity": 8, "needsChunk": true },
+      "kincir": { "name": "Windmill", "th": 3, "cost": { "wood": 40, "ore": 15, "coin": 80 }, "secs": 300, "produces": "wheat", "perGameHour": 3, "capacity": 12, "needsChunk": true },
+      "gudang": { "name": "Storehouse", "th": 3, "cost": { "wood": 50, "ore": 20, "coin": 100 }, "secs": 300, "needsChunk": true, "maxLevel": 3, "storeBonus": [0.5, 1, 1.5],
+        "upgrade": [ { "cost": { "wood": 80, "ore": 40, "coin": 200 }, "secs": 600 }, { "cost": { "wood": 120, "ore": 60, "coin": 400 }, "secs": 1200 } ] }
     }
   },
   "monsters": {
