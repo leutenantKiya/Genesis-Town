@@ -7,7 +7,7 @@ import { HttpError } from '../auth.ts';
 
 export type Rng = () => number;
 
-export interface ActionResult { toast: string; gained?: Record<string, number> }
+export interface ActionResult { toast: string; gained?: Record<string, number>; credit?: { account: string; token: string; n: number } }
 
 export class World {
   econ: Econ;
@@ -160,7 +160,7 @@ export class World {
     const have = this.gs.plots(account);
     const out: Plot[] = [];
     for (let i = 0; i < count; i++) {
-      out.push(have.find((p) => p.idx === i) ?? { account, idx: i, state: 'empty', planted_day: 0, grown: 0, watered_day: -1 });
+      out.push(have.find((p) => p.idx === i) ?? { account, idx: i, state: 'empty', planted_day: 0, grown: 0, watered_day: -1, planter: '' });
     }
     return out;
   }
@@ -182,13 +182,14 @@ export class World {
   }
 
   /** `field` replaces the village farm with an island's: its own plot rows, plot count, growth days and extra yield. */
-  farm(account: string, op: string, idx: number, field?: { plotAccount: string; count: number; growDays: number; yieldBonus: number }): ActionResult {
+  farm(account: string, op: string, idx: number, field?: { plotAccount: string; count: number; growDays: number; yieldBonus: number; owner?: string; guest?: boolean }): ActionResult {
     const f = { ...this.econ.farm, plots: field?.count ?? this.econ.farm.plots, growDays: field?.growDays ?? this.econ.farm.growDays };
     if (!Number.isInteger(idx) || idx < 0 || idx >= f.plots) throw new HttpError(400, 'No such plot.');
     const plot = this.plots(field?.plotAccount ?? account, f.plots)[idx];
     const t = this.clock.time();
     const p = this.state(account);
     let toast: string;
+    let credit: ActionResult['credit'];
     if (op === 'till') {
       if (plot.state !== 'empty') throw new HttpError(409, 'This plot is already hoed.');
       this.spendEnergy(p, f.energyCost);
@@ -197,6 +198,10 @@ export class World {
     } else if (op === 'plant') {
       if (plot.state !== 'tilled') throw new HttpError(409, 'Hoe the plot first.');
       if (f.noGrowthSeasons.includes(t.season)) throw new HttpError(409, 'Wheat does not grow in winter.');
+      if (field?.guest) {
+        const mine = this.plots(field.plotAccount, f.plots).filter((x) => x.planter === account && (x.state === 'planted' || x.state === 'ready')).length;
+        if (mine >= this.econ.coop.guestPlotsPerHost) throw new HttpError(409, `You already have ${mine} crops growing here.`);
+      }
       // Seeds can't run out for good: with no Gandum left, the village hands out a few seeds a day (net zero on
       // chain, since the seed goes straight into the ground). Otherwise a town whose bakery is closed can't farm.
       let gift = false;
@@ -207,7 +212,7 @@ export class World {
       }
       if (this.gs.balance(account, f.seed) < 1) throw new HttpError(409, `You have no Wheat seed, and today's village seeds are used up (${seeds} per day). Try again tomorrow, or buy Wheat.`);
       this.gs.add(t.settleDay, account, f.seed, -1, 'plant');
-      Object.assign(plot, { state: 'planted', planted_day: t.day, grown: 0, watered_day: -1 });
+      Object.assign(plot, { state: 'planted', planted_day: t.day, grown: 0, watered_day: -1, planter: account });
       toast = gift ? 'The village gives you 1 wheat seed, planted right away. Water it every day.' : 'Wheat seed planted. Water it every day.';
     } else if (op === 'water') {
       if (plot.state !== 'planted') throw new HttpError(409, 'Nothing needs watering.');
@@ -220,16 +225,18 @@ export class World {
     } else if (op === 'harvest') {
       if (plot.state !== 'ready') throw new HttpError(409, 'Not ready to harvest yet.');
       const n = f.harvest + (this.econ.seasons[t.season]?.harvestBonus ?? 0) + (field?.yieldBonus ?? 0);
-      this.checkGain(account, f.seed, n);
-      this.gs.add(t.settleDay, account, f.seed, n, 'harvest');
-      Object.assign(plot, { state: 'tilled', grown: 0, watered_day: -1 });
-      toast = `+${n} Wheat`;
+      const receiver = plot.planter || field?.owner || account;
+      this.checkGain(receiver, f.seed, n);
+      this.gs.add(t.settleDay, receiver, f.seed, n, 'harvest', receiver === account ? null : `coop:${account}`);
+      Object.assign(plot, { state: 'tilled', grown: 0, watered_day: -1, planter: '' });
+      if (receiver === account) toast = `+${n} Wheat`;
+      else { toast = 'The wheat goes to the player who planted it.'; credit = { account: receiver, token: f.seed, n }; }
     } else {
       throw new HttpError(400, 'Unknown garden action.');
     }
     this.gs.savePlayer(p);
     this.gs.savePlot(plot);
-    return { toast };
+    return credit ? { toast, credit } : { toast };
   }
 
   /** Shipping box: items leave now; the town pays (70% of base) at the next settlement. */

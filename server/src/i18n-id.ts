@@ -158,6 +158,18 @@ export const EXACT: Record<string, string> = {
 };
 export const PATTERNS: Array<[string, string]> = [
  [
+  "You already have {0} crops growing here.",
+  "Kamu sudah punya {0} tanaman yang tumbuh di sini."
+ ],
+ [
+  "The wheat goes to {0}, who planted it.",
+  "Gandumnya untuk {0}, yang menanamnya."
+ ],
+ [
+  "{0} harvested {1} Wheat for you in {2}'s Homeland.",
+  "{0} memanen {1} Gandum untukmu di Homeland {2}."
+ ],
+ [
   "You helped a lot here today ({0}). Come back tomorrow.",
   "Kamu sudah banyak membantu di sini hari ini ({0}). Kembali besok."
  ],

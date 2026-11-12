@@ -24,7 +24,7 @@
 - [x] Step 2: Party everywhere: green tags, minimap dots, off-screen arrows, party chat `/p`
 - [x] Step 3: Party in Homelands: owner's party may visit; portal entries, "Ikut" follow, safe leave and kick
 - [x] Step 4: Homeland roles (Pengunjung / Pembantu / Tukang) and gathering plus night fights for helpers
-- [ ] Step 5: Farming together (planter gets the harvest, guest plot limit)
+- [x] Step 5: Farming together (planter gets the harvest, guest plot limit)
 - [ ] Step 6: Building together (builder pays, `assist` speeds jobs, helpers collect for the owner)
 - [ ] Step 7: Trade sessions on the server (two-sided, version-checked confirmations, countdown, any world)
 - [ ] Step 8: Trade window on the client, started from a card, the party panel or `/dagang`; Riwayat "Dagang" filter

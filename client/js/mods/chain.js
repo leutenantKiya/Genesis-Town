@@ -944,10 +944,11 @@
     var pi = plotAt(x, y);
     if (pi >= 0) {
       var p = S.st && S.st.plots[pi]; if (!p) return $t('Petak kebun (masuk dulu)');
+      var own = p.planter_name ? ' · ' + $t('milik {0}', p.planter_name) : '';
       if (p.state === 'empty') return $t('Cangkul (−2 energi)');
       if (p.state === 'tilled') return have('wheat') > 0 ? $t('Tanam gandum (1 Gandum, tekan 2x)') : $t('Tanam (benih gratis dari desa, tekan 2x)');
-      if (p.state === 'ready') return $t('Panen gandum');
-      return p.wateredToday ? $t('Sudah disiram hari ini') : $t('Siram (−2 energi)');
+      if (p.state === 'ready') return $t('Panen gandum') + own;
+      return (p.wateredToday ? $t('Sudah disiram hari ini') : $t('Siram (−2 energi)')) + own;
     }
     var tok = TILE_ITEM[tt];
     if (tok) {

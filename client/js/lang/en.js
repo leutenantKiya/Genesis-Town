@@ -273,6 +273,7 @@
     "Tanam (benih gratis dari desa, tekan 2x)": "Plant (free seed from the village, press 2x)",
     "Panen gandum": "Harvest wheat",
     "Sudah disiram hari ini": "Already watered today",
+    "milik {0}": "owned by {0}",
     "Siram (−2 energi)": "Water (−2 energy)",
     "Mancing": "Fish",
     "Nambang": "Mine",

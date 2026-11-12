@@ -287,7 +287,17 @@ export class Game {
       case 'flee': res = this.need(this.monsters).flee(account); break;
       case 'craft': res = this.world.craft(account, s('recipe')); break;
       case 'eat': res = this.world.eat(account, s('token')); break;
-      case 'farm': res = this.world.farm(account, s('op'), n('plot', -1), w.row ? { plotAccount: `${account}@${wid}`, count: this.farmCount(w.row), growDays: Math.max(1, Math.ceil(this.econ.farm.growDays / this.homelands.effects(account).farmGrowFactor - 1e-9)), yieldBonus: 0 } : undefined); break;
+      case 'farm': {
+        const own = w.row?.account ?? account; // a guest farms the owner's plots; the owner's Petani speeds the crops
+        res = this.world.farm(account, s('op'), n('plot', -1), w.row ? { plotAccount: `${own}@${wid}`, count: this.farmCount(w.row), growDays: Math.max(1, Math.ceil(this.econ.farm.growDays / this.homelands.effects(own).farmGrowFactor - 1e-9)), yieldBonus: 0, owner: own, guest: own !== account } : undefined);
+        const cr = (res as { credit?: { account: string; token: string; n: number } }).credit;
+        if (cr) {
+          const who = this.store.nameOf(account) ?? account.split('.')[0], at = this.store.nameOf(own) ?? own.split('.')[0];
+          this.store.addHistory(cr.account, 'harvest', `${who} harvested ${cr.n} Wheat for you in ${at}'s Homeland.`, 'offchain', null, null, [cr.token]);
+          res = { toast: `The wheat goes to ${this.store.nameOf(cr.account) ?? cr.account.split('.')[0]}, who planted it.` };
+        }
+        break;
+      }
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
       case 'build': res = this.homelands.start(account, s('kind') as 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay); break;
       case 'dress': res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay); break;
@@ -334,7 +344,9 @@ export class Game {
     const wid = this.positions?.worldOf(account) ?? 'public';
     const hid = wid === 'public' ? null : parseHome(wid);
     const hrow = hid ? this.homelands.byId(hid) : undefined;
-    const field = hrow && hrow.account === account ? this.farmCount(hrow) : null;
+    let fieldOwner: string | null = null; // whose plots this player sees: the Homeland owner's, for helpers and up
+    if (hrow) { try { if (hrow.account === account || this.homelands.access(account, hrow.id).role !== 'visitor') fieldOwner = hrow.account; } catch { /* fixWorld will move them */ } }
+    const field = hrow && fieldOwner ? this.farmCount(hrow) : null;
     const p = this.world.state(account);
     const bag: Record<string, { settled: number; today: number; name: string }> = {};
     for (const [token, def] of Object.entries(this.econ.items)) {
@@ -352,7 +364,7 @@ export class Game {
       worldId: hrow ? wid : 'public',
       here,
       homeland: this.homelands.view(account),
-      plots: (field ? this.world.plots(`${account}@${wid}`, field) : hrow ? [] : this.world.plots(account)).map((x) => ({ idx: x.idx, state: x.state, grown: x.grown, wateredToday: x.watered_day === t.day })),
+      plots: (field ? this.world.plots(`${fieldOwner}@${wid}`, field) : hrow ? [] : this.world.plots(account)).map((x) => ({ idx: x.idx, state: x.state, grown: x.grown, wateredToday: x.watered_day === t.day, mine: !x.planter || x.planter === account, ...(x.planter && x.planter !== account ? { planter_name: this.store.nameOf(x.planter) ?? x.planter.split('.')[0] } : {}) })),
       world: this.map ? { seed: this.map.seed, unlocked: this.map.unlocked } : null,
       encounter: this.monsters?.pending.get(account) ?? null,
       koUntil,
