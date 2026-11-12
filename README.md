@@ -1,6 +1,11 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Settlement guards** (2026-11-12): before sending a day, the server asks the contract which day it last closed; if
+>   the chain is already further (an older database, or a second server on the same contract), settlement stops instead
+>   of paying gas for transactions that must fail, and `/api/health` says so. The Neon copy stores how far it is settled,
+>   and a database that is further behind can no longer overwrite it. `server/scripts/snapshot-move.ts` puts a local
+>   database into the copy (`--dry-run` only reads).
 > - **No doomed NEAR Auth popup** (2026-11-12): NEAR Auth's shared testnet login only returns to addresses it has
 >   allowed, so the server lists them (`NEAR_AUTH_ORIGINS`, default `http://localhost:3000`) and the game offers NEAR
 >   Auth only there. Elsewhere the Google button stays, and a device approval explains instead of opening a popup that

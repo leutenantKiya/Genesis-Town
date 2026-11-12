@@ -83,3 +83,32 @@ test('a failed save is reported and tried again; an unchanged database is not up
   check.close(); db.close();
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('the stored copy remembers how far it was settled, and a copy that is further behind is refused', async () => {
+  const { dir, path } = tmpDb();
+  // like gt_snapshot: one row per key with its settled_through; a save that is behind throws
+  const rows = new Map<string, { gz: Buffer; st: number | null }>();
+  const remote: SnapshotRemote = {
+    load: async (key) => rows.get(key)?.gz ?? null,
+    save: async (key, gz, _sha, _size, st) => {
+      const cur = rows.get(key);
+      if (cur && cur.st != null && st != null && cur.st > st) throw new Error(`the stored copy is settled through day ${cur.st}, this server only through day ${st}; not overwriting it`);
+      rows.set(key, { gz, st: st ?? null });
+    },
+  };
+  const db = new DatabaseSync(path);
+  db.exec('CREATE TABLE t (v TEXT)');
+  let settled = 609;
+  const ahead = startSnapshots({ db, path, key: 'k', remote, settledThrough: () => settled, timer: false, log: () => {} });
+  await ahead.flush();
+  assert.equal(rows.get('k')!.st, 609);
+  // an old deploy that only reached day 263 starts and tries to save: refused, and it says why
+  settled = 263;
+  db.prepare('INSERT INTO t VALUES (?)').run('old');
+  const behind = startSnapshots({ db, path, key: 'k', remote, settledThrough: () => settled, timer: false, log: () => {} });
+  await behind.flush();
+  assert.equal(rows.get('k')!.st, 609, 'the newer copy is kept');
+  assert.match(behind.status().lastError ?? '', /settled through day 609, this server only through day 263/);
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
