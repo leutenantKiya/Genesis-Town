@@ -56,7 +56,7 @@ export interface Econ {
   monsters: MonsterConfig;
   homeland: HomelandConfig;
   trade: { expireSecs: number; maxLines: number; inviteSecs: number; sessionIdleSecs: number; countdownMs: number };
-  guest: { max: number; idleSecs: number; helloPerMinute: number };
+  guest: { max: number; idleSecs: number; helloPerMinute: number; perIp: number; maxMinutes: number };
   party: { max: number; inviteSecs: number; maxPendingInvites: number };
   coop: { partyRoleDefault: 'none' | 'visitor' | 'helper' | 'builder'; guestGatherPerHostDay: number; guestLeavesCharges: number; guestPlotsPerHost: number; assistEnergy: number; assistSecs: number; assistMaxShare: number };
   consign: { merchant: string; feeBps: number; maxPerItem: number; sellPerGameHour: number };

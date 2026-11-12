@@ -109,7 +109,7 @@ export function createApp(deps: AppDeps) {
   const checkSpend = spendGuard(deps.chain, game);
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
-  social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs };
+  social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs, perIp: game.econ.guest.perIp, maxMinutes: game.econ.guest.maxMinutes };
   const guestHelloLimiter = new RateLimiter(game.econ.guest.helloPerMinute, 200); // new guests per IP
   const guestPresenceLimiter = new RateLimiter(240, 100_000); // guest position reports per IP
   // Merchants walk the public area as players tagged NPC: behind their stall (as the client draws them); "/msg Sari ..." asks them through the dialogue provider.

@@ -8,7 +8,7 @@ import { RateLimiter } from './relayer.ts';
 import { randomBytes } from 'node:crypto';
 
 /** A visitor who has not signed in: in memory only, public village only, no chat. `ip` is who created it. */
-export interface Guest extends Seen { id: string; ip: string; since: number }
+export interface Guest extends Seen { id: string; pub: string; ip: string; since: number }
 
 export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean; guest?: boolean }
 /** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
@@ -50,7 +50,9 @@ export class Social {
   seen = new Map<string, Seen>();
   /** Visitors without an account (id "g-<random>"). Set from the economy config by the app. */
   guests = new Map<string, Guest>();
-  guestCfg = { max: 5, idleSecs: 30 };
+  guestCfg = { max: 5, idleSecs: 30, perIp: 1, maxMinutes: 30 };
+  /** Ids of guests an admin kicked: refused afterwards (memory only, like the guests). */
+  kicked = new Set<string>();
   chat: Stored[] = [];
   seq = 0;
   chatLimiter = new RateLimiter(8, 600);
@@ -160,22 +162,27 @@ export class Social {
   }
 
   /* ---- guests: visitors who have not signed in ---- */
-  dropIdleGuests() { const now = this.now(); for (const [id, g] of this.guests) if (now - g.t > this.guestCfg.idleSecs * 1000) this.guests.delete(id); }
+  dropIdleGuests() { const now = this.now(); for (const [id, g] of this.guests) if (now - g.t > this.guestCfg.idleSecs * 1000 || now - g.since > this.guestCfg.maxMinutes * 60_000) this.guests.delete(id); }
   /** A new guest, or 429 when `guestCfg.max` guests were seen in the last 15 s. */
   guestHello(ip: string): { guest: string; nick: string } {
     this.dropIdleGuests();
     const now = this.now();
+    // one guest per address: a second hello returns the same guest
+    let mine = 0, same: Guest | undefined;
+    for (const g of this.guests.values()) if (g.ip === ip) { mine++; same ??= g; }
+    if (same && mine >= this.guestCfg.perIp) { same.t = now; return { guest: same.id, nick: same.nick }; }
     let live = 0; for (const g of this.guests.values()) if (now - g.t <= 15_000) live++;
     if (live >= this.guestCfg.max) throw new HttpError(429, 'The village is full of guests.');
-    const id = 'g-' + randomBytes(9).toString('hex');
+    const id = 'g-' + randomBytes(9).toString('hex'), pub = 'guest-' + randomBytes(6).toString('hex'); // id is the guest's secret, pub is what everyone else sees
     let nick = '';
     do { nick = 'Tamu-' + (1000 + Math.floor(Math.random() * 9000)); } while ([...this.guests.values()].some((g) => g.nick === nick));
-    this.guests.set(id, { id, account: id, ip, since: now, world: 'public', nick, tag: '', look: Math.floor(Math.random() * 8), x: 0, y: 0, dir: 'down', scene: 'in', t: now } as Guest);
+    this.guests.set(id, { id, pub, account: pub, ip, since: now, world: 'public', nick, tag: '', look: Math.floor(Math.random() * 8), x: 0, y: 0, dir: 'down', scene: 'in', t: now } as Guest);
     return { guest: id, nick };
   }
   /** A guest's position (public village only). The id must belong to `ip`; an unknown or expired id is 404 so the client says hello again. */
   guestReport(id: unknown, ip: string, p: { x?: unknown; y?: unknown; dir?: unknown }, walkable?: (x: number, y: number) => boolean): Guest {
     this.dropIdleGuests();
+    if (typeof id === 'string' && this.kicked.has(id)) throw new HttpError(403, 'You were removed from the village.');
     const g = typeof id === 'string' ? this.guests.get(id) : undefined;
     if (!g || g.ip !== ip) throw new HttpError(404, 'Unknown guest.');
     const x = Number(p.x), y = Number(p.y);
@@ -185,8 +192,12 @@ export class Social {
     if (!walkable || walkable(x, y)) { g.x = x; g.y = y; g.scene = 'out'; } else g.scene = 'in';
     return g;
   }
-  guestList() { this.dropIdleGuests(); return [...this.guests.values()].map((g) => ({ guest: g.id, nick: g.nick, ip: g.ip, since: g.since })); }
+  guestList() { this.dropIdleGuests(); return [...this.guests.values()].map((g) => ({ guest: g.pub, nick: g.nick, ip: g.ip, since: g.since })); }
   dropGuest(id: string) { return this.guests.delete(id); }
+  /** Admin kick by public handle: drop the guest and refuse its secret id from now on. */
+  kickGuest(pub: string) { for (const [id, g] of this.guests) if (g.pub === pub) { this.guests.delete(id); this.kicked.add(id); return true; } return false; }
+  /** Drop every live guest of an address (a ban). */
+  dropGuestsOf(ip: string) { let n = 0; for (const [id, g] of this.guests) if (g.ip === ip) { this.guests.delete(id); this.kicked.add(id); n++; } return n; }
   online() { const now = this.now(); let n = 0; for (const s of this.seen.values()) if (now - s.t <= 15_000) n++; return n; }
 
   /** A chat line: "/msg name text" (or /w) is private (to one player, any world), anything else is for everyone in `world`. */
