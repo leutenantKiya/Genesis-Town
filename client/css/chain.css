@@ -243,6 +243,12 @@ html.gt-phone .gt-chat-input{min-height:44px;font-size:16px}
 .gt-code-msg{min-height:1.2em;color:var(--bad,#b3261e)}
 .chain-warn{margin:10px 0 0;color:var(--bad,#b3261e)}
 .gt-login-google{display:flex;justify-content:center;align-items:center;min-height:44px;margin:12px 0 4px}
+.gt-luck p{margin:0 0 8px}
+.gt-luck-row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.gt-luck-dice{margin:10px 0;text-align:center;font-size:26px;min-height:36px}
+.gt-luck-dice.rolling{animation:gt-roll .35s linear infinite}
+.gt-luck-dice.win{color:#2f8a4a;font-weight:700;font-size:20px}.gt-luck-dice.lose{opacity:.75;font-size:20px}
+@keyframes gt-roll{0%{transform:rotate(0)}50%{transform:rotate(14deg) scale(1.1)}100%{transform:rotate(0)}}
 .gt-login-or{text-align:center;margin:6px 0;opacity:.7}
 .gt-login-near{display:block;width:280px;max-width:100%;min-height:44px;margin:0 auto 4px;padding:0 12px;border-radius:4px;cursor:pointer;
   font:600 14px var(--font);color:#fff;background:#000;border:1px solid #000}

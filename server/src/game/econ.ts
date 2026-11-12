@@ -39,6 +39,8 @@ export interface HomelandConfig {
 }
 
 export interface Econ {
+  /** The luck table in the market: stake goods (never coin), win the same again or lose the stake (burned). */
+  gamble?: { winChance: number; maxBet: number; dailyBets: number; goods: string[] };
   time: TimeConfig;
   items: Record<string, ItemDef>;
   recipes: Record<string, Recipe>;

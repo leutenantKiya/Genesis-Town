@@ -373,7 +373,53 @@
     var t = ctx.tile;
     if (t.x === m.consign.x && t.y === m.consign.y) { consignModal(); return true; }
     if (t.x === m.board.x && t.y === m.board.y) { boardModal('day'); return true; }
+    if (m.gamble && t.x === m.gamble.x && t.y === m.gamble.y) { luckModal(); return true; }
     return false;
+  }
+
+  /* ---------------------------------------------------------------- Meja Untung: stake goods on a dice roll */
+  function luckModal() {
+    if (!signedIn()) { GT.toast($t('Masuk dulu.')); return; }
+    var st = C.state, g = st.cfg && st.cfg.econ && st.cfg.econ.gamble, bag = (st.st && st.st.bag) || {};
+    if (!g) { GT.toast($t('Meja Untung belum buka.')); return; }
+    var pick = g.goods.filter(function (t) { var b = bag[t]; return b && b.settled + b.today > 0; })[0] || g.goods[0], qty = 1, busy = false;
+    var body = document.createElement('div'); body.className = 'gt-luck';
+    var h = GT.modal({ title: '🎲 ' + $t('Meja Untung'), body: body });
+    function paint(result) {
+      body.textContent = '';
+      var p = document.createElement('p');
+      p.textContent = $t('Taruh barang, lempar dadu. Menang: dapat sejumlah taruhanmu lagi. Kalah: taruhannya hilang. Peluang menang {0}%, maksimal {1} per taruhan, {2} taruhan sehari. Tidak pernah memakai koin.', [Math.round(g.winChance * 100), g.maxBet, g.dailyBets]);
+      body.appendChild(p);
+      var goods = document.createElement('div'); goods.className = 'gt-luck-row';
+      g.goods.forEach(function (t) {
+        var b = bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today, x = document.createElement('button');
+        x.type = 'button'; x.className = 'mbtn' + (t === pick ? ' primary' : ''); x.disabled = n <= 0;
+        if (window.GT_ITEMS) x.appendChild(GT_ITEMS.icon(t, 16));
+        x.appendChild(document.createTextNode(' ' + ((st.cfg.econ.items[t] && st.cfg.econ.items[t].name) || t) + ' · ' + n));
+        x.addEventListener('click', function () { pick = t; paint(); });
+        goods.appendChild(x);
+      });
+      body.appendChild(goods);
+      var qrow = document.createElement('div'); qrow.className = 'gt-luck-row';
+      for (var q = 1; q <= g.maxBet; q++) (function (q) {
+        var x = document.createElement('button'); x.type = 'button'; x.className = 'mbtn' + (q === qty ? ' primary' : ''); x.textContent = 'x' + q;
+        x.addEventListener('click', function () { qty = q; paint(); }); qrow.appendChild(x);
+      })(q);
+      body.appendChild(qrow);
+      var dice = document.createElement('div'); dice.className = 'gt-luck-dice' + (result ? (result.win ? ' win' : ' lose') : '');
+      dice.textContent = result ? (result.win ? '🎉 ' + $t('Menang! +{0}', [result.qty]) : '💨 ' + $t('Kalah −{0}', [result.qty])) : '🎲 🎲';
+      body.appendChild(dice);
+      var roll = document.createElement('button'); roll.type = 'button'; roll.className = 'mbtn primary'; roll.textContent = '🎲 ' + $t('Lempar dadu');
+      roll.disabled = busy;
+      roll.addEventListener('click', function () {
+        if (busy) return; busy = true; dice.className = 'gt-luck-dice rolling'; dice.textContent = '🎲 🎲';
+        C.act({ action: 'gamble', token: pick, qty: qty, world: 'public' }, true).then(function (r) {
+          bag = (C.state.st && C.state.st.bag) || bag; busy = false; if (h.isOpen()) paint(r || null);
+        }, function () { busy = false; if (h.isOpen()) paint(); });
+      });
+      body.appendChild(roll);
+    }
+    paint();
   }
   function onFrame(dt) {
     pollT -= dt;
@@ -386,6 +432,7 @@
     if (GT.view3dOn && GT.view3dOn()) { // 2.5D: the stall and board stand in the 3D world; here only small name signs
       var c = GT.at(m.consign.x, m.consign.y), b = GT.at(m.board.x, m.board.y);
       label(ctx, $t('Titip Jual'), c.x + T / 2, c.y + T + 5); label(ctx, $t('Papan Juara'), b.x + T / 2, b.y + T + 5);
+      if (m.gamble) { var gm = GT.at(m.gamble.x, m.gamble.y); label(ctx, '🎲 ' + $t('Meja Untung'), gm.x + T / 2, gm.y + T + 5); }
       ctx.restore(); return;
     }
     // Titip Jual: striped awning over a counter, a crate of goods on it
@@ -402,6 +449,15 @@
     ctx.fillStyle = '#f6ead0'; ctx.fillRect(x + 1, y + 2, T - 2, 5);
     ctx.fillStyle = '#e8b030'; ctx.fillRect(x + 5, y + 3, 2, 3); ctx.fillRect(x + 4, y + 4, 4, 1);
     label(ctx, $t('Papan Juara'), x + T / 2, y + T + 5);
+    if (m.gamble) { // Meja Untung: a green felt table with two dice
+      x = m.gamble.x * T - camX; y = m.gamble.y * T - camY;
+      ctx.fillStyle = '#5a3a1e'; ctx.fillRect(x + 2, y + 8, 1, T - 8); ctx.fillRect(x + T - 3, y + 8, 1, T - 8);
+      ctx.fillStyle = '#2a2430'; ctx.fillRect(x, y + 3, T, 6);
+      ctx.fillStyle = '#2f8a4a'; ctx.fillRect(x + 1, y + 4, T - 2, 4);
+      ctx.fillStyle = '#f8f4ec'; ctx.fillRect(x + 3, y + 4, 2, 2); ctx.fillRect(x + 7, y + 5, 2, 2);
+      ctx.fillStyle = '#c83c3c'; ctx.fillRect(x + 3, y + 4, 1, 1); ctx.fillRect(x + 8, y + 6, 1, 1);
+      label(ctx, '🎲 ' + $t('Meja Untung'), x + T / 2, y + T + 5);
+    }
     ctx.restore();
   }
 

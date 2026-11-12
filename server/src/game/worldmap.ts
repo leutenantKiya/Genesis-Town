@@ -28,7 +28,7 @@ export interface Weather { kind: string; label: string; wet: boolean }
 export interface MonsterSpot { id: string; kind: string; x: number; y: number }
 interface VillageApi {
   generate(seed: number, unlocked?: string[]): Layout; chunkOf(L: Layout, x: number, y: number): Chunk; PROJECTS: Record<string, Project>;
-  landmarks(L: Layout): { consign: Pos; board: Pos };
+  landmarks(L: Layout): { consign: Pos; board: Pos; gamble: Pos };
   weather(seed: number, day: number, season: string): Weather; monstersAt(L: Layout, hour: number, counts?: Record<string, number>): MonsterSpot[];
 }
 export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos; ferryOf(L: Layout): { a: Pos; b: Pos; wa: Pos; wb: Pos } | null } }).GTVillage;
@@ -91,7 +91,7 @@ export class WorldMap implements GameMap, MonsterMap {
   nearStall(p: Pos, d = 3) { return this.layout.market.stalls.some((s) => dist(p, { x: s.x, y: s.y + 1 }) <= d || dist(p, s) <= d); }
   /** The Titip Jual stall and the Papan Juara board (village.js `landmarks`); true when `p` is within `d` tiles of one. */
   landmarks() { return Village.landmarks(this.layout); }
-  nearLandmark(p: Pos, which: 'consign' | 'board', d = 3) { const l = this.landmarks()[which]; return dist(p, l) <= d || dist(p, { x: l.x, y: l.y + 1 }) <= d; }
+  nearLandmark(p: Pos, which: 'consign' | 'board' | 'gamble', d = 3) { const l = this.landmarks()[which]; return dist(p, l) <= d || dist(p, { x: l.x, y: l.y + 1 }) <= d; }
   nearPlot(p: Pos, idx: number) { const q = this.layout.farm.plots[idx]; return !!q && dist(p, q) <= 1; }
   atOwnHouse(p: Pos) { const h = this.layout.buildings.find((b) => b.own); return !!h && dist(p, { x: h.dx, y: h.dy + 1 }) <= 1; }
   checkGather(tile: string, x: number, y: number) {

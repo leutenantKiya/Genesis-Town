@@ -21,12 +21,12 @@ import { leaderboard } from './leaderboard.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', boat: 'visit', hoe: 'help', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -35,6 +35,7 @@ export class Game {
   gs: GameStore;
   clock: Clock;
   world: World;
+  rng: () => number;
   market: Market;
   settlement: Settlement;
   /** The shared village map; absent in unit tests and the simulator, which use abstract tile coordinates. */
@@ -60,6 +61,7 @@ export class Game {
     this.gs = new GameStore(store.db);
     this.clock = new Clock(this.econ, this.gs, o.now);
     this.world = new World(this.econ, this.gs, this.clock, o.rng);
+    this.rng = o.rng ?? Math.random;
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
@@ -147,6 +149,28 @@ export class Game {
     const arrive = target.row ? target.map!.layout.spawn : this.map.portal();
     this.positions.setWorld(account, to, arrive, this.now());
     return { toast: target.row ? (target.row.account === account ? 'Arrived at your Homeland.' : 'Arrived at your friend\'s Homeland.') : 'Arrived in the public area.', world: to, arrive };
+  }
+
+  /** The luck table: stake 1..maxBet of one good; win the same amount again (through the daily gain cap) or lose the
+   *  stake, which is burned. The odds sit under one half, so the table takes goods out of the economy, never adds coin. */
+  private betsToday = new Map<string, { day: number; n: number }>();
+  private gamble(account: string, wid: string, pos: Pos, token: string, qty: number): { toast: string; tags: string[]; win: boolean; token: string; qty: number } {
+    const g = this.econ.gamble;
+    if (!g || !this.map || wid !== 'public') throw new HttpError(409, 'The luck table is at the market.');
+    if (!this.map.nearLandmark(pos, 'gamble', 2)) throw new HttpError(409, 'Come to the luck table at the market.');
+    if (!g.goods.includes(token)) throw new HttpError(400, 'That cannot be staked.');
+    if (!Number.isInteger(qty) || qty < 1 || qty > g.maxBet) throw new HttpError(400, `Stake 1 to ${g.maxBet}.`);
+    const day = this.clock.time().settleDay, seen = this.betsToday.get(account);
+    const used = seen && seen.day === day ? seen.n : 0;
+    if (used >= g.dailyBets) throw new HttpError(409, 'No more bets today. Come back tomorrow.');
+    const have = this.gs.balance(account, token);
+    if (have < qty) throw new HttpError(409, `Not enough ${this.econ.items[token]?.name ?? token} (have ${have}).`);
+    const win = this.rng() < g.winChance;
+    if (win) this.world.checkGain(account, token, qty); // a full daily cap refuses the bet before anything moves
+    this.betsToday.set(account, { day, n: used + 1 });
+    this.gs.add(day, account, token, win ? qty : -qty, 'gamble', 'public:luck');
+    const nm = this.econ.items[token]?.name ?? token;
+    return { toast: win ? `You win! +${qty} ${nm}.` : `You lose ${qty} ${nm}.`, tags: [token], win, token, qty };
   }
 
   /** The ferry to the island in the village's bottom-right corner: from beside one boat to the other shore. */
@@ -318,6 +342,7 @@ export class Game {
       }
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
       case 'boat': res = this.boat(account, wid, pos ?? { x: -9, y: -9 }); break;
+      case 'gamble': res = this.gamble(account, wid, pos ?? { x: -9, y: -9 }, s('token'), n('qty')); break;
       case 'hoe': {
         if (!w.row) throw new HttpError(409, 'Use the hoe in a Homeland farm.');
         const hx = n('x', -1), hy = n('y', -1);
