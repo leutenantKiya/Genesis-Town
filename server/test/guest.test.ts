@@ -144,3 +144,30 @@ test('admin: only ADMIN_ACCOUNTS; list, kick (id refused), ban (hello and regist
     assert.equal((await r.pub('/api/guest/hello', {}, '6.6.6.6')).status, 200);
   } finally { r.close(); }
 });
+
+test('admin: frozen accounts list + unfreeze, and settlement status (admins only)', async () => {
+  const r = await rig();
+  try {
+    const get = async (path: string) => {
+      const ts = String(Date.now()), sig = r.kp.sign(new TextEncoder().encode(requestMessage('GET', path, ts, ''))).signature;
+      const res = await fetch(r.base + path, { headers: { 'x-account-id': 'p1.players.test', 'x-gt-key': r.kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') } });
+      return { status: res.status, json: (await res.json()) as any };
+    };
+    r.game.gs.recordShortfall(1, 0, 'p9.players.test', 'fish', -5, -3);
+    assert.equal((await get('/api/admin/frozen')).status, 403);
+    assert.equal((await get('/api/admin/status')).status, 403);
+    assert.equal((await r.signed('/api/admin/unfreeze', { account: 'p9.players.test' })).status, 403);
+    assert.equal(r.game.gs.isFrozen('p9.players.test'), true);
+    r.cfg.adminAccounts.push('p1.players.test');
+    const fz = (await get('/api/admin/frozen')).json.frozen;
+    assert.equal(fz.length, 1); assert.equal(fz[0].account, 'p9.players.test'); assert.equal(fz[0].items[0].token, 'fish');
+    r.game.settlement.retry.set(3, { until: r.game.clock.now() + 60_000, delay: 30_000 });
+    const st = (await get('/api/admin/status')).json;
+    assert.equal(typeof st.day, 'number'); assert.equal(typeof st.settledThrough, 'number');
+    assert.equal(st.retry[0].day, 3); assert.ok(st.retry[0].inSeconds > 0); assert.ok(Array.isArray(st.settlements));
+    assert.equal((await r.signed('/api/admin/unfreeze', { account: 'p9.players.test' })).json.lifted, 1);
+    assert.equal(r.game.gs.isFrozen('p9.players.test'), false);
+    assert.equal((await get('/api/admin/frozen')).json.frozen.length, 0);
+    assert.equal((await r.signed('/api/admin/unfreeze', {})).status, 400);
+  } finally { r.close(); }
+});

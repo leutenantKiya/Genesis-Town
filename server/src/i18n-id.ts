@@ -47,6 +47,7 @@ export const EXACT: Record<string, string> = {
  "You were removed from the village.": "Kamu dikeluarkan dari desa.",
  "This address is banned.": "Alamat ini diblokir.",
  "Admins only.": "Khusus admin.",
+ "account required": "Akun wajib diisi",
  "Unknown guest.": "Tamu tidak dikenal.",
  "Nothing is being built there.": "Tidak ada yang sedang dibangun di sana.",
  "This job can't go any faster.": "Pekerjaan ini tidak bisa lebih cepat lagi.",

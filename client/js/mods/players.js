@@ -48,6 +48,9 @@
       renderHead();
     }, function (e) {
       if (e && e.status === 404) guestId = ''; // expired: say hello again
+      else if (e && e.status === 403) { // kicked or address banned by an admin: say so once and stop knocking until the page is reloaded
+        GT.toast((e.message || $t('Kamu dikeluarkan dari desa.'))); guestRetryAt = Date.now() + 365 * 86400000; me = null; others = {}; renderHead();
+      }
       else if (e && e.status === 429 && !guestId) { if (!guestToldFull) { guestToldFull = true; GT.toast($t('Desa sedang penuh tamu, coba lagi nanti.')); } guestRetryAt = Date.now() + 20000; }
       else guestRetryAt = Date.now() + 5000;
     }).then(function () { guestBusy = false; });

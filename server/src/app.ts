@@ -409,6 +409,34 @@ export function createApp(deps: AppDeps) {
         }
         throw new HttpError(404, 'no such route');
       }
+      if (p === '/api/admin/frozen' || p === '/api/admin/status' || p === '/api/admin/unfreeze') {
+        if (req.method === 'GET' && p !== '/api/admin/unfreeze') {
+          adminOf(req, url);
+          if (p === '/api/admin/frozen') {
+            const by = new Map<string, { account: string; items: Array<{ token: string; day: number; wanted: number; applied: number }> }>();
+            for (const f of game.gs.shortfalls()) {
+              if (f.kind !== 'shortfall' || f.resolved) continue;
+              const e = by.get(f.account) ?? { account: f.account, items: [] };
+              e.items.push({ token: f.token, day: f.day, wanted: f.wanted, applied: f.applied });
+              by.set(f.account, e);
+            }
+            return send(res, 200, { frozen: [...by.values()] });
+          }
+          const t = game.clock.time(), now = game.clock.now();
+          return send(res, 200, {
+            day: t.day, hour: t.hour, settleDay: t.settleDay, settledThrough: game.settlement.settledThrough(),
+            retry: [...game.settlement.retry.entries()].map(([day, r]) => ({ day, inSeconds: Math.max(0, Math.round((r.until - now) / 1000)), delaySeconds: Math.round(r.delay / 1000) })),
+            settlements: game.gs.settlements(8)
+          });
+        } else if (req.method === 'POST' && p === '/api/admin/unfreeze') {
+          const raw = await readRaw(req);
+          adminOf(req, url, raw);
+          const account = String(parseJson(raw).account ?? '');
+          if (!account) throw new HttpError(400, 'account required');
+          return send(res, 200, { account, lifted: game.gs.unfreeze(account) });
+        }
+        throw new HttpError(404, 'no such route');
+      }
       if (req.method === 'POST' && p === '/api/guest/hello') {
         assertNotBanned(clientIp(req));
         // a visitor who has not signed in: no keys, no account. Outside accountOf on purpose; limited per address, bound to it.

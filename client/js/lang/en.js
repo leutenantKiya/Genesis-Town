@@ -1385,6 +1385,13 @@
     "IP diblokir.": "Address banned.",
     "IP yang diblokir: {0}": "Banned addresses: {0}",
     "Buka blokir": "Unban",
+    "Akun beku: {0}": "Frozen accounts: {0}",
+    "Lepas beku": "Unfreeze",
+    "Akun dilepas dari beku.": "Account unfrozen.",
+    "Settlement: hari {0} jam {1}, selesai sampai hari {2}": "Settlement: day {0} hour {1}, settled through day {2}",
+    "Hari {0} gagal, coba lagi {1}s lagi": "Day {0} failed, retry in {1}s",
+    "Jadi admin: isi ADMIN_ACCOUNTS=akun1,akun2 (id akun NEAR kamu) di .env dan di Railway Variables, lalu restart server.": "To be admin: set ADMIN_ACCOUNTS=account1,account2 (your NEAR account id) in .env and in Railway Variables, then restart the server.",
+    "Kamu dikeluarkan dari desa.": "You were removed from the village.",
     "Admin": "Admin",
     "Muat ulang": "Reload"
   });
