@@ -91,3 +91,22 @@ test('re-saving the invite list keeps each guest\'s role', async () => {
   w.game.homelands.setInvites(P, [Q]);
   assert.deepEqual(w.game.gs.homelandInviteRoles(h.row.id).map((r) => ({ ...r })), [{ account: Q, role: 'helper' }]);
 });
+
+test('a visitor in the friend\'s world cannot act in their own world by sending the own spawn; only the presence poll lands a reload', async () => {
+  const w = await world();
+  w.party(P, Q);
+  const friend = w.enter(Q, P);           // Q stands in P's Homeland
+  const mine = w.home(Q);                  // Q's own Homeland: same spawn, same Town Hall door
+  assert.equal(w.game.positions!.worldOf(Q), friend.wid);
+  w.adv(1000);
+  // an upgrade aimed at "own" Homeland while the server has Q in the friend's: refused, nothing moved, nothing built
+  fails(() => w.game.act(Q, { action: 'build', kind: 'th', target: 'th', world: mine.wid, pos: mine.map.layout.spawn }), 409, 'Change worlds through the portal.');
+  fails(() => w.game.act(Q, { action: 'eat', token: 'bread', world: mine.wid, pos: mine.map.layout.spawn }), 409, 'Change worlds through the portal.');
+  assert.equal(w.game.positions!.worldOf(Q), friend.wid);
+  assert.equal(w.game.homelands.ensure(Q).th, 1);
+  assert.equal(w.game.homelands.ensure(P).th, 1);
+  // the presence poll (page reload) does land the client on its own spawn
+  w.game.reportPosition(Q, mine.map.layout.spawn, mine.wid);
+  assert.equal(w.game.positions!.worldOf(Q), mine.wid);
+  assert.equal(w.game.state(Q).worldId, mine.wid);
+});

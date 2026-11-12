@@ -551,6 +551,7 @@
     "Area Publik (pasar)": "Public Area (market)",
     "Rumahku": "My Home",
     "Dunia {0}": "World {0}",
+    "Balai Kota · {0}": "Town Hall · {0}",
     "Portal · mau ke mana?": "Portal · where to?",
     "Melangkah ke portal…": "Stepping into the portal…",
     "Peta gagal dibuat. Memuat ulang agar posisimu kembali sama dengan server…": "The map could not be created. Reloading so your position matches the server again…",

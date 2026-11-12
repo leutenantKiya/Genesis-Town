@@ -45,10 +45,14 @@ test('reload lands at own spawn', async () => {
   w.game.reportPosition(P, home.layout.spawn, wid);
   assert.equal(w.game.positions!.worldOf(P), wid);
   assert.equal(w.game.state(P).worldId, wid);
-  // the same through an action, with the server believing something else (it restarted)
+  // an action never moves a player between worlds, even onto their own spawn (the server restarted and believes 'public')
   w.game.positions!.reset(P);
-  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: wid, pos: home.layout.spawn }), 409, /energy is already full/); // past the position check
+  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: wid, pos: home.layout.spawn }), 409, 'Change worlds through the portal.');
+  assert.equal(w.game.positions!.worldOf(P), 'public');
+  // only the presence poll lands the reload
+  w.game.reportPosition(P, home.layout.spawn, wid);
   assert.equal(w.game.positions!.worldOf(P), wid);
+  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: wid, pos: home.layout.spawn }), 409, /energy is already full/); // past the position check
   // someone else's spawn is not believed
   const other = w.hl(Q), oid = `HL-${w.game.homelands.ensure(Q).id}`;
   w.adv(1000);
@@ -67,6 +71,7 @@ test('ship in a Homeland is refused; build needs standing at the door', async ()
   const w = await world();
   const home = w.hl(P), wid = `HL-${w.game.homelands.ensure(P).id}`;
   const sp = home.layout.spawn;
+  w.game.reportPosition(P, sp, wid);
   fails(() => w.game.act(P, { action: 'ship', token: 'bread', qty: 1, world: wid, pos: sp }), 409, 'The Shipping Box is only in the public area.');
   fails(() => w.game.act(P, { action: 'build', kind: 'build', target: 'kolam-c', world: wid, pos: sp }), 409, /near that lot/);
   fails(() => w.game.act(P, { action: 'build', kind: 'th', target: 'th', world: 'public', pos: w.game.map!.layout.spawn }), 409, /Homeland/);
@@ -76,6 +81,7 @@ test('travel needs the portal', async () => {
   const w = await world();
   const home = w.hl(P), wid = `HL-${w.game.homelands.ensure(P).id}`;
   const sp = home.layout.spawn;
+  w.game.reportPosition(P, sp, wid);
   fails(() => w.game.act(P, { action: 'travel', to: 'public', world: wid, pos: sp }), 409, 'Go to the portal first.');
   w.adv(60_000);
   const near = standNear(home, home.portal(), 2);

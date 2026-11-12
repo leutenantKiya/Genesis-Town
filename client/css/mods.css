@@ -21,6 +21,10 @@
 .hl-grow{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
 
 /* ---------------------------------------------------------------- Homeland: Balai Kota, lots, bots */
+/* whose Homeland this is: a chip in the top right corner of the screen (js/mods/homeland.js) */
+.hl-where{position:absolute;right:8px;top:8px;z-index:4;max-width:min(60%,260px);padding:2px 8px;border-radius:var(--r-ctl);background:var(--chip);color:var(--hud-ink);
+  font-size:calc(14px*var(--ts));line-height:1.3;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hl-where.guest{color:var(--gold)}
 .hl-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 6px}
 .hl-stat{display:flex;justify-content:space-between;align-items:baseline;gap:8px;background:var(--paper-2);box-shadow:inset 0 var(--line) 0 var(--paper-hi);
   border-radius:var(--r-ctl);padding:8px 10px;font-size:calc(15px*var(--ts))}

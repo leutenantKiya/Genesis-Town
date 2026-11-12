@@ -17,7 +17,8 @@
   var H = null;                          // last GET /api/homeland: the view plus `invited`
   var HV = null;                         // the view of the Homeland we stand in when it is someone else's (GET /api/homeland?world=), with our `role`
   var layoutSig = '';                    // signature of the generator inputs the current map was built from
-  var loading = null, lastLoad = 0, pollT = 0, jobPing = 0;
+  var loading = null, lastLoad = 0, pollT = 0, jobPing = 0, lastSync = 0;
+  var whereEl = null, whereTxt = null;     // the chip that says whose Homeland this is
   var travelling = false, hintShown = false, nearHint = false, hintT = 0;
   var win = null;                        // the open window: { kind: 'hall' | 'lot', arg, h, busy }
   var lastClose = 0, clockT = 0;
@@ -53,10 +54,13 @@
   function S() { return C && C.state; }
   function wid() { return (GT.worldId && GT.worldId()) || 'public'; }
   function isHL(w) { return /^HL-\d+$/.test(w); }
-  function inOwnHome() { return !!(H && wid() === H.world); }
-  /* the Homeland we are looking at: our own, or the host's when we are a guest */
-  function V() { return inOwnHome() ? H : (isHL(wid()) ? HV : null); }
-  function role() { if (inOwnHome()) return 'owner'; var h = S() && S().st && S().st.here; return (HV && HV.role) || (h && h.role) || 'visitor'; }
+  /* The world the SERVER has us in (every state answer carries it). When it differs from the one drawn here (not while travelling), the
+     screen is not trustworthy: it must not pass for our own Homeland. The state is refreshed until both agree. */
+  function mismatch() { var st = S() && S().st, sw = st && st.worldId; return !!(sw && !travelling && sw !== wid()); }
+  function inOwnHome() { return !!(H && wid() === H.world && !mismatch()); }
+  /* the Homeland we are looking at: our own, or the host's when we are a guest (nothing while client and server disagree) */
+  function V() { return mismatch() ? null : inOwnHome() ? H : (isHL(wid()) ? HV : null); }
+  function role() { if (inOwnHome()) return 'owner'; if (mismatch()) return 'visitor'; var h = S() && S().st && S().st.here; return (HV && HV.role) || (h && h.role) || 'visitor'; }
   function hostName() { var h = S() && S().st && S().st.here; return (h && h.owner_name) || $t('pemilik'); }
   function assistCost() { var c = S() && S().cfg && S().cfg.econ && S().cfg.econ.coop; return (c && c.assistEnergy) || 10; }
   function itemName(t) {
@@ -656,7 +660,7 @@
       if (ctx.mode === 'bump' && Date.now() - lastClose < 700) return true; // key still held after closing the window
       if (ctx.mode === 'message') return false;
       if (!loggedIn()) return true;
-      if (d.kind === 'townhall') openWin('hall', $t('Balai Kota'));
+      if (d.kind === 'townhall') openWin('hall', inOwnHome() ? $t('Balai Kota') : $t('Balai Kota · {0}', [hostName()]));
       else openWin('lot', KIND_NAME[d.kind] || $t('Bangunan'), d.lot);
       return true;
     }
@@ -670,10 +674,30 @@
     }
     return false;
   }
+  /* A small chip in the corner of the screen while in a Homeland: "Rumahku" for your own, "Dunia {name}" for someone else's. */
+  function where() {
+    var txt = '', guest = false;
+    if (isHL(wid())) {
+      if (mismatch() || (!inOwnHome() && !H)) txt = $t('Memuat…');
+      else if (inOwnHome()) txt = $t('Rumahku');
+      else { txt = $t('Dunia {0}', [hostName()]); guest = true; }
+    }
+    if (txt === whereTxt) return;
+    whereTxt = txt;
+    if (!txt) { if (whereEl) whereEl.style.display = 'none'; return; }
+    if (!whereEl) {
+      var screen = document.getElementById('screen');
+      if (!screen) return;
+      whereEl = $('div', 'hl-where'); whereEl.setAttribute('aria-live', 'polite'); screen.appendChild(whereEl);
+    }
+    whereEl.textContent = txt; whereEl.classList.toggle('guest', guest); whereEl.style.display = '';
+  }
   function onFrame(dt) {
     var now = Date.now();
     for (var i = pops.length - 1; i >= 0; i--) { pops[i].t += dt; if (pops[i].t > 1.4) pops.splice(i, 1); }
     clockT += dt;
+    where();
+    if (mismatch() && now - lastSync > 3000 && C && S() && S().account && S().mode !== 'offline') { lastSync = now; C.refresh(true).then(function () { return load(true); }); }
     if (win && win.kind === 'hall' && clockT >= 1) { clockT = 0; redrawWin(); }
     pollT -= dt;
     if (pollT <= 0) {

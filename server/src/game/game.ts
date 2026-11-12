@@ -242,7 +242,8 @@ export class Game {
     if ((a === 'build' || a === 'collect' || a === 'assist' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Build and harvest in your own Homeland.');
     let pos: Pos | null = null;
     if (this.map && this.positions && w.map) {
-      pos = this.positions.report(account, body.pos, this.now(), wid, w.map, this.homeFor(account, wid));
+      // no `home` here: an action never changes worlds (only `travel` and the presence poll of a reload do)
+      pos = this.positions.report(account, body.pos, this.now(), wid, w.map);
       const far = (msg: string) => { throw new HttpError(409, msg); };
       if (a === 'gather' && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Too far. Stand right next to it.');
       if ((a === 'sell' || a === 'buy') && !w.map.nearStall(pos)) far('Buying and selling happens at the merchants\' stalls in the market.');
