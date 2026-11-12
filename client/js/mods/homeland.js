@@ -130,7 +130,7 @@
       if (H && cur !== H.world) opts.push({ label: $t('Rumahku'), onPick: function () { travel(H.world); } });
       ((H && H.invited) || []).forEach(function (v) {
         if (cur === v.world) return;
-        opts.push({ label: $t('Dunia {0}', [v.owner_name || v.world]), onPick: function () { travel(v.world); } });
+        opts.push({ label: v.via === 'party' ? $t('Dunia {0} (party)', [v.owner_name || v.world]) : $t('Dunia {0}', [v.owner_name || v.world]), onPick: function () { travel(v.world); } });
       });
       GT.menu($t('Portal · mau ke mana?'), opts);
     });

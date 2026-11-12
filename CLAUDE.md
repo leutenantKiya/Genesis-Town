@@ -49,8 +49,8 @@ NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play
 - Server validates actions against where the player stands (shared `village.js` map).
 - **Homeland**: every player has an off-chain world (`HL-<n>`), not an NFT and not sellable. Town Hall, chunk and building
   timers are server-authoritative (`ends_at`, one builder, one job at a time); buildings produce lazily, capped by
-  capacity and `caps.dailyGainPerItem`. Contractors tire and the Restoran pantry feeds them; hired bots need a bed in a Rumah Pekerja; collapsed contractors go to the Rumah Sakit; cosmetics boost bots (all off-chain, no new tokens). The public area (`public`) is trade-only: merchants, Pasar, players. Guests are
-  invited by `name#tag`, walk and chat, never build. Settlement uses the token registry only.
+  capacity and `caps.dailyGainPerItem`. Contractors tire and the Restoran pantry feeds them; hired bots need a bed in a Rumah Pekerja; collapsed contractors go to the Rumah Sakit; cosmetics boost bots (all off-chain, no new tokens). The public area (`public`) is trade-only: merchants, Pasar, players. Guests (invited by `name#tag`, or the owner's party) walk, chat and eat; what else they may do is the owner's choice (roles, see docs/coop-trade-plan.md).
+  Settlement uses the token registry only.
 - **Direct player trade** (`/api/trade/*`, public area, within 3 tiles) is off-chain ledger rows settled daily like merchant trades; Pasar listings and gifts stay on chain. Consignment sells inside the same coin faucet. Worker bots never hold items or coin and never trade.
 - Coin is minted only by town demand, capped per day + money-supply throttle (`docs/economy.md`).
 
@@ -58,7 +58,7 @@ NEAR Auth (Google/email); no seed phrase, wallet popup or gas prompt during play
 
 client mod → `POST /api/act {kind, ...}` (signed) → `game.ts` switch → `world.ts`/`market.ts` method → ledger row
 via `gamestore.ts` → shows in Riwayat as "menunggu settlement" → `settlement.ts` at 06:00. Requests that happen inside a Homeland carry `world` (`public` or `HL-<n>`); positions and gather checks use that
-world's map (`Game.worldFor`). Add tests in
+world's map (`Game.worldFor(account, world, need)`, `need` = `visit`, `help`, `build` or `owner`: the least Homeland role the action needs, table `NEED` in `game.ts`). Add tests in
 `server/test/`. Balance/tuning numbers go in `economy/config.json`, not code.
 
 ## Commands

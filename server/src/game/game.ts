@@ -23,6 +23,13 @@ export interface GameOptions { merchantParent: string; town: string; chunkSize?:
 
 const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress'] as const;
 
+/** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
+export type Need = 'visit' | 'help' | 'build' | 'owner';
+const NEED: Record<(typeof ACTIONS)[number], Need> = {
+  gather: 'help', craft: 'owner', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  travel: 'visit', build: 'build', collect: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
+};
+
 export class Game {
   econ: Econ;
   gs: GameStore;
@@ -56,7 +63,7 @@ export class Game {
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
-    this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, clock: this.clock, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
+    this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, clock: this.clock, party: { same: (a, b) => this.party.same(a, b), mates: (a) => this.party.mates(a) }, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
     const hist = (a: string, summary: string, tokens: string[]) => { store.addHistory(a, 'trade', summary, 'offchain', null, null, tokens.filter((t) => t in this.econ.items)); };
     this.trade = new Trade({
       econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, now: this.now, history: hist, assertActive: (a) => this.assertActive(a),
@@ -92,7 +99,7 @@ export class Game {
   reportPosition(account: string, pos: Pos | null, world = 'public') {
     if (!this.positions || !pos) return;
     this.fixWorld(account);
-    try { this.positions.report(account, pos, this.now(), world, this.worldFor(account, world, false).map ?? undefined, this.homeFor(account, world)); } catch { /* a bad poll is not an action; the next action is checked */ }
+    try { this.positions.report(account, pos, this.now(), world, this.worldFor(account, world, 'visit').map ?? undefined, this.homeFor(account, world)); } catch { /* a bad poll is not an action; the next action is checked */ }
   }
 
   /** The player's own Homeland as a place to land (page reload, Start): only when `world` is that Homeland and the server has them elsewhere. */
@@ -104,14 +111,16 @@ export class Game {
     return { world, spawn: this.homelands.map(row).layout.spawn };
   }
 
-  /** The map a request is about. Homelands: the owner (or, for walking and travel only, an invited guest) is let in; anyone else gets 409. */
-  worldFor(account: string, wid: string, ownerOnly: boolean): { map: GameMap | null; row: HomelandRow | null } {
+  /** The map a request is about. `need` is the least role the request needs in a Homeland: 'visit' (any guest: invited or the owner's party),
+   *  'help' (Helper or better), 'build' (Builder or better) or 'owner'. Anyone who may not be there at all gets 409. */
+  worldFor(account: string, wid: string, need: Need): { map: GameMap | null; row: HomelandRow | null } {
     if (wid === 'public') return { map: this.map, row: null };
     const id = parseHome(wid);
     if (id === null || !worldIdOk(wid) || wid !== homeWorld(id)) throw new HttpError(400, 'Unknown world.');
     if (!this.map) throw new HttpError(409, 'The Homeland world isn\'t active yet.');
-    const { row, owner } = this.homelands.access(account, id);
-    if (ownerOnly && !owner) throw new HttpError(409, 'This isn\'t your Homeland. Guests can only look around.');
+    const { row, role } = this.homelands.access(account, id);
+    const have = { visitor: 0, helper: 1, builder: 2, owner: 3 }[role], want = { visit: 0, help: 1, build: 2, owner: 3 }[need];
+    if (have < want) throw new HttpError(409, need === 'help' ? 'Ask the owner to make you a Helper.' : need === 'build' ? 'Only the owner or a Builder can build here.' : 'This isn\'t your Homeland. Guests can only look around.');
     return { map: this.homelands.map(row), row };
   }
 
@@ -122,7 +131,7 @@ export class Game {
   fixWorld(account: string) {
     const w = this.positions?.worldOf(account);
     if (!this.positions || !w || w === 'public') return;
-    try { this.worldFor(account, w, false); } catch { this.positions.reset(account); }
+    try { this.worldFor(account, w, 'visit'); } catch { this.positions.reset(account); this.monsters?.pending.delete(account); }
   }
 
   /** Portal trip: from within 2 tiles of this world's portal to the public area (arrive at its portal) or a Homeland you own or are invited to (arrive at its spawn). */
@@ -132,7 +141,7 @@ export class Game {
     if (to === from) throw new HttpError(409, 'You\'re already there.');
     const d = fromMap.portal();
     if (Math.abs(pos.x - d.x) + Math.abs(pos.y - d.y) > 2) throw new HttpError(409, 'Go to the portal first.');
-    const target = this.worldFor(account, to, false);
+    const target = this.worldFor(account, to, 'visit');
     const arrive = target.row ? target.map!.layout.spawn : this.map.portal();
     this.positions.setWorld(account, to, arrive, this.now());
     return { toast: target.row ? (target.row.account === account ? 'Arrived at your Homeland.' : 'Arrived at your friend\'s Homeland.') : 'Arrived in the public area.', world: to, arrive };
@@ -225,7 +234,7 @@ export class Game {
     // With the shared map, every action says where the player stands, and the action must happen there.
     // Every action says which world it is in (default: the public area). Homelands: only the owner acts; guests just walk.
     const wid = s('world') || 'public';
-    const w = this.worldFor(account, wid, a !== 'travel');
+    const w = this.worldFor(account, wid, NEED[a as (typeof ACTIONS)[number]]);
     const home = this.econ.homeland;
     if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
     if (w.row && a === 'ship') throw new HttpError(409, 'The Shipping Box is only in the public area.');

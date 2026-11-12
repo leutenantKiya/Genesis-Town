@@ -98,12 +98,13 @@ test('stranger cannot enter HL-<other>', async () => {
   const near = standNear(w.game.map!, w.game.map!.portal(), 2);
   fails(() => w.game.act(P, { action: 'travel', to: oid, world: 'public', pos: near }), 409, 'You are not invited to this world.');
   fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: oid, pos: w.hl(Q).layout.spawn }), 409, /not invited/);
-  // an invited guest may enter, but not act
+  // an invited guest may enter and eat, but not gather
   w.game.homelands.setInvites(Q, [P]);
   const r = w.game.act(P, { action: 'travel', to: oid, world: 'public', pos: near }) as any;
   assert.equal(r.world, oid);
   w.adv(1000);
-  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: oid, pos: w.hl(Q).layout.spawn }), 409, /isn't your Homeland/);
+  fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: oid, pos: w.hl(Q).layout.spawn }), 409, /energy is already full/);
+  fails(() => w.game.act(P, { action: 'gather', tile: 'tree', x: 1, y: 1, world: oid, pos: w.hl(Q).layout.spawn }), 409, /Helper/);
 });
 
 test('demo path: gather wood at home x5, build kolam, advance 45 s, collect after 30 s gives fish, travel to public, sell fish at a stall gives coin', async () => {

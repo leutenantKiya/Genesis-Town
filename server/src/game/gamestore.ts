@@ -9,7 +9,7 @@ export interface Plot { account: string; idx: number; state: 'empty' | 'tilled' 
 export interface MarketRow { merchant: string; token: string; mid: number; bought: number; sold: number; ask: number; bid: number; reason: string; change_pct: number; hour: number }
 
 
-export interface HomelandRow { account: string; id: number; seed: number; gen: number; th: number; open: string[]; created_at: number }
+export interface HomelandRow { account: string; id: number; seed: number; gen: number; th: number; open: string[]; created_at: number; party_role?: string | null }
 export interface HomelandBuildingRow { account: string; lot: string; kind: string; last_collect: number }
 export interface HomelandJobRow { account: string; target: string; kind: 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade'; ends_at: number; worker: number; base_secs: number; started_at: number }
 export interface WorkerRow { account: string; slot: number; fatigue: number; updated_at: number; sick_until: number }
@@ -60,6 +60,10 @@ export class GameStore {
     `);
     const jc = (this.db.prepare('PRAGMA table_info(homeland_jobs)').all() as Array<{ name: string }>).map((c) => c.name);
     const bc = (this.db.prepare('PRAGMA table_info(homeland_bots)').all() as Array<{ name: string }>).map((c) => c.name);
+    const hc = (this.db.prepare('PRAGMA table_info(homelands)').all() as Array<{ name: string }>).map((c) => c.name);
+    const ic = (this.db.prepare('PRAGMA table_info(homeland_invites)').all() as Array<{ name: string }>).map((c) => c.name);
+    if (!hc.includes('party_role')) this.db.exec('ALTER TABLE homelands ADD COLUMN party_role TEXT');
+    if (!ic.includes('role')) this.db.exec("ALTER TABLE homeland_invites ADD COLUMN role TEXT NOT NULL DEFAULT 'visitor'");
     if (!bc.includes('house')) this.db.exec("ALTER TABLE homeland_bots ADD COLUMN house TEXT NOT NULL DEFAULT ''");
     for (const c of ['worker', 'base_secs', 'started_at']) if (!jc.includes(c)) this.db.exec(`ALTER TABLE homeland_jobs ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
   }
@@ -336,13 +340,22 @@ export class GameStore {
   homelandInvites(id: number): string[] {
     return (this.db.prepare('SELECT account FROM homeland_invites WHERE id = ? ORDER BY account').all(id) as unknown as Array<{ account: string }>).map((r) => r.account);
   }
-  setHomelandInvites(id: number, accounts: string[]) {
-    this.db.prepare('DELETE FROM homeland_invites WHERE id = ?').run(id);
-    const st = this.db.prepare('INSERT OR IGNORE INTO homeland_invites (id, account) VALUES (?, ?)');
-    for (const a of accounts) st.run(id, a);
+  /** The invite list with each guest's role. */
+  homelandInviteRoles(id: number): Array<{ account: string; role: string }> {
+    return this.db.prepare('SELECT account, role FROM homeland_invites WHERE id = ? ORDER BY account').all(id) as unknown as Array<{ account: string; role: string }>;
   }
-  /** Homelands whose invite list holds this account. */
-  homelandsInvitedTo(account: string): HomelandRow[] {
-    return this.db.prepare('SELECT h.* FROM homelands h JOIN homeland_invites v ON v.id = h.id WHERE v.account = ? ORDER BY h.id').all(account).map((r) => this.homelandRow(r)!);
+  /** Replaces the list; an account that stays keeps its role, a new one starts as a visitor. */
+  setHomelandInvites(id: number, accounts: string[]) {
+    this.tx(() => {
+      const keep = new Map(this.homelandInviteRoles(id).map((r) => [r.account, r.role]));
+      this.db.prepare('DELETE FROM homeland_invites WHERE id = ?').run(id);
+      const st = this.db.prepare('INSERT OR IGNORE INTO homeland_invites (id, account, role) VALUES (?, ?, ?)');
+      for (const a of accounts) st.run(id, a, keep.get(a) ?? 'visitor');
+    });
+  }
+  setHomelandPartyRole(account: string, role: string | null) { this.db.prepare('UPDATE homelands SET party_role = ? WHERE account = ?').run(role, account); }
+  /** Homelands whose invite list holds this account, with the invite role. */
+  homelandsInvitedTo(account: string): Array<HomelandRow & { role: string }> {
+    return this.db.prepare('SELECT h.*, v.role AS role FROM homelands h JOIN homeland_invites v ON v.id = h.id WHERE v.account = ? ORDER BY h.id').all(account).map((r) => ({ ...this.homelandRow(r)!, role: String((r as { role: unknown }).role) }));
   }
 }

@@ -138,7 +138,7 @@ export function createApp(deps: AppDeps) {
   social.partyJoinedAt = (a) => game.party.joinedAt(a);
   social.access = (a, w) => {
     if (w === 'public') return true;
-    try { game.worldFor(a, w, false); return true; } catch { return false; }
+    try { game.worldFor(a, w, 'visit'); return true; } catch { return false; }
   };
   /** The party view plus where each member is: `world` and `online` from presence (last 15 s); `x`, `y` only for a mate outdoors in `w`. */
   function partyWithPlaces(acct: string, w: string) {
@@ -353,7 +353,7 @@ export function createApp(deps: AppDeps) {
         game.fixWorld(acct); // a guest uninvited while standing there: back to the public area first
         const w = await checkedWorld(acct, b.world, { x: Number(b.x), y: Number(b.y) });
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
-        if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, false).map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
+        if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, 'visit').map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
         if (onTile) social.report(acct, w, b);
         const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));

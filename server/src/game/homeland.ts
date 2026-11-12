@@ -14,7 +14,14 @@ import type { Clock } from './clock.ts';
 import { Homeland, HomelandMap, type HomelandProgress } from './worldmap.ts';
 
 export interface PlayerDir { nameOf(account: string): string | null; tagOf(account: string): string; accountByNameTag(name: string, tag: string): string | null; isPlayer(account: string): boolean }
-export interface HomelandDeps { econ: Econ; gs: GameStore; worldSeed: number; now: () => number; players?: PlayerDir; town: string; clock?: Clock }
+export interface HomelandDeps { econ: Econ; gs: GameStore; worldSeed: number; now: () => number; players?: PlayerDir; town: string; clock?: Clock; party?: { same(a: string, b: string): boolean; mates(a: string): string[] } }
+
+/** Guest roles: visitor < helper < builder < owner. */
+export type Role = 'visitor' | 'helper' | 'builder' | 'owner';
+const RANK: Record<Role, number> = { visitor: 0, helper: 1, builder: 2, owner: 3 };
+const roleOf = (r: string): Role => (r === 'helper' || r === 'builder' || r === 'owner' ? r : 'visitor');
+// Step 4 lifts this cap: until helper powers exist, every guest is effectively a visitor.
+const capRole = (r: Role): Role => (RANK[r] <= RANK.visitor ? r : 'visitor');
 
 export interface BuildingOption extends BuildingDef { lot: string | null; can: boolean; why: string | null }
 export interface HomelandView {
@@ -580,12 +587,26 @@ export class Homelands {
 
   /* ------------------------------------------------------------ guests */
 
-  access(account: string, id: number): { row: HomelandRow; owner: boolean } {
+  /** The role a non-owner gets in this Homeland, or null: the better of the invite role and the party role. */
+  private guestRole(account: string, row: HomelandRow): { role: Role; via: 'invite' | 'party' } | null {
+    let best: { role: Role; via: 'invite' | 'party' } | null = null;
+    const inv = this.d.gs.homelandInviteRoles(row.id).find((r) => r.account === account);
+    if (inv) best = { role: capRole(roleOf(inv.role)), via: 'invite' };
+    const pr = row.party_role ?? this.d.econ.coop.partyRoleDefault;
+    if (pr !== 'none' && this.d.party?.same(account, row.account)) {
+      const role = capRole(roleOf(pr));
+      if (!best || RANK[role] > RANK[best.role]) best = { role, via: 'party' };
+    }
+    return best;
+  }
+
+  access(account: string, id: number): { row: HomelandRow; owner: boolean; role: Role } {
     const row = this.byId(id);
     if (!row) throw new HttpError(404, 'That world does not exist.');
-    const owner = row.account === account;
-    if (!owner && !this.d.gs.homelandInvites(id).includes(account)) throw new HttpError(409, 'You are not invited to this world.');
-    return { row, owner };
+    if (row.account === account) return { row, owner: true, role: 'owner' };
+    const g = this.guestRole(account, row);
+    if (!g) throw new HttpError(409, 'You are not invited to this world.');
+    return { row, owner: false, role: g.role };
   }
 
   /** Only the owner edits the list; each entry is an account id of a registered player or a display name. */
@@ -608,7 +629,16 @@ export class Homelands {
     return list;
   }
 
-  invitedTo(account: string): Array<{ id: number; world: string; owner_name: string; owner_tag: string }> {
-    return this.d.gs.homelandsInvitedTo(account).map((r) => ({ id: r.id, world: homeWorld(r.id), owner_name: this.d.players?.nameOf(r.account) ?? r.account, owner_tag: this.d.players?.tagOf(r.account) ?? '' }));
+  /** Homelands this account may visit as a guest: on the owner's invite list, or the owner's party (unless the owner shut it out). */
+  invitedTo(account: string): Array<{ id: number; world: string; owner_name: string; owner_tag: string; role: Role; via: 'invite' | 'party' }> {
+    const rows = new Map<number, HomelandRow>();
+    for (const r of this.d.gs.homelandsInvitedTo(account)) rows.set(r.id, r);
+    for (const m of this.d.party?.mates(account) ?? []) { const r = this.d.gs.homelandOf(m); if (r) rows.set(r.id, r); }
+    const out: Array<{ id: number; world: string; owner_name: string; owner_tag: string; role: Role; via: 'invite' | 'party' }> = [];
+    for (const r of [...rows.values()].sort((a, b) => a.id - b.id)) {
+      const g = this.guestRole(account, r);
+      if (g) out.push({ id: r.id, world: homeWorld(r.id), owner_name: this.d.players?.nameOf(r.account) ?? r.account, owner_tag: this.d.players?.tagOf(r.account) ?? '', role: g.role, via: g.via });
+    }
+    return out;
   }
 }

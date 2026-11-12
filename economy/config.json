@@ -132,6 +132,7 @@
   ],
   "trade": { "expireSecs": 120, "maxLines": 4 },
   "party": { "max": 4, "inviteSecs": 120, "maxPendingInvites": 5 },
+  "coop": { "partyRoleDefault": "helper" },
   "consign": { "merchant": "Granny Daisy", "feeBps": 500, "maxPerItem": 50, "sellPerGameHour": 3 },
   "homeland": {
     "builders": 1,

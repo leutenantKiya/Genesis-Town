@@ -22,7 +22,7 @@
 
 - [x] Step 1: Party core: create, invite, accept or decline, leave, kick; panel and name-card button
 - [x] Step 2: Party everywhere: green tags, minimap dots, off-screen arrows, party chat `/p`
-- [ ] Step 3: Party in Homelands: owner's party may visit; portal entries, "Ikut" follow, safe leave and kick
+- [x] Step 3: Party in Homelands: owner's party may visit; portal entries, "Ikut" follow, safe leave and kick
 - [ ] Step 4: Homeland roles (Pengunjung / Pembantu / Tukang) and gathering plus night fights for helpers
 - [ ] Step 5: Farming together (planter gets the harvest, guest plot limit)
 - [ ] Step 6: Building together (builder pays, `assist` speeds jobs, helpers collect for the owner)

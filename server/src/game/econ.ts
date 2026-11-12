@@ -57,6 +57,7 @@ export interface Econ {
   homeland: HomelandConfig;
   trade: { expireSecs: number; maxLines: number };
   party: { max: number; inviteSecs: number; maxPendingInvites: number };
+  coop: { partyRoleDefault: 'none' | 'visitor' | 'helper' | 'builder' };
   consign: { merchant: string; feeBps: number; maxPerItem: number; sellPerGameHour: number };
 }
 

@@ -1329,6 +1329,9 @@
     "offline": "offline",
     "Homelandmu": "Your Homeland",
     "Homeland {0}": "{0}'s Homeland",
+    "Dunia {0} (party)": "World {0} (party)",
+    "Ketua pindah ke {0}. Ikut?": "The leader moved to {0}. Follow?",
+    "Ikut": "Follow",
     "[Party] {0}": "[Party] {0}"
   });
 })();

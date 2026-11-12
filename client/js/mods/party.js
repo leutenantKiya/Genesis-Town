@@ -24,6 +24,7 @@
     if (!v) return;
     view = { party: v.party || null, invites: v.invites || [] };
     if (panel && panel.isOpen()) renderPanel();
+    watchLeader();
     maybePopInvite();
   }
   function isLeader() { return !!(view.party && view.party.leader === me()); }
@@ -38,6 +39,38 @@
     if (H && H.world === m.world) return $t('Homelandmu');
     var v = H && (H.invited || []).filter(function (i) { return i.world === m.world; })[0];
     return v && v.owner_name ? $t('Homeland {0}', [v.owner_name]) : $t('Homeland');
+  }
+  // can I travel to this world? the village, my Homeland, or one I may visit (invited or a mate's)
+  function canGo(world) {
+    if (!world) return false;
+    if (world === 'public') return true;
+    var H = window.GT_HOME && GT_HOME.state && GT_HOME.state();
+    return !!(H && (H.world === world || (H.invited || []).some(function (i) { return i.world === world; })));
+  }
+  var following = false;
+  // "Ikut": walk to the portal of the world I am in, then cross to the mate's world. The server checks access as for any travel.
+  function follow(world) {
+    if (following || !window.GT_HOME || !canGo(world) || GT.worldId() === world) return;
+    if (GT.isUiOpen()) return;
+    var p = GT.world && GT.world.portal, pl = GT.player;
+    if (!p || !pl) { GT.toast($t('Tidak ada jalan ke portal.')); return; }
+    var cross = function () { GT_HOME.travel(world); };
+    if (Math.abs(pl.x - p.x) + Math.abs(pl.y - p.y) <= 2) { cross(); return; }
+    if (!(window.GT_MOUSE && GT_MOUSE.goNear(p, cross))) { GT.toast($t('Tidak ada jalan ke portal.')); return; }
+    GT.toast($t('Berjalan ke portal…'));
+  }
+  // the leader changed world between two polls: offer to follow
+  var leaderWorld = null;
+  function watchLeader() {
+    var p = view.party;
+    if (!p) { leaderWorld = null; return; }
+    var l = p.members.filter(function (m) { return m.leader; })[0];
+    if (!l || l.account === me() || !l.online || !l.world) return;
+    var was = leaderWorld; leaderWorld = l.world;
+    if (was && was !== l.world && l.world !== GT.worldId() && canGo(l.world) && !GT.isUiOpen()) {
+      var w = l.world;
+      GT.menu($t('Ketua pindah ke {0}. Ikut?', [placeOf(l)]), [{ label: $t('Ikut'), onPick: function () { follow(w); } }, { label: $t('Nanti'), onPick: function () {} }]);
+    }
   }
   // green dots on the map sheet (M) for mates in my world: the server sends x, y only for them
   function onMinimap(g, C) {
@@ -69,6 +102,11 @@
         tx.appendChild($('div', 'tr-lot-n', m.name + '#' + m.tag + (m.leader ? ' · ' + $t('Ketua') : '') + (m.account === me() ? ' · ' + $t('kamu') : '')));
         tx.appendChild($('div', 'chain-dim', m.account === me() ? placeOf({ online: true, world: (GT.worldId && GT.worldId()) || 'public' }) : placeOf(m)));
         row.appendChild(tx);
+        if (m.account !== me() && m.online && m.world && m.world !== ((GT.worldId && GT.worldId()) || 'public') && canGo(m.world)) {
+          var jn = $('button', 'mbtn primary', $t('Ikut')); jn.type = 'button';
+          jn.addEventListener('click', function () { if (panel && panel.isOpen()) panel.close(); follow(m.world); });
+          row.appendChild(jn);
+        }
         if (isLeader() && m.account !== me()) {
           var kick = $('button', 'mbtn', $t('Keluarkan')); kick.type = 'button';
           kick.addEventListener('click', function () { answer('/party/kick', { account: m.account }, $t('{0} dikeluarkan dari party.', [m.name])); });
