@@ -277,6 +277,22 @@
     }
   }
 
+  /* ---------------------------------------------------------------- riding the carousel (ride.js sets GT_RIDE.on)
+     The player's card sits on the first horse, which turns with the ride (fun.js: spin.rotation.y = t * 0.55, horse 0
+     at radius 1.05, bobbing sin(t * 2.2) * 0.14), and the camera drops low and slowly circles the ride, looking at
+     the rider: a cinematic shot. Only the picture changes; the player still stands on their tile for the game. */
+  function rideShot(now) {
+    var R = window.GT_RIDE, L = world && world.layout, car = L && L.fun && L.fun.carousel;
+    if (!R || !R.on || !car) return;
+    var t = now / 1000, th = t * 0.55, cx = car.x + 0.5, cz = car.y + 0.5;
+    var hx = cx + Math.cos(th) * 1.05, hz = cz - Math.sin(th) * 1.05, bob = Math.sin(t * 2.2) * 0.14;
+    var me = actors.get('me');
+    if (me) { me.actor.set(hx, hz, 'down', 'sit'); me.actor.pose(0.62 + bob, 0, 1); me.actor.group.visible = true; }
+    var ca = th * 0.4 + 0.9, r = 5.4;
+    camera.position.set(cx + Math.sin(ca) * r, 1.45, cz + Math.cos(ca) * r);
+    camera.lookAt(hx, 0.95 + bob, hz);
+  }
+
   /* ---------------------------------------------------------------- dropping into the world (after the character screen)
      The player's own 3D card falls from high above, speeding up and spinning twice, lands on their tile with a squash and
      a ring of dust. Being the real sprite, it is lit like the world at that hour and lands exactly where the player is. */
@@ -475,6 +491,7 @@
       actors.forEach(function (a, k) { if (!seen.has(k) && !(keepOut && a.outdoor)) { a.actor.dispose(); actors.delete(k); } });
       rig.follow(pt.x, pt.y, dt);
       if (snapNext || Math.hypot(rig.target.x - pt.x, rig.target.z - pt.y) > 8) { rig.snap(); snapNext = false; } // a new world or a long jump: no glide across the map
+      rideShot(now);
       sky.set(o.hour, season); sky.follow(pt.x, pt.y);
       world.update(now / 1000, o.hour, sky.night);
       syncStumps(now); world.nature.tick(dt);

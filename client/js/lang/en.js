@@ -69,6 +69,7 @@
     "Penggergajian": "Sawmill",
     "atau": "or",
     "Tingkatkan": "Upgrade",
+    "Naik kuda putar · jalan atau Esc untuk turun": "On the carousel · walk or press Esc to get off",
     "Mall": "Mall",
     "Perlengkapan untuk pekerjamu. Tiap barang menambah tenaga pekerja (tukang lebih cepat, bot menghasilkan lebih banyak). Satu barang per pekerja; membeli yang baru menggantikannya.": "Gear for your workers. Each piece makes a worker stronger (builders work faster, bots make more). One piece per worker; a new one replaces it.",
     "Tukang Balai Kota": "Town Hall Builder",
