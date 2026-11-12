@@ -178,6 +178,15 @@ export function createApp(deps: AppDeps) {
     return acct;
   }
 
+  function isAdmin(acct: string) { return deps.cfg.adminAccounts.includes(acct); }
+  function assertNotBanned(ip: string) { if (deps.store.isBanned(ip)) throw new HttpError(403, 'This address is banned.'); }
+  /** Admin routes: signed like any player request, then the account must be in ADMIN_ACCOUNTS (403 otherwise). */
+  function adminOf(req: IncomingMessage, url: URL, raw = ''): string {
+    const acct = accountOf(req, url, raw);
+    if (!isAdmin(acct)) throw new HttpError(403, 'Admins only.');
+    return acct;
+  }
+
   /** Dev tools (clock jump, forced settlement) only answer the owner's own machine: DEV_TOOLS=1 and a direct loopback
    *  request with no proxy header. On a public host they stay closed even if the flag is left on by mistake. */
   function devAllowed(req: IncomingMessage) {
@@ -352,6 +361,7 @@ export function createApp(deps: AppDeps) {
       }
       if (req.method === 'POST' && p === '/api/auth/register') {
         const ip = clientIp(req);
+        assertNotBanned(ip);
         if (!ipLimiter.take(ip)) throw new HttpError(429, 'too many sign-ups from this address');
         return send(res, 200, await register({ ...deps, onNewPlayer: (a) => game.onNewPlayer(a) }, await readJson(req)));
       }
@@ -363,6 +373,7 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, transfers.create(acct, b.ct, b.iv));
       }
       if (req.method === 'POST' && p === '/api/transfer/redeem') {
+        assertNotBanned(clientIp(req));
         if (!redeemLimiter.take(clientIp(req))) throw new HttpError(429, 'too many new-device requests');
         return send(res, 200, transfers.redeem((await readJson(req)).id));
       }
@@ -379,13 +390,34 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/time') {
         return send(res, 200, { ...game.clock.time(), fraction: game.clock.hourFraction(), settledThrough: game.settlement.settledThrough(), world: game.map ? { seed: game.map.seed, unlocked: game.map.unlocked } : null, weather: game.weather() });
       }
+      if (p === '/api/admin/guests' || p === '/api/admin/bans' || p === '/api/admin/kick' || p === '/api/admin/ban' || p === '/api/admin/unban') {
+        if (req.method === 'GET') {
+          adminOf(req, url);
+          if (p === '/api/admin/guests') return send(res, 200, { guests: social.guestList() });
+          if (p === '/api/admin/bans') return send(res, 200, { bans: deps.store.listBans() });
+        } else if (req.method === 'POST') {
+          const raw = await readRaw(req);
+          adminOf(req, url, raw);
+          const b = parseJson(raw);
+          if (p === '/api/admin/kick') return send(res, 200, { kicked: social.kickGuest(String(b.guest ?? '')), guests: social.guestList() });
+          const ip = String(b.ip ?? '').trim().slice(0, 64);
+          if (!ip) throw new HttpError(400, 'ip required');
+          if (p === '/api/admin/ban') { deps.store.addBan(ip, String(b.note ?? '').slice(0, 200)); social.dropGuestsOf(ip); }
+          else if (p === '/api/admin/unban') deps.store.removeBan(ip);
+          else throw new HttpError(404, 'no such route');
+          return send(res, 200, { bans: deps.store.listBans(), guests: social.guestList() });
+        }
+        throw new HttpError(404, 'no such route');
+      }
       if (req.method === 'POST' && p === '/api/guest/hello') {
+        assertNotBanned(clientIp(req));
         // a visitor who has not signed in: no keys, no account. Outside accountOf on purpose; limited per address, bound to it.
         if (!guestHelloLimiter.take(clientIp(req))) throw new HttpError(429, 'Too many requests, try again shortly.');
         return send(res, 200, social.guestHello(clientIp(req)));
       }
       if (req.method === 'POST' && p === '/api/guest/presence') {
         const ip = clientIp(req);
+        assertNotBanned(ip);
         if (!guestPresenceLimiter.take(ip)) throw new HttpError(429, 'too many presence reports');
         const b = await readJson(req) as { guest?: unknown; x?: unknown; y?: unknown; dir?: unknown };
         const g = social.guestReport(b.guest, ip, b, game.map ? (x, y) => game.map!.walkable(x, y) : undefined);
@@ -435,7 +467,7 @@ export function createApp(deps: AppDeps) {
           await game.prepare(acct, { world: w });
           game.reportPosition(acct, { x: Number(qx), y: Number(qy) }, w);
         }
-        return send(res, 200, { ...game.state(acct), name: deps.store.nameOf(acct) });
+        return send(res, 200, { ...game.state(acct), name: deps.store.nameOf(acct), ...(isAdmin(acct) ? { admin: true } : {}) });
       }
       if (req.method === 'POST' && p === '/api/act') {
         const raw = await readRaw(req);

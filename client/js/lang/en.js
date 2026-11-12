@@ -1375,6 +1375,17 @@
     "{0} mengajak dagang": "{0} invites you to trade",
     "Ajakan dagang": "Trade invitation",
     "Tamu": "Guest",
-    "Desa sedang penuh tamu, coba lagi nanti.": "The village is full of guests, try again later."
+    "Desa sedang penuh tamu, coba lagi nanti.": "The village is full of guests, try again later.",
+    "Guest online: {0}": "Guests online: {0}",
+    "Tidak ada guest.": "No guests.",
+    "masuk {0} lalu": "joined {0} ago",
+    "Kick": "Kick",
+    "Ban IP": "Ban IP",
+    "Guest dikeluarkan.": "Guest removed.",
+    "IP diblokir.": "Address banned.",
+    "IP yang diblokir: {0}": "Banned addresses: {0}",
+    "Buka blokir": "Unban",
+    "Admin": "Admin",
+    "Muat ulang": "Reload"
   });
 })();

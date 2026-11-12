@@ -35,6 +35,11 @@ export class Store {
         account_id TEXT NOT NULL REFERENCES players(account_id),
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS bans (
+        ip TEXT PRIMARY KEY,
+        at INTEGER NOT NULL,
+        note TEXT NOT NULL DEFAULT ''
+      );
       CREATE TABLE IF NOT EXISTS active_keys (
         account_id TEXT PRIMARY KEY,
         public_key TEXT NOT NULL,
@@ -181,6 +186,12 @@ export class Store {
     const r = this.db.prepare('SELECT public_key FROM active_keys WHERE account_id = ?').get(accountId) as { public_key: string } | undefined;
     return !!r && r.public_key !== publicKey;
   }
+
+  /** Banned addresses (guests, sign-ups, device codes). */
+  isBanned(ip: string): boolean { return !!this.db.prepare('SELECT 1 FROM bans WHERE ip = ?').get(ip); }
+  addBan(ip: string, note = '') { this.db.prepare('INSERT INTO bans (ip, at, note) VALUES (?, ?, ?) ON CONFLICT(ip) DO UPDATE SET note = excluded.note').run(ip, Date.now(), note); }
+  removeBan(ip: string) { this.db.prepare('DELETE FROM bans WHERE ip = ?').run(ip); }
+  listBans(): { ip: string; at: number; note: string }[] { return this.db.prepare('SELECT ip, at, note FROM bans ORDER BY at DESC').all() as { ip: string; at: number; note: string }[]; }
 
   sessionKeyOnchain(publicKey: string): boolean {
     const r = this.db.prepare('SELECT onchain FROM session_keys WHERE public_key = ?').get(publicKey) as { onchain: number } | undefined;

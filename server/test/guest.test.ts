@@ -112,3 +112,35 @@ test('Social: a guest is dropped after maxMinutes even when active', async () =>
   assert.throws(() => soc.guestReport(a.guest, '1.1.1.1', { x: 1, y: 1 }), /Unknown guest/);
   assert.notEqual(soc.guestHello('1.1.1.1').guest, a.guest, 'must say hello again, new secret');
 });
+
+test('admin: only ADMIN_ACCOUNTS; list, kick (id refused), ban (hello and register refused), unban', async () => {
+  const r = await rig();
+  try {
+    const get = async (path: string) => {
+      const ts = String(Date.now()), sig = r.kp.sign(new TextEncoder().encode(requestMessage('GET', path, ts, ''))).signature;
+      const res = await fetch(r.base + path, { headers: { 'x-account-id': 'p1.players.test', 'x-gt-key': r.kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') } });
+      return { status: res.status, json: (await res.json()) as any };
+    };
+    assert.equal((await get('/api/admin/guests')).status, 403);
+    assert.equal((await r.signed('/api/admin/ban', { ip: '1.2.3.4' })).status, 403);
+    assert.equal((await get('/api/state')).json.admin, undefined);
+    r.cfg.adminAccounts.push('p1.players.test');
+    assert.equal((await get('/api/state')).json.admin, true);
+    const g = (await r.pub('/api/guest/hello', {}, '5.5.5.5')).json, g2 = (await r.pub('/api/guest/hello', {}, '6.6.6.6')).json;
+    const list = (await get('/api/admin/guests')).json.guests;
+    assert.equal(list.length, 2);
+    const row = list.find((x: any) => x.ip === '5.5.5.5');
+    assert.ok(row.nick && row.since && row.guest !== g.guest, 'the list shows a public handle, not the secret');
+    assert.equal((await r.signed('/api/admin/kick', { guest: row.guest })).json.guests.length, 1);
+    assert.equal((await r.pub('/api/guest/presence', { guest: g.guest, ...at(r.sp) }, '5.5.5.5')).status, 403, 'kicked id refused');
+    assert.equal((await r.signed('/api/admin/ban', { ip: '6.6.6.6', note: 'rude' })).json.bans.length, 1);
+    assert.equal((await r.pub('/api/guest/presence', { guest: g2.guest, ...at(r.sp) }, '6.6.6.6')).status, 403);
+    const hb = await r.pub('/api/guest/hello', {}, '6.6.6.6');
+    assert.equal(hb.status, 403); assert.match(hb.json.error, /banned/);
+    assert.equal((await r.pub('/api/auth/register', {}, '6.6.6.6')).status, 403);
+    assert.equal((await r.pub('/api/transfer/redeem', { id: 'x' }, '6.6.6.6')).status, 403);
+    assert.equal((await get('/api/admin/bans')).json.bans[0].note, 'rude');
+    await r.signed('/api/admin/unban', { ip: '6.6.6.6' });
+    assert.equal((await r.pub('/api/guest/hello', {}, '6.6.6.6')).status, 200);
+  } finally { r.close(); }
+});

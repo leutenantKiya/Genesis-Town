@@ -170,6 +170,7 @@
     var opts = [];
     if (document.getElementById('simbtn')) opts.push({ label: $t('Simulasi 1 minggu'), onPick: function () { press('simbtn'); } });
     opts.push({ label: $t('Pengaturan'), onPick: openSettings });
+    if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push({ label: $t('Admin'), onPick: function () { GT_ADMIN.open(); } });
     opts.push({ label: $t('Party'), onPick: function () { if (window.GT_PARTY) GT_PARTY.open(); } });
     if (GT.openProfile) opts.push({ label: $t('Profil'), onPick: function () { GT.openProfile(); } });
     if (document.getElementById('btnJiwa')) opts.push({ label: $t('Jiwa'), onPick: function () { press('btnJiwa'); } });
