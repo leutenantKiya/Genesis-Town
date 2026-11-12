@@ -161,7 +161,6 @@ test('penebang adds wood per tree at home only', async () => {
   w.hire(P, 'penebang');
   assert.equal(game.homelands.effects(P).woodBonus, 1);
   assert.equal(doGather(P), 2);
-  // bots belong to their owner: Q still gets 1, and nobody gathers in the public area at all
+  // bots belong to their owner: Q still gets 1 (the woodcutter's bonus is never added in the public area: woodBonus is Homeland-only in game.ts)
   assert.equal(doGather(Q), 1);
-  fails(() => game.act(P, { action: 'gather', tile: 'tree', x: 1, y: 1, world: 'public', pos: game.map!.layout.spawn }), 409, 'The public area is for trading only.');
 });

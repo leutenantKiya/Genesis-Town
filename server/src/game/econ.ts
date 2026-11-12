@@ -29,6 +29,10 @@ export interface HomelandConfig {
   motivation: { tukang: number; base: number; perHiburan: number; factorBase: number; factorSpan: number };
   restoran: { pantryMax: number; serveEveryGameHours: number; serveRelief: number; serveMinFatigue: number; chefServeFactor: number };
   publicTradeOnly: boolean;
+  /** Fishing, chopping and mining are allowed in the public area even when it is otherwise trade-only (no farming, no monsters). */
+  publicGather?: boolean;
+  /** Every area of the public village is open from the start, without waiting for its town project. */
+  publicOpenAll?: boolean;
   townhall: TownhallStep[];
   chunks: ChunkStep[];
   buildings: Record<string, BuildingDef>;

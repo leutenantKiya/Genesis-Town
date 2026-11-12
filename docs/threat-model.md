@@ -256,7 +256,7 @@ still pass `checkGain`.
 ## Presence and chat
 
 One system (`server/src/social.ts`, client `players.js`), in memory only: players seen in the last 15 s and the last 300 chat
-lines. The client polls `POST /api/presence` about every 0.7 s and gets the other players of its own world and the new lines.
+lines. The client polls `POST /api/presence` about every 0.45 s and gets the other players of its own world and the new lines.
 - **Rate limits**: one chat line per 2 s and 8 per minute per account, an IP limiter on `/api/chat` (the client address
   from the TRUST_PROXY helper), a limiter on `/api/presence`. Lines are at most 80 characters, control characters are
   removed, and a short word list is masked. Frozen accounts (`assertActive`) cannot chat or rename.

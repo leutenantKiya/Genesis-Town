@@ -59,12 +59,17 @@ test('reload lands at own spawn', async () => {
   fails(() => w.game.act(P, { action: 'eat', token: 'bread', world: oid, pos: other.layout.spawn }), 409, /./);
 });
 
-test('gather in public answers 409 Area publik hanya untuk berdagang', async () => {
+test('the public area allows gathering (publicGather) but not farming or monster fights', async () => {
   const w = await world();
   const pos = w.game.map!.layout.spawn;
-  for (const body of [{ action: 'gather', tile: 'tree', x: pos.x + 1, y: pos.y }, { action: 'farm', op: 'till', plot: 0 }, { action: 'engage', monster: 'x' }]) {
+  for (const body of [{ action: 'farm', op: 'till', plot: 0 }, { action: 'engage', monster: 'x' }]) {
     fails(() => w.game.act(P, { ...body, pos }), 409, 'The public area is for trading only.');
   }
+  // gathering gets past the trade-only rule (it then fails on the tile, not on the rule)
+  assert.throws(() => w.game.act(P, { action: 'gather', tile: 'tree', x: pos.x + 1, y: pos.y, pos }), (e: any) => e.message !== 'The public area is for trading only.');
+  // with publicGather off, the old rule holds
+  w.game.econ.homeland.publicGather = false;
+  fails(() => w.game.act(P, { action: 'gather', tile: 'tree', x: pos.x + 1, y: pos.y, pos }), 409, 'The public area is for trading only.');
 });
 
 test('ship in a Homeland is refused; build needs standing at the door', async () => {

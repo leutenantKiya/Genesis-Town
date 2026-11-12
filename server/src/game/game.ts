@@ -84,6 +84,8 @@ export class Game {
     });
     if (o.worldSeed != null) {
       this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
+      // every village area open from the start (owner's choice, 2026-11-12); town projects still run on chain
+      if (this.econ.homeland.publicOpenAll) for (const c of this.map.layout.chunks) this.unlockChunk(c.id);
       this.positions = new Positions(this.map);
       // night monsters live in Homelands (and in the village forest only when the public area is not trade-only)
       if (this.econ.monsters) this.monsters = new Monsters(this.econ, this.gs, this.clock, this.world, this.map, o.rng ?? Math.random);
@@ -238,7 +240,7 @@ export class Game {
     const w = this.worldFor(account, wid, NEED[a as (typeof ACTIONS)[number]]);
     const home = this.econ.homeland;
     if (a === 'build' && w.row && w.row.account !== account && (s('kind') === 'th' || s('kind') === 'chunk')) throw new HttpError(409, 'Only the owner can upgrade the Town Hall or open new land.');
-    if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
+    if (this.map && wid === 'public' && home.publicTradeOnly && ((a === 'gather' && !home.publicGather) || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
     if (w.row && a === 'ship') throw new HttpError(409, 'The Shipping Box is only in the public area.');
     if ((a === 'build' || a === 'collect' || a === 'assist' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Build and harvest in your own Homeland.');
     let pos: Pos | null = null;

@@ -290,6 +290,7 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
   const { WorldMap } = await import('../src/game/worldmap.ts');
   const econ = (await import('../src/game/econ.ts')).loadEcon();
   econ.homeland.publicTradeOnly = false; // village mechanics
+  econ.homeland.publicOpenAll = false; // this test is about areas that open with their town project
   const chain = new MockChain();
   chain.accounts.add(TOWN);
   chain.add(TOWN, 'coin', 5000n);
@@ -336,6 +337,7 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
 test('positions: actions happen where the player stands, and nobody jumps across the map', async () => {
   const econ = (await import('../src/game/econ.ts')).loadEcon();
   econ.homeland.publicTradeOnly = false; // village mechanics
+  econ.homeland.publicOpenAll = false; // this test is about areas that open with their town project
   const chain = new MockChain();
   chain.accounts.add(TOWN);
   chain.add(TOWN, 'coin', 5000n);
