@@ -997,7 +997,7 @@
     var why = $('div', 'gt-shop-why');
     why.appendChild($('p', null, focus ? item(sel) + ': ' + focus.reason : touch ? $t('Ketuk barang untuk jual atau beli 1. Harga berubah tiap jam game.') : $t('Klik untuk 1, Shift+klik untuk 5, klik kanan untuk jual semua. Harga berubah tiap jam game.')));
     var left = focus && focus.bid != null ? Math.min(have(sel), 10) : 0; // the server takes at most 10 per trade
-    if (left > 1) why.appendChild(button($t('Jual {0} {1} (sekitar {2} koin)', [left, item(sel), left * focus.bid]), function () { trade('sell', sel, left); }));
+    if (left > 1) why.appendChild(button($t('Jual {0} {1} (sekitar {2} koin)', [left, item(sel), left * focus.bid]), function () { trade('sell', sel, left); }, 'gt-data'));
     wrap.appendChild(why);
     holdingLine(id, wrap);
     if (S.account) wrap.appendChild(button($t('Ngobrol dengan {0}', [m.name]), function () { talkTo(id, m.name); }));
@@ -1261,7 +1261,7 @@
   function listingRow(l) {
     var row = $('div', 'mrow chain-item' + (l.anonymous ? ' gt-black-row' : ''));
     var info = $('div', 'grow');
-    info.appendChild($('div', null, $t('{0} {1} · {2} koin/buah', [l.amount, item(l.token_id), l.price_each])));
+    info.appendChild($('div', 'gt-data', $t('{0} {1} · {2} koin/buah', [l.amount, item(l.token_id), l.price_each])));
     var ba = bestAsk(l.token_id);
     var who = l.anonymous ? (isMine(l) ? $t('Penjual: kamu (anonim)') : $t('Penjual: tidak diketahui')) : $t('Dari {0} · {1} ({2} poin)', [isMine(l) ? $t('kamu') : shortAcc(l.seller), l.title || $t('Pedagang baru'), l.popularity || 0]);
     info.appendChild($('div', 'chain-dim', who + (ba && +l.price_each < ba.ask ? $t(' · lebih murah dari pedagang') : '')));
@@ -1269,8 +1269,8 @@
     if (isMine(l)) {
       row.appendChild(button($t('Tarik'), function () { marketCall('cancel_listing', { listing_id: l.id }, $t('Barangmu ditarik dan kembali ke tas.')).then(refreshModal); }));
     } else {
-      row.appendChild(button($t('Beli 1'), function () { marketCall('buy_listing', { listing_id: l.id, amount: '1', max_price_each: String(l.price_each) }, $t('Terbeli!')).then(refreshModal); }, 'primary'));
-      if (+l.amount > 1) row.appendChild(button($t('Beli {0}', [l.amount]), function () { marketCall('buy_listing', { listing_id: l.id, amount: String(l.amount), max_price_each: String(l.price_each) }, $t('Terbeli!')).then(refreshModal); }));
+      row.appendChild(button($t('Beli 1'), function () { marketCall('buy_listing', { listing_id: l.id, amount: '1', max_price_each: String(l.price_each) }, $t('Terbeli!')).then(refreshModal); }, 'primary gt-data'));
+      if (+l.amount > 1) row.appendChild(button($t('Beli {0}', [l.amount]), function () { marketCall('buy_listing', { listing_id: l.id, amount: String(l.amount), max_price_each: String(l.price_each) }, $t('Terbeli!')).then(refreshModal); }, 'gt-data'));
     }
     return row;
   }

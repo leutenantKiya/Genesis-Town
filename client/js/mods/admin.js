@@ -17,7 +17,7 @@
 
   function row(text, sub, buttons) {
     var r = $('div', 'tr-lot'), tx = $('div', 'tr-lot-t');
-    tx.appendChild($('div', 'tr-lot-n', text)); if (sub) tx.appendChild($('div', 'chain-dim', sub));
+    tx.appendChild($('div', 'tr-lot-n gt-data', text)); if (sub) tx.appendChild($('div', 'chain-dim', sub));
     r.appendChild(tx);
     buttons.forEach(function (b) { var x = $('button', 'mbtn', b.label); x.type = 'button'; x.addEventListener('click', b.fn); r.appendChild(x); });
     return r;

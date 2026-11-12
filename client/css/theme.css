@@ -48,6 +48,7 @@
 
   /* Type */
   --font:'Pixelify Sans','Press Start 2P',ui-sans-serif,system-ui,sans-serif;       /* everything people read */
+  --font-data:ui-monospace,'SF Mono',Menlo,Consolas,'Roboto Mono',monospace;        /* numbers and ids people must read exactly: tags, prices, quantities, timers, IPs */
   --font-display:'Press Start 2P',ui-monospace,Menlo,Consolas,monospace;            /* titles and big counters, 16px or 24px only */
   --ts:1;                   /* the player's text size (Pengaturan) */
 
@@ -95,3 +96,6 @@ html.gt-s-dingin{ --accent:#8fc8f2; --season:#1e3046; }   /* ice on slate */
   --moon:#cfd8ff;                    /* clock dot at night */
   --coin-edge:#c9962a;               /* coin icon shade */
 }
+
+/* Informational numbers and ids use the plain monospace data font: the pixel fonts blur 3/5/8 and 1/7. */
+.gt-data,.mbtn.gt-data,.gt-cs-tag,.gt-slot-n,.gt-card-n,.gt-card-l1,.gt-card-l2,.gt-hist-s,.hl-meta,.tr-meta,.hl-n,.tr-qty,.tr-num,.tr-num-line,.tr-rk,.tr-sc,.hl-time,.tr-count,.hud #coins,.hud #clock,.hud #seed,.hud #loc,.gt-fight-hp{font-family:var(--font-data);font-variant-numeric:tabular-nums}

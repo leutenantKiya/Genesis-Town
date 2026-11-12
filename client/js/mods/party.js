@@ -105,7 +105,7 @@
       var list = $('div', 'tr-lines');
       p.members.forEach(function (m) {
         var row = $('div', 'tr-lot'), tx = $('div', 'tr-lot-t');
-        tx.appendChild($('div', 'tr-lot-n', m.name + '#' + m.tag + (m.leader ? ' · ' + $t('Ketua') : '') + (m.account === me() ? ' · ' + $t('kamu') : '')));
+        tx.appendChild($('div', 'tr-lot-n gt-data', m.name + '#' + m.tag + (m.leader ? ' · ' + $t('Ketua') : '') + (m.account === me() ? ' · ' + $t('kamu') : '')));
         tx.appendChild($('div', 'chain-dim', m.account === me() ? placeOf({ online: true, world: (GT.worldId && GT.worldId()) || 'public' }) : placeOf(m)));
         row.appendChild(tx);
         if (m.account !== me() && m.online && m.world && m.world !== ((GT.worldId && GT.worldId()) || 'public') && canGo(m.world)) {
@@ -143,7 +143,7 @@
       var ic = $('div', 'tr-cell'), ih = $('div', 'tr-cell-h');
       ih.appendChild($('span', 'tr-cell-t', $t('Ajakan masuk'))); ic.appendChild(ih);
       view.invites.forEach(function (i) {
-        var row = $('div', 'tr-lot'); row.appendChild($('div', 'tr-lot-n', i.name + '#' + i.tag));
+        var row = $('div', 'tr-lot'); row.appendChild($('div', 'tr-lot-n gt-data', i.name + '#' + i.tag));
         var ok = $('button', 'mbtn primary', $t('Terima')); ok.type = 'button';
         ok.addEventListener('click', function () { answer('/party/accept', { from: i.from }, $t('Kamu masuk party.')); });
         var no = $('button', 'mbtn', $t('Tolak')); no.type = 'button';

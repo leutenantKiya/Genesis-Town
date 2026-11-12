@@ -315,6 +315,7 @@
       return;
     }
     body.appendChild(el('p', 'gt-pcard-title', o.title || $t('Pedagang baru')));
+    if (o.tag) body.appendChild(el('p', 'gt-data', o.nick + '#' + o.tag));
     body.appendChild(el('p', 'chain-dim', $t('Warga desa yang sedang jalan-jalan.')));
     var extra = cardActions.map(function (f) { try { return f(o); } catch (e) { return null; } }).filter(Boolean);
     GT.modal({ title: o.nick + (o.tag ? '#' + o.tag : ''), body: body, actions: [
