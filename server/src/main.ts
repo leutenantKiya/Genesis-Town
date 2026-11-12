@@ -76,3 +76,17 @@ server.listen(cfg.port, () => {
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => { game.stop(); server.close(); if (snapshots) await snapshots.flush(); process.exit(0); });
 }
+// A promise nobody awaited (a chain or RPC call that failed) must not take the whole town down: log it and keep serving.
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection (server keeps running):', reason);
+});
+// A synchronous throw that escaped every handler leaves the process in an unknown state: save the db copy, then exit
+// so the host restarts it. SQLite commits are atomic, so the copy holds only whole transactions.
+let dying = false;
+process.on('uncaughtException', async (err) => {
+  console.error('uncaughtException (saving and exiting):', err);
+  if (dying) return;
+  dying = true;
+  try { game.stop(); if (snapshots) await snapshots.flush(); } catch (e) { console.error('flush on crash failed:', e); }
+  process.exit(1);
+});
