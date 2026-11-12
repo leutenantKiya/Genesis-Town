@@ -21,7 +21,7 @@
 
 ## STATUS
 
-- [ ] Step 1: New device signs in at once (off-chain), on-chain actions ask for approval when first needed; code box removed from login
+- [x] Step 1: New device signs in at once (off-chain), on-chain actions ask for approval when first needed; code box removed from login
 - [ ] Step 2: One live session per account (newest login wins), "opened on another device" screen with "Main di sini"
 - [ ] Step 3: Online guests (max 5): guest presence in the public village, small name tags, offline-demo fallback
 - [ ] Step 4: Admin panel: ADMIN_ACCOUNTS, list guests, kick guest, ban/unban IP

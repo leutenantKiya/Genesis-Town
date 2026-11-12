@@ -67,7 +67,7 @@ export function isEd25519Key(s: unknown): s is string {
   try { PublicKey.from(s); return true; } catch { return false; }
 }
 
-export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsKey?: boolean; ownerPublicKey?: string }
+export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsChainApproval?: boolean; ownerPublicKey?: string }
 
 export async function register(
   deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; verifyGoogle?: TokenVerifier; onNewPlayer?: (accountId: string) => void },
@@ -85,12 +85,14 @@ export async function register(
   }
   const existing = deps.store.playerBySub(sub);
   if (existing) {
-    // Same login again. Adding another session key needs the owner's NEAR Auth signature (planned, M4).
+    // Same login again, or the same login on a new device. The verified login token is the proof of identity, so a new
+    // device plays off-chain at once with its key stored as onchain = 0. The key is added to the NEAR account (signed by
+    // the player's NEAR Auth key, POST /api/auth/add-key, src/newdevice.ts) only when the player first needs the relayer.
     const owner = deps.store.sessionKeyOwner(body.sessionPublicKey);
-    if (owner === existing.account_id) return { accountId: existing.account_id, created: false, txHashes: [] };
-    // Same login on a new device: the browser adds a session key signed by the player's NEAR Auth key
-    // (POST /api/auth/add-key, src/newdevice.ts).
-    return { accountId: existing.account_id, created: false, txHashes: [], needsKey: true, ownerPublicKey: existing.owner_pk };
+    if (owner && owner !== existing.account_id) throw new HttpError(409, 'session key already belongs to another account');
+    if (!owner) deps.store.addSessionKey(body.sessionPublicKey, existing.account_id, false);
+    if (deps.store.sessionKeyOnchain(body.sessionPublicKey)) return { accountId: existing.account_id, created: false, txHashes: [] };
+    return { accountId: existing.account_id, created: false, txHashes: [], needsChainApproval: true, ownerPublicKey: existing.owner_pk };
   }
   // A session key belongs to exactly one account. A second login in the same browser must bring a fresh key.
   if (deps.store.sessionKeyOwner(body.sessionPublicKey)) throw new HttpError(409, 'session key already belongs to another account');
@@ -121,8 +123,8 @@ export async function register(
 }
 
 // An account that exists on chain but not in this database. Its name and its owner key both come from the login, so it
-// is this player's. With the browser's session key already on it the player is back in at once; otherwise the browser
-// adds the key with the NEAR Auth owner key, like any new device (needsKey).
+// is this player's. With the browser's session key already on it the key is stored as on chain; otherwise it plays
+// off-chain and is approved later like any new device (needsChainApproval).
 async function adopt(
   deps: { chain: Chain; store: Store },
   sub: string, accountId: string, ownerPk: string, sessionPk: string, hasKey: boolean,
@@ -134,12 +136,16 @@ async function adopt(
     txHashes.push(reg.txHash);
     deps.store.addHistory(accountId, 'storage', 'Registered in the game contract', reg.ok ? (deps.chain.mode === 'mock' ? 'mock' : 'ok') : 'failed', reg.txHash);
   }
-  if (!hasKey) return { accountId, created: false, txHashes, needsKey: true, ownerPublicKey: ownerPk };
+  if (!hasKey) {
+    deps.store.addSessionKey(sessionPk, accountId, false);
+    return { accountId, created: false, txHashes, needsChainApproval: true, ownerPublicKey: ownerPk };
+  }
   deps.store.addSessionKey(sessionPk, accountId);
   return { accountId, created: false, txHashes };
 }
 
 export class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  code?: string;
+  constructor(status: number, message: string, code?: string) { super(message); this.status = status; this.code = code; }
 }

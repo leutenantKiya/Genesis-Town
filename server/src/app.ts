@@ -551,7 +551,7 @@ export function createApp(deps: AppDeps) {
     handle(req, res).catch((e) => {
       const status = e instanceof HttpError ? e.status : 500;
       if (status === 500) console.error(e);
-      send(res, status, { error: e instanceof HttpError ? e.message : 'internal error' });
+      send(res, status, { error: e instanceof HttpError ? e.message : 'internal error', ...(e instanceof HttpError && e.code ? { code: e.code } : {}) });
     });
   });
   return { server };

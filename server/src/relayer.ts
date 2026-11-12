@@ -153,6 +153,7 @@ export async function relay(deps: RelayDeps, body: { signedDelegate?: unknown })
   const key = delegateKey(sd);
   const owner = deps.store.sessionKeyOwner(key);
   if (!owner || owner !== da.senderId) throw new HttpError(403, 'unknown session key for this sender');
+  if (!deps.store.sessionKeyOnchain(key)) throw new HttpError(409, 'This device must be approved with NEAR Auth first.', 'approve_device');
   deps.assertActive?.(da.senderId);
   if (da.receiverId !== deps.cfg.gameContractId) throw new HttpError(403, 'receiver must be the game contract');
   if (da.actions.length !== 1 || !da.actions[0].functionCall) throw new HttpError(403, 'exactly one function call allowed');

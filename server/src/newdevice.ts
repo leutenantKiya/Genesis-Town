@@ -55,7 +55,9 @@ export async function addDeviceKey(d: NewDeviceDeps, body: { idToken?: unknown; 
   if (!fc || fc.receiverId !== d.cfg.gameContractId || fc.methodNames.length !== 0) throw new HttpError(403, 'the new key may only call the game contract');
   const newKey = pk(add.publicKey.ed25519Key);
   if (!newKey) throw new HttpError(400, 'ed25519 session key required');
-  if (d.store.sessionKeyOwner(newKey)) throw new HttpError(409, 'session key already belongs to an account');
+  // a key this device already signed in with off-chain (onchain = 0) is exactly the one being approved
+  const had = d.store.sessionKeyOwner(newKey);
+  if (had && (had !== player.account_id || d.store.sessionKeyOnchain(newKey))) throw new HttpError(409, 'session key already belongs to an account');
   const ahead = BigInt(da.maxBlockHeight) - (await d.currentBlockHeight());
   if (ahead <= 0n || ahead > 3000n) throw new HttpError(400, 'delegate expiry out of range');
 

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import * as near from 'near-api-js';
 import { addDeviceKey, parseMpcSignature } from '../src/newdevice.ts';
-import { setup } from './helpers.ts';
+import { setup, signedDelegateB64 } from './helpers.ts';
+import { relay, RateLimiter } from '../src/relayer.ts';
+import { requestMessage, verifyRequest, ReplayCache } from '../src/reqauth.ts';
 
 const ACC = 'p1.players.test';
 function world() {
@@ -47,6 +49,34 @@ test('new device: the owner-signed AddKey is relayed and the new session key wor
   assert.ok(s.store.history(ACC).some((h) => h.kind === 'device'));
   // the same key cannot be added twice
   await assert.rejects(addDeviceKey(deps, request({ owner, newKey: r.newKey }).body), /already belongs/);
+});
+
+test('new device: a key signed in off-chain passes verifyRequest, is refused by the relayer, and relays after approval', async () => {
+  const { s, owner, deps } = world();
+  const kp = near.KeyPair.fromRandom('ed25519');
+  const pkStr = kp.getPublicKey().toString();
+  s.store.addSessionKey(pkStr, ACC, false); // what register() does for a new device
+  // off-chain requests are signed with it
+  const ts = String(Date.now());
+  const sig = kp.sign(new TextEncoder().encode(requestMessage('GET', '/api/state', ts, ''))).signature;
+  const hdr = { 'x-account-id': ACC, 'x-gt-key': pkStr, 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') };
+  assert.equal(verifyRequest({ sessionKeyOwner: (k) => s.store.sessionKeyOwner(k), replay: new ReplayCache() }, hdr, 'GET', '/api/state', ''), ACC);
+  // the relayer asks for approval
+  s.chain.accounts.add(ACC); s.chain.accounts.add('p2.players.test'); s.chain.bal.set(ACC + '|fish', 5n);
+  const rdeps = { ...s, limiter: new RateLimiter(30, 1000), currentBlockHeight: async () => 100n };
+  const { b64 } = signedDelegateB64({ sender: ACC, key: kp });
+  await assert.rejects(relay(rdeps, { signedDelegate: b64 }), (e: { status: number; code?: string }) => e.status === 409 && e.code === 'approve_device');
+  // approving the same key (NEAR Auth) flips it on chain
+  const out = await addDeviceKey(deps, request({ owner, newKey: kp }).body);
+  assert.equal(out.accountId, ACC);
+  assert.equal(s.store.sessionKeyOnchain(pkStr), true);
+  const { b64: b2 } = signedDelegateB64({ sender: ACC, key: kp });
+  assert.equal((await relay(rdeps, { signedDelegate: b2 })).status, 'mock');
+  // a key of another account cannot be approved onto this one
+  const stolen = near.KeyPair.fromRandom('ed25519');
+  s.store.addPlayer('p2.players.test', 'google-oauth2|2', 'ed25519:o2');
+  s.store.addSessionKey(stolen.getPublicKey().toString(), 'p2.players.test', false);
+  await assert.rejects(addDeviceKey(deps, request({ owner, newKey: stolen }).body), /already belongs/);
 });
 
 test('new device: anything but one game-only AddKey on your own account, signed by your owner key, is refused', async () => {

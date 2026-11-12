@@ -29,12 +29,19 @@ test('register: verifies token, uses the server-derived owner key, creates accou
   // Same login and same device: no new account.
   const again = await register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|42'), sessionPublicKey: session });
   assert.equal(again.created, false);
-  // Same login, new device: no key is added here; the answer says to run the new-device flow with the owner key.
+  // Same login, new device: signed in at once, the key is stored off-chain (onchain = 0); the answer says it still needs approval.
   const other = near.KeyPair.fromRandom('ed25519').getPublicKey().toString();
   const nd = await register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|42'), sessionPublicKey: other });
-  assert.equal(nd.needsKey, true);
+  assert.equal(nd.accountId, r.accountId);
+  assert.equal(nd.needsChainApproval, true);
+  assert.equal((nd as { needsKey?: boolean }).needsKey, undefined);
   assert.equal(nd.ownerPublicKey, await s.chain.derivedOwnerKey('google-oauth2|42'));
-  assert.equal(s.store.sessionKeyOwner(other), undefined);
+  assert.equal(s.store.sessionKeyOwner(other), r.accountId);
+  assert.equal(s.store.sessionKeyOnchain(other), false);
+  assert.equal(s.store.sessionKeyOnchain(session), true);
+  // the same new device signing in again is still off-chain, and a key of another account is refused
+  const nd2 = await register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|42'), sessionPublicKey: other });
+  assert.equal(nd2.needsChainApproval, true);
   // A different login in the same browser must not reuse the first account's session key.
   await assert.rejects(register({ ...s, verify }, { idToken: await iss.sign('google-oauth2|43'), sessionPublicKey: session }), /already belongs to another account/);
   assert.equal(s.store.playerBySub('google-oauth2|43'), undefined, 'no account created');
@@ -51,15 +58,17 @@ test('register: an account already on chain but missing from a fresh database is
   const fresh = { ...setup(), chain: s.chain };
   // same browser: its session key is on the account already, so the player is straight back in
   const back = await register({ ...fresh, verify }, { idToken: await iss.sign('google-oauth2|77'), sessionPublicKey: session });
-  assert.deepEqual([back.accountId, back.created, back.needsKey], [first.accountId, false, undefined]);
+  assert.deepEqual([back.accountId, back.created, back.needsChainApproval], [first.accountId, false, undefined]);
   assert.equal(fresh.store.sessionKeyOwner(session), first.accountId);
-  // another browser on yet another fresh database: the new-device flow adds its key with the owner key
+  assert.equal(fresh.store.sessionKeyOnchain(session), true);
+  // another browser on yet another fresh database: signed in at once, off-chain, approval later
   const other = near.KeyPair.fromRandom('ed25519').getPublicKey().toString();
   const fresh2 = { ...setup(), chain: s.chain };
   const nd = await register({ ...fresh2, verify }, { idToken: await iss.sign('google-oauth2|77'), sessionPublicKey: other });
-  assert.deepEqual([nd.accountId, nd.created, nd.needsKey, nd.ownerPublicKey], [first.accountId, false, true, await s.chain.derivedOwnerKey('google-oauth2|77')]);
+  assert.deepEqual([nd.accountId, nd.created, nd.needsChainApproval, nd.ownerPublicKey], [first.accountId, false, true, await s.chain.derivedOwnerKey('google-oauth2|77')]);
   assert.equal(fresh2.store.playerBySub('google-oauth2|77')?.account_id, first.accountId);
-  assert.equal(fresh2.store.sessionKeyOwner(other), undefined);
+  assert.equal(fresh2.store.sessionKeyOwner(other), first.accountId);
+  assert.equal(fresh2.store.sessionKeyOnchain(other), false);
 });
 
 test('register: rejects wrong issuer, wrong audience, garbage token, bad session key', async () => {

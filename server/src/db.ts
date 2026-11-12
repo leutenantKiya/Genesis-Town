@@ -68,6 +68,10 @@ export class Store {
     // Older databases have no tokens column on history.
     const cols = this.db.prepare('PRAGMA table_info(history)').all() as unknown as Array<{ name: string }>;
     if (!cols.some((c) => c.name === 'tokens')) this.db.exec('ALTER TABLE history ADD COLUMN tokens TEXT');
+    // onchain = 1: the key is on the player's NEAR account. 0: a key a new device signed in with; it plays off-chain at once
+    // and is added to the account (NEAR Auth approval) the first time it needs the relayer.
+    const sk = this.db.prepare('PRAGMA table_info(session_keys)').all() as unknown as Array<{ name: string }>;
+    if (!sk.some((c) => c.name === 'onchain')) this.db.exec('ALTER TABLE session_keys ADD COLUMN onchain INTEGER NOT NULL DEFAULT 1');
   }
 
   /** names: display name (may repeat; unique together with the 5-digit tag), tag, look (palette 0-7). Older tables had a UNIQUE name column: rebuild without it, keep the rows, tags come lazily. */
@@ -154,9 +158,16 @@ export class Store {
       .run(accountId, sub, ownerPk, Date.now());
   }
 
-  addSessionKey(publicKey: string, accountId: string) {
-    this.db.prepare('INSERT OR IGNORE INTO session_keys (public_key, account_id, created_at) VALUES (?, ?, ?)')
-      .run(publicKey, accountId, Date.now());
+  /** `onchain` false: the key only signs off-chain requests until `addSessionKey(.., true)` (an existing row is upgraded, never downgraded). */
+  addSessionKey(publicKey: string, accountId: string, onchain = true) {
+    this.db.prepare('INSERT OR IGNORE INTO session_keys (public_key, account_id, created_at, onchain) VALUES (?, ?, ?, ?)')
+      .run(publicKey, accountId, Date.now(), onchain ? 1 : 0);
+    if (onchain) this.db.prepare('UPDATE session_keys SET onchain = 1 WHERE public_key = ? AND account_id = ?').run(publicKey, accountId);
+  }
+
+  sessionKeyOnchain(publicKey: string): boolean {
+    const r = this.db.prepare('SELECT onchain FROM session_keys WHERE public_key = ?').get(publicKey) as { onchain: number } | undefined;
+    return !!r && r.onchain === 1;
   }
 
   sessionKeyOwner(publicKey: string): string | undefined {

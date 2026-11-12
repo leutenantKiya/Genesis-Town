@@ -17,7 +17,7 @@
   var LS_ACC = 'gt.chain.account', LS_KEY = 'gt.chain.sessionKey', LS_OFF = 'gt.chain.offline';
   // Game keys of every account that played in this browser ({account: secret key}), so signing out and back in (or
   // switching accounts) never loses a key. LS_KEY holds the key for the next sign-in until the server confirms it.
-  var LS_KEYS = 'gt.chain.keys', LS_FORCE = 'gt.chain.chooseAccount';
+  var LS_KEYS = 'gt.chain.keys', LS_FORCE = 'gt.chain.chooseAccount', LS_OWNER = 'gt.chain.ownerKey';
   var TILE_ITEM = { water: 'fish', rock: 'ore', tree: 'wood' };
   var MERCHANTS = [
     { id: 'sari', pal: 3, dx: 3, dy: 2, tag: $t('Sari · Ikan') },
@@ -56,7 +56,7 @@
     })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+          if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; if (j.code) e.code = j.code; throw e; }
           return j;
         });
       });
@@ -225,143 +225,50 @@
       })
       .then(function (r) {
         if (r === null) return;
-        if (r.needsKey) {
-          // Adding a key for a new device needs the owner key, which only NEAR Auth can use.
-          // returns true when it has shown the explanation window (Google sign-in) and the login should simply stop here
-          var needProvider = function () {
-            if (provider) return false;
-            if (via === 'google') { approveDeviceWindow(); return true; }
-            throw new Error($t('Akun ini perlu kunci baru; masuk dengan NEAR Auth.'));
-          };
-          // a key for this account from an earlier sign-in in this browser: use it instead of adding a new one
-          var known = keyOf(r.accountId);
-          if (known && known.getPublicKey().toString() !== kp.getPublicKey().toString()) {
-            return reg(known.getPublicKey().toString()).then(function (r2) {
-              if (r2.needsKey) { if (needProvider()) return; return newDevice(provider, r, idToken).then(function () { signedIn(r.accountId, sessionKey(), $t('Kunci baru ditambahkan. Selamat datang kembali!')); }); }
-              return signedIn(r2.accountId, known, $t('Selamat datang kembali!'));
-            });
-          }
-          if (needProvider()) return;
-          return newDevice(provider, r, idToken).then(function () { return signedIn(r.accountId, sessionKey(), $t('Kunci baru ditambahkan. Selamat datang kembali!')); });
+        // A new device is in at once: the server keeps its key off-chain until the first on-chain action (approveDevice).
+        var enter = function (res, key) {
+          lsSet(LS_OWNER, res.needsChainApproval && res.ownerPublicKey ? res.ownerPublicKey : null);
+          keepKey(res.accountId, key);
+          S.account = res.accountId; lsSet(LS_ACC, res.accountId); renderBanner();
+          GT.toast(res.created ? $t('Akun dibuat! Paket awal: 100 koin, 1 Alat, 3 Roti, 3 Gandum.') : $t('Selamat datang kembali!'));
+          return refresh(true);
+        };
+        // a key for this account from an earlier sign-in in this browser: use it instead of the fresh one
+        var known = r.needsChainApproval && keyOf(r.accountId);
+        if (known && known.getPublicKey().toString() !== kp.getPublicKey().toString()) {
+          return reg(known.getPublicKey().toString()).then(function (r2) { return enter(r2, known); });
         }
-        keepKey(r.accountId, kp);
-        S.account = r.accountId; lsSet(LS_ACC, r.accountId); renderBanner();
-        GT.toast(r.created ? $t('Akun dibuat! Paket awal: 100 koin, 1 Alat, 3 Roti, 3 Gandum.') : $t('Selamat datang kembali!'));
-        return refresh(true);
+        return enter(r, kp);
       });
   }
 
-  // A Google sign-in for an account that exists but has no key in this browser. Adding a key needs the player's NEAR
-  // Auth key: where NEAR Auth works, one button runs its login (which ends in the new-device step); where it does not
-  // (an address it does not allow-list), the window explains why, in full.
-  function approveDeviceWindow() {
-    var usable = !!(window.NearLib && S.cfg && S.cfg.fastAuth);
+  // First on-chain action on a device that signed in off-chain: the player's NEAR Auth key adds this device's game key
+  // to the account (newDevice). Resolves once the key is on the account; rejects when the player cancels or NEAR Auth is
+  // unusable here (then nothing else can approve it).
+  function approveDevice() {
+    var usable = !!(window.NearLib && S.cfg && S.cfg.fastAuth && !S.cfg.devLogin), ownerPk = lsGet(LS_OWNER);
     var body = $('div');
-    if (usable) {
-      body.appendChild($('p', null, $t('Perangkat ini perlu disetujui satu kali dengan NEAR Auth sebelum bisa bermain dengan akunmu.')));
-      body.appendChild(codeEntry(function () { hh.close('code'); }));
-      var hh = GT.modal({ title: $t('Perangkat baru'), body: body, actions: [{ label: $t('Setujui dengan NEAR Auth'), primary: true, onClick: function (h) { h.close('near'); nearLogin(); return true; } }] });
-    } else {
-      body.appendChild($('p', null, $t('Akun ini sudah dipakai di perangkat lain. Perangkat baru perlu persetujuan NEAR Auth, yang belum aktif di alamat ini; main dulu dari perangkat pertamamu.')));
-      body.appendChild(codeEntry(function () { hn.close('code'); }));
-      var hn = GT.modal({ title: $t('Perangkat baru'), body: body });
+    if (!usable || !ownerPk) {
+      body.appendChild($('p', null, $t('Pasar, hadiah, saham, dan proyek kota di perangkat ini perlu persetujuan NEAR Auth, yang belum aktif di alamat ini. Kamu tetap bisa bermain; untuk hal on-chain, pakai perangkat pertamamu.')));
+      GT.modal({ title: $t('Setujui perangkat ini'), body: body });
+      return Promise.reject(new Error($t('Perangkat ini belum disetujui.')));
     }
-  }
-
-  /* ---- Move to another device: a one-time code = server id + a random secret. The browser encrypts {account, game key}
-     with AES-GCM under a key derived (HKDF) from the secret and uploads only the ciphertext (POST /api/transfer, signed).
-     The server keeps it for 10 minutes, gives it out once and deletes it (server/src/transfer.ts), and never sees the
-     secret, so a seen, old or used code gives nothing. The key itself is the same game key on both devices (a
-     function-call key on the game contract, it cannot move NEAR). ---- */
-  var CODE_PREFIX = 'gt2.';
-  function toB64url(u8) { var s = ''; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-  function fromB64url(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var bin = atob(s), u8 = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return u8; }
-  function transferKey(secret, usage) {
-    var c = window.crypto.subtle;
-    return c.importKey('raw', secret, 'HKDF', false, ['deriveKey']).then(function (base) {
-      return c.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('genesis-town transfer v1') }, base, { name: 'AES-GCM', length: 256 }, false, usage);
+    body.appendChild($('p', null, $t('Untuk memakai Pasar, hadiah, saham, atau proyek kota, setujui perangkat ini satu kali dengan NEAR Auth. Bermain biasa tidak perlu persetujuan.')));
+    return new Promise(function (resolve, reject) {
+      GT.modal({ title: $t('Setujui perangkat ini'), body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui dengan NEAR Auth'), primary: true, onClick: function (h) {
+        var provider = new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: S.cfg.fastAuth.clientId });
+        GT.toast($t('Membuka NEAR Auth…'));
+        provider.login(undefined, true)
+          .then(function () { return provider.client.getIdTokenClaims(); })
+          .then(function (claims) {
+            if (!claims || !claims.__raw) throw new Error($t('Login tidak memberi token'));
+            h.close('action');
+            return newDevice(provider, { accountId: S.account, ownerPublicKey: ownerPk }, claims.__raw);
+          })
+          .then(function () { lsSet(LS_OWNER, null); resolve(); }, function (e) { GT.toast($t('Gagal: {0}', [e && e.message || e])); reject(e); });
+        return false;
+      } }] });
     });
-  }
-  function canTransfer() { return !!(window.NearLib && window.crypto && window.crypto.subtle); }
-  function makeTransferCode() {
-    var kp = S.account && canTransfer() && keyOf(S.account);
-    if (!kp) return Promise.reject(new Error($t('Gagal.')));
-    var secret = window.crypto.getRandomValues(new Uint8Array(16)), iv = window.crypto.getRandomValues(new Uint8Array(12));
-    return transferKey(secret, ['encrypt'])
-      .then(function (k) { return window.crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, k, new TextEncoder().encode(JSON.stringify({ a: S.account, k: kp.toString() }))); })
-      .then(function (ct) { return api('/transfer', { method: 'POST', body: { ct: toB64url(new Uint8Array(ct)), iv: toB64url(iv) } }); })
-      .then(function (r) { return CODE_PREFIX + r.id + '.' + toB64url(secret); });
-  }
-  // keeps the key only if the server accepts a signed request with it
-  function redeemTransferCode(text) {
-    var bad = new Error($t('Kode tidak valid. Salin seluruh kode dari perangkat lain.'));
-    var m = /^gt2\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]{22})$/.exec(String(text || '').replace(/\s+/g, ''));
-    if (!m || !canTransfer()) return Promise.reject(bad);
-    var secret; try { secret = fromB64url(m[2]); } catch (e) { return Promise.reject(bad); }
-    return api('/transfer/redeem', { method: 'POST', body: { id: m[1] } }).then(null, function (e) {
-      if (e && e.status === 404) throw new Error($t('Kode sudah kedaluwarsa atau sudah dipakai. Buat kode baru di perangkat lain.'));
-      throw e;
-    }).then(function (r) {
-      return transferKey(secret, ['decrypt'])
-        .then(function (k) { return window.crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64url(r.iv) }, k, fromB64url(r.ct)); })
-        .then(function (buf) {
-          var o = JSON.parse(new TextDecoder().decode(buf));
-          if (!o || o.a !== r.account || typeof o.k !== 'string' || o.k.indexOf('ed25519:') !== 0 || !/^[a-z0-9][a-z0-9._-]{1,63}$/.test(o.a)) throw bad;
-          return { account: o.a, kp: window.NearLib.KeyPair.fromString(o.k) };
-        })
-        .catch(function () { throw bad; });
-    }).then(function (c) {
-      var prev = S.account, had = keyRing()[c.account];
-      keepKey(c.account, c.kp); S.account = c.account;
-      return api('/state').then(function () {
-        return signedIn(c.account, c.kp, $t('Akun dipindahkan ke perangkat ini. Selamat datang kembali!'));
-      }, function () {
-        var ring = keyRing(); if (had) ring[c.account] = had; else delete ring[c.account];
-        lsSet(LS_KEYS, JSON.stringify(ring)); S.account = prev;
-        throw new Error($t('Kode ini tidak cocok dengan akun mana pun atau sudah tidak berlaku.'));
-      });
-    });
-  }
-  // the "I have a code" field for the sign-in windows; done() runs after a successful sign-in
-  function codeEntry(done) {
-    var box = $('div', 'gt-code-entry');
-    box.appendChild($('h4', 'chain-h', $t('Aku punya kode dari perangkat lain')));
-    var input = $('input', 'gt-code-input'); input.type = 'text'; input.placeholder = $t('Tempel kode di sini'); input.autocomplete = 'off'; input.spellcheck = false;
-    input.setAttribute('aria-label', $t('Aku punya kode dari perangkat lain'));
-    var msg = $('p', 'mnote gt-code-msg'); msg.setAttribute('role', 'alert');
-    var go = button($t('Masuk dengan kode'), function () {
-      msg.textContent = ''; go.disabled = true;
-      redeemTransferCode(input.value).then(function () { done(); }, function (e) { msg.textContent = e.message; go.disabled = false; });
-    }, 'primary');
-    box.appendChild(input); box.appendChild(go); box.appendChild(msg);
-    return box;
-  }
-  // signed in: shows the code to type or paste on the other device (made on demand: the server holds it for 10 minutes)
-  function transferWindow() {
-    makeTransferCode().then(function (code) {
-      var body = $('div');
-      body.appendChild($('p', null, $t('Di perangkat lain: pilih "Aku punya kode dari perangkat lain" saat masuk, lalu tempel kode ini.')));
-      var ta = $('textarea', 'gt-code-box'); ta.readOnly = true; ta.rows = 3; ta.value = code; ta.spellcheck = false;
-      ta.setAttribute('aria-label', $t('Pindahkan ke perangkat lain'));
-      ta.addEventListener('focus', function () { ta.select(); });
-      body.appendChild(ta);
-      var note = $('p', 'mnote');
-      var copy = button($t('Salin'), function () {
-        var ok = function () { note.textContent = $t('Tersalin!'); };
-        var fallback = function () { ta.focus(); ta.select(); try { if (document.execCommand('copy')) ok(); } catch (e) { /* select-all is enough */ } };
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(ok, fallback); else fallback();
-      }, 'primary');
-      body.appendChild(copy); body.appendChild(note);
-      body.appendChild($('p', 'chain-warn', $t('Kode ini berlaku 10 menit. Siapa pun yang memegang kode ini bisa bermain sebagai kamu; jangan dibagikan.')));
-      GT.modal({ title: $t('Pindahkan ke perangkat lain'), body: body });
-    }, function (e) { GT.toast((e && e.message) || $t('Gagal.')); });
-  }
-
-  function signedIn(account, kp, msg) {
-    keepKey(account, kp);
-    S.account = account; lsSet(LS_ACC, account); renderBanner();
-    GT.toast(msg);
-    return refresh(true);
   }
 
   // Sign out: forget the account in this browser and clear the NEAR Auth login cache (no redirect). The game key stays
@@ -413,7 +320,6 @@
     body.appendChild($('p', null, $t('Pilih cara masuk. Akunmu tetap akun NEAR testnet; tanpa dompet, tanpa biaya gas.')));
     var slot = $('div', 'gt-login-google'); slot.appendChild($('p', 'mnote', $t('Memuat tombol Google…')));
     body.appendChild(slot);
-    body.appendChild(codeEntry(function () { h.close('code'); }));
     var actions = [];
     if (window.NearLib) actions.push({ label: $t('Masuk dengan NEAR Auth (Google/email)'), onClick: function (h) { h.close('near'); nearLogin(); return true; } });
     var h = GT.modal({ title: $t('Masuk'), body: body, actions: actions, onClose: function () { onGoogle = null; } });
@@ -803,6 +709,12 @@
   function b64(bytes) { var s = ''; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); }
 
   function signedCall(method, args, extra) {
+    return signedCallOnce(method, args, extra).catch(function (e) {
+      if (!e || e.code !== 'approve_device') throw e;
+      return approveDevice().then(function () { return signedCallOnce(method, args, extra); });
+    });
+  }
+  function signedCallOnce(method, args, extra) {
     var L = window.NearLib, kp = sessionKey(), ready;
     if (S.mode === 'mock') ready = Promise.resolve({ nonce: BigInt(Date.now()), height: 0n });
     else {
@@ -1231,7 +1143,6 @@
     wrap.appendChild($('p', 'chain-dim', $t('{0}Barang "hari ini" tersimpan permanen pukul 06:00{1}', [document.documentElement.classList.contains('gt-phone') ? $t('Ketuk barang untuk melihat, lalu Pegang. ') : $t('Klik untuk melihat, klik kanan untuk memegang. '), chainUI() ? $t(' (di NEAR).') : '.'])));
     if (S.account) wrap.appendChild($('p', 'chain-dim', $t('Akun: {0}', [S.account])));
     wrap.appendChild(button($t('Semua riwayat'), function () { open('history'); }));
-    if (S.account && window.NearLib) wrap.appendChild(button($t('Pindahkan ke perangkat lain'), transferWindow));
     wrap.appendChild(button($t('Keluar (ganti akun)'), function () { signOut(); }));
     return wrap;
   }
