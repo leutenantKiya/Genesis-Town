@@ -710,8 +710,51 @@
     }
     return null;
   }
+  /* ---- the hoe (cangkul): green squares on the grass inside the farm fence while it is in hand; click one (or face it
+     and press F / R) to till it. The server keeps the tilled tiles (view.tilled); they are drawn as soil. */
+  function viewTilled() { var v = V(); return (v && v.tilled) || []; }
+  function isTilled(x, y) { var t = viewTilled(); for (var i = 0; i < t.length; i++) if (t[i][0] === x && t[i][1] === y) return true; return false; }
+  function hoeable(x, y) {
+    var L = GT.world, f = L && L.farm;
+    if (!isHL(wid()) || !f || f.x0 == null || x <= f.x0 || x >= f.x1 || y <= f.y0 || y >= f.y1) return false;
+    var t = L.tiles[y * L.w + x];
+    return (t === 'grass' || t === 'tallgrass' || t === 'flower') && !isTilled(x, y);
+  }
+  function holdingHoe() { return !!(window.GT_ITEMS && GT_ITEMS.holding && GT_ITEMS.holding('hoe')); }
+  function hoe(tile) {
+    var p = GT.player, d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[p.dir] || [0, 1];
+    var t = tile && Math.abs(tile.x - p.x) + Math.abs(tile.y - p.y) <= 1 ? tile : { x: p.x + d[0], y: p.y + d[1] };
+    if (!isHL(wid())) { GT.toast($t('Cangkul dipakai di kebun Homeland.')); return; }
+    if (!hoeable(t.x, t.y)) { GT.toast($t('Berdiri di sebelah kotak hijau di dalam pagar kebun, lalu klik kotaknya.')); return; }
+    if (!loggedIn() || hoeBusy) return;
+    hoeBusy = true;
+    C.act({ action: 'hoe', x: t.x, y: t.y }).then(function (r) {
+      var v = V(); if (v && r && r.tilled) v.tilled = r.tilled;
+      if (window.GT_FX && GT_FX.chop) GT_FX.chop({ x: t.x, y: t.y });
+    }, function () {}).then(function () { hoeBusy = false; });
+  }
+  var hoeBusy = false;
+  function onDrawGround(ctx, camX, camY, T) {
+    if (!GT.scene || GT.scene.kind !== 'out' || !isHL(wid())) return;
+    viewTilled().forEach(function (q) { // tilled soil: dark earth with furrows
+      var x = q[0] * T - camX, y = q[1] * T - camY;
+      ctx.fillStyle = '#6e4a2c'; ctx.fillRect(x, y, T, T);
+      ctx.fillStyle = '#4e321c'; for (var k = 2; k < T; k += 3) ctx.fillRect(x + 1, y + k, T - 2, 1);
+    });
+    if (!holdingHoe()) return;
+    var L = GT.world, f = L && L.farm, p = GT.player;
+    if (!f || f.x0 == null || p.x <= f.x0 - 2 || p.x >= f.x1 + 2 || p.y <= f.y0 - 2 || p.y >= f.y1 + 2) return; // only by the farm
+    for (var yy = f.y0 + 1; yy < f.y1; yy++) for (var xx = f.x0 + 1; xx < f.x1; xx++) {
+      if (!hoeable(xx, yy)) continue;
+      var sx = xx * T - camX, sy = yy * T - camY, reach = Math.abs(xx - p.x) + Math.abs(yy - p.y) <= 1;
+      ctx.fillStyle = reach ? 'rgba(80,220,110,.45)' : 'rgba(80,220,110,.2)'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2);
+      ctx.strokeStyle = 'rgba(40,160,70,.9)'; ctx.lineWidth = 1; ctx.strokeRect(sx + 1.5, sy + 1.5, T - 3, T - 3);
+    }
+  }
+
   function onInteract(ctx) {
     if (ctx.scene.kind !== 'out' || ctx.npc) return false;
+    if (ctx.mode !== 'message' && holdingHoe() && hoeable(ctx.tile.x, ctx.tile.y)) { if (ctx.mode !== 'bump') hoe(ctx.tile); return true; }
     var t = ctx.tile, p = portalPos();
     if (ctx.mode === 'talk' && p && t.x === p.x && t.y === p.y) { openPortal(); return true; }
     if (!isHL(wid())) return false;
@@ -860,7 +903,7 @@
     GT.hotkey('B', function () { openPortal(); });
     upBtn = GT.addHudButton({ id: 'gt-upbtn', label: '▲ ' + $t('Tingkatkan'), secondary: false, onClick: function () { if (inOwnHome()) openWin('hall', $t('Balai Kota')); } });
     if (upBtn) { upBtn.hidden = true; upBtn.title = $t('Naikkan Balai Kota, buka wilayah, dan lihat pembangun'); }
-    window.GT_HOME = { enter: enter, travel: travel, openPortal: openPortal, refresh: function () { return load(true); }, state: function () { return H; } };
+    window.GT_HOME = { hoe: hoe, enter: enter, travel: travel, openPortal: openPortal, refresh: function () { return load(true); }, state: function () { return H; } };
   }
-  GT.register({ id: 'homeland', init: init, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw, onWorld: onWorld });
+  GT.register({ id: 'homeland', init: init, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw, onDrawGround: onDrawGround, onWorld: onWorld });
 })();

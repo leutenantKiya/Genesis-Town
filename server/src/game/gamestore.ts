@@ -46,6 +46,7 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS homeland_workers (account TEXT NOT NULL, slot INTEGER NOT NULL, fatigue REAL NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, sick_until INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, slot));
       CREATE TABLE IF NOT EXISTS homeland_furniture (account TEXT NOT NULL, key TEXT NOT NULL, level INTEGER NOT NULL, PRIMARY KEY (account, key));
       CREATE TABLE IF NOT EXISTS homeland_cosmetics (account TEXT NOT NULL, slot INTEGER NOT NULL, cosmetic TEXT NOT NULL, PRIMARY KEY (account, slot));
+      CREATE TABLE IF NOT EXISTS homeland_tilled (account TEXT NOT NULL, x INTEGER NOT NULL, y INTEGER NOT NULL, PRIMARY KEY (account, x, y));
       CREATE TABLE IF NOT EXISTS homeland_pantry (account TEXT PRIMARY KEY, pantry INTEGER NOT NULL DEFAULT 0, tick_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS homeland_forage (account TEXT PRIMARY KEY, last INTEGER NOT NULL, carry REAL NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS trade_offers (id INTEGER PRIMARY KEY AUTOINCREMENT, from_acct TEXT NOT NULL, to_acct TEXT NOT NULL,
@@ -300,6 +301,13 @@ export class GameStore {
   }
   saveWorker(w: WorkerRow) {
     this.db.prepare('INSERT INTO homeland_workers (account, slot, fatigue, updated_at, sick_until) VALUES (?, ?, ?, ?, ?) ON CONFLICT(account, slot) DO UPDATE SET fatigue = excluded.fatigue, updated_at = excluded.updated_at, sick_until = excluded.sick_until').run(w.account, w.slot, w.fatigue, w.updated_at, w.sick_until);
+  }
+  /** Ground a hoe has turned inside a Homeland's farm fence (the owner's account), as [x, y] tiles. */
+  tilledOf(account: string): Array<[number, number]> {
+    return (this.db.prepare('SELECT x, y FROM homeland_tilled WHERE account = ? ORDER BY y, x').all(account) as Array<{ x: number; y: number }>).map((r) => [r.x, r.y]);
+  }
+  addTilled(account: string, x: number, y: number): boolean {
+    return Number(this.db.prepare('INSERT OR IGNORE INTO homeland_tilled (account, x, y) VALUES (?, ?, ?)').run(account, x, y).changes) > 0;
   }
   pantryOf(account: string): { pantry: number; tick_at: number } | undefined {
     return this.db.prepare('SELECT pantry, tick_at FROM homeland_pantry WHERE account = ?').get(account) as { pantry: number; tick_at: number } | undefined;

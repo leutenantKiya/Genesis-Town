@@ -21,12 +21,12 @@ import { leaderboard } from './leaderboard.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', boat: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', boat: 'visit', hoe: 'help', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -318,6 +318,13 @@ export class Game {
       }
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
       case 'boat': res = this.boat(account, wid, pos ?? { x: -9, y: -9 }); break;
+      case 'hoe': {
+        if (!w.row) throw new HttpError(409, 'Use the hoe in a Homeland farm.');
+        const hx = n('x', -1), hy = n('y', -1);
+        if (!pos || Math.abs(pos.x - hx) + Math.abs(pos.y - hy) > 1) throw new HttpError(409, 'Stand next to that ground.');
+        res = this.homelands.hoe(w.row.account, hx, hy);
+        break;
+      }
       case 'build': res = this.homelands.start(w.row!.account, s('kind') as 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay, account); break;
       case 'assist': res = this.homelands.assist(w.row!.account, s('target'), (cost) => this.world.useEnergy(account, cost)); break;
       case 'dress': res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay); break;

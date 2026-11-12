@@ -13,7 +13,7 @@ export interface Layout {
   chunks: Chunk[]; projects: Record<string, Project>;
   buildings: Array<{ kind: string; name: string | null; x: number; y: number; w: number; h: number; dx: number; dy: number; open: boolean; own?: boolean }>;
   market: { stalls: Array<{ x: number; y: number }> };
-  farm: { plots: Array<{ x: number; y: number }>; gate: { x: number; y: number } };
+  farm: { plots: Array<{ x: number; y: number }>; gate: { x: number; y: number }; x0?: number; y0?: number; x1?: number; y1?: number };
   spawn: { x: number; y: number };
 }
 export interface Pos { x: number; y: number }

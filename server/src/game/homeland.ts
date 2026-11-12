@@ -22,6 +22,8 @@ const RANK: Record<Role, number> = { visitor: 0, helper: 1, builder: 2, owner: 3
 /** Stored invite and party roles only ever grant helper or builder; 'owner' and anything unknown count as visitor (owner comes from row.account alone). */
 const roleOf = (r: unknown): Role => (r === 'helper' || r === 'builder' ? r : 'visitor');
 const SETTABLE = ['visitor', 'helper', 'builder'];
+/** Ground the hoe can turn: open grass inside the farm fence (the fixed plots are 'soil' and are tilled through the farm act). */
+const HOEABLE = new Set(['grass', 'tallgrass', 'flower']);
 
 export interface BuildingOption extends BuildingDef { lot: string | null; can: boolean; why: string | null }
 export interface HomelandView {
@@ -41,6 +43,7 @@ export interface HomelandView {
   storehouse: { lot: string; level: number; maxLevel: number; bonus: number; nextBonus: number | null; next: { cost: Cost; secs: number } | null } | null;
   restoran: { pantry: number; pantryMax: number; nextServeAt: number } | null;
   forage: { stored: Record<string, number>; capacity: number } | null;
+  tilled: Array<[number, number]>;
   cook: { recipe: { inputs: Record<string, number>; output: string }; can: boolean; why: string | null } | null;
   hire: Record<string, { name: string; price: number; rarity: string; max: number; have: number; th: number; can: boolean; why: string | null }>;
 }
@@ -439,6 +442,17 @@ export class Homelands {
     return { toast: `${def.name} hired (-${def.price} coins).`, tags: ['coin'] };
   }
 
+  /** The hoe: turns one grass tile inside the farm fence into tilled ground (owner's world, kept for good). */
+  hoe(owner: string, x: number, y: number): { toast: string; tags: string[]; tilled: Array<[number, number]> } {
+    const row = this.ensure(owner), L = this.map(row).layout, f = L.farm;
+    if (!Number.isInteger(x) || !Number.isInteger(y) || f.x0 == null || f.y0 == null || f.x1 == null || f.y1 == null) throw new HttpError(400, 'Bad tile.');
+    if (x <= f.x0 || x >= f.x1 || y <= f.y0 || y >= f.y1) throw new HttpError(409, 'Use the hoe inside the farm fence.');
+    const t = L.tiles[y * L.w + x];
+    if (!HOEABLE.has(t)) throw new HttpError(409, 'This ground cannot be hoed.');
+    if (!this.d.gs.addTilled(owner, x, y)) throw new HttpError(409, 'Already hoed.');
+    return { toast: 'The ground is hoed.', tags: [], tilled: this.d.gs.tilledOf(owner) };
+  }
+
   collect(account: string, lot: string, day: number, checkGain: (a: string, t: string, n: number) => void, actor = account): { toast: string; tags: string[]; gained: Record<string, number> } {
     this.settle(account);
     const gs = this.d.gs;
@@ -619,6 +633,7 @@ export class Homelands {
       })(),
       hospital: (() => { const h = this.hospital(account); if (!h) return null; const st = h.def.upgrade?.[h.level - 1]; return { lot: h.lot, level: h.level, maxLevel: h.def.maxLevel ?? 1, healGameHours: h.def.healGameHours![h.level - 1], next: h.level < (h.def.maxLevel ?? 1) && st ? { cost: st.cost, secs: st.secs } : null }; })(),
       restoran: this.restoranLot(account) ? { pantry: this.pantryOf(account), pantryMax: this.cfg.restoran.pantryMax, nextServeAt: (gs.pantryOf(account)?.tick_at ?? this.now()) + Math.round(this.msPerHour() * Math.min(1, this.serveInterval(account))) } : null,
+      tilled: gs.tilledOf(account),
       forage: (() => { const f = this.forageStored(account); return f ? { stored: f.stored, capacity: f.capacity } : null; })(),
       cook: (() => { const r = this.cookRecipe(account); if (!r) return null; const why = this.cookWhy(account, r, 1); return { recipe: r, can: why === null, why }; })(),
       hire: Object.fromEntries(Object.entries(this.cfg.bots ?? {}).map(([job, d]) => {
