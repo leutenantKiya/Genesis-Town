@@ -108,6 +108,13 @@ html.gt-phone .gt3d-tray button{height:44px;min-width:44px;padding:0 8px}
   border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);
   box-shadow:inset 0 var(--line) 0 var(--paper-hi),inset 0 calc(-1*var(--edge)) 0 var(--shade);
   padding:calc(var(--fs)*1.1) calc(var(--fs)*1.6) calc(var(--fs)*1.3) calc(var(--fs)*1.3);min-height:calc(var(--fs)*1.7*2 + var(--fs)*2.2);cursor:pointer;user-select:none;-webkit-user-select:none}
+/* waiting in a portal: the view swims, purple creeping in from the edges (homeland.js sets --dz 0..1) */
+html.gt-dizzy::after{content:"";position:fixed;inset:0;z-index:40;pointer-events:none;opacity:var(--dz,0);
+  background:radial-gradient(ellipse at center,rgba(150,70,230,.15) 20%,rgba(110,30,200,.75) 100%);animation:gt-swirl 2.2s ease-in-out infinite alternate}
+html.gt-dizzy canvas{filter:hue-rotate(calc(var(--dz,0)*70deg)) blur(calc(var(--dz,0)*1.5px));animation:gt-wobble 1.6s ease-in-out infinite}
+@keyframes gt-wobble{0%,100%{transform:none}25%{transform:scale(calc(1 + var(--dz,0)*.03)) rotate(calc(var(--dz,0)*1.2deg))}75%{transform:scale(calc(1 + var(--dz,0)*.02)) rotate(calc(var(--dz,0)*-1.2deg))}}
+@keyframes gt-swirl{to{filter:hue-rotate(30deg)}}
+@media (prefers-reduced-motion: reduce){html.gt-dizzy canvas,html.gt-dizzy::after{animation:none}}
 #dlg.on{display:block;z-index:20} /* over the 2.5D key hint (.gt3d-hint, z 5) and the action hint */
 #dtxt{display:block;white-space:pre-wrap;overflow-wrap:anywhere}
 #dtxt .h{visibility:hidden}

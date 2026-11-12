@@ -183,6 +183,7 @@
       for (var xx = 0; xx < 8; xx++) {
         if (r() < 0.5) R(fg, xx, 0, 1, 24, P[2]);
         for (var k = 0; k < 3; k++) R(fg, xx, Math.floor(r() * 22), 1, 1 + Math.floor(r() * 3), r() < 0.5 ? P[0] : P[3]);
+        if (r() < 0.45) R(fg, xx, Math.floor(r() * 20), 1, 2 + Math.floor(r() * 3), 'rgba(235,248,255,0.75)'); // white water
       }
       ftex.needsUpdate = true;
     }
@@ -220,7 +221,7 @@
       redraw: function () { paint(); gtex.needsUpdate = true; paintWater(); paintBank(); paintFall(); buildUnder(); },
       update: function (t) {
         wtex.offset.set((t * 0.035) % 1, (t * 0.02) % 1);
-        ftex.offset.y = (t * 1.6) % 1;
+        ftex.offset.y = 1 - (t * 1.6) % 1; // v grows downward on the falls (their quads start at the island's underside): run it down
         clouds.children.forEach(function (p) { p.position.x += p.userData.v * 0.016; if (p.position.x > W + 14) p.position.x = -14; });
       }
     };

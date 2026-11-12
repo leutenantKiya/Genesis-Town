@@ -148,6 +148,42 @@
     var d = portalPos(), p = GT.player;
     return !!(d && GT.scene && GT.scene.kind === 'out' && Math.abs(p.x - d.x) + Math.abs(p.y - d.y) <= 2);
   }
+  /* Standing in the portal: wait PORTAL_WAIT seconds while the screen swims (purple, wobbling, as in Minecraft's portal),
+     then go. With one place to go it goes straight there; with more, the choice menu opens. Stepping out undoes it. */
+  var PORTAL_WAIT = 3, portalT = 0, dizzyOn = false;
+  function portalDests() {
+    var cur = wid(), out = [];
+    if (cur !== 'public') out.push('public');
+    if (H && cur !== H.world) out.push(H.world);
+    ((H && H.invited) || []).forEach(function (v) { if (cur !== v.world && out.indexOf(v.world) < 0) out.push(v.world); });
+    return out;
+  }
+  function inPortal() {
+    var d = portalPos(), p = GT.player, sc = GT.scene;
+    if (!d || !sc || sc.kind !== 'out' || p.moving) return false;
+    var m = sc.map, walk = m && m.walk && m.walk[d.y * m.w + d.x] === 1;
+    // on the portal tile; or, where the ring itself blocks, right beside it and facing it
+    if (walk) return Math.round(p.x) === d.x && Math.round(p.y) === d.y;
+    var dx = d.x - Math.round(p.x), dy = d.y - Math.round(p.y);
+    if (Math.abs(dx) + Math.abs(dy) !== 1) return false;
+    return (dx === 1 && p.dir === 'right') || (dx === -1 && p.dir === 'left') || (dy === 1 && p.dir === 'down') || (dy === -1 && p.dir === 'up');
+  }
+  function dizzy(k) {
+    var root = document.documentElement;
+    if (k <= 0.001) { if (dizzyOn) { root.classList.remove('gt-dizzy'); root.style.removeProperty('--dz'); dizzyOn = false; } return; }
+    if (!dizzyOn) { root.classList.add('gt-dizzy'); dizzyOn = true; }
+    root.style.setProperty('--dz', Math.min(1, k).toFixed(3));
+  }
+  function portalTick(dt) {
+    var on = !travelling && loggedIn() && !GT.isUiOpen() && inPortal();
+    portalT = on ? portalT + dt : Math.max(0, portalT - dt * 3);
+    dizzy(portalT / PORTAL_WAIT);
+    if (on && portalT >= PORTAL_WAIT) {
+      portalT = 0; dizzy(0);
+      var ds = portalDests();
+      if (ds.length === 1) travel(ds[0]); else openPortal();
+    }
+  }
   function openPortal() {
     if (travelling || !loggedIn()) return;
     if (!nearPortal()) { GT.toast($t('Pergi ke portal dulu.')); return; }
@@ -200,8 +236,8 @@
   function bodyFor(w) { return w.kind === 'hall' ? hallBody() : lotBody(w.arg); }
   function redrawWin() {
     if (!win || !win.h || !win.h.isOpen()) return;
-    var ae = document.activeElement; // do not wipe a name being typed into the invite field
-    if (ae && ae.tagName === 'INPUT' && win.h.el && win.h.el.contains(ae)) return;
+    var ae = document.activeElement; // do not wipe a name being typed into the invite field, or a role list open for a pick
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT') && win.h.el && win.h.el.contains(ae)) return;
     win.h.setBody(bodyFor(win));
   }
   function busyJob() { var v = V(); return v && v.builders && v.builders.busy >= v.builders.total; }
@@ -716,6 +752,9 @@
     whereEl.textContent = txt; whereEl.classList.toggle('guest', guest); whereEl.style.display = '';
   }
   function onFrame(dt) {
+    portalTick(dt);
+    // the Upgrade button shows only in your own Homeland (not everyone knows the Town Hall is where you upgrade)
+    if (upBtn) { var own = inOwnHome(); if (upBtn.hidden === own) upBtn.hidden = !own; }
     var now = Date.now();
     for (var i = pops.length - 1; i >= 0; i--) { pops[i].t += dt; if (pops[i].t > 1.4) pops.splice(i, 1); }
     clockT += dt;
@@ -814,9 +853,12 @@
     ctx.restore();
   }
 
+  var upBtn = null;
   function init() {
     C = window.GT_CHAIN || null;
     GT.hotkey('B', function () { openPortal(); });
+    upBtn = GT.addHudButton({ id: 'gt-upbtn', label: '▲ ' + $t('Tingkatkan'), secondary: false, onClick: function () { if (inOwnHome()) openWin('hall', $t('Balai Kota')); } });
+    if (upBtn) { upBtn.hidden = true; upBtn.title = $t('Naikkan Balai Kota, buka wilayah, dan lihat pembangun'); }
     window.GT_HOME = { enter: enter, travel: travel, openPortal: openPortal, refresh: function () { return load(true); }, state: function () { return H; } };
   }
   GT.register({ id: 'homeland', init: init, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw, onWorld: onWorld });

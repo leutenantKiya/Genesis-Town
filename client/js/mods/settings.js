@@ -169,7 +169,7 @@
   function moreSheet() {
     var opts = [];
     if (document.getElementById('simbtn')) opts.push({ label: $t('Simulasi 1 minggu'), onPick: function () { press('simbtn'); } });
-    opts.push({ label: $t('Pengaturan'), onPick: openSettings });
+    opts.push({ label: $t('Tampilan, suara & tombol'), onPick: openSettings });
     if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push({ label: $t('Admin'), onPick: function () { GT_ADMIN.open(); } });
     opts.push({ label: $t('Party'), onPick: function () { if (window.GT_PARTY) GT_PARTY.open(); } });
     if (window.GT_CHARSCREEN) opts.push({ label: $t('Ubah karakter'), onPick: function () { GT_CHARSCREEN.open(true); } });

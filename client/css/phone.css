@@ -86,6 +86,9 @@ html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:
 html:not(.gt-phone) #acts > button{display:none!important}
 html:not(.gt-phone) #acts > #chainbtn,html:not(.gt-phone) #acts > #pasarbtn,html:not(.gt-phone) #acts > #mapbtn,
 html:not(.gt-phone) #acts > #simbtn,html:not(.gt-phone) #acts > #gt-morebtn{display:inline-block!important}
+/* the Homeland's Upgrade button: first, and only while you stand in your own Homeland (homeland.js sets hidden) */
+html:not(.gt-phone) #acts > #gt-upbtn:not([hidden]){display:inline-block!important;order:0}
+#acts > #gt-upbtn[hidden]{display:none!important}
 #acts > #chainbtn{order:1}#acts > #pasarbtn{order:2}#acts > #mapbtn{order:3}#acts > #simbtn{order:4}#acts > #gt-morebtn{order:5}
 #acts > #chainbtn{background:var(--accent);color:var(--accent-ink)}
 #acts > #chainbtn:hover{background:var(--accent-hi)}
