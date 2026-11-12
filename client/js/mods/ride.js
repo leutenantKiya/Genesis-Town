@@ -14,7 +14,8 @@
 
   function carousel() {
     var L = GT.world, w = (GT.worldId && GT.worldId()) || 'public';
-    return w === 'public' && L && L.fun && L.fun.carousel ? L.fun.carousel : null;
+    var fun = L && (L.fun || (L.layout && L.layout.fun)); // the engine's world keeps the generator's spots under layout
+    return w === 'public' && fun && fun.carousel ? fun.carousel : null;
   }
   function near(c, t) { return Math.max(Math.abs(t.x - (c.x + 0.5)), Math.abs(t.y - (c.y + 0.5))) <= 3; }
 

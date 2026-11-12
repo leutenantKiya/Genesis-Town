@@ -897,7 +897,8 @@
   /* ------------------------------------------------------------ context hint: which key does what here */
   function keyLabel() {
     // on a phone (or any touch screen) the interact control is the A button
-    if (document.documentElement.classList.contains('gt-phone') || window.matchMedia('(pointer: coarse)').matches) return 'A';
+    if (document.documentElement.classList.contains('gt-phone')) return $t('tombol aksi'); // the round action button: phones have no A key any more
+    if (window.matchMedia('(pointer: coarse)').matches) return 'A';
     return window.GT_SETTINGS ? GT_SETTINGS.label('talk').split(' / ')[0] : 'F';
   }
   var DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };

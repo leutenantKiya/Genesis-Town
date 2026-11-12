@@ -183,6 +183,13 @@
 >   riding the **carousel** with a cinematic camera, letterbox and colour grade (`mods/ride.js`); house furniture to use
 >   (nap, tips, TV news, watering a plant until it blooms, your own chest opens your bag; an icon and verb float over the
 >   piece you face, `mods/interior.js`). *(planned)*: the Upgrade button on phones.
+> - **Playtest fixes, round 2** (2026-11-13): phones play full screen with no D-pad or A/E buttons: tap to walk, and one
+>   round action button (`#btnAct`, `GT_ACTBTN.add` for mod probes in `mods/settings.js`) appears with an icon and a verb
+>   only when something in front of you can be used; F (or the action button) opens the portal at once, the dizzy wait
+>   still works; the hoe's green squares show again in 2D and 2.5D (the client now reads the fence from
+>   `GT.world.layout.farm`, like the server); merchant name tags sit right above their heads; island waterfalls pour far
+>   below the island and fade, with a new streaked water texture; F (or the action button) gets you on the carousel
+>   again (it read a `GT.world.fun` the engine never had; now `GT.world.layout.fun`).
 >
 > - **Work buildings** (2026-11-12, after Kingshot's resource buildings): every Homeland has a **Penggergajian** (sawmill,
 >   wood) on a forest island, a **Kincir Angin** (windmill, wheat) with sails that turn in the 2.5D view, and a **Gudang**

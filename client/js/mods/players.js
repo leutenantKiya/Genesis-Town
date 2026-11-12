@@ -120,7 +120,10 @@
     if (ctx.measureText(text).width > 96) { while (text.length > 1 && ctx.measureText(text + '…').width > 96) text = text.slice(0, -1); text += '…'; }
     return text;
   }
-  function overlaps(a, b) { return Math.abs(a.x - b.x) < (a.w + b.w) / 2 + 1 && Math.abs(a.y - b.y) < 9; }
+  // sc: how big the tags are really drawn (GT_THEME.scale, 0.6 in 2.5D); the boxes must be compared at that size, or two tags
+  // that sit apart on screen still count as touching
+  function overlapX(a, b) { return Math.abs(a.x - b.x) < (a.w * a.sc + b.w * b.sc) / 2 + 1; }
+  function overlaps(a, b) { return overlapX(a, b) && Math.abs(a.y - b.y) < 9 * Math.max(a.sc, b.sc); }
   function onDraw(ctx, camX, camY, T) {
     var TH = tone();
     if (!TH || !GT.scene || GT.scene.kind !== 'out') return;
@@ -131,15 +134,21 @@
     Object.keys(others).forEach(function (a) {
       var o = others[a], cx = curX(o, now);
       var at = GT.at(cx, curY(o, now)); // in 2.5D this follows the head at any camera turn
-      var x = GT.snap(at.x + T / 2), y = GT.snap(at.y - 3 - (o.npc && Math.round(cx) % 2 ? 9 : 0)); // neighbouring merchant tags alternate in height
+      var x = GT.snap(at.x + T / 2), y = GT.snap(at.y - 3); // every tag starts right above its owner's head
       var small = o.guest || !!guestId, sz = small ? 5 : 7; // a guest's own tag is small and dim; a guest sees everyone's tags small
       ctx.font = sz + 'px "Pixelify Sans", sans-serif';
       var text = o.guest ? $t('Tamu') : o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
-      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.party ? 'party' : 'dark', size: sz, k: key(o.nick, o.tag) });
+      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag) });
     });
     tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
     tags.forEach(function (t) {
-      for (var n = 0; n < 4; n++) { var hit = placed.some(function (p) { return overlaps(p, t); }); if (!hit) break; t.y -= 9; }
+      for (var n = 0; n < 4; n++) {
+        var hit = placed.filter(function (p) { return overlaps(p, t); })[0];
+        if (!hit) break;
+        // two merchants a stall apart: slide the right tag a few pixels sideways so both stay on their own heads
+        if (hit.npc && t.npc && Math.abs(hit.y - t.y) < 3 * t.sc) t.x = GT.snap(Math.max(t.x, hit.x + (hit.w * hit.sc + t.w * t.sc) / 2 + 1));
+        else t.y -= 9 * t.sc;
+      }
       placed.push(t);
       TH.label(ctx, t.text, t.x, t.y, { tone: t.tone, size: t.size });
       var bt = fitBubble(ctx, t.k, now);

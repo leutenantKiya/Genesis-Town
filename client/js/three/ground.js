@@ -175,32 +175,79 @@
     }
     buildUnder();
 
-    /* --- waterfalls: wherever water reaches an island's edge it pours over into the sky */
-    var fcv = GT3.canvas(8, 24), fg = fcv.getContext('2d'), ftex = GT3.tex(fcv, true);
-    function paintFall() { // the pool's own colours, as vertical streaks; 8 px per tile both ways, so the pixels stay square
-      var P = GT3.pal().water, r = GT3.rng(5);
-      R(fg, 0, 0, 8, 24, P[1]);
-      for (var xx = 0; xx < 8; xx++) {
-        if (r() < 0.5) R(fg, xx, 0, 1, 24, P[2]);
-        for (var k = 0; k < 3; k++) R(fg, xx, Math.floor(r() * 22), 1, 1 + Math.floor(r() * 3), r() < 0.5 ? P[0] : P[3]);
-        if (r() < 0.45) R(fg, xx, Math.floor(r() * 20), 1, 2 + Math.floor(r() * 3), 'rgba(235,248,255,0.75)'); // white water
+    /* --- waterfalls: wherever water reaches an island's edge it pours over the lip and keeps falling into the sky, far
+       below the island's underside, thinning out (vertex alpha) until it is gone. One sheet per edge, on the OUTER side of
+       the edge (a hair in front of the cliff, never inside the rock), merged into one mesh with one material. A second thin
+       mesh holds the white foam on the lip. The streak texture is 12 px wide for one tile and 48 px tall for four, so its
+       pixels are the same size as the ground's (12 px per tile) and stay square. */
+    var FALL_LEN = 11,                                           // how far below the water level the sheet reaches (tiles)
+      FALL_STOPS = [[0, 0.95], [1.5, 0.9], [4, 0.66], [7.5, 0.32], [FALL_LEN, 0]], // [depth below the lip, opacity]
+      FTW = 12, FTH = 48, FTILES = FTH / FTW,                    // fall texture: px wide, px tall, tiles tall
+      FO = 0.02, FOAM_H = 3 * PX;                                // FO: just in front of the cliff; foam strip height
+    var fcv = GT3.canvas(FTW, FTH), fg = fcv.getContext('2d'), ftex = GT3.tex(fcv, true);
+    var mcv = GT3.canvas(FTW, 3), mg = mcv.getContext('2d'), mtex = GT3.tex(mcv, true); // foam on the lip
+    function paintFall() { // vertical streaks in the pool's own colours; every streak wraps, so the texture tiles downward
+      var P = GT3.pal().water, r = GT3.rng(5), xx, k, n;
+      function streak(x, y, len, col) { // a 1 px wide run that wraps round the bottom of the texture
+        y = ((y % FTH) + FTH) % FTH;
+        if (y + len <= FTH) R(fg, x, y, 1, len, col);
+        else { R(fg, x, y, 1, FTH - y, col); R(fg, x, 0, 1, y + len - FTH, col); }
+      }
+      R(fg, 0, 0, FTW, FTH, P[1]);
+      for (xx = 0; xx < FTW; xx++) {
+        n = 2 + Math.floor(r() * 2); for (k = 0; k < n; k++) streak(xx, Math.floor(r() * FTH), 6 + Math.floor(r() * 12), P[0]);  // deep streaks
+        n = 2 + Math.floor(r() * 2); for (k = 0; k < n; k++) streak(xx, Math.floor(r() * FTH), 5 + Math.floor(r() * 10), P[2]);  // light streaks
+        n = 1 + Math.floor(r() * 2); for (k = 0; k < n; k++) streak(xx, Math.floor(r() * FTH), 2 + Math.floor(r() * 5), P[3]);   // highlights
+        if (r() < 0.3) streak((xx + 1) % FTW, Math.floor(r() * FTH), 3 + Math.floor(r() * 6), P[2]);                              // a streak 2 px wide
       }
       ftex.needsUpdate = true;
+      // foam: white spray on the top lip, 3 rows (the canvas top is the strip's top)
+      var fr = GT3.rng(9);
+      mg.clearRect(0, 0, FTW, 3);
+      for (xx = 0; xx < FTW; xx++) {
+        R(mg, xx, 0, 1, 1, P[3]);
+        if (fr() < 0.8) R(mg, xx, 1, 1, 1, fr() < 0.6 ? P[3] : P[2]);
+        if (fr() < 0.4) R(mg, xx, 2, 1, 1, fr() < 0.5 ? P[2] : P[3]);
+      }
+      mtex.needsUpdate = true;
     }
     paintFall();
-    var falls = [], FO = 0.02;     // FO: just in front of the island's side wall, which has the same depth
+    var falls = [], foams = [];
+    function addFall(ax, az, bx, bz, nx, nz) { // one tile edge: a strip from the lip down in segments (a to b runs left to right)
+      var uo = (GT3.hash(ax * 2 + nx, az * 2 + nz, 41) % FTW) / FTW,           // each tile starts at another column and height,
+        vo = (GT3.hash(ax * 2 + nx, az * 2 + nz, 43) % FTH) / FTH * FTILES,   // so side by side falls do not repeat
+        i, d0, d1, y0, y1, c = FO;
+      for (i = 0; i + 1 < FALL_STOPS.length; i++) {
+        d0 = FALL_STOPS[i][0]; d1 = FALL_STOPS[i + 1][0]; y0 = -SINK - d0; y1 = -SINK - d1;
+        falls.push({ geo: GT3.quad([ax + nx * c, y1, az + nz * c], [bx + nx * c, y1, bz + nz * c], [bx + nx * c, y0, bz + nz * c], [ax + nx * c, y0, az + nz * c],
+          [uo, vo + d1 / FTILES, uo + 1, vo + d0 / FTILES]) }); // v grows downward on the sheet: the offset below runs it down
+      }
+      c = FO * 2; y0 = -SINK; y1 = -SINK - FOAM_H;
+      foams.push({ geo: GT3.quad([ax + nx * c, y1, az + nz * c], [bx + nx * c, y1, bz + nz * c], [bx + nx * c, y0, bz + nz * c], [ax + nx * c, y0, az + nz * c], [uo, 0, uo + 1, 1]) });
+    }
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
       if (ground[y * W + x] !== 'water') continue;
-      var fb = bottom(x, y), hv = (-SINK - fb) / 3;
-      if (!solidAt(x, y + 1)) falls.push({ geo: GT3.quad([x, fb, y + 1 + FO], [x + 1, fb, y + 1 + FO], [x + 1, -SINK, y + 1 + FO], [x, -SINK, y + 1 + FO], [0, hv, 1, 0]) });
-      if (!solidAt(x, y - 1)) falls.push({ geo: GT3.quad([x + 1, fb, y - FO], [x, fb, y - FO], [x, -SINK, y - FO], [x + 1, -SINK, y - FO], [0, hv, 1, 0]) });
-      if (!solidAt(x + 1, y)) falls.push({ geo: GT3.quad([x + 1 + FO, fb, y + 1], [x + 1 + FO, fb, y], [x + 1 + FO, -SINK, y], [x + 1 + FO, -SINK, y + 1], [0, hv, 1, 0]) });
-      if (!solidAt(x - 1, y)) falls.push({ geo: GT3.quad([x - FO, fb, y], [x - FO, fb, y + 1], [x - FO, -SINK, y + 1], [x - FO, -SINK, y], [0, hv, 1, 0]) });
+      if (!solidAt(x, y + 1)) addFall(x, y + 1, x + 1, y + 1, 0, 1);
+      if (!solidAt(x, y - 1)) addFall(x + 1, y, x, y, 0, -1);
+      if (!solidAt(x + 1, y)) addFall(x + 1, y + 1, x + 1, y, 1, 0);
+      if (!solidAt(x - 1, y)) addFall(x, y, x, y + 1, -1, 0);
     }
-    var fall = null;
+    function fallAlpha(depth) { // opacity at a depth below the lip, linear between the stops
+      for (var i = 0; i + 1 < FALL_STOPS.length; i++) {
+        var a = FALL_STOPS[i], b = FALL_STOPS[i + 1];
+        if (depth <= b[0]) return a[1] + (b[1] - a[1]) * Math.max(0, (depth - a[0]) / (b[0] - a[0]));
+      }
+      return 0;
+    }
+    var fall = null, foam = null;
     if (falls.length) {
-      fall = new THREE.Mesh(GT3.merge(falls), new THREE.MeshBasicMaterial({ map: ftex, vertexColors: true, transparent: true, opacity: 0.92, side: THREE.DoubleSide }));
-      fall.name = 'waterfalls'; group.add(fall);
+      var fgeo = GT3.merge(falls), fp = fgeo.attributes.position, rgba = new Float32Array(fp.count * 4);
+      for (var vi = 0; vi < fp.count; vi++) { rgba[vi * 4] = rgba[vi * 4 + 1] = rgba[vi * 4 + 2] = 1; rgba[vi * 4 + 3] = fallAlpha(-SINK - fp.getY(vi)); }
+      fgeo.deleteAttribute('color'); fgeo.setAttribute('color', new THREE.Float32BufferAttribute(rgba, 4)); // rgba: three reads the 4th as vertex alpha
+      fall = new THREE.Mesh(fgeo, new THREE.MeshBasicMaterial({ map: ftex, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+      fall.name = 'waterfalls'; fall.renderOrder = 1; group.add(fall);
+      foam = new THREE.Mesh(GT3.merge(foams), new THREE.MeshBasicMaterial({ map: mtex, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+      foam.name = 'waterfall-foam'; foam.renderOrder = 2; group.add(foam);
     }
 
     /* --- clouds drifting below the islands */
@@ -221,7 +268,7 @@
       redraw: function () { paint(); gtex.needsUpdate = true; paintWater(); paintBank(); paintFall(); buildUnder(); },
       update: function (t) {
         wtex.offset.set((t * 0.035) % 1, (t * 0.02) % 1);
-        ftex.offset.y = 1 - (t * 1.6) % 1; // v grows downward on the falls (their quads start at the island's underside): run it down
+        ftex.offset.y = 1 - (t * 1.2) % 1; // v grows downward on the sheets (0 at the lip): a falling offset runs the streaks down; 1.2 x 4 tiles = 4.8 tiles/s
         clouds.children.forEach(function (p) { p.position.x += p.userData.v * 0.016; if (p.position.x > W + 14) p.position.x = -14; });
       }
     };

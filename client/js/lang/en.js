@@ -725,6 +725,7 @@
     "Bangunan": "Buildings",
     "Lahan {0}": "Lot {0}",
     "Portal: hadap portal lalu tekan {0} (atau tombol B) untuk bepergian.": "Portal: face the portal and press {0} (or the B button) to travel.",
+    "Portal: hadap portal lalu ketuk tombol aksi untuk bepergian.": "Portal: face the portal and tap the action button to travel.",
     "Karakter": "Character",
     "Memuat karakter…": "Loading character…",
     "Gagal memuat karakter.": "Could not load the character.",
@@ -1472,6 +1473,23 @@
     "Jadi admin: isi ADMIN_ACCOUNTS=akun1,akun2 (id akun NEAR kamu) di .env dan di Railway Variables, lalu restart server.": "To be admin: set ADMIN_ACCOUNTS=account1,account2 (your NEAR account id) in .env and in Railway Variables, then restart the server.",
     "Kamu dikeluarkan dari desa.": "You were removed from the village.",
     "Admin": "Admin",
-    "Muat ulang": "Reload"
+    "Muat ulang": "Reload",
+    "Bicara": "Talk",
+    "Belanja": "Shop",
+    "Berdiri": "Stand up",
+    "Portal": "Portal",
+    "Kebun": "Farm",
+    "Turun": "Get off",
+    "Naik": "Ride",
+    "Lihat": "Look",
+    "Meja": "Table",
+    "Pintu": "Door",
+    "Perahu": "Boat",
+    "Tanam": "Plant",
+    "Panen": "Harvest",
+    "Main": "Play",
+    "Bangun": "Build",
+    "Aksi": "Action",
+    "tombol aksi": "action button"
   });
 })();

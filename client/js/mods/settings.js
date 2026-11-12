@@ -124,7 +124,8 @@
     return window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 900;
   }
   // Phone (portrait, narrow): the game view fills the screen between a one-line status bar and the thumb zone
-  // (D-pad, A/E, and a bottom bar with the four places players go). css/phone.css lays it out.
+  // (no D-pad and no A/E: tap the map to walk, one contextual action button, and a bottom bar with the places players go).
+  // css/phone.css lays it out.
   function wantsPhone() {
     if (wantsFull() || st.layout === 'boxed') return false;
     return window.innerWidth <= 900 && window.innerHeight > window.innerWidth; // phones and portrait tablets
@@ -201,6 +202,132 @@
     setInterval(sync, 700); // the account button is created later by chain.js and changes on sign-in
     sync();
   }
+
+  /* ------------------------------------------------------------ phone action button */
+  // On a phone there is no D-pad and no A / E button (css/phone.css hides #pad): you walk by tapping the map (mouse.js) and
+  // ONE round button (#btnAct, index.html) appears over the game view only while the tile you face can be used.
+  // Tapping it does what A / F does: GT.interact('talk'). It stays hidden while a window or dialog is open, while you
+  // walk, fish or fight. The probes below read the same data the engine and the mods act on; a mod whose interaction
+  // is not covered adds its own with GT_ACTBTN.add(fn): fn(ctx) returns {icon, label} or null, where ctx is
+  // {scene, map, tile:{x,y}, idx, tileType, npc, door, player, world}. Probes added this way run first.
+  var actBtn = null, actIco = null, actLbl = null, actProbes = [], actSeen = '', actOn = '', actAt = 0;
+
+  function npcOn(sc, x, y) {
+    var a = sc.npcs || [];
+    for (var i = 0; i < a.length; i++) if (!a[i].hidden && a[i].x === x && a[i].y === y) return a[i];
+    return null;
+  }
+  function tileAct(c) {
+    var sc = c.scene, out = sc.kind === 'out';
+    switch (c.tileType) {
+      case 'stall': return out ? { icon: '🛒', label: $t('Belanja') } : null;
+      case 'counter': return sc.kind === 'mart' ? { icon: '🛒', label: $t('Belanja') } : null;
+      case 'water': return out ? { icon: '🎣', label: $t('Mancing') } : null;
+      case 'tree': return out ? { icon: '🪓', label: $t('Tebang') } : null;
+      case 'rock': return out ? { icon: '⛏️', label: $t('Tambang') } : null;
+      case 'table': return out ? null : (sc.house && sc.house.own ? { icon: '🔨', label: $t('Meja') } : { icon: '🍌', label: $t('Makan') });
+      case 'chest': return out ? null : { icon: '📦', label: $t('Buka') };
+      case 'bed': return out ? null : { icon: '😴', label: $t('Tidur') };
+      case 'bookshelf': return out ? null : { icon: '📚', label: $t('Baca') };
+      case 'tv': return out ? null : { icon: '📺', label: $t('Nonton') };
+      case 'fridge': return out ? null : { icon: '🧃', label: $t('Minum') };
+      case 'plant': return out ? null : { icon: '💧', label: $t('Siram') };
+      case 'chair': return out ? null : { icon: '🪑', label: $t('Duduk') };
+      case 'dice_table': case 'card_table': case 'slot': return sc.kind === 'casino' ? { icon: '🎲', label: $t('Main') } : null;
+    }
+    return null;
+  }
+  // the village's one-off spots: portal, Mall, boats, carousel (their mods decide on the same data)
+  function spotAct(c) {
+    var L = c.world, V = window.GTVillage, t = c.tile, p = c.player, pub = GT.worldId && GT.worldId() === 'public';
+    if (c.scene.kind !== 'out' || !L) return null;
+    if (window.GT_RIDE && GT_RIDE.on) return { icon: '🎠', label: $t('Turun') };
+    if (L.portal && L.portal.x === t.x && L.portal.y === t.y) return { icon: '🌀', label: $t('Portal') };
+    if (pub && V) {
+      try {
+        // someone standing on a spot is talked to first (trade.js skips the spot when ctx.npc is set)
+        var lm = V.landmarks && L.market ? V.landmarks(L) : null, at = function (q) { return !c.npc && q && q.x === t.x && q.y === t.y; };
+        if (lm && at(lm.mall)) return { icon: '🛍️', label: $t('Mall') };
+        // trade.js opens these on interact while you face them (walkable plaza tiles with no NPC, so nothing else shows the button)
+        if (lm && at(lm.consign)) return { icon: '🧺', label: $t('Titip Jual') };
+        if (lm && at(lm.board)) return { icon: '🏆', label: $t('Papan Juara') };
+        if (lm && at(lm.gamble)) return { icon: '🎲', label: $t('Main') };
+        var fe = V.ferryOf && V.ferryOf(L);
+        if (fe) {
+          var near = function (q) { return Math.abs(p.x - q.x) + Math.abs(p.y - q.y) <= 1; };
+          if ((t.x === fe.wa.x && t.y === fe.wa.y) || (t.x === fe.wb.x && t.y === fe.wb.y) || near(fe.a) || near(fe.b)) return { icon: '⛵', label: $t('Perahu') };
+        }
+      } catch (e) { /* a village without these spots */ }
+      var fun = L.fun || (L.layout && L.layout.fun), car = fun && fun.carousel; // the carousel lives under GT.world.layout.fun
+      if (car && Math.max(Math.abs(t.x - (car.x + 0.5)), Math.abs(t.y - (car.y + 0.5))) <= 3 && Math.max(Math.abs(p.x - (car.x + 0.5)), Math.abs(p.y - (car.y + 0.5))) <= 3) return { icon: '🎠', label: $t('Naik') };
+    }
+    return null;
+  }
+  // farm plots (the village's and the Homeland's) and the Homeland's hoe grid
+  function farmAct(c) {
+    var L = c.world, C = window.GT_CHAIN, cs = C && C.state, t = c.tile;
+    if (c.scene.kind !== 'out' || !L) return null;
+    var plots = (cs && cs.plots && cs.plots.length) ? cs.plots : (L.farm && L.farm.plots) || [];
+    for (var i = 0; i < plots.length; i++) {
+      if (plots[i].x !== t.x || plots[i].y !== t.y) continue;
+      var pl = cs && cs.st && cs.st.plots && cs.st.plots[i], s = pl && pl.state;
+      return { icon: '🌱', label: s === 'empty' ? $t('Cangkul') : s === 'tilled' ? $t('Tanam') : s === 'ready' ? $t('Panen') : s ? $t('Siram') : $t('Kebun') };
+    }
+    // the Homeland's hoe grid and empty lots are not decided here: mods/homeland.js registers its own probe (GT_ACTBTN.add)
+    return null;
+  }
+  function actionAhead() {
+    var sc = GT.scene, pl = GT.player, f = GT.facing && GT.facing();
+    if (!sc || !sc.map || !pl || !f) return null;
+    if (GT.sitting) return { id: 'sit', icon: '🧍', label: $t('Berdiri') };
+    var m = sc.map;
+    if (f.x < 0 || f.y < 0 || f.x >= m.w || f.y >= m.h) return null;
+    var idx = f.y * m.w + f.x, tt = m.tiles[idx];
+    var npc = npcOn(sc, f.x, f.y);
+    if (!npc && tt === 'counter' && sc.kind === 'mart') npc = { name: '', key: 'x:keeper' };
+    var door = m.door && m.door.get(idx) || null;
+    var c = { scene: sc, map: m, tile: { x: f.x, y: f.y }, idx: idx, tileType: door ? 'door' : tt, npc: npc, door: door, player: pl, world: GT.world };
+    var r = null, i;
+    for (i = 0; i < actProbes.length && !r; i++) { try { r = actProbes[i](c) || null; } catch (e) { r = null; } }
+    if (!r) r = spotAct(c);
+    if (!r && npc) r = npc.key && (npc.key.indexOf('merchant:') === 0 || /:keeper$/.test(npc.key)) ? { icon: '🛒', label: $t('Belanja') } : { icon: '💬', label: $t('Bicara') };
+    if (!r && door) r = { icon: '🚪', label: $t('Pintu') };
+    if (!r) r = farmAct(c);
+    if (!r && m.info && m.info.has(idx)) r = { icon: 'ℹ️', label: $t('Lihat') };
+    if (!r) r = tileAct(c);
+    return r;
+  }
+  function actHide() { if (actBtn && !actBtn.hidden) actBtn.hidden = true; actOn = ''; actSeen = ''; }
+  function actTick() {
+    if (!actBtn) return;
+    var now = performance.now();
+    if (now - actAt < 100) return;
+    actAt = now;
+    var pl = GT.player;
+    if (!document.documentElement.classList.contains('gt-phone') || !pl || pl.moving || GT.isUiOpen() ||
+        (window.GT_FISH && GT_FISH.active()) || document.documentElement.classList.contains('gt-fighting')) return actHide();
+    var a = actionAhead();
+    if (!a) return actHide();
+    var key = a.icon + '|' + a.label;
+    if (actOn === key) return; // already showing it
+    // it has to hold for a poll before it appears, so tiles you walk past do not make the button flicker
+    if (actSeen !== key) { actSeen = key; return; }
+    actOn = key;
+    actIco.textContent = a.icon; actLbl.textContent = a.label;
+    actBtn.setAttribute('aria-label', a.label); actBtn.title = a.label;
+    actBtn.hidden = false;
+  }
+  function buildActBtn() {
+    actBtn = document.getElementById('btnAct');
+    if (!actBtn) return;
+    actIco = actBtn.querySelector('.ico'); actLbl = actBtn.querySelector('.lbl');
+    function press() { if (!GT.isUiOpen()) GT.interact('talk'); }
+    actBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); actBtn.classList.add('down'); press(); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) { actBtn.addEventListener(t, function () { actBtn.classList.remove('down'); }); });
+    actBtn.addEventListener('click', function (e) { if (e.detail === 0) press(); e.currentTarget.blur(); }); // the keyboard's Enter / Space
+    actBtn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  }
+  window.GT_ACTBTN = { add: function (fn) { if (typeof fn === 'function') actProbes.push(fn); }, ahead: actionAhead };
 
   /* ------------------------------------------------------------ settings modal */
   var modal = null;
@@ -344,7 +471,9 @@
   window.GT_SETTINGS = { label: label, keyName: keyName, open: openSettings, toggleFullscreen: toggleFullscreen, _state: st };
   GT.register({
     id: 'settings',
+    onFrame: actTick,
     init: function () {
+      buildActBtn();
       GT.addHudButton({ id: 'setbtn', label: $t('Atur'), onClick: openSettings, secondary: false });
       // A calmer HUD: Tas, Pasar, Peta and Simulasi stay in view; everything else lives in Lainnya
       // (css/phone.css hides the rest). Their keyboard shortcuts still work.

@@ -2,9 +2,10 @@
    The screen is one column, read top to bottom and played with the thumbs:
      status bar (where you are, coins, time, energy)
      the game view, filling every pixel that is left (engine.js layoutPhone)
-     thumb zone: D-pad on the left, A and E on the right
-     bottom bar: Tas, Pasar, Peta, Lainnya, one tap each
-     controls (D-pad, A, E, bottom bar) are frosted glass over the game's dark backdrop; opaque when transparency is off
+     no D-pad and no A / E buttons: you walk by tapping the map (mods/mouse.js), and ONE round action button floats
+       at the bottom right of the game view only while the tile you face can be used (mods/settings.js, #btnAct)
+     bottom bar: Tas, Pasar, Peta, Chat, Pengaturan, one tap each
+     controls (action button, bottom bar) are frosted glass over the game's dark backdrop; opaque when transparency is off
    Margins 16px; every control at least 44px tall; no frame around the screen, so no space is lost. */
 
 .gt-tabbar{display:none}
@@ -27,38 +28,42 @@ html.gt-phone .bezel{flex:1 1 0;min-height:0;position:relative;padding:0;border-
 html.gt-phone #fit{position:absolute;inset:0;width:auto;height:auto;display:flex;align-items:center;justify-content:center}
 html.gt-phone #screen{box-shadow:none}
 
-/* thumb zone */
-html.gt-phone .pad{display:flex!important;align-items:center;justify-content:space-between;margin:0;padding:12px 16px 8px;--cell:52px;--bA:76px;--bE:56px}
-html.gt-phone .ab{gap:0}
-html.gt-phone .abrow{gap:14px;align-items:flex-end}
-html.gt-phone #btnE{margin-bottom:calc(var(--bA)*.55)}
+/* the thumb zone is gone: the old D-pad / A / E / F pad is hidden, the game view takes its height (a resize re-lays the canvas) */
+html.gt-phone .pad{display:none!important}
 
-/* glass controls: the one place translucency and blur are allowed (owner, 2026-11-04). D-pad, A/E and the tab bar only.
+/* the contextual action button: round, bottom right of the game view, shown only while something is in front of the player */
+.actbtn{display:none}
+html.gt-phone .actbtn:not([hidden]){display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;position:absolute;right:16px;bottom:16px;z-index:6;
+  width:72px;height:72px;padding:0;border-radius:50%;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;
+  background:color-mix(in srgb,var(--accent) 88%,transparent);color:var(--accent-ink);text-shadow:none;font-family:var(--font);
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);
+  border:1px solid var(--glass-line);box-shadow:0 2px 10px var(--glass-shade),inset 0 1px 0 var(--glass-hi);
+  animation:gt-actpop var(--t-press,.12s) var(--ease,ease-out)}
+html.gt-phone .actbtn .ico{font-size:28px;line-height:1}
+html.gt-phone .actbtn .lbl{font-size:calc(12px*var(--ts));line-height:1.1;max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html.gt-phone .actbtn:active,html.gt-phone .actbtn.down{background:var(--accent-hi);transform:scale(.94)}
+html.gt-phone .actbtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+/* the item bar (hotbar.js) sits along the bottom of the view: float the button above it */
+html.gt-phone.gt-has-hotbar .actbtn:not([hidden]){bottom:84px}
+html.gt-fishing .actbtn,html.gt-fighting .actbtn{display:none!important}
+@keyframes gt-actpop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+
+/* glass controls: the one place translucency and blur are allowed (owner, 2026-11-04). The tab bar only (the action button is tinted glass above).
    White glyphs keep a faint text-shadow: over a bright map tile the glass alone does not hold 4.5:1. */
-html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnE,html.gt-phone .gt-tabbar{
+html.gt-phone .gt-tabbar{
   background:var(--glass);
   -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);
   border:1px solid var(--glass-line);
   box-shadow:inset 0 1px 0 var(--glass-hi);
   color:var(--glass-ink);text-shadow:0 1px 2px var(--glass-shade)}
-/* A is the accent: tinted glass, ink label (never white on an accent fill) */
-html.gt-phone #btnA{background:color-mix(in srgb,var(--accent) 88%,transparent);color:var(--accent-ink);text-shadow:none;
-  -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);border:1px solid var(--glass-line);box-shadow:inset 0 1px 0 var(--glass-hi)}
-html.gt-phone .dp::after{filter:none}
-html.gt-phone .dp.up::after{border-bottom-color:var(--glass-ink)}
-html.gt-phone .dp.dn::after{border-top-color:var(--glass-ink)}
-html.gt-phone .dp.left::after{border-right-color:var(--glass-ink)}
-html.gt-phone .dp.right::after{border-left-color:var(--glass-ink)}
-html.gt-phone .dp:active,html.gt-phone .dp.down,html.gt-phone #btnE:active,html.gt-phone #btnE.down{background:var(--glass-line)}
-html.gt-phone #btnA:active,html.gt-phone #btnA.down{background:var(--accent-hi)}
 html.gt-phone .gt-tabbar{border-width:1px 0 0}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnE,html.gt-phone .gt-tabbar{background:var(--hud-2)}
-  html.gt-phone #btnA{background:var(--accent)}
+  html.gt-phone .gt-tabbar{background:var(--hud-2)}
+  html.gt-phone .actbtn:not([hidden]){background:var(--accent)}
 }
 @media (prefers-reduced-transparency:reduce){
-  html.gt-phone .dp,html.gt-phone .dpad .mid,html.gt-phone #btnE,html.gt-phone .gt-tabbar{background:var(--hud-2);-webkit-backdrop-filter:none;backdrop-filter:none}
-  html.gt-phone #btnA{background:var(--accent);-webkit-backdrop-filter:none;backdrop-filter:none}
+  html.gt-phone .gt-tabbar{background:var(--hud-2);-webkit-backdrop-filter:none;backdrop-filter:none}
+  html.gt-phone .actbtn:not([hidden]){background:var(--accent);-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 
 /* bottom bar: the four places, labelled, 52px tall, above the home indicator */
@@ -73,14 +78,16 @@ html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:
 
 /* small phones */
 @media (max-width:350px){
-  html.gt-phone .pad{--cell:44px;--bA:64px;--bE:48px;padding-inline:10px}
   html.gt-phone .gt-tab{font-size:calc(12px*var(--ts))}
 }
-/* short phones: tighter thumb zone so the game view keeps its height */
+/* short phones: a lower tab bar and a slightly smaller action button so the game view keeps its height */
 @media (max-height:640px){
-  html.gt-phone .pad{--cell:44px;--bA:62px;--bE:46px;padding-block:6px 4px}
   html.gt-phone .gt-tab{min-height:46px}
+  html.gt-phone .actbtn:not([hidden]){width:64px;height:64px;right:12px;bottom:12px}
+  html.gt-phone.gt-has-hotbar .actbtn:not([hidden]){bottom:80px}
+  html.gt-phone .actbtn .ico{font-size:24px}
 }
+@media (prefers-reduced-motion:reduce){html.gt-phone .actbtn:not([hidden]){animation:none}}
 
 /* Desktop and tablet HUD (not phone): four places in view plus Lainnya, in the order players need them */
 html:not(.gt-phone) #acts > button{display:none!important}

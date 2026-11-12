@@ -150,7 +150,7 @@
   }
   /* Standing in the portal: wait PORTAL_WAIT seconds while the screen swims (purple, wobbling, as in Minecraft's portal),
      then go. With one place to go it goes straight there; with more, the choice menu opens. Stepping out undoes it. */
-  var PORTAL_WAIT = 3, portalT = 0, dizzyOn = false;
+  var PORTAL_WAIT = 3, portalT = 0, dizzyOn = false, portalBusy = false;
   function portalDests() {
     var cur = wid(), out = [];
     if (cur !== 'public') out.push('public');
@@ -175,7 +175,7 @@
     root.style.setProperty('--dz', Math.min(1, k).toFixed(3));
   }
   function portalTick(dt) {
-    var on = !travelling && loggedIn() && !GT.isUiOpen() && inPortal();
+    var on = !travelling && !portalBusy && loggedIn() && !GT.isUiOpen() && inPortal();
     portalT = on ? portalT + dt : Math.max(0, portalT - dt * 3);
     dizzy(portalT / PORTAL_WAIT);
     if (on && portalT >= PORTAL_WAIT) {
@@ -185,10 +185,13 @@
     }
   }
   function openPortal() {
-    if (travelling || !loggedIn()) return;
+    if (travelling || portalBusy || !loggedIn()) return;
     if (!nearPortal()) { GT.toast($t('Pergi ke portal dulu.')); return; }
-    // the menu opens even when the Homeland refresh fails (a party mate's world): the public area is always on it
-    load(true).catch(function () {}).then(function () {
+    // the menu opens even when the Homeland refresh fails (a party mate's world): the public area is always on it;
+    // portalBusy keeps the dizzy wait from starting over (or firing again) while that refresh is still loading
+    portalBusy = true;
+    Promise.resolve().then(function () { return load(true); }).catch(function () {}).then(function () { // a throw inside load() must not leave portalBusy set
+      portalBusy = false;
       var cur = wid(), opts = [];
       if (cur !== 'public') opts.push({ icon: '🏪', label: $t('Area Publik (pasar)'), onPick: function () { travel('public'); } });
       if (H && cur !== H.world) opts.push({ icon: '🏡', label: $t('Rumahku'), onPick: function () { travel(H.world); } });
@@ -734,9 +737,13 @@
      and press F / R) to till it. The server keeps the tilled tiles (view.tilled); they are drawn as soil. */
   function viewTilled() { var v = V(); return (v && v.tilled) || []; }
   function isTilled(x, y) { var t = viewTilled(); for (var i = 0; i < t.length; i++) if (t[i][0] === x && t[i][1] === y) return true; return false; }
+  /* The fence bounds (x0..y1) and the tiles live in the generator's layout (GT.world.layout), the very data the server's
+     hoe() checks. The engine's own GT.world.farm only keeps {plots, gate}, so reading x0 from it left every tile unhoeable. */
+  function layoutOfWorld() { var W = GT.world; return (W && W.layout && W.layout.farm && W.layout.tiles) ? W.layout : null; }
+  function farmOf() { var L = layoutOfWorld(), f = L && L.farm; return f && f.x0 != null && f.y0 != null && f.x1 != null && f.y1 != null ? f : null; }
   function hoeable(x, y) {
-    var L = GT.world, f = L && L.farm;
-    if (!isHL(wid()) || !f || f.x0 == null || x <= f.x0 || x >= f.x1 || y <= f.y0 || y >= f.y1) return false;
+    var L = layoutOfWorld(), f = farmOf();
+    if (!isHL(wid()) || !L || !f || x <= f.x0 || x >= f.x1 || y <= f.y0 || y >= f.y1) return false;
     var t = L.tiles[y * L.w + x];
     return (t === 'grass' || t === 'tallgrass' || t === 'flower') && !isTilled(x, y);
   }
@@ -762,13 +769,14 @@
       ctx.fillStyle = '#4e321c'; for (var k = 2; k < T; k += 3) ctx.fillRect(x + 1, y + k, T - 2, 1);
     });
     if (!holdingHoe()) return;
-    var L = GT.world, f = L && L.farm, p = GT.player;
-    if (!f || f.x0 == null || p.x <= f.x0 - 2 || p.x >= f.x1 + 2 || p.y <= f.y0 - 2 || p.y >= f.y1 + 2) return; // only by the farm
+    var f = farmOf(), p = GT.player;
+    if (!f || p.x <= f.x0 - 2 || p.x >= f.x1 + 2 || p.y <= f.y0 - 2 || p.y >= f.y1 + 2) return; // only by the farm
     for (var yy = f.y0 + 1; yy < f.y1; yy++) for (var xx = f.x0 + 1; xx < f.x1; xx++) {
       if (!hoeable(xx, yy)) continue;
       var sx = xx * T - camX, sy = yy * T - camY, reach = Math.abs(xx - p.x) + Math.abs(yy - p.y) <= 1;
-      ctx.fillStyle = reach ? 'rgba(80,220,110,.45)' : 'rgba(80,220,110,.2)'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2);
-      ctx.strokeStyle = 'rgba(40,160,70,.9)'; ctx.lineWidth = 1; ctx.strokeRect(sx + 1.5, sy + 1.5, T - 3, T - 3);
+      // fairly opaque: in the 2.5D view this layer is lit like the ground, so at night or in rain it must still show
+      ctx.fillStyle = reach ? 'rgba(90,240,120,.6)' : 'rgba(90,240,120,.32)'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2);
+      ctx.strokeStyle = 'rgba(30,170,70,1)'; ctx.lineWidth = 1; ctx.strokeRect(sx + 1.5, sy + 1.5, T - 3, T - 3);
     }
   }
 
@@ -802,7 +810,8 @@
     if (ms && ctx.mode === 'talk' && ctx.tile.x === ms.x && ctx.tile.y === ms.y) { mallModal(); return true; }
     if (ctx.mode !== 'message' && holdingHoe() && hoeable(ctx.tile.x, ctx.tile.y)) { if (ctx.mode !== 'bump') hoe(ctx.tile); return true; }
     var t = ctx.tile, p = portalPos();
-    if (ctx.mode === 'talk' && p && t.x === p.x && t.y === p.y) { openPortal(); return true; }
+    // the interact key (F / Space / A) opens the destination menu at once: on the portal tile, or facing it (no dizzy wait)
+    if (ctx.mode === 'talk' && p && ((t.x === p.x && t.y === p.y) || (Math.round(GT.player.x) === p.x && Math.round(GT.player.y) === p.y))) { portalT = 0; dizzy(0); openPortal(); return true; }
     if (!isHL(wid())) return false;
     var d = ctx.door;
     if (d && HOME_KINDS[d.kind]) {
@@ -863,7 +872,7 @@
     }
     hintT -= dt; if (hintT > 0) return; hintT = 0.5;
     var n = nearPortal();
-    if (n && !nearHint && !hintShown && S() && S().account && !GT.isUiOpen()) { hintShown = true; GT.toast($t('Portal: hadap portal lalu tekan {0} (atau tombol B) untuk bepergian.', [document.documentElement.classList.contains('gt-phone') ? 'A' : 'F'])); }
+    if (n && !nearHint && !hintShown && S() && S().account && !GT.isUiOpen()) { hintShown = true; GT.toast(document.documentElement.classList.contains('gt-phone') ? $t('Portal: hadap portal lalu ketuk tombol aksi untuk bepergian.') : $t('Portal: hadap portal lalu tekan {0} (atau tombol B) untuk bepergian.', ['F'])); }
     nearHint = n;
   }
   function onWorld() {
@@ -954,9 +963,44 @@
     ctx.restore();
   }
 
+  /* Holding the hoe, a click on a green square tills it. mouse.js would only walk onto that (walkable) grass, so this runs
+     first (window capture phase): next to the tile it hoes at once, further away it walks beside it, then hoes. */
+  function onHoeClick(e) {
+    var cv = document.getElementById('cv');
+    if (e.button !== 0 || !cv || e.target !== cv || !holdingHoe() || GT.isUiOpen() || !isHL(wid())) return;
+    if ((window.GT_FISH && GT_FISH.active()) || document.documentElement.classList.contains('gt-fighting')) return; // like mouse.js: no tilling mid-cast or mid-fight
+    if (window.GT_VIEW3D && GT_VIEW3D.tookClick && GT_VIEW3D.tookClick()) return; // the end of a drag-to-walk, not a click
+    var sc = GT.scene, t = GT.screenToTile && GT.screenToTile(e.clientX, e.clientY);
+    if (!sc || sc.kind !== 'out' || !t || !hoeable(t.x, t.y)) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    var p = GT.player;
+    if (Math.abs(t.x - p.x) + Math.abs(t.y - p.y) <= 1) { hoe(t); return; }
+    if (!window.GT_MOUSE || !GT_MOUSE.goNear) { GT.toast($t('Berdiri di sebelah kotak hijau di dalam pagar kebun, lalu klik kotaknya.')); return; }
+    var m = sc.map, best = null;
+    [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(function (d) {
+      var x = t.x + d[0], y = t.y + d[1];
+      if (x < 0 || y < 0 || x >= m.w || y >= m.h || m.walk[y * m.w + x] !== 1) return;
+      var path = GT.findPath(sc, { x: p.x, y: p.y }, { x: x, y: y });
+      if (path && (!best || path.length < best.path.length)) best = { x: x, y: y, path: path };
+    });
+    if (!best) { GT.toast($t('Tidak ada jalan ke sana.')); return; }
+    GT_MOUSE.goNear({ x: best.x, y: best.y }, function () { hoe(t); });
+  }
+
   var upBtn = null;
   function init() {
     C = window.GT_CHAIN || null;
+    window.addEventListener('click', onHoeClick, true);
+    // the phone's action button (settings.js): a green hoe square, an empty lot or the portal in front of you
+    if (window.GT_ACTBTN) GT_ACTBTN.add(function (c) {
+      if (c.scene.kind !== 'out') return null;
+      var t = c.tile, p = portalPos(), me = GT.player;
+      if (p && ((t.x === p.x && t.y === p.y) || (Math.round(me.x) === p.x && Math.round(me.y) === p.y))) return { icon: '🌀', label: $t('Portal') };
+      if (!isHL(wid())) return null;
+      if (holdingHoe() && hoeable(t.x, t.y)) return { icon: '🌱', label: $t('Cangkul') };
+      if (withinLot(t)) return { icon: '🏗️', label: $t('Bangun') };
+      return null;
+    });
     GT.hotkey('B', function () { openPortal(); });
     upBtn = GT.addHudButton({ id: 'gt-upbtn', label: $t('Tingkatkan'), secondary: false, onClick: function () { if (inOwnHome()) openWin('hall', $t('Balai Kota')); } });
     if (upBtn) { upBtn.hidden = true; upBtn.title = $t('Naikkan Balai Kota, buka wilayah, dan lihat pembangun'); }
