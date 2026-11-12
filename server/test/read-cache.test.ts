@@ -101,14 +101,31 @@ test('ledger: a settled day is computed once (per proof account), an unsettled d
     h.game.gs.setMeta('settle.through', '5');
     for (let i = 0; i < 3; i++) assert.equal((await h.get('/api/ledger/5')).status, 200);
     assert.equal(calls, 1);
-    await h.get('/api/ledger/5?proof=a.players.test');
-    await h.get('/api/ledger/5?proof=a.players.test');
-    assert.equal(calls, 2); // another key, own entry
+    for (let i = 0; i < 50; i++) await h.get(`/api/ledger/5?proof=x${i}.players.test`);
+    assert.equal(calls, 1); // proof values never create entries
     calls = 0;
     for (let i = 0; i < 3; i++) await h.get('/api/ledger/6');
     assert.equal(calls, 3); // day 6 is not settled yet
     h.game.gs.setMeta('settle.through', '6');
     await h.get('/api/ledger/6'); await h.get('/api/ledger/6');
     assert.equal(calls, 4);
+  } finally { h.close(); }
+});
+
+test('ledger proofs are built per request from the cached day', async () => {
+  const h = await harness();
+  try {
+    const gs = h.game.gs as any;
+    const rows = [1, 2, 3].map((i) => ({ seq: i, day: 5, account: i === 2 ? 'b.players.test' : 'a.players.test', token: 'coin', delta: i, kind: 'sell', ref: null }));
+    gs.dayRows = () => rows;
+    gs.setMeta('settle.through', '5');
+    const a = await h.get('/api/ledger/5?proof=a.players.test');
+    const b = await h.get('/api/ledger/5?proof=b.players.test');
+    const none = await h.get('/api/ledger/5?proof=nobody.players.test');
+    assert.equal(a.json.proofs.length, 2);
+    assert.equal(b.json.proofs.length, 1);
+    assert.equal(b.json.proofs[0].seq, 2);
+    assert.deepEqual(none.json.proofs, []);
+    assert.equal(a.json.root, b.json.root);
   } finally { h.close(); }
 });

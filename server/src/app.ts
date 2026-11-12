@@ -138,7 +138,7 @@ export function createApp(deps: AppDeps) {
   // Public read routes shared by every caller, held briefly. Anything the server itself changes clears them at once.
   const READ_CACHE_MS = 4000;
   const readCache = new TtlCache<unknown>(READ_CACHE_MS);
-  const ledgerCache = new BoundedCache<unknown>(500); // settled days only
+  const ledgerCache = new BoundedCache<unknown>(60); // settled days only, keyed by day
   const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
     try { await afterRelayWork(sender, method, args, extra, relayBody); } finally { readCache.clear(); }
   };
@@ -587,17 +587,19 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && m) {
         // The full off-chain ledger of a game day, with its Merkle root (stored on chain by settle_day).
         const day = Number(m[1]);
-        // a settled day never changes: keep its answer (per day and per proof account), bounded
+        // a settled day never changes: keep its rows, leaves and root (keyed by day only, so ?proof= values never add entries)
         const settled = day <= game.settlement.settledThrough();
-        const proofKey = `${day}:${url.searchParams.get('proof') ?? ''}`;
-        const kept = settled ? ledgerCache.get(proofKey) : undefined;
-        if (kept) return send(res, 200, kept);
-        const rows = game.gs.dayRows(day).map(({ seq, day: d, account, token, delta, kind, ref }) => ({ seq, day: d, account, token, delta, kind, ref }));
-        const leaves = rows.map(leafHash);
+        type DayLedger = { rows: { seq: number; day: number; account: string; token: string; delta: unknown; kind: string; ref: unknown }[]; leaves: ReturnType<typeof leafHash>[]; root: string; settlements: unknown[] };
+        let d = settled ? ledgerCache.get(String(day)) as DayLedger | undefined : undefined;
+        if (!d) {
+          const rows = game.gs.dayRows(day).map(({ seq, day: dd, account, token, delta, kind, ref }) => ({ seq, day: dd, account, token, delta, kind, ref }));
+          const leaves = rows.map(leafHash);
+          d = { rows, leaves, root: merkleRoot(leaves), settlements: game.gs.settlements(50).filter((s) => (s as { day: number }).day === day) } as DayLedger;
+          if (settled) ledgerCache.set(String(day), d);
+        }
         const proofFor = url.searchParams.get('proof');
-        const proofs = proofFor ? rows.map((r, i) => (r.account === proofFor ? { seq: r.seq, index: i, proof: merkleProof(leaves, i) } : null)).filter(Boolean) : undefined;
-        const body = { day, root: merkleRoot(leaves), rows, proofs, settlements: game.gs.settlements(50).filter((s) => (s as { day: number }).day === day) };
-        if (settled) ledgerCache.set(proofKey, body);
+        const proofs = proofFor ? d.rows.map((r, i) => (r.account === proofFor ? { seq: r.seq, index: i, proof: merkleProof(d.leaves, i) } : null)).filter(Boolean) : undefined;
+        const body = { day, root: d.root, rows: d.rows, proofs, settlements: d.settlements };
         return send(res, 200, body);
       }
       if (req.method === 'POST' && p === '/api/sim') {
