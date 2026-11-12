@@ -36,7 +36,15 @@
     return box;
   }
   function standPos() { return C.standPos ? C.standPos() : { x: GT.player.x, y: GT.player.y }; }
-  function post(path, body) { body = body || {}; body.pos = standPos(); return C.api(path, { method: 'POST', body: body }); }
+  function post(path, body) {
+    body = body || {}; body.pos = standPos();
+    var once = function () { return C.api(path, { method: 'POST', body: body }); };
+    // a device not yet approved with NEAR Auth may play but not trade: approve it once, then retry
+    return once().catch(function (e) {
+      if (!e || e.code !== 'approve_device' || !C.approveDevice) throw e;
+      return C.approveDevice().then(once);
+    });
+  }
   function fail(e) { GT.toast(e.message || $t('Gagal.')); }
   function refreshState(r) { if (r && r.state) { S().st = r.state; if (C.refresh) C.refresh(true); } }
 

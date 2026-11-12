@@ -10,7 +10,7 @@ import type { Config } from './config.ts';
 import type { Chain } from './chain.ts';
 import type { Store } from './db.ts';
 
-export type TokenVerifier = (idToken: string) => Promise<{ sub: string }>;
+export type TokenVerifier = (idToken: string) => Promise<{ sub: string; iat?: number }>;
 
 // Mock-chain development only (DEV_LOGIN=1 with CHAIN_MODE=mock): "dev:<name>" logs in as sub "dev|<name>".
 export function withDevLogin(cfg: Config, inner: TokenVerifier): TokenVerifier {
@@ -32,7 +32,7 @@ export function auth0Verifier(cfg: Config, keys?: JWTVerifyGetKey): TokenVerifie
       algorithms: ['RS256'],
     });
     if (typeof payload.sub !== 'string' || !payload.sub) throw new Error('token has no sub');
-    return { sub: payload.sub };
+    return { sub: payload.sub, iat: payload.iat };
   };
 }
 
@@ -51,7 +51,7 @@ export function googleVerifier(clientId: string, keys?: JWTVerifyGetKey): TokenV
       algorithms: ['RS256'],
     });
     if (typeof payload.sub !== 'string' || !/^[0-9]{1,64}$/.test(payload.sub)) throw new Error('token has no Google account id');
-    return { sub: 'google-oauth2|' + payload.sub };
+    return { sub: 'google-oauth2|' + payload.sub, iat: payload.iat };
   };
 }
 
@@ -67,6 +67,12 @@ export function isEd25519Key(s: unknown): s is string {
   try { PublicKey.from(s); return true; } catch { return false; }
 }
 
+/** A key added to an existing account without NEAR Auth needs a login token issued in the last 10 minutes (a stolen old token is not enough). Dev logins have no iat. */
+export const FRESH_LOGIN_SECS = 600;
+function requireFreshLogin(iat: number | undefined, now = Date.now()) {
+  if (iat !== undefined && now / 1000 - iat > FRESH_LOGIN_SECS) throw new HttpError(401, 'Please sign in again.');
+}
+
 export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsChainApproval?: boolean; ownerPublicKey?: string }
 
 export async function register(
@@ -79,8 +85,8 @@ export async function register(
   if (body.provider !== undefined && body.provider !== 'near' && body.provider !== 'google') throw new HttpError(400, 'provider must be "near" or "google"');
   const verify = body.provider === 'google' ? deps.verifyGoogle : deps.verify;
   if (!verify) throw new HttpError(400, 'Google login is not set up on this server');
-  let sub: string;
-  try { ({ sub } = await verify(body.idToken)); } catch (e) {
+  let sub: string, iat: number | undefined;
+  try { ({ sub, iat } = await verify(body.idToken)); } catch (e) {
     throw new HttpError(401, 'login token rejected: ' + (e as Error).message);
   }
   const existing = deps.store.playerBySub(sub);
@@ -90,7 +96,7 @@ export async function register(
     // the player's NEAR Auth key, POST /api/auth/add-key, src/newdevice.ts) only when the player first needs the relayer.
     const owner = deps.store.sessionKeyOwner(body.sessionPublicKey);
     if (owner && owner !== existing.account_id) throw new HttpError(409, 'session key already belongs to another account');
-    if (!owner) deps.store.addSessionKey(body.sessionPublicKey, existing.account_id, false);
+    if (!owner) { requireFreshLogin(iat); deps.store.addSessionKey(body.sessionPublicKey, existing.account_id, false); }
     deps.store.setActiveKey(existing.account_id, body.sessionPublicKey);
     if (deps.store.sessionKeyOnchain(body.sessionPublicKey)) return { accountId: existing.account_id, created: false, txHashes: [] };
     return { accountId: existing.account_id, created: false, txHashes: [], needsChainApproval: true, ownerPublicKey: existing.owner_pk };
@@ -103,15 +109,15 @@ export async function register(
   // no row for it (a fresh database after a redeploy, or another server on the same parent). Adopt it instead of
   // trying to create it again, which fails with AccountAlreadyExists on every login.
   const onChain = await deps.chain.accountHasKey(accountId, body.sessionPublicKey);
-  if (onChain !== null) return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, onChain);
+  if (onChain !== null) return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, onChain, iat);
   let created: Awaited<ReturnType<Chain['createPlayerAccount']>>;
   try { created = await deps.chain.createPlayerAccount(accountId, ownerPk, body.sessionPublicKey); } catch (e) {
     // created in between (two logins at once): adopt it like above
     if (!/already exists|AccountAlreadyExists/i.test(String((e as Error)?.message ?? e))) throw e;
-    return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, !!(await deps.chain.accountHasKey(accountId, body.sessionPublicKey)));
+    return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, !!(await deps.chain.accountHasKey(accountId, body.sessionPublicKey)), iat);
   }
   if (!created.ok) {
-    if (/AccountAlreadyExists|already exists/i.test(created.error ?? '')) return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, !!(await deps.chain.accountHasKey(accountId, body.sessionPublicKey)));
+    if (/AccountAlreadyExists|already exists/i.test(created.error ?? '')) return adopt(deps, sub, accountId, ownerPk, body.sessionPublicKey, !!(await deps.chain.accountHasKey(accountId, body.sessionPublicKey)), iat);
     throw new HttpError(502, 'account creation failed: ' + created.error);
   }
   deps.store.addPlayer(accountId, sub, ownerPk);
@@ -129,8 +135,9 @@ export async function register(
 // off-chain and is approved later like any new device (needsChainApproval).
 async function adopt(
   deps: { chain: Chain; store: Store },
-  sub: string, accountId: string, ownerPk: string, sessionPk: string, hasKey: boolean,
+  sub: string, accountId: string, ownerPk: string, sessionPk: string, hasKey: boolean, iat?: number,
 ): Promise<RegisterResult> {
+  if (!hasKey) requireFreshLogin(iat);
   deps.store.addPlayer(accountId, sub, ownerPk);
   const txHashes: string[] = [];
   if (!(await deps.chain.isRegistered(accountId))) {

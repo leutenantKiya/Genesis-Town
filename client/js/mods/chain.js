@@ -1611,6 +1611,6 @@
     return true;
   }
 
-  window.GT_CHAIN = { monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, _signedCall: signedCall };
+  window.GT_CHAIN = { approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame, onKey: onKey });
 })();

@@ -286,3 +286,5 @@ Recovery: the owner calls `pause`, rotates the role keys, and unpauses.
 - **Theft, combat, police**: switched off. If they come back, they never touch on-chain balances.
 - **NEAR Intents and mainnet**: not in the build. Any stretch use needs explicit approval, tiny amounts, separate dev
   accounts, and dry-run quotes (HACKATHON.md Q-007).
+
+- **New devices**: a key that signed in on a new device is stored off-chain (`onchain = 0`). It plays, but cannot move value to other players until NEAR Auth approves it: live trade, old offers and device-transfer codes answer 409 `approve_device`, like the relayer. Adding such a key to an existing account needs a login token issued in the last 10 minutes (`iat`; dev logins have none), so a stolen old token is not enough.

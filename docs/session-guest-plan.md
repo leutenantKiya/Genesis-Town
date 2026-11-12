@@ -38,6 +38,8 @@
    NEAR Auth new-device flow (`newDevice` in `client/js/mods/chain.js`, `/api/auth/add-key`), which on success flips the
    key to `onchain = 1` (`addDeviceKey` stores it; if the row exists, update it). Where NEAR Auth is unusable (domain not
    allowed), the approve modal says on-chain actions on this device need NEAR Auth and offers nothing else.
+   Gate: an `onchain = 0` key is also refused (409 `approve_device`) on `/api/trade/open|join|set|ready|offer|accept` and `POST /api/transfer`
+   (`accountOfApproved` in `app.ts`), and adding a new off-chain key to an existing account needs a login token with `iat` within 10 minutes.
 2. **Remove the transfer code from the UI** (the "I have a code from another device" box and the Bag button "Move to
    another device"). Keep `/api/transfer*` and `transfer.ts` on the server (harmless, tested); mark them unused in CLAUDE.md.
 3. **One live session per account.** Add `players.active_key TEXT` (or a small `active_keys(account PRIMARY KEY, key,

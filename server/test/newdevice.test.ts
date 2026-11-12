@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import * as near from 'near-api-js';
+import { register } from '../src/auth.ts';
 import { addDeviceKey, parseMpcSignature } from '../src/newdevice.ts';
 import { setup, signedDelegateB64 } from './helpers.ts';
 import { relay, RateLimiter } from '../src/relayer.ts';
@@ -123,4 +124,17 @@ test('one live session: logging in on B supersedes A, logging in on A supersedes
   s.store.setActiveKey(ACC, A.getPublicKey().toString()); // login on A again
   assert.throws(() => verifyRequest(rd, hdrFor(B), 'GET', '/api/state', ''), isSup);
   assert.equal(verifyRequest(rd, hdrFor(A), 'GET', '/api/state', ''), ACC);
+});
+
+test('new device: a stale login token (older than 10 minutes) cannot add a key to an existing account; a fresh one can', async () => {
+  const { s } = world();
+  const key = () => near.KeyPair.fromRandom('ed25519').getPublicKey().toString();
+  const at = (secsAgo: number) => async () => ({ sub: 'google-oauth2|1', iat: Math.floor(Date.now() / 1000) - secsAgo });
+  const stale = key(), fresh = key();
+  await assert.rejects(register({ ...s, verify: at(11 * 60) }, { idToken: 't', sessionPublicKey: stale }), (e: { status: number; message: string }) => e.status === 401 && /sign in again/.test(e.message));
+  assert.equal(s.store.sessionKeyOwner(stale), undefined);
+  assert.equal((await register({ ...s, verify: at(60) }, { idToken: 't', sessionPublicKey: fresh })).needsChainApproval, true);
+  // a dev login has no iat and is not checked; a key the account already has needs no fresh token
+  assert.equal((await register({ ...s, verify: async () => ({ sub: 'google-oauth2|1' }) }, { idToken: 't', sessionPublicKey: key() })).accountId, ACC);
+  assert.equal((await register({ ...s, verify: at(11 * 60) }, { idToken: 't', sessionPublicKey: fresh })).accountId, ACC);
 });

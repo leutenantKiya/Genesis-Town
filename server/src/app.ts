@@ -167,6 +167,13 @@ export function createApp(deps: AppDeps) {
   function accountOf(req: IncomingMessage, url: URL, raw = ''): string {
     return verifyRequest({ sessionKeyOwner: (k) => deps.store.sessionKeyOwner(k), isSuperseded: (k, a) => deps.store.isSuperseded(k, a), replay }, req.headers, req.method ?? 'GET', url.pathname + url.search, raw);
   }
+  /** Like accountOf, for anything that moves items or coin to another player (live trade, old offers, device-transfer
+   *  codes): a key that is not yet on the NEAR account (signed in on a new device, not approved with NEAR Auth) is refused. */
+  function accountOfApproved(req: IncomingMessage, url: URL, raw = ''): string {
+    const acct = accountOf(req, url, raw);
+    if (!deps.store.sessionKeyOnchain(String(req.headers['x-gt-key']))) throw new HttpError(409, 'This device must be approved with NEAR Auth first.', 'approve_device');
+    return acct;
+  }
 
   /** Dev tools (clock jump, forced settlement) only answer the owner's own machine: DEV_TOOLS=1 and a direct loopback
    *  request with no proxy header. On a public host they stay closed even if the flag is left on by mistake. */
@@ -284,7 +291,8 @@ export function createApp(deps: AppDeps) {
     }
     if (req.method !== 'POST') throw new HttpError(404, 'no such route');
     const raw = await readRaw(req);
-    const acct = accountOf(req, url, raw);
+    const gated = /^\/api\/trade\/(open|join|set|ready|offer|accept)$/.test(p); // value moves to another player
+    const acct = gated ? accountOfApproved(req, url, raw) : accountOf(req, url, raw);
     if (!actLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
     game.assertActive(acct);
     const b = parseJson(raw);
@@ -347,7 +355,7 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'POST' && p === '/api/transfer') {
         // signed: only the account's own game key can open a code for it
         const raw = await readRaw(req);
-        const acct = accountOf(req, url, raw);
+        const acct = accountOfApproved(req, url, raw);
         const b = parseJson(raw);
         return send(res, 200, transfers.create(acct, b.ct, b.iv));
       }
