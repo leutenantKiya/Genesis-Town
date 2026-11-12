@@ -16,7 +16,7 @@
  *                         Clicking an action runs onClick and does NOT close the modal unless the action has no onClick, has close:true,
  *                         or onClick returns true.  handle = {close(reason), el, box, body, setBody(x), setTitle(t), setActions(list), btn(id), isOpen()}.
  *                         Esc / X close with reason 'esc' / 'x'.  Tapping outside never closes (unless backdropClose).  close() is idempotent.
- *  GT.menu(title, opts)   modal list; picking an option closes the menu FIRST, then calls onPick (so it can open another modal). Digits 1-9 pick.
+ *  GT.menu(title, opts)   modal list; picking an option closes the menu FIRST, then calls onPick (so it can open another modal). Digits 1-9 pick. An option is {label, onPick, disabled?, icon?} (icon: an emoji shown before the words).
  *  Extra helpers          GT.addHudButton({id,label,key,onClick,secondary}), GT.hotkey(key,fn), GT.addNpc(sceneRef,def), GT.removeNpc(npc),
  *                         GT.moveNpc(npc,sceneRef,x,y), GT.npcHide(npc,bool), GT.npcTeleport(npc,x,y,dir), GT.findNpc(key), GT.getScene(ref),
  *                         GT.doorFront(b), GT.getAffinity(npc), GT.setAffinity(npc,v), GT.addAffinity(npc,d), GT.iconEl(id,size),
@@ -1392,7 +1392,9 @@ function menu(title, options){
   options = options || [];
   var list = el('div', 'mlist'), h;
   options.forEach(function(o, i){
-    var b = el('button', 'mbtn mopt', (i < 9 ? (i + 1) + '. ' : '') + o.label); b.type = 'button';
+    var b = el('button', 'mbtn mopt', (i < 9 ? (i + 1) + '. ' : '')); b.type = 'button';
+    if (o.icon){ var ic = el('span', 'mopt-ic', o.icon); ic.setAttribute('aria-hidden', 'true'); b.appendChild(ic); } // o.icon: an emoji before the words
+    b.appendChild(document.createTextNode(o.label));
     if (o.disabled) b.disabled = true;
     b.addEventListener('click', function(){ h.close('pick'); if (o.onPick){ try { o.onPick(); } catch(e){ console.error('[GT] menu pick', e); } } });
     list.appendChild(b);

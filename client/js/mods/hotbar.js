@@ -22,7 +22,8 @@
     wheat: { k: OL, y: '#f0c848', Y: '#b88a28', g: '#58a040', rows: ['..k.k.k.', '.kykykyk', '.kykykyk', '..kykyk.', '...kgk..', '...kgk..', '..kgk...', '..kk....'] },
     bread: { k: OL, b: '#e0a050', L: '#f8d890', B: '#b87430', rows: ['........', '..kkkk..', '.kbbbbk.', 'kbLbbbbk', 'kbbbLbbk', 'kBbbbbBk', '.kBBBBk.', '..kkkk..'] },
     meal:  { k: OL, b: '#c86a30', B: '#8a4020', p: '#f0f0f0', y: '#f8d838', rows: ['........', '.kkkk.k.', 'kbbybkbk', 'kbBbbbbk', 'kbbbbkBk', '.kkkk.k.', 'kppppppk', '.kkkkkk.'] },
-    tool:  { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#8a5a30', rows: ['..kkk...', '.kgggk..', '.kgGgk..', '..kgkk..', '...kwk..', '...kwk..', '...kwk..', '....k...'] },
+    // the pickaxe (Beliung): a steel head curving down to a point at each end, on a wooden handle
+    tool:  { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#8a5a30', rows: ['.kkkkkk.', 'kggggGgk', 'kgkkwkGk', 'k..kwk.k', '...kwk..', '...kwk..', '...kwk..', '....k...'] },
     hoe:   { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#a8703a', rows: ['kkkkk...', 'kgggGk..', '.kkkwk..', '...kwk..', '...kwk..', '...kwk..', '...kwk..', '....k...'] }
   };
   function icon(id, size) {
@@ -123,7 +124,7 @@
       c.act({ action: 'farm', op: 'plant', plot: pi }).catch(function () {});
       return;
     }
-    if (id === 'tool') return GT.toast($t('Alat dipakai otomatis saat menambang batu.'));
+    if (id === 'tool') return GT.toast($t('Beliung dipakai otomatis saat menambang batu.'));
     toggle(held); // raw goods: what you can do with them (send, sell)
   }
 
@@ -143,18 +144,22 @@
     pop.appendChild($('b', null, (it.name || econ.name || id) + ' · ' + (it.settled + it.today)));
     pop.appendChild($('p', null, it.today ? $t('{0} tercatat di NEAR, {1}{2} hari ini (masuk pukul 06:00).', [it.settled, it.today > 0 ? '+' : '', it.today]) : it.settled > 0 ? $t('Semua sudah tercatat di NEAR.') : $t('Belum punya. {0}', [hintFor(id)])));
     var row = $('div', 'gt-slotpop-acts');
-    function act(label, fn, primary) { var x = $('button', 'mbtn' + (primary ? ' primary' : ''), label); x.type = 'button'; x.addEventListener('click', function () { closePop(); fn(); }); row.appendChild(x); }
-    if (econ.energy && it.settled + it.today > 0) act($t('Makan (+{0} energi)', [econ.energy]), function () { c.act({ action: 'eat', token: id }).catch(function () {}); }, true);
-    if (can > 0) act($t('Kirim'), function () { c.askSend(id); });
-    if (can > 0) act($t('Jual ke pemain'), function () { c.askList(id, can); });
-    act($t('Buka tas'), openBag);
+    function act(ic, label, fn, primary) {
+      var x = $('button', 'mbtn' + (primary ? ' primary' : '')); x.type = 'button';
+      var s = $('span', 'mopt-ic', ic); s.setAttribute('aria-hidden', 'true'); x.appendChild(s); x.appendChild(document.createTextNode(label));
+      x.addEventListener('click', function () { closePop(); fn(); }); row.appendChild(x);
+    }
+    if (econ.energy && it.settled + it.today > 0) act('🍽️', $t('Makan (+{0} energi)', [econ.energy]), function () { c.act({ action: 'eat', token: id }).catch(function () {}); }, true);
+    if (can > 0) act('📤', $t('Kirim'), function () { c.askSend(id); });
+    if (can > 0) act('🏷️', $t('Jual ke pemain'), function () { c.askList(id, can); });
+    act('🎒', $t('Buka tas'), openBag);
     pop.appendChild(row);
     // sit above the chosen slot
     var slot = bar.children[selected], sr = document.getElementById('screen').getBoundingClientRect(), r = slot.getBoundingClientRect();
     pop.style.left = Math.max(6, Math.min(sr.width - 230, r.left - sr.left - 90)) + 'px';
   }
   function hintFor(id) {
-    return { fish: $t('Mancing di kolam atau sungai.'), wood: $t('Tebang pohon.'), ore: $t('Nambang di batu Tambang Utara (butuh Alat).'), wheat: $t('Tanam dan panen di kebunmu.'), bread: $t('Buat di Meja Kerja (2 Gandum) atau beli di Wati.'), meal: $t('Buat di Meja Kerja (Ikan + Kayu) atau beli di Sari.'), tool: $t('Buat di Meja Kerja (2 Bijih + Kayu) atau beli di Budi.') }[id] || '';
+    return { fish: $t('Mancing di kolam atau sungai.'), wood: $t('Tebang pohon.'), ore: $t('Nambang di batu Tambang Utara (butuh Beliung).'), wheat: $t('Tanam dan panen di kebunmu.'), bread: $t('Buat di Meja Kerja (2 Gandum) atau beli di Wati.'), meal: $t('Buat di Meja Kerja (Ikan + Kayu) atau beli di Sari.'), tool: $t('Buat di Meja Kerja (2 Bijih + Kayu) atau beli di Budi.') }[id] || '';
   }
 
   function onKey(e) {

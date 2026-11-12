@@ -190,11 +190,11 @@
     // the menu opens even when the Homeland refresh fails (a party mate's world): the public area is always on it
     load(true).catch(function () {}).then(function () {
       var cur = wid(), opts = [];
-      if (cur !== 'public') opts.push({ label: $t('Area Publik (pasar)'), onPick: function () { travel('public'); } });
-      if (H && cur !== H.world) opts.push({ label: $t('Rumahku'), onPick: function () { travel(H.world); } });
+      if (cur !== 'public') opts.push({ icon: '🏪', label: $t('Area Publik (pasar)'), onPick: function () { travel('public'); } });
+      if (H && cur !== H.world) opts.push({ icon: '🏡', label: $t('Rumahku'), onPick: function () { travel(H.world); } });
       ((H && H.invited) || []).forEach(function (v) {
         if (cur === v.world) return;
-        opts.push({ label: v.via === 'party' ? $t('Dunia {0} (party)', [v.owner_name || v.world]) : $t('Dunia {0}', [v.owner_name || v.world]), onPick: function () { travel(v.world); } });
+        opts.push({ icon: v.via === 'party' ? '👥' : '✉️', label: v.via === 'party' ? $t('Dunia {0} (party)', [v.owner_name || v.world]) : $t('Dunia {0}', [v.owner_name || v.world]), onPick: function () { travel(v.world); } });
       });
       GT.menu($t('Portal · mau ke mana?'), opts);
     });
@@ -270,7 +270,12 @@
     r.appendChild($('span', 'hl-k', $t('Biaya')));
     if (!keys.length) r.appendChild($('span', 'hl-chip', 'gratis'));
     keys.forEach(function (t) {
-      var c = $('span', 'hl-chip' + (have(t) < cost[t] ? ' short' : '')); c.appendChild($('b', 'hl-n', String(cost[t]))); c.appendChild(document.createTextNode(' ' + itemName(t))); r.appendChild(c);
+      var c = $('span', 'hl-chip' + (have(t) < cost[t] ? ' short' : '')); c.appendChild($('b', 'hl-n', String(cost[t])));
+      // goods with a hotbar icon show the icon (the name stays in the tooltip and for screen readers); coin keeps its word
+      var IT = window.GT_ITEMS;
+      if (IT && IT.SLOTS.indexOf(t) >= 0) { var ic = IT.icon(t, 16); ic.classList.add('hl-ic'); c.appendChild(ic); c.title = itemName(t); c.setAttribute('aria-label', cost[t] + ' ' + itemName(t)); }
+      else c.appendChild(document.createTextNode(' ' + itemName(t)));
+      r.appendChild(c);
     });
     if (secs != null) { r.appendChild($('span', 'hl-k', $t('Waktu'))); r.appendChild($('b', 'hl-n', secsLine(secs))); }
     if (short.length) r.appendChild($('span', 'hl-lack', $t('kurang {0}', [short.map(itemName).join(', ')])));

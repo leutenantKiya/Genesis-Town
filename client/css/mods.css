@@ -164,3 +164,6 @@ html.gt-phone .tr-lot{flex-wrap:wrap}
 .tr-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
 html.gt-phone .tr-cols{grid-template-columns:1fr}
 html.gt-phone .tr-acts .mbtn{min-height:44px;flex:1}
+/* icons in place of words: menu options and slot actions (an emoji before the label), cost chips (the item's pixel icon) */
+.mopt-ic{display:inline-block;margin-right:6px;line-height:1}
+.hl-chip .hl-ic{width:16px;height:16px;margin-left:4px;vertical-align:-3px;image-rendering:pixelated}

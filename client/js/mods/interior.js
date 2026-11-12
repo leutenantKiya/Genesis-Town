@@ -5,9 +5,11 @@
  *   bookshelf  a book with a useful tip about the game
  *   tv         the town news: today's live prices from the merchants
  *   fridge     a glass of orange juice
- *   plant      you water it
+ *   plant      you water it; the third time it blooms
  *   table      a snack at the table
- * Every other tile keeps the engine's own line of text.
+ *   chest      in your own house it opens your bag (your storage); in someone else's it stays locked
+ * The furniture you face shows an icon and a verb above it (chairs too: the engine seats you), so the room says what
+ * it can do. Every other tile keeps the engine's own line of text.
  */
 (function () {
   'use strict';
@@ -46,6 +48,20 @@
     GT.dialog([lines.slice(0, 3).join('\n')], '📺 ' + $t('TV Desa'));
   }
 
+  // watering a plant three times makes it bloom (per plant, until the page is reloaded)
+  var watered = {};
+  function water(ctx) {
+    var k = (ctx.scene.key || '') + ':' + ctx.tile.x + ',' + ctx.tile.y, n = watered[k] = (watered[k] || 0) + 1;
+    if (n === 3) { float('🌸'); GT.toast($t('Tanamannya berbunga! Rumahmu jadi lebih segar.')); return; }
+    float('💧'); GT.toast(n > 3 ? $t('Tanamannya sudah mekar dan segar.') : $t('Kamu menyiram tanamannya. Daunnya berkilau.'));
+  }
+  // the chest is the player's own storage: in your own house it opens the bag; in someone else's it stays shut
+  function chest(ctx) {
+    var h = ctx.scene.house, C = window.GT_CHAIN;
+    if (h && h.own && C && C.state && C.state.account) { float('📦'); C.open('bag'); return; }
+    GT.dialog([h && h.own ? $t('Peti penyimpananmu. Masuk dulu untuk melihat isi tasmu.') : $t('Peti milik pemilik rumah. Terkunci rapat.')], '📦 ' + $t('Peti'));
+  }
+
   function onInteract(ctx) {
     if (ctx.scene.kind === 'out' || ctx.npc || ctx.mode !== 'talk' || ctx.door) return false;
     var t = ctx.tileType;
@@ -53,10 +69,30 @@
     if (t === 'bookshelf') { GT.dialog([TIPS[Math.floor(Math.random() * TIPS.length)]], '📚 ' + $t('Rak Buku')); return true; }
     if (t === 'tv') { news(); return true; }
     if (t === 'fridge') { float('🧃'); GT.toast($t('Segelas jus jeruk dingin. Segar!')); return true; }
-    if (t === 'plant') { float('💧'); GT.toast($t('Kamu menyiram tanamannya. Daunnya berkilau.')); return true; }
+    if (t === 'plant') { water(ctx); return true; }
     if (t === 'table') { float('🍌'); GT.toast($t('Kamu makan sepotong pisang goreng. Enak!')); return true; }
+    if (t === 'chest' && ctx.scene.house) { chest(ctx); return true; }
     return false;
   }
 
-  GT.register({ id: 'interior', onInteract: onInteract });
+  // A small "icon + verb" label over the furniture you face, so you can see what it does before pressing Space / F.
+  var VERB = {
+    bed: ['😴', 'Tidur'], bookshelf: ['📚', 'Baca'], tv: ['📺', 'Nonton'], fridge: ['🧃', 'Minum'], plant: ['💧', 'Siram'],
+    table: ['🍌', 'Makan'], chair: ['🪑', 'Duduk'], chest: ['📦', 'Buka']
+  };
+  function onDraw(ctx, camX, camY, T) {
+    var sc = GT.scene, TH = window.GT_THEME;
+    if (!TH || !sc || sc.kind === 'out' || !sc.map || napping || GT.isUiOpen() || GT.sitting || (GT.player && GT.player.moving)) return;
+    var f = GT.facing(), m = sc.map;
+    if (!f || f.x < 0 || f.y < 0 || f.x >= m.w || f.y >= m.h) return;
+    var t = m.tiles[f.y * m.w + f.x], v = VERB[t];
+    if (!v || (t === 'chest' && !sc.house)) return;
+    var a = GT.at(f.x, f.y);
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    TH.label(ctx, v[0] + ' ' + $t(v[1]), GT.snap(a.x + T / 2), GT.snap(a.y - 2), { tone: 'dark', size: 6 });
+    ctx.restore();
+  }
+
+  GT.register({ id: 'interior', onInteract: onInteract, init: function (g) { g.register({ id: 'interior-hint', onDraw: onDraw }); } });
 })();

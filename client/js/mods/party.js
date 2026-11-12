@@ -71,7 +71,7 @@
     var was = leaderWorld; leaderWorld = l.world;
     if (was && was !== l.world && l.world !== GT.worldId() && canGo(l.world) && !GT.isUiOpen()) {
       var w = l.world;
-      GT.menu($t('Ketua pindah ke {0}. Ikut?', [placeOf(l)]), [{ label: $t('Ikut'), onPick: function () { follow(w); } }, { label: $t('Nanti'), onPick: function () {} }]);
+      GT.menu($t('Ketua pindah ke {0}. Ikut?', [placeOf(l)]), [{ icon: '✅', label: $t('Ikut'), onPick: function () { follow(w); } }, { icon: '⏳', label: $t('Nanti'), onPick: function () {} }]);
     }
   }
   // green dots on the map sheet (M) for mates in my world: the server sends x, y only for them

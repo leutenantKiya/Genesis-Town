@@ -174,11 +174,15 @@
 >   fishing, chopping and mining (`homeland.publicGather`, `publicOpenAll`) and a **boat** to its bottom-right island
 >   (`GTVillage.ferryOf`, act `boat`); mining swings a **pickaxe**; the fishing rod has a spinning reel; a **hoe** (Cangkul) tills
 >   grass inside a Homeland farm fence (act `hoe`, table `homeland_tilled`).
->   Also: icons on the top bar and phone tabs; Homeland buildings with a stone base and flower boxes; a nine-step
+>   The mining token `tool` is now shown as the **Pickaxe** (Beliung) with a pickaxe icon; it is still needed to mine
+>   and wears out after 20 uses (token id unchanged).
+>   Also: icons on the top bar, phone tabs, menus (`GT.menu` option `icon`), hotbar actions and Town Hall costs (item
+>   pixel icons); Homeland buildings with a stone base and flower boxes; a nine-step
 >   **mission** chain; a **Luck Table** by the market (stake 1-5 goods, 45% to double, the stake burned otherwise, 20 bets a
 >   day, never coin; act `gamble`); a **Mall** stand selling worker gear (new Work Gloves, Work Boots, Hard Hat; act `mall`);
 >   riding the **carousel** with a cinematic camera, letterbox and colour grade (`mods/ride.js`); house furniture to use
->   (nap, tips, TV news, `mods/interior.js`). *(planned)*: a Pickaxe token, the Upgrade button on phones.
+>   (nap, tips, TV news, watering a plant until it blooms, your own chest opens your bag; an icon and verb float over the
+>   piece you face, `mods/interior.js`). *(planned)*: the Upgrade button on phones.
 >
 > - **Work buildings** (2026-11-12, after Kingshot's resource buildings): every Homeland has a **Penggergajian** (sawmill,
 >   wood) on a forest island, a **Kincir Angin** (windmill, wheat) with sails that turn in the 2.5D view, and a **Gudang**

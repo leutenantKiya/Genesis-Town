@@ -124,7 +124,7 @@ export class World {
       if (p.tool_uses >= (this.econ.items.tool.durability ?? 20)) {
         this.gs.add(t.settleDay, account, 'tool', -1, 'tool_break');
         p.tool_uses = 0;
-        toast += ' · Your Tool broke!';
+        toast += ' · Your Pickaxe broke!';
       }
     }
     this.gs.savePlayer(p);

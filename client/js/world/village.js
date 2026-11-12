@@ -43,7 +43,7 @@
     "Komedi putar. Kudanya berputar pelan, siang dan malam.": "Carousel. The horses turn slowly, day and night.",
     "Kolam teratai. Katak-katak suka duduk di lumpurnya.": "Lotus pond. Frogs like to sit in its mud.",
     "Meja teras Warung Kopi. Duduk santai sambil ngopi.": "Coffee Shop terrace table. Sit back and enjoy a coffee.",
-    "Tambang Utara. Bijih di bebatuan; bawa Alat.": "North Mine. Ore in the rocks; bring a Tool.",
+    "Tambang Utara. Bijih di bebatuan; bawa Beliung.": "North Mine. Ore in the rocks; bring a Pickaxe.",
     " belum bisa dicapai: jembatannya belum ada. Bahan untuk {0} dikumpulkan di Balai Desa.": " can't be reached yet: the bridge isn't built. Materials for {0} are collected at the Town Hall.",
     " belum dibuka.": " isn't open yet.",
     "Cerah": "Clear",
@@ -366,7 +366,7 @@
       }
       if (best) line(mx, my + 3, best.x, best.y, false);
       var sx = mx + 1, sy = my + 4;
-      if (free(sx, sy)) { set(sx, sy, 'sign'); info[I(sx, sy)] = $t('Tambang Utara. Bijih di bebatuan; bawa Alat.'); res[I(sx, sy)] = 1; }
+      if (free(sx, sy)) { set(sx, sy, 'sign'); info[I(sx, sy)] = $t('Tambang Utara. Bijih di bebatuan; bawa Beliung.'); res[I(sx, sy)] = 1; }
     })();
     // the pond in Ladang Barat with a sandy shore
     (function () {

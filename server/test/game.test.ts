@@ -68,7 +68,7 @@ test('a felled tree is a stump in the state until it grows back', async () => {
 test('ore and wood need a tool, and the tool breaks after 20 uses', async () => {
   const { game, clock } = await world();
   game.gs.add(0, Q, 'tool', -1, 'test');
-  assert.throws(() => game.act(Q, { action: 'gather', tile: 'rock', x: 1, y: 1 }), /Ore|Tool/);
+  assert.throws(() => game.act(Q, { action: 'gather', tile: 'rock', x: 1, y: 1 }), /Ore|Pickaxe/);
   let broke = '';
   for (let i = 0; i < 20; i++) {
     const r = game.act(P, { action: 'gather', tile: 'rock', x: i, y: 0 });

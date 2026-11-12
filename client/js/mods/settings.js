@@ -168,16 +168,16 @@
   function press(id) { var b = document.getElementById(id); if (b) b.click(); }
   function moreSheet() {
     var opts = [];
-    if (document.getElementById('simbtn')) opts.push({ label: $t('Simulasi 1 minggu'), onPick: function () { press('simbtn'); } });
-    opts.push({ label: $t('Tampilan, suara & tombol'), onPick: openSettings });
-    if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push({ label: $t('Admin'), onPick: function () { GT_ADMIN.open(); } });
-    opts.push({ label: $t('Party'), onPick: function () { if (window.GT_PARTY) GT_PARTY.open(); } });
-    if (window.GT_CHARSCREEN) opts.push({ label: $t('Ubah karakter'), onPick: function () { GT_CHARSCREEN.open(true); } });
-    if (GT.openProfile) opts.push({ label: $t('Profil'), onPick: function () { GT.openProfile(); } });
-    if (GT.interact) opts.push({ label: $t('Pesan ke NPC di depanmu'), onPick: function () { GT.interact('message'); } });
-    if (document.getElementById('devbtn')) opts.push({ label: 'Dev', onPick: function () { press('devbtn'); } });
+    if (document.getElementById('simbtn')) opts.push({ icon: '📊', label: $t('Simulasi 1 minggu'), onPick: function () { press('simbtn'); } });
+    opts.push({ icon: '🎛️', label: $t('Tampilan, suara & tombol'), onPick: openSettings });
+    if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push({ icon: '🛡️', label: $t('Admin'), onPick: function () { GT_ADMIN.open(); } });
+    opts.push({ icon: '👥', label: $t('Party'), onPick: function () { if (window.GT_PARTY) GT_PARTY.open(); } });
+    if (window.GT_CHARSCREEN) opts.push({ icon: '👕', label: $t('Ubah karakter'), onPick: function () { GT_CHARSCREEN.open(true); } });
+    if (GT.openProfile) opts.push({ icon: '🪪', label: $t('Profil'), onPick: function () { GT.openProfile(); } });
+    if (GT.interact) opts.push({ icon: '✉️', label: $t('Pesan ke NPC di depanmu'), onPick: function () { GT.interact('message'); } });
+    if (document.getElementById('devbtn')) opts.push({ icon: '🛠️', label: 'Dev', onPick: function () { press('devbtn'); } });
     // signing out lives here, with the other account settings (it used to sit at the foot of the Bag)
-    if (window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account) opts.push({ label: $t('Keluar (ganti akun)'), onPick: function () { GT_CHAIN.signOut(); } });
+    if (window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account) opts.push({ icon: '🚪', label: $t('Keluar (ganti akun)'), onPick: function () { GT_CHAIN.signOut(); } });
     GT.menu($t('Pengaturan'), opts);
   }
   function buildTabbar() {

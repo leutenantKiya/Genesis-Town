@@ -240,7 +240,7 @@
           lsSet(LS_OWNER, res.needsChainApproval && res.ownerPublicKey ? res.ownerPublicKey : null);
           keepKey(res.accountId, key);
           S.account = res.accountId; S.superseded = false; lsSet(LS_ACC, res.accountId); renderBanner();
-          GT.toast(res.created ? $t('Akun dibuat! Paket awal: 100 koin, 1 Alat, 3 Roti, 3 Gandum.') : $t('Selamat datang kembali!'));
+          GT.toast(res.created ? $t('Akun dibuat! Paket awal: 100 koin, 1 Beliung, 3 Roti, 3 Gandum.') : $t('Selamat datang kembali!'));
           return refresh(true);
         };
         // a key for this account from an earlier sign-in in this browser: use it instead of the fresh one
@@ -933,7 +933,7 @@
       var danger = tok !== 'fish' && night && night.now && !night.guarded && wildAt(L, x, y);
       var spot = tok === 'fish' && window.GT_FISH && GT_FISH.isSpot(x, y);
       if (tok === 'fish') return spot ? $t('Mancing di riak air: ikan berkumpul di sini') : $t('Mancing (lebih cepat di riak air)');
-      return $t('{0} (−4 energi){1}{2}', [verb, needTool ? $t(' · butuh Alat') : '', danger ? $t(' · malam: awas monster') : '']);
+      return $t('{0} (−4 energi){1}{2}', [verb, needTool ? $t(' · butuh Beliung') : '', danger ? $t(' · malam: awas monster') : '']);
     }
     return null;
   }
@@ -1093,7 +1093,7 @@
     }, 'primary'));
   }
 
-  var WHERE = { fish: $t('mancing di kolam atau sungai'), wood: $t('tebang pohon'), ore: $t('nambang di Tambang Utara (butuh Alat)'), wheat: $t('tanam di kebunmu (kalau Gandummu habis, desa memberi 3 benih gratis per hari)'), bread: $t('Meja Kerja: 2 Gandum'), meal: $t('Meja Kerja: Ikan + Kayu'), tool: $t('Meja Kerja: 2 Bijih + Kayu'), coin: $t('jual ke pedagang yang buka, atau Kotak Kirim di rumahmu') };
+  var WHERE = { fish: $t('mancing di kolam atau sungai'), wood: $t('tebang pohon'), ore: $t('nambang di Tambang Utara (butuh Beliung)'), wheat: $t('tanam di kebunmu (kalau Gandummu habis, desa memberi 3 benih gratis per hari)'), bread: $t('Meja Kerja: 2 Gandum'), meal: $t('Meja Kerja: Ikan + Kayu'), tool: $t('Meja Kerja: 2 Bijih + Kayu'), coin: $t('jual ke pedagang yang buka, atau Kotak Kirim di rumahmu') };
   function restoreBody(id, m, wrap) {
     var s = (S.shops || []).filter(function (x) { return x.id === id; })[0];
     wrap.appendChild($('p', 'chain-closed', $t('TUTUP. {0} tidak sanggup membayar sewa.', [m.name])));
@@ -1186,7 +1186,7 @@
     var coin = S.st.bag.coin || { settled: 0, today: 0 };
     var head = $('div', 'gt-shop-head');
     head.appendChild($('span', null, $t('Koin {0}{1}', [coin.settled + coin.today, coin.today ? $t(' ({0}{1} hari ini)', [coin.today > 0 ? '+' : '', coin.today]) : ''])));
-    head.appendChild($('span', 'chain-dim', $t('Alat {0}/{1} pemakaian', [S.st.tool.uses, S.st.tool.durability])));
+    head.appendChild($('span', 'chain-dim', $t('Beliung {0}/{1} pemakaian', [S.st.tool.uses, S.st.tool.durability])));
     wrap.appendChild(head);
     var slots = window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.st.bag).filter(function (t) { return t !== 'coin'; });
     var inHand = window.GT_ITEMS && GT_ITEMS.held();
@@ -1209,7 +1209,7 @@
   }
   var USE = {
     fish: $t('Mentah, tidak bisa dimakan. Masak jadi Ikan Bakar di Meja Kerja (Ikan + Kayu), atau jual.'),
-    wood: $t('Bahan Ikan Bakar dan Alat, dan dibutuhkan proyek desa.'), ore: $t('Bahan Alat, dan dibutuhkan proyek desa.'),
+    wood: $t('Bahan Ikan Bakar dan Beliung, dan dibutuhkan proyek desa.'), ore: $t('Bahan Beliung, dan dibutuhkan proyek desa.'),
     wheat: $t('Pegang lalu klik kanan petak kebun untuk menanam, atau buat Roti (2 Gandum).'),
     tool: $t('Dipakai otomatis saat menambang batu.')
   };

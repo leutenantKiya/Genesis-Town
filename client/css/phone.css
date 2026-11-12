@@ -101,3 +101,4 @@ html.gt-phone .btn,html.gt-phone .mbtn{min-height:44px}
 #acts > #chainbtn::before,#acts > #pasarbtn::before,#acts > #mapbtn::before,#acts > #simbtn::before,#acts > #gt-morebtn::before,#acts > #gt-upbtn::before{margin-right:6px;font-size:1.05em;line-height:1}
 #tab-bag::before{content:"🎒"}#tab-market::before{content:"🏪"}#tab-map::before{content:"🗺️"}#tab-chat::before{content:"💬"}#tab-more::before{content:"⚙️"}
 .gt-tab::before{display:block;font-size:20px;line-height:1.1;margin-bottom:2px}
+#acts > #btnSosial::before{content:"💬";margin-right:6px;font-size:1.05em;line-height:1}#acts > #setbtn::before{content:"🎛️";margin-right:6px;font-size:1.05em;line-height:1}

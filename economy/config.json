@@ -15,7 +15,7 @@
     "wheat": { "name": "Wheat",     "kind": "raw",      "base": 5 },
     "bread": { "name": "Bread",       "kind": "crafted",  "base": 16, "energy": 25 },
     "meal":  { "name": "Grilled Fish", "kind": "crafted",  "base": 20, "energy": 45 },
-    "tool":  { "name": "Tool",       "kind": "crafted",  "base": 45, "durability": 20 }
+    "tool":  { "name": "Pickaxe",    "kind": "crafted",  "base": 45, "durability": 20 }
   },
   "recipes": {
     "bread": { "inputs": { "wheat": 2 }, "output": "bread", "fee": 0, "energy": 5 },
