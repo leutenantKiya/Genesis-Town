@@ -56,6 +56,17 @@ export interface AppDeps {
   funds?: { status(): { checkedAt: number | null; near: Record<string, string>; low: string[]; lowBelow: string } };
 }
 
+/** What /api/health reports as wrong: settlement more than a day behind the last day that could be closed, a server
+ *  account low on NEAR for gas, or the last database copy failing. Each line is short, for a person reading the JSON. */
+export function healthProblems(h: { settleDay: number; settledThrough: number; fundsLow?: string[]; snapshotError?: string | null }): string[] {
+  const out: string[] = [];
+  const behind = (h.settleDay - 1) - h.settledThrough;
+  if (behind > 1) out.push(`settlement is ${behind} days behind (settled through day ${h.settledThrough})`);
+  for (const a of h.fundsLow ?? []) out.push(`${a} is low on NEAR for gas`);
+  if (h.snapshotError) out.push(`database copy failing: ${h.snapshotError}`);
+  return out;
+}
+
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
@@ -355,9 +366,14 @@ export function createApp(deps: AppDeps) {
         });
       }
       if (req.method === 'GET' && p === '/api/health') {
-        // for the host's health check: the process is up and the game clock and settlement are where they should be
-        const t = game.clock.time();
-        return send(res, 200, { ok: true, chain: deps.chain.mode, day: t.day, hour: t.hour, settledThrough: game.settlement.settledThrough(), snapshot: deps.snapshot ? deps.snapshot.status() : null, funds: deps.funds ? deps.funds.status() : null });
+        // The host's deploy check (railway.json) only needs the process up, so this stays 200 even when something is
+        // wrong (a 503 would block the very deploy that fixes it); `ok` and `problems` say what. ?strict=1 answers 503
+        // instead, for an outside uptime monitor.
+        const t = game.clock.time(), settledThrough = game.settlement.settledThrough();
+        const snapshot = deps.snapshot ? deps.snapshot.status() : null, funds = deps.funds ? deps.funds.status() : null;
+        const problems = healthProblems({ settleDay: t.settleDay, settledThrough, fundsLow: funds?.low, snapshotError: snapshot?.lastError });
+        const status = problems.length && url.searchParams.get('strict') === '1' ? 503 : 200;
+        return send(res, status, { ok: problems.length === 0, problems, chain: deps.chain.mode, day: t.day, hour: t.hour, settledThrough, snapshot, funds });
       }
       if (req.method === 'POST' && p === '/api/auth/register') {
         const ip = clientIp(req);

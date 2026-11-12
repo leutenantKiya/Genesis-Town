@@ -6,7 +6,7 @@ import { Store } from '../src/db.ts';
 import { MockChain } from '../src/chain.ts';
 import { Game } from '../src/game/game.ts';
 import { loadEcon } from '../src/game/econ.ts';
-import { createApp } from '../src/app.ts';
+import { createApp, healthProblems } from '../src/app.ts';
 import { requestMessage } from '../src/reqauth.ts';
 import { loadConfig } from '../src/config.ts';
 import { relay, relayTokens, RateLimiter } from '../src/relayer.ts';
@@ -219,4 +219,26 @@ test('static files never leak from a sibling folder whose name starts with the c
     assert.equal(leak.status, 403);
     assert.notEqual(leak.body, 'secret');
   } finally { h.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('health lists settlement lag, low gas and a failing db copy, and stays 200 unless strict', async () => {
+  assert.deepEqual(healthProblems({ settleDay: 10, settledThrough: 9 }), []);
+  assert.deepEqual(healthProblems({ settleDay: 10, settledThrough: 8 }), [], 'one day of slack for retries');
+  assert.match(healthProblems({ settleDay: 10, settledThrough: 7 })[0], /2 days behind/);
+  assert.deepEqual(healthProblems({ settleDay: 10, settledThrough: 9, fundsLow: ['relayer.test'] }), ['relayer.test is low on NEAR for gas']);
+  assert.match(healthProblems({ settleDay: 10, settledThrough: 9, snapshotError: 'timeout' })[0], /database copy failing: timeout/);
+  const h = await harness();
+  try {
+    const t = h.game.clock.time();
+    h.game.gs.setMeta('settle.through', String(t.settleDay - 10));
+    const loose = await h.raw('GET', '/api/health');
+    assert.equal(loose.status, 200);
+    assert.equal(loose.json.ok, false);
+    assert.match(loose.json.problems[0], /days behind/);
+    assert.equal((await h.raw('GET', '/api/health?strict=1')).status, 503);
+    h.game.gs.setMeta('settle.through', String(t.settleDay - 1));
+    const good = await h.raw('GET', '/api/health?strict=1');
+    assert.equal(good.status, 200);
+    assert.equal(good.json.ok, true);
+  } finally { h.close(); }
 });
