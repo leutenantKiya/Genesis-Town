@@ -18,6 +18,7 @@ import { Social, worldIdOk } from './social.ts';
 import type { Game } from './game/game.ts';
 import { homeWorld, parseHome } from './game/homeland.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
+import { TtlCache, BoundedCache } from './ttlcache.ts';
 import { Worker } from 'node:worker_threads';
 import type { SimResult } from './game/sim.ts';
 
@@ -134,7 +135,13 @@ export function createApp(deps: AppDeps) {
   };
   const acctLang = new LangMemory(); // last language each account played in (merchant chat replies follow it)
   const presenceLimiter = new RateLimiter(240, 100_000); // about 2 reports a second per account
+  // Public read routes shared by every caller, held briefly. Anything the server itself changes clears them at once.
+  const READ_CACHE_MS = 4000;
+  const readCache = new TtlCache<unknown>(READ_CACHE_MS);
   const afterRelay = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
+    try { await afterRelayWork(sender, method, args, extra, relayBody); } finally { readCache.clear(); }
+  };
+  const afterRelayWork = async (sender: string, method: string, args: Record<string, unknown>, extra: string[], relayBody: Record<string, unknown> = {}) => {
     const accts = [sender, ...extra];
     if (method === 'send_item' && typeof args.receiver_id === 'string') accts.push(args.receiver_id);
     if (typeof args.merchant === 'string') accts.push(args.merchant);
@@ -539,8 +546,11 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, game.market.quote(q.get('merchant') ?? '', q.get('token') ?? '', side, Number(qs)));
       }
       if (req.method === 'GET' && p === '/api/shops') {
+        // The shop list is the same for everyone; only each caller's own `holding` differs, so only the list is cached.
         const a = req.headers['x-account-id'];
-        return send(res, 200, { shops: await game.shops(typeof a === 'string' ? a : undefined) });
+        const list = await readCache.get('shops', () => game.shops()) as Awaited<ReturnType<typeof game.shops>>;
+        const shops = typeof a === 'string' && a ? await Promise.all(list.map(async (s) => ({ ...s, holding: await deps.chain.holding(s.account_id, a) }))) : list;
+        return send(res, 200, { shops });
       }
       if (req.method === 'POST' && p === '/api/talk') {
         const raw = await readRaw(req);
@@ -555,12 +565,14 @@ export function createApp(deps: AppDeps) {
       if (req.method === 'GET' && p === '/api/projects') {
         // Town projects as the contract holds them (pledges, contributors, done), plus the map areas they open.
         const retired = Object.fromEntries(game.econ.projects.filter((p) => p.retired).map((p) => [p.id, p.retired]));
-        return send(res, 200, { projects: (await deps.chain.listProjects()).map((p) => { const own = game.econ.projects.find((q) => q.id === p.id); const named = own ? { ...p, name: own.name } : p; return retired[p.id] ? { ...named, retired: retired[p.id] } : named; }), world: game.map?.view() ?? null });
+        return send(res, 200, await readCache.get('projects', async () => ({ projects: (await deps.chain.listProjects()).map((p) => { const own = game.econ.projects.find((q) => q.id === p.id); const named = own ? { ...p, name: own.name } : p; return retired[p.id] ? { ...named, retired: retired[p.id] } : named; }), world: game.map?.view() ?? null })));
       }
       if (req.method === 'GET' && p === '/api/listings') {
         // Player market: open listings read from the contract (escrowed there), newest first.
-        const listings = bazaar.view(await deps.chain.listListings(50));
-        return send(res, 200, { listings, feeBps: MARKET_FEE_BPS, contractId: deps.cfg.gameContractId, popular: bazaar.top(10) });
+        return send(res, 200, await readCache.get('listings', async () => {
+          const listings = bazaar.view(await deps.chain.listListings(50));
+          return { listings, feeBps: MARKET_FEE_BPS, contractId: deps.cfg.gameContractId, popular: bazaar.top(10) };
+        }));
       }
       if (req.method === 'GET' && p === '/api/history') {
         const acct = accountOf(req, url);
@@ -596,7 +608,7 @@ export function createApp(deps: AppDeps) {
         if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
         const per = game.econ.time.hoursPerDay, h = game.clock.time().hour;
         game.clock.skipHours((20 - h + per) % per || per);
-        await game.step();
+        await game.step(); readCache.clear();
         return send(res, 200, { time: game.clock.time() });
       }
       if (req.method === 'POST' && p === '/api/dev/unfreeze') {
@@ -619,12 +631,13 @@ export function createApp(deps: AppDeps) {
           if (!game.econ.items[t] || !Number.isInteger(n) || (n as number) < 1 || (n as number) > 1000) throw new HttpError(400, 'bad item or amount');
           deps.chain.add(acct, t, BigInt(n as number));
         }
-        await game.settlement.refresh([acct]);
+        await game.settlement.refresh([acct]); readCache.clear();
         return send(res, 200, { ok: true, state: game.state(acct) });
       }
       if (req.method === 'POST' && p === '/api/dev/settle') {
         if (!devAllowed(req)) throw new HttpError(403, 'dev tools are off (or not from this machine)');
-        return send(res, 200, await game.devSettle());
+        const r = await game.devSettle(); readCache.clear();
+        return send(res, 200, r);
       }
       throw new HttpError(404, 'no such route');
     }
