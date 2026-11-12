@@ -94,10 +94,18 @@ test('RateLimiter: memory per key stays bounded by the minute limit, and finishe
   assert.ok(l.hits.get('p')!.recent.length <= 240, 'only the last minute is kept as timestamps');
   for (let i = 0; i < 50; i++) l.take(`ip${i}`, 1000);
   assert.equal(l.hits.size, 51);
-  l.take('late', 86_400_000 + 5_000_000);
-  assert.deepEqual([...l.hits.keys()], ['late'], 'keys whose day ended are gone');
+  l.take('late', 2 * 86_400_000 + 5_000_000);
+  assert.deepEqual([...l.hits.keys()], ['late'], 'keys idle for two day windows are gone');
   const m = new RateLimiter(2, 100);
   assert.ok(m.take('a', 0) && m.take('a', 1));
   assert.equal(m.take('a', 2), false, 'minute limit still holds');
   assert.ok(m.take('a', 60_001), 'and frees up after a minute');
+});
+
+test('RateLimiter: a burst at the day-window edge cannot double the daily limit', () => {
+  const day = 86_400_000;
+  const l = new RateLimiter(100, 10);
+  for (let i = 0; i < 10; i++) assert.ok(l.take('a', day - 60_000 + i));
+  assert.equal(l.take('a', day + 1000), false, 'just past the edge the last window still counts');
+  assert.ok(l.take('a', 2 * day - 1000), 'nearly a full day later it has worn off');
 });

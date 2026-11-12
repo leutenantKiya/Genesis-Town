@@ -49,10 +49,11 @@ export function verifyDelegateSignature(sd: DecodedDelegate): boolean {
   return PublicKey.from(delegateKey(sd)).verify(new Uint8Array(msg), Uint8Array.from(sig));
 }
 
-/** Per-key limits: at most `perMinute` in any rolling minute and `perDay` per day window (counted from the key's first
- *  hit of that day). Memory per key is bounded by `perMinute` timestamps plus a counter, never by `perDay` (presence
- *  allows 100 000 a day), and keys whose day is over are swept out about once a minute. */
-interface Bucket { recent: number[]; dayStart: number; dayCount: number }
+/** Per-key limits: at most `perMinute` in any rolling minute and about `perDay` in any rolling day. The day uses the
+ *  sliding-window estimate (last window's count weighted by how much of it still overlaps, plus this window's), so a
+ *  burst at a window edge cannot double the daily limit. Memory per key is `perMinute` timestamps plus two counters,
+ *  never `perDay` of them (presence allows 100 000 a day), and keys idle for two windows are swept about once a minute. */
+interface Bucket { recent: number[]; winStart: number; cur: number; prev: number }
 const DAY_MS = 86_400_000;
 export class RateLimiter {
   perMinute: number;
@@ -63,21 +64,22 @@ export class RateLimiter {
   take(key: string, now = Date.now()): boolean {
     this.sweep(now);
     let b = this.hits.get(key);
-    if (!b) { b = { recent: [], dayStart: now, dayCount: 0 }; this.hits.set(key, b); }
-    if (now - b.dayStart >= DAY_MS) { b.dayStart = now; b.dayCount = 0; }
+    if (!b) { b = { recent: [], winStart: now, cur: 0, prev: 0 }; this.hits.set(key, b); }
+    const passed = Math.floor((now - b.winStart) / DAY_MS);
+    if (passed >= 2) { b.prev = 0; b.cur = 0; b.winStart = now; }
+    else if (passed === 1) { b.prev = b.cur; b.cur = 0; b.winStart += DAY_MS; }
     b.recent = b.recent.filter((t) => now - t < 60_000);
-    if (b.recent.length >= this.perMinute || b.dayCount >= this.perDay) return false;
+    const day = b.prev * (1 - (now - b.winStart) / DAY_MS) + b.cur;
+    if (b.recent.length >= this.perMinute || day >= this.perDay) return false;
     b.recent.push(now);
-    b.dayCount++;
+    b.cur++;
     return true;
   }
-  /** Drops keys whose day window is over and that had nothing in the last minute: their next hit starts fresh anyway. */
+  /** Drops keys with nothing in the last two day windows: both counters would read zero on their next hit anyway. */
   sweep(now = Date.now()): void {
     if (now - this.lastSweep < 60_000) return;
     this.lastSweep = now;
-    for (const [k, b] of this.hits) {
-      if (now - b.dayStart >= DAY_MS && b.recent.every((t) => now - t >= 60_000)) this.hits.delete(k);
-    }
+    for (const [k, b] of this.hits) if (now - b.winStart >= 2 * DAY_MS) this.hits.delete(k);
   }
 }
 
