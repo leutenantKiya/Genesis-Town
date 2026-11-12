@@ -141,7 +141,7 @@
     acts.appendChild(button($t('Main sekarang'), function () { login(); }, 'primary'));
     acts.appendChild(button($t('Lihat-lihat dulu'), function () { try { sessionStorage.setItem('gt.title.skip', '1'); } catch (e) { /* storage blocked */ } renderTitle(); }));
     card.appendChild(acts);
-    card.appendChild($('p', 'gt-title-note', $t('Masuk pakai Google atau email. Tanpa dompet, tanpa biaya, langsung di browser.')));
+    card.appendChild($('p', 'gt-title-note', S.cfg && S.cfg.google && !nearAuthHere() ? $t('Masuk pakai Google. Tanpa dompet, tanpa biaya, langsung di browser.') : $t('Masuk pakai Google atau email. Tanpa dompet, tanpa biaya, langsung di browser.')));
     titleEl.appendChild(card);
   }
 
@@ -255,8 +255,15 @@
   // First on-chain action on a device that signed in off-chain: the player's NEAR Auth key adds this device's game key
   // to the account (newDevice). Resolves once the key is on the account; rejects when the player cancels or NEAR Auth is
   // unusable here (then nothing else can approve it).
+  // NEAR Auth's login only returns to page addresses it has allowed (the server lists them in fastAuth.origins). Anywhere
+  // else its popup can only fail with "Callback URL mismatch", so the game does not offer it there.
+  function nearAuthHere() {
+    var fa = S.cfg && S.cfg.fastAuth;
+    if (!window.NearLib || !fa || S.cfg.devLogin) return false;
+    return !fa.origins || fa.origins.indexOf(location.origin) >= 0;
+  }
   function approveDevice() {
-    var usable = !!(window.NearLib && S.cfg && S.cfg.fastAuth && !S.cfg.devLogin), ownerPk = lsGet(LS_OWNER);
+    var usable = nearAuthHere(), ownerPk = lsGet(LS_OWNER);
     var body = $('div');
     if (!usable || !ownerPk) {
       body.appendChild($('p', null, $t('Pasar, hadiah, saham, dan proyek kota di perangkat ini perlu persetujuan NEAR Auth, yang belum aktif di alamat ini. Kamu tetap bisa bermain; untuk hal on-chain, pakai perangkat pertamamu.')));
@@ -301,6 +308,10 @@
     if (S.busy) return;
     if (S.cfg && S.cfg.devLogin) return devLogin();
     if (S.cfg && S.cfg.google) return chooseLogin();
+    if (!nearAuthHere()) {
+      GT.modal({ title: $t('Masuk'), body: $t('Login belum aktif di alamat ini: NEAR Auth hanya menerima alamat yang sudah didaftarkan, dan login Google belum dipasang di server ini. Kamu tetap bisa melihat-lihat desa sebagai tamu.'), actions: [{ label: $t('Oke'), primary: true }] });
+      return;
+    }
     return nearLogin();
   }
 
@@ -331,7 +342,7 @@
     var slot = $('div', 'gt-login-google'); slot.appendChild($('p', 'mnote', $t('Memuat tombol Google…')));
     body.appendChild(slot);
     var h;
-    if (window.NearLib) {
+    if (nearAuthHere()) {
       body.appendChild($('p', 'gt-login-or', $t('atau')));
       var nb = $('button', 'gt-login-near', $t('Masuk dengan NEAR Auth (Google/email)')); nb.type = 'button';
       nb.addEventListener('click', function () { h.close('near'); nearLogin(); });
@@ -764,7 +775,14 @@
     else {
       var prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl });
       ready = Promise.all([prov.viewAccessKey({ accountId: S.account, publicKey: kp.getPublicKey() }), prov.viewBlock({ finality: 'final' })])
-        .then(function (r) { return { nonce: BigInt(r[0].nonce) + 1n, height: BigInt(r[1].header.height) }; });
+        .then(function (r) { return { nonce: BigInt(r[0].nonce) + 1n, height: BigInt(r[1].header.height) }; }, function (e) {
+          // this device's game key is not on the NEAR account yet (a new device, or an account adopted by a fresh
+          // database): the same answer the relayer would give, so signedCall runs the device approval
+          if (/does not exist|UNKNOWN_ACCESS_KEY/i.test(String(e && (e.type || '') + ' ' + (e.message || e)))) {
+            var a = new Error($t('Perangkat ini perlu disetujui dengan NEAR Auth dulu.')); a.code = 'approve_device'; throw a;
+          }
+          throw e;
+        });
     }
     return ready.then(function (x) {
       var da = L.buildDelegateAction({

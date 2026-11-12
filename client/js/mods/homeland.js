@@ -112,7 +112,7 @@
 
   /* The map for the generator inputs of the view. Keeps the player where they stand. */
   function layoutFor(r) {
-    return GTHomeland.generate(r.seed, { open: r.open || [], th: r.th, gen: r.gen, built: (r.built || []).map(function (b) { return { kind: b.kind, lot: b.lot }; }) });
+    return GTHomeland.generate(r.seed, { open: r.open || [], th: r.th, gen: r.gen, light: r.light | 0, built: (r.built || []).map(function (b) { return { kind: b.kind, lot: b.lot }; }) });
   }
   function rebuild() {
     if (!H || !window.GTHomeland) return false;
@@ -287,7 +287,7 @@
   }
 
   function jobWhat(j) {
-    return j.kind === 'th' ? $t('Balai Kota naik level') : j.kind === 'chunk' ? $t('Membuka wilayah {0}', [chunkName(j.target)]) : j.kind === 'furniture' ? $t('Memasang {0}', [/:kasur$/.test(j.target) ? 'kasur' : 'hiburan']) : j.kind === 'upgrade' ? $t('Menaikkan {0}', [(lotById(j.target.split(':')[0]) && KIND_NAME[lotById(j.target.split(':')[0]).kind]) || $t('Bangunan')]) : $t('Membangun {0}', [(lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target]);
+    return j.kind === 'th' ? $t('Balai Kota naik level') : j.kind === 'light' ? $t('Memasang lampu jalan') : j.kind === 'chunk' ? $t('Membuka wilayah {0}', [chunkName(j.target)]) : j.kind === 'furniture' ? $t('Memasang {0}', [/:kasur$/.test(j.target) ? 'kasur' : 'hiburan']) : j.kind === 'upgrade' ? $t('Menaikkan {0}', [(lotById(j.target.split(':')[0]) && KIND_NAME[lotById(j.target.split(':')[0]).kind]) || $t('Bangunan')]) : $t('Membangun {0}', [(lotById(j.target) && KIND_NAME[lotById(j.target).kind]) || j.target]);
   }
   function jobLine(j) { return $t('{0} · sisa {1}', [jobWhat(j), clock(endMs(j) - Date.now())]); }
 
@@ -365,6 +365,18 @@
       var short = shortOf(th.cost), can = !busy && !short.length;
       wrap.appendChild(stepBlock($t('Naikkan ke level {0}', [th.level]), unlocksAt(th.level), th, can, why, $t('Naikkan ke level {0}', [th.level]), function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
     }
+
+    // Lighting project: street lamps on the centre island, then on every open island (lit at night)
+    var lt = H.next && H.next.light, lb = cell($t('Lampu jalan'), H.light ? $t('level {0}', [H.light]) : null);
+    if (!lt) lb.appendChild($('p', 'chain-dim', $t('Semua pulaumu yang terbuka sudah diterangi.')));
+    else {
+      lb.appendChild($('p', 'chain-dim', lt.covers === 'open' ? $t('Pasang lampu di setiap pulau yang sudah terbuka. Pulau yang dibuka nanti ikut terang.') : $t('Pasang lampu di sepanjang jalan pulau tengah. Menyala sendiri saat malam.')));
+      lb.appendChild(costRow(lt.cost, lt.secs));
+      if (H.th < lt.th) lb.appendChild($('p', 'hl-why', $t('Terkunci: perlu Balai Kota level {0}.', [lt.th])));
+      var okLight = !busy && H.th >= lt.th && !shortOf(lt.cost).length;
+      acts(lb).appendChild(btn(H.light ? $t('Tambah lampu') : $t('Pasang lampu'), function () { run({ action: 'build', kind: 'light', target: 'light' }); }, '', !okLight || isBusy()));
+    }
+    wrap.appendChild(lb);
 
     // neighbouring locked chunks
     var ch = H.next && H.next.chunk, mine = { c: 1 };
@@ -594,7 +606,7 @@
     if (!v || !v.jobs.length || !isHL(wid())) return null;
     var j = v.jobs[0], L = layoutOf(), m = GT.world;
     if (!L || !m) return null;
-    if (j.kind === 'th') { var t = L.buildings[0]; return { tx: t.dx + 2, ty: t.dy + 1, fx: t.x + t.w / 2, fy: t.y + t.h / 2, job: j }; }
+    if (j.kind === 'th' || j.kind === 'light') { var t = L.buildings[0]; return { tx: t.dx + 2, ty: t.dy + 1, fx: t.x + t.w / 2, fy: t.y + t.h / 2, job: j }; }
     if (j.kind === 'build') {
       var lot = lotById(j.target);
       if (lot) return { tx: lot.door.x + 1, ty: lot.door.y + 1, fx: lot.x + lot.w / 2, fy: lot.y + lot.h / 2, job: j };

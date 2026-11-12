@@ -276,6 +276,7 @@ export class Game {
     const w = this.worldFor(account, wid, NEED[a as (typeof ACTIONS)[number]]);
     const home = this.econ.homeland;
     if (a === 'build' && w.row && w.row.account !== account && (s('kind') === 'th' || s('kind') === 'chunk')) throw new HttpError(409, 'Only the owner can upgrade the Town Hall or open new land.');
+    if (a === 'build' && w.row && w.row.account !== account && s('kind') === 'light') throw new HttpError(409, 'Only the owner can put up street lights.');
     if (this.map && wid === 'public' && home.publicTradeOnly && ((a === 'gather' && !home.publicGather) || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
     if (w.row && a === 'ship') throw new HttpError(409, 'The Shipping Box is only in the public area.');
     if ((a === 'build' || a === 'collect' || a === 'assist' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Build and harvest in your own Homeland.');
@@ -287,7 +288,8 @@ export class Game {
       if (a === 'gather' && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Too far. Stand right next to it.');
       if ((a === 'sell' || a === 'buy') && !w.map.nearStall(pos)) far('Buying and selling happens at the merchants\' stalls in the market.');
       if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Stand next to your garden plot.');
-      if ((a === 'craft' || a === 'ship') && !w.map.atOwnHouse(pos)) far(a === 'craft' ? 'The Workbench is in your Town Hall.' : 'The Shipping Box is at your house.');
+      if (a === 'craft' && !w.map.atWorkbench(pos)) far(w.row ? 'The Workbench is in your Town Hall and in your house.' : 'The Workbench is in your house.');
+      if (a === 'ship' && !w.map.atOwnHouse(pos)) far('The Shipping Box is at your house.');
       if ((a === 'build' || a === 'assist') && w.map instanceof HomelandMap) {
         const kind = a === 'build' ? s('kind') : this.gs.homelandJobs(w.row!.account).find((j) => j.target === s('target'))?.kind ?? '';
         if (kind === 'build' || kind === 'furniture' || kind === 'upgrade') { if (!w.map.nearLot(pos, s('target').split(':')[0])) far('Stand near that lot.'); }
@@ -356,7 +358,7 @@ export class Game {
         res = this.homelands.hoe(w.row.account, hx, hy);
         break;
       }
-      case 'build': res = this.homelands.start(w.row!.account, s('kind') as 'th' | 'chunk' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay, account); break;
+      case 'build': res = this.homelands.start(w.row!.account, s('kind') as 'th' | 'chunk' | 'light' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay, account); break;
       case 'assist': res = this.homelands.assist(w.row!.account, s('target'), (cost) => this.world.useEnergy(account, cost)); break;
       case 'dress': res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay); break;
       case 'hire': res = this.homelands.hire(account, s('job'), this.clock.time().settleDay); break;

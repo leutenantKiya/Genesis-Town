@@ -247,7 +247,10 @@
     } else if (!active() && shownFor) { shownFor = null; if (root) close(); } // signed out: next login shows it again
   }
   function onKey() { return !!root; }
+  // the 2.5D view draws the player from the engine's `me` entity (pal 0 by default), not through GT.charDraw:
+  // give it the chosen look so you see yourself as the other players see you
+  function onEntities(ents) { for (var i = 0; i < ents.length; i++) if (ents[i].me) ents[i].pal = mine.look | 0; }
 
   window.GT_CHARSCREEN = { open: function (force) { return open(force === true); }, setMine: setMine, _mine: function () { return mine; } };
-  GT.register({ id: 'charscreen', init: wrapCharDraw, onFrame: onFrame, onKey: onKey });
+  GT.register({ id: 'charscreen', init: wrapCharDraw, onFrame: onFrame, onKey: onKey, onEntities: onEntities });
 })();

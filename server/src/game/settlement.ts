@@ -56,6 +56,10 @@ export class Settlement {
   busy = false;
   /** Per-day retry backoff after a failed settlement (memory only): next attempt time and current delay. */
   retry = new Map<number, { until: number; delay: number }>();
+  /** Set when the contract has already closed a later day than this database has reached: the database is an older copy
+   *  (or another server settles the same contract). Every settle_day would fail and still cost gas, so settlement stops
+   *  until a restart with the right database. Shown by /api/health. */
+  blocked: { chainDay: number; ourDay: number } | null = null;
 
   constructor(d: SettleDeps) { this.d = d; }
 
@@ -83,6 +87,17 @@ export class Settlement {
         if (lastQuiet === day - 1) this.d.gs.setMeta('settle.through', String(lastQuiet)); // the quiet days before this one
         const r = this.retry.get(day);
         if (r && this.d.clock.now() < r.until) break;
+        if (this.blocked) break;
+        if (sent === 0) {
+          // once per run, before the first transaction: is the chain already past this day?
+          let chainDay = -1;
+          try { chainDay = await this.d.chain.lastSettledDay(); } catch { /* RPC hiccup: settleDay tells us anyway */ }
+          if (chainDay > day) {
+            this.blocked = { chainDay, ourDay: day };
+            console.error(`settlement stopped: the contract already closed day ${chainDay}, but this database is only at day ${day}. It is an older copy, or another server settles the same contract. Restart with the right database.`);
+            break;
+          }
+        }
         let ok = false;
         try { ok = await this.settleDay(day); } catch (e) { console.error(`settlement day ${day}:`, (e as Error).message); }
         if (!ok) {

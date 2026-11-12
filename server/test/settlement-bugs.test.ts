@@ -216,3 +216,26 @@ test('close_shop reporting ok:false (shop already closed, as testnet now returns
   assert.ok(calls.includes('wati.gt.test'), 'close_shop was attempted');
   assert.ok(game.settlement.settledThrough() >= day, 'the day still finished');
 });
+
+test('a database behind the chain stops settling instead of paying gas for days the contract already closed', async () => {
+  const { game, chain } = await world(['p1.players.test']);
+  chain.lastSettled = 1000; // another database (or server) already closed day 1000 on this contract
+  const restore = quiet();
+  try {
+    await game.devSettle();
+    await game.step();
+  } finally { restore(); }
+  assert.equal(chain.settleCalls.length, 0, 'no settle_day sent');
+  assert.ok(game.settlement.blocked && game.settlement.blocked.chainDay === 1000);
+  const { healthProblems } = await import('../src/app.ts');
+  const problems = healthProblems({ settleDay: 5, settledThrough: 3, settleBlocked: game.settlement.blocked });
+  assert.match(problems.join('\n'), /settlement stopped: the contract already closed day 1000/);
+});
+
+test('a database level with the chain settles as before', async () => {
+  const { game, chain } = await world(['p1.players.test']);
+  await game.devSettle();
+  assert.equal(game.settlement.blocked, null);
+  assert.ok(chain.settleCalls.length > 0);
+  assert.equal(chain.lastSettled, game.settlement.settledThrough());
+});

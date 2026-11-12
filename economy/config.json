@@ -148,6 +148,10 @@
       { "level": 4, "cost": { "wood": 120, "ore": 50, "coin": 400 }, "secs": 900 },
       { "level": 5, "cost": { "wood": 200, "ore": 100, "coin": 900 }, "secs": 1800 }
     ],
+    "lighting": [
+      { "level": 1, "name": "Street lights", "th": 1, "cost": { "wood": 8, "ore": 2, "coin": 20 }, "secs": 60, "covers": "centre" },
+      { "level": 2, "name": "Street lights on every island", "th": 2, "cost": { "wood": 20, "ore": 8, "coin": 60 }, "secs": 180, "covers": "open" }
+    ],
     "chunks": [
       { "n": 1, "th": 1, "cost": { "wood": 10 }, "secs": 30 },
       { "n": 2, "th": 2, "cost": { "wood": 25, "coin": 20 }, "secs": 90 },

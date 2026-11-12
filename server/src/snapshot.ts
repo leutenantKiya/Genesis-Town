@@ -19,7 +19,9 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 /** Where the copy lives. `pgRemote` is the real one; tests pass an in-memory one. */
 export interface SnapshotRemote {
   load(key: string): Promise<Buffer | null>;
-  save(key: string, gz: Buffer, sha256: string, size: number): Promise<void>;
+  /** Saves the copy. `settledThrough` is how far the copy is settled: a save whose copy is behind the one already stored
+   *  is refused (throws), so an older database (an old deploy, a second server) can never overwrite a newer one. */
+  save(key: string, gz: Buffer, sha256: string, size: number, settledThrough?: number): Promise<void>;
 }
 
 export function pgRemote(url: string): SnapshotRemote {
@@ -32,6 +34,7 @@ export function pgRemote(url: string): SnapshotRemote {
     try {
       await c.query(`CREATE TABLE IF NOT EXISTS gt_snapshot (
         id TEXT PRIMARY KEY, saved_at TIMESTAMPTZ NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, data BYTEA NOT NULL)`);
+      await c.query('ALTER TABLE gt_snapshot ADD COLUMN IF NOT EXISTS settled_through INTEGER');
       return await fn(c);
     } finally { await c.end().catch(() => {}); }
   }
@@ -40,9 +43,16 @@ export function pgRemote(url: string): SnapshotRemote {
       const r = await c.query('SELECT data FROM gt_snapshot WHERE id = $1', [key]);
       return r.rows.length ? (r.rows[0].data as Buffer) : null;
     }),
-    save: (key, gz, sha256, size) => withClient(async (c) => {
-      await c.query(`INSERT INTO gt_snapshot (id, saved_at, size, sha256, data) VALUES ($1, now(), $2, $3, $4)
-        ON CONFLICT (id) DO UPDATE SET saved_at = now(), size = $2, sha256 = $3, data = $4`, [key, size, sha256, gz]);
+    save: (key, gz, sha256, size, settledThrough) => withClient(async (c) => {
+      const st = settledThrough ?? null;
+      const r = await c.query(`INSERT INTO gt_snapshot (id, saved_at, size, sha256, data, settled_through) VALUES ($1, now(), $2, $3, $4, $5)
+        ON CONFLICT (id) DO UPDATE SET saved_at = now(), size = $2, sha256 = $3, data = $4, settled_through = $5
+        WHERE gt_snapshot.settled_through IS NULL OR $5::int IS NULL OR gt_snapshot.settled_through <= $5::int
+        RETURNING id`, [key, size, sha256, gz, st]);
+      if (r.rowCount === 0) {
+        const cur = await c.query('SELECT settled_through FROM gt_snapshot WHERE id = $1', [key]);
+        throw new Error(`the stored copy is settled through day ${cur.rows[0]?.settled_through}, this server only through day ${st}; not overwriting it`);
+      }
     }),
   };
 }
@@ -85,7 +95,7 @@ export function startSnapshots(o: {
       lastChanges = seen; lastAt = now();
       if (sha === lastSha) return; // nothing that matters changed
       const gz = gzipSync(raw);
-      await o.remote.save(o.key, gz, sha, gz.length);
+      await o.remote.save(o.key, gz, sha, gz.length, o.settledThrough ? o.settledThrough() : undefined);
       lastSha = sha; status.lastSavedAt = now(); status.lastSize = gz.length; status.lastError = null; status.saves++;
     } catch (e) {
       status.lastError = (e as Error).message;

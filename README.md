@@ -1,6 +1,20 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Settlement guards** (2026-11-12): before sending a day, the server asks the contract which day it last closed; if
+>   the chain is already further (an older database, or a second server on the same contract), settlement stops instead
+>   of paying gas for transactions that must fail, and `/api/health` says so. The Neon copy stores how far it is settled,
+>   and a database that is further behind can no longer overwrite it. `server/scripts/snapshot-move.ts` puts a local
+>   database into the copy (`--dry-run` only reads).
+> - **No doomed NEAR Auth popup** (2026-11-12): NEAR Auth's shared testnet login only returns to addresses it has
+>   allowed, so the server lists them (`NEAR_AUTH_ORIGINS`, default `http://localhost:3000`) and the game offers NEAR
+>   Auth only there. Elsewhere the Google button stays, and a device approval explains instead of opening a popup that
+>   fails with "Callback URL mismatch".
+> - **Street lights in Homelands** (2026-11-12): the Town Hall menu has a Street lights project (owner only, a builder
+>   job; cost in `economy/config.json` `homeland.lighting`). Level 1 puts lamps along the centre island's paths, level 2
+>   on every open island (outer islands along their grass cross). The shared generator places them, so server, owner and
+>   guests see the same lamps, and they glow at night like the village's. Crafting also works at the Workbench in
+>   Rumahmu now, not only in the Town Hall.
 > - **Admin panel** (2026-11-12, step 4 of [docs/session-guest-plan.md](docs/session-guest-plan.md)): accounts listed in the `ADMIN_ACCOUNTS` env var get an "Admin" entry in Lainnya: guests online with their address, Kick, Ban IP, and a list of banned addresses with Unban (`/api/admin/*`), plus two operator tools for hosts where the dev tools are closed: frozen accounts (settlement shortfalls) with Unfreeze, and a read-only settlement status (day, settled-through, days in retry backoff, last rows). To become admin set `ADMIN_ACCOUNTS=p<id>.players.genesistown.testnet` (comma-separated) in `.env` and in Railway Variables, then restart. A banned address cannot be a guest, sign up or redeem a device code. Guests are now one per address (a second hello returns the same guest), last at most 30 minutes at a time, and other players see a guest only by a public handle, never its secret id.
 > - **Online guests** (2026-11-12, step 3 of [docs/session-guest-plan.md](docs/session-guest-plan.md)): a visitor who has not signed in walks the public village as a guest ("Tamu") and sees the players there; players see the guest with a small dim "Tamu" tag, and a guest sees everyone's name tags small. Guests cannot chat, trade or act; at most 5 at once (`guest.max` in `economy/config.json`), the 6th gets "Desa sedang penuh tamu" and stays in the offline demo. `POST /api/guest/hello` and `/api/guest/presence`, in memory only, never in Homelands.
 > - **New device signs in at once** (2026-11-12, step 1 of [docs/session-guest-plan.md](docs/session-guest-plan.md)): the same Google or NEAR Auth login on another browser goes straight into the game, with no code and no extra screen; NEAR Auth approval is asked only the first time that device uses the market, gifts, shares or town projects. The "I have a code" box and "Move to another device" are gone from the UI.

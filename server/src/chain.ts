@@ -19,6 +19,8 @@ export interface Chain {
   registerPlayer(accountId: string): Promise<TxResult>;
   settleDay(day: number, chunk: number, entries: DeltaEntry[], root: string, active: number): Promise<TxResult>;
   isChunkApplied(day: number, chunk: number): Promise<boolean>;
+  /** The last day the contract has closed (`get_config().last_settled_day`); `settle_day` refuses any earlier day. */
+  lastSettledDay(): Promise<number>;
   closeShop(merchant: string): Promise<TxResult>;
   payDividend(merchant: string, day: number, amount: number): Promise<TxResult>;
   relay(signedDelegate: unknown, senderId: string): Promise<TxResult>;
@@ -122,6 +124,7 @@ export class TestnetChain implements Chain {
     return this.settlerCall('settle_day', { day, chunk, entries, ledger_root: root, active_players: active }, '100');
   }
   isChunkApplied(day: number, chunk: number) { return this.view<boolean>('is_chunk_applied', { day, chunk }); }
+  async lastSettledDay() { return Number((await this.view<{ last_settled_day: number }>('get_config', {})).last_settled_day); }
   closeShop(merchant: string) { return this.settlerCall('close_shop', { merchant }, '50'); }
   payDividend(merchant: string, day: number, amount: number) { return this.settlerCall('pay_dividend', { merchant, day, amount: String(amount) }, '50'); }
 
@@ -238,6 +241,7 @@ export class MockChain implements Chain {
     if (this.settleError) throw new Error(this.settleError);
     const k = `${day}:${chunk}`;
     if (this.applied.has(k)) return { txHash: this.hash(), ok: false, error: 'chunk already applied' };
+    if (day < this.lastSettled) return { txHash: this.hash(), ok: false, error: 'day already closed' };
     if (this.roots.has(day) && this.roots.get(day) !== root) return { txHash: this.hash(), ok: false, error: 'ledger_root differs' };
     const snapshot = new Map(this.bal);
     const gainSnapshot = new Map(this.gainUsed);
@@ -274,6 +278,7 @@ export class MockChain implements Chain {
     }
     this.applied.add(k);
     this.roots.set(day, root);
+    this.lastSettled = Math.max(this.lastSettled, day);
     return { txHash: this.hash(), ok: true };
   }
   supplyBig(): bigint { let x = 0n; for (const [key, v] of this.bal) if (key.endsWith('|coin')) x += v; return x; }
@@ -287,6 +292,8 @@ export class MockChain implements Chain {
     return (BigInt(L.faucetW0) * kk * (mcap - supplyAtStart)) / mcap;
   }
   async isChunkApplied(day: number, chunk: number) { return this.applied.has(`${day}:${chunk}`); }
+  lastSettled = 0; // like the contract's last_settled_day
+  async lastSettledDay() { return this.lastSettled; }
 
   async closeShop(merchant: string): Promise<TxResult> {
     const s = this.shops.get(merchant);
