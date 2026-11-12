@@ -1,6 +1,10 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **No doomed NEAR Auth popup** (2026-11-12): NEAR Auth's shared testnet login only returns to addresses it has
+>   allowed, so the server lists them (`NEAR_AUTH_ORIGINS`, default `http://localhost:3000`) and the game offers NEAR
+>   Auth only there. Elsewhere the Google button stays, and a device approval explains instead of opening a popup that
+>   fails with "Callback URL mismatch".
 > - **Street lights in Homelands** (2026-11-12): the Town Hall menu has a Street lights project (owner only, a builder
 >   job; cost in `economy/config.json` `homeland.lighting`). Level 1 puts lamps along the centre island's paths, level 2
 >   on every open island (outer islands along their grass cross). The shared generator places them, so server, owner and

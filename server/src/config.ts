@@ -24,7 +24,9 @@ export interface Config {
   /** Account ids (comma list in ADMIN_ACCOUNTS) that may use the in-game admin panel. */
   adminAccounts: string[];
   googleClientId: string | null; // Sign in with Google (GIS) OAuth client id; public, but kept in env with the rest
-  fastAuth: { domain: string; clientId: string; contractId: string; mpcContractId: string; mpcDomainId: number };
+  // origins: the page addresses NEAR Auth's login accepts as callback (the shared testnet client only lists the ones
+  // NEAR registered); elsewhere the client hides NEAR Auth instead of opening a popup that fails
+  fastAuth: { domain: string; clientId: string; contractId: string; mpcContractId: string; mpcDomainId: number; origins: string[] };
   explorerTxUrl: string; // prefix, hash is appended
   relay: { perMinute: number; perDay: number; maxGasTera: number; maxBlocksAhead: number };
   settleChunk: number;
@@ -83,6 +85,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       contractId: 'fast-auth.testnet',
       mpcContractId: 'v1.signer-prod.testnet',
       mpcDomainId: 1,
+      origins: (env.NEAR_AUTH_ORIGINS ?? 'http://localhost:3000').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean),
     },
     explorerTxUrl: 'https://testnet.nearblocks.io/txns/',
     relay: {

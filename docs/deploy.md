@@ -40,6 +40,7 @@ private keys are typed by you into the host, never committed and never put in a 
 | `MERCHANT_PARENT_ACCOUNT_ID` | as in `.env` |
 | `WORLD_SEED` | empty (keeps the current village) |
 | `FASTAUTH_CLIENT_ID`, `FASTAUTH_DOMAIN` | empty, or the client id and Auth0 domain NEAR Auth gives for the public domain (see Login below) |
+| `NEAR_AUTH_ORIGINS` | page origins where NEAR Auth's login may return (default `http://localhost:3000`); add the deployed origin only after NEAR Auth allows it, otherwise the game hides NEAR Auth there |
 | `GOOGLE_CLIENT_ID` | the Google OAuth client id for "Masuk dengan Google" (see Login below); empty hides the button |
 | `ANTHROPIC_API_KEY` | optional (**secret**); Claude writes merchant replies; without any AI key merchants answer with local lines |
 | `DIALOGUE_PROVIDER` | empty (`anthropic` if the Anthropic key is set, else `nearai` if its key is set, else `local`), or `anthropic` / `nearai` / `local` |

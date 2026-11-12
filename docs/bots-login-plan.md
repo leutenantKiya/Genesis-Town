@@ -26,7 +26,7 @@
 ## STATUS
 
 - [ ] Step 0 (OWNER): top up `game.genesistown.testnet` storage; stop the second testnet server
-- [ ] Step 1: NEAR Auth only where it works: `NEAR_AUTH_ORIGINS`, no doomed popup, clear message
+- [x] Step 1: NEAR Auth only where it works: `NEAR_AUTH_ORIGINS`, no doomed popup, clear message
 - [ ] Step 2 (OWNER): ask NEAR Auth to allow the Railway origin; pin `NEARAI_MODEL`
 - [ ] Step 3: Bot wallets on the server: id, registration, output into the wallet, caps against the owner
 - [ ] Step 4: Bot wallet in the UI: balances, explorer link, "Ambil hasil" (settled only)
@@ -222,7 +222,8 @@ Settled 2026-11-12:
     15 wheat.
   - The README should link their explorer pages as the first "NPCs with wallets".
 
+- **Which worker bots:** producing bots only (Farmer, Fisher, Woodcutter, Hunter; at most 7 per player).
+
 Still open:
-1. Which worker bots get a wallet: producing bots only (recommended), every bot, or one wallet per Homeland?
-2. Who tops up the contract storage, and from which faucet? This must happen before step 3 runs on testnet.
-3. Use the "genesis-town" Auth0 tenant for an email login, or leave it?
+1. Who tops up the contract storage, and from which faucet? This must happen before step 3 runs on testnet.
+2. Use the "genesis-town" Auth0 tenant for an email login, or leave it?
