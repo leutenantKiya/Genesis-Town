@@ -23,7 +23,7 @@
 - [x] Step 1: Party core: create, invite, accept or decline, leave, kick; panel and name-card button
 - [x] Step 2: Party everywhere: green tags, minimap dots, off-screen arrows, party chat `/p`
 - [x] Step 3: Party in Homelands: owner's party may visit; portal entries, "Ikut" follow, safe leave and kick
-- [ ] Step 4: Homeland roles (Pengunjung / Pembantu / Tukang) and gathering plus night fights for helpers
+- [x] Step 4: Homeland roles (Pengunjung / Pembantu / Tukang) and gathering plus night fights for helpers
 - [ ] Step 5: Farming together (planter gets the harvest, guest plot limit)
 - [ ] Step 6: Building together (builder pays, `assist` speeds jobs, helpers collect for the owner)
 - [ ] Step 7: Trade sessions on the server (two-sided, version-checked confirmations, countdown, any world)
@@ -65,7 +65,7 @@ If `git push` is rejected, run `git pull --rebase --autostash origin main`, run 
 3. **The public village stays trade-only.** `econ.homeland.publicTradeOnly` and the existing 409 "The public area is for trading only." stay. Party co-op in public means presence, chat, finding each other and trade. Nothing else.
 4. **Homeland access** is the best of two grants:
    - an **invite role**: a new `homeland_invites.role` column, default `'visitor'`, so today's behaviour is kept;
-   - a **party role**: a new `homelands.party_role` column, `NULL` = the config default `coop.partyRoleDefault` = `'helper'`, `'none'` = party mates get no access.
+   - a **party role**: a new `homelands.party_role` column, `NULL` = the config default `coop.partyRoleDefault` = `'visitor'` (party mates may enter, walk, chat, eat and trade; work rights need the owner's choice, because the party leader can invite strangers), `'none'` = party mates get no access.
    The ranks are `visitor < helper < builder < owner`. Only the owner edits roles. Hire, dress, cook, stock, forage, invites and roles stay owner-only.
 5. **Who receives what:**
    - Gather, fish and monster drops go to the actor, under the actor's own daily cap.
@@ -96,7 +96,7 @@ If `git push` is rejected, run `git pull --rebase --autostash origin main`, run 
 
 ```json
 "party": { "max": 4, "inviteSecs": 120, "maxPendingInvites": 5 },
-"coop":  { "partyRoleDefault": "helper", "guestGatherPerHostDay": 40, "guestLeavesCharges": 1, "guestPlotsPerHost": 2,
+"coop":  { "partyRoleDefault": "visitor", "guestGatherPerHostDay": 40, "guestLeavesCharges": 1, "guestPlotsPerHost": 2,
            "assistEnergy": 10, "assistSecs": 15, "assistMaxShare": 0.5 },
 "trade": { "expireSecs": 120, "maxLines": 4, "inviteSecs": 60, "sessionIdleSecs": 300, "countdownMs": 3000 }
 ```

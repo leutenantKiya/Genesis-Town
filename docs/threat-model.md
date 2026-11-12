@@ -213,7 +213,7 @@ about the server's own rules.
 - **Lazy production is capped.** A building accrues goods per game hour up to its capacity; `collect` computes the
   amount on the server and counts it against `caps.dailyGainPerItem`, the same cap as gathering. Waiting never yields
   more than the capacity, and spamming `collect` yields nothing extra.
-- **Only the owner builds.** Guests may walk and chat in a Homeland, never `build`, `collect` or gather.
+- **Roles decide what a guest may do.** Guests (invited, or the owner's party) are visitors by default (walk, chat, eat); the owner can make them helpers (gather, fight, later farm and collect for the owner) or builders. Hire, dress, cook, stock, forage, invites and roles stay owner-only. A helper's take is capped per host per day (`coop.guestGatherPerHostDay`, counted from ledger refs `HL-<n>:`), a guest never takes a node's last charge, and drops always go to the actor under the actor's own daily cap.
 - **Settlement stays registry-only.** `settle_day`, `send_item` and the Pasar accept items and `coin` only, so no
   game action can mint another kind of token.
 - The v5 island methods (`buy_island`, `save_island`) remain in the contract source but the game never calls them and

@@ -30,6 +30,19 @@
   var HOME_KINDS = { townhall: 1, kolam: 1, tambang: 1, restoran: 1, rumah: 1, rumahsakit: 1 };
   var KIND_NAME = { kolam: $t('Kolam Ikan'), tambang: $t('Tambang'), restoran: $t('Restoran'), rumah: $t('Rumah Pekerja'), rumahsakit: $t('Rumah Sakit') };
 
+  var ROLE_NAME = { visitor: $t('Pengunjung'), helper: $t('Pembantu'), builder: $t('Tukang'), none: $t('Tidak boleh') };
+  function roleSelect(value, withNone, onPick) {
+    var sel = $('select', 'hl-role'); (withNone ? ['none', 'visitor', 'helper', 'builder'] : ['visitor', 'helper', 'builder']).forEach(function (k) {
+      var o = $('option', null, ROLE_NAME[k]); o.value = k; if (k === value) o.selected = true; sel.appendChild(o);
+    });
+    sel.addEventListener('change', function () { onPick(sel.value); });
+    return sel;
+  }
+  function setRole(who, role) {
+    return C.api('/homeland/role', { method: 'POST', body: { who: who, role: role } })
+      .then(function (r) { GT.toast($t('Peran tersimpan.')); return load(true); }, function (e) { GT.toast($t('Gagal: {0}', [e.message])); });
+  }
+
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function btn(label, onClick, cls, disabled) {
     var b = $('button', 'mbtn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.disabled = !!disabled;
@@ -237,7 +250,12 @@
     stat($t('Balai Kota'), $t('level {0}', [H.th]));
     stat($t('Wilayah terbuka'), $t('{0} dari 9', [H.open.length + 1]));
     wrap.appendChild(stats);
-    if (!owner) { wrap.appendChild($('p', 'hl-p', $t('Ini Balai Kota milik pemilik dunia ini. Hanya pemiliknya yang bisa membangun.'))); return wrap; }
+    if (!owner) {
+      wrap.appendChild($('p', 'hl-p', $t('Ini Balai Kota milik pemilik dunia ini. Hanya pemiliknya yang bisa membangun.')));
+      var here = S() && S().st && S().st.here;
+      if (here) wrap.appendChild($('p', 'hl-p', $t('Kamu: {0} di dunia ini', [ROLE_NAME[here.role] || ROLE_NAME.visitor])));
+      return wrap;
+    }
 
     var bs = cell($t('Pembangun'), $t('{0} dari {1} sibuk', [H.builders.busy, H.builders.total]));
     if (H.jobs.length) H.jobs.forEach(function (j) {
@@ -351,6 +369,16 @@
         }, function (e) { GT.toast($t('Gagal: {0}', [e.message])); });
     }));
     wrap.appendChild(iv);
+
+    // roles: what the party and each invited guest may do here
+    var rl = cell($t('Peran tamu'));
+    rl.appendChild($('p', 'chain-dim', $t('Pengunjung hanya jalan, mengobrol, makan, dan berdagang. Pembantu juga menebang, menambang, memancing, dan melawan monster. Tukang juga boleh membangun.')));
+    var pr = $('div', 'hl-acts'); pr.appendChild($('span', 'hl-k', $t('Party'))); pr.appendChild(roleSelect(H.party_role || 'visitor', true, function (v) { setRole('party', v); })); rl.appendChild(pr);
+    (H.guests || []).forEach(function (g) {
+      var row = $('div', 'hl-acts'); row.appendChild($('span', 'hl-k', g.name + (g.tag ? '#' + g.tag : '')));
+      row.appendChild(roleSelect(g.role || 'visitor', false, function (v) { setRole(g.account, v); })); rl.appendChild(row);
+    });
+    wrap.appendChild(rl);
     return wrap;
   }
 

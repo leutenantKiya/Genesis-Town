@@ -26,7 +26,7 @@ export interface MonsterConfig {
   /** Homelands: how many roam per kind (the village's `roaming` is for the larger shared forest). */
   homeland?: { roaming: Record<string, number> };
 }
-export interface Encounter { kind: string; name: string; hp: number; maxHp: number; tile: string | null; x: number; y: number; id?: string }
+export interface Encounter { kind: string; name: string; hp: number; maxHp: number; tile: string | null; x: number; y: number; id?: string; prefix?: string; minLeft?: number }
 
 export class Monsters {
   pending = new Map<string, Encounter>();
@@ -61,14 +61,14 @@ export class Monsters {
   }
 
   /** Called before a gather: maybe a monster blocks it. `map` is the world the player gathers in; `home` = a Homeland. */
-  maybeEncounter(account: string, tile: string, x: number, y: number, map: MonsterMap = this.map, home = false): Encounter | null {
+  maybeEncounter(account: string, tile: string, x: number, y: number, map: MonsterMap = this.map, home = false, opts?: { prefix?: string; minLeft?: number }): Encounter | null {
     if (this.pending.has(account)) return this.pending.get(account)!;
     if (this.guarded(home) || !this.isNight() || !map.wild(x, y)) return null;
     const chance = this.cfg.chance[tile] ?? 0;
     if (!(this.rng() < chance)) return null;
     const kind = this.cfg.byTile[tile] ?? Object.keys(this.cfg.kinds)[0];
     const d = this.cfg.kinds[kind];
-    const e = { kind, name: d.name, hp: d.hp, maxHp: d.hp, tile, x, y };
+    const e: Encounter = { kind, name: d.name, hp: d.hp, maxHp: d.hp, tile, x, y, prefix: opts?.prefix ?? '', minLeft: opts?.minLeft ?? 0 };
     this.pending.set(account, e);
     return e;
   }
@@ -80,13 +80,13 @@ export class Monsters {
   }
 
   /** The player walked into a roaming monster: it attacks. Checked against where it stands this hour (or last). */
-  engage(account: string, id: string, pos: { x: number; y: number }, map: MonsterMap = this.map, home = false): Encounter {
+  engage(account: string, id: string, pos: { x: number; y: number }, map: MonsterMap = this.map, home = false, opts?: { prefix?: string }): Encounter {
     if (this.pending.has(account)) return this.pending.get(account)!;
     const h = this.clock.hours();
     const m = [...this.roaming(map, home, h), ...this.roaming(map, home, h - 1)].find((q) => q.id === id && Math.abs(q.x - pos.x) + Math.abs(q.y - pos.y) <= this.cfg.reach);
     if (!m) throw new HttpError(409, 'There\'s nothing here.');
     const d = this.cfg.kinds[m.kind];
-    const e = { kind: m.kind, name: d.name, hp: d.hp, maxHp: d.hp, tile: null, x: m.x, y: m.y, id: m.id };
+    const e = { kind: m.kind, name: d.name, hp: d.hp, maxHp: d.hp, tile: null, x: m.x, y: m.y, id: m.id, prefix: opts?.prefix ?? '' };
     this.pending.set(account, e);
     return e;
   }
@@ -124,11 +124,11 @@ export class Monsters {
       const day = this.clock.time().settleDay; // the open ledger day, like every other write
       if (e.tile) {
         try {
-          const g = this.world.gather(account, e.tile, e.x, e.y);
+          const g = this.world.gather(account, e.tile, e.x, e.y, e.prefix ?? '', 0, e.minLeft ?? 0);
           toast += ` ${g.toast}`;
           try {
             this.world.checkGain(account, this.econ.gather.tiles[e.tile], 1);
-            this.gs.add(day, account, this.econ.gather.tiles[e.tile], 1, 'monster_bonus', e.kind);
+            this.gs.add(day, account, this.econ.gather.tiles[e.tile], 1, 'monster_bonus', `${e.prefix ?? ''}${e.kind}`);
             toast += ' +1 bonus.';
           } catch { toast += ' Bonus lost: daily limit reached.'; }
         } catch (err) {
@@ -139,7 +139,7 @@ export class Monsters {
         const drop = d.drop;
         try {
           this.world.checkGain(account, drop, 1);
-          this.gs.add(day, account, drop, 1, 'monster_drop', e.kind);
+          this.gs.add(day, account, drop, 1, 'monster_drop', `${e.prefix ?? ''}${e.kind}`);
           toast += ` It dropped 1 ${this.econ.items[drop]?.name ?? drop}.`;
         } catch { toast += ' It dropped something, but your daily limit is full.'; }
       }

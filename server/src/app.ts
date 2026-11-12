@@ -227,6 +227,14 @@ export function createApp(deps: AppDeps) {
       if (!Array.isArray(b.accounts)) throw new HttpError(400, 'accounts must be a list');
       game.homelands.setInvites(acct, (b.accounts as unknown[]).map(String));
       send(res, 200, { invite: game.homelands.view(acct).guests });
+    } else if (req.method === 'POST' && p === '/api/homeland/role') {
+      const raw = await readRaw(req);
+      const acct = accountOf(req, url, raw);
+      if (!actLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+      game.assertActive(acct);
+      const b = parseJson(raw);
+      game.homelands.setRole(acct, String(b.who ?? ''), String(b.role ?? ''));
+      send(res, 200, { homeland: game.homelands.view(acct) });
     } else throw new HttpError(404, 'no such route');
     return true;
   }

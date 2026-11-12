@@ -82,7 +82,7 @@ export class World {
   }
 
   /** `bonus`: extra units per successful gather (Penebang bots in the owner's Homeland). */
-  gather(account: string, tile: string, x: number, y: number, nodePrefix = '', bonus = 0): ActionResult {
+  gather(account: string, tile: string, x: number, y: number, nodePrefix = '', bonus = 0, minLeft = 0): ActionResult {
     const g = this.econ.gather;
     const token = g.tiles[tile];
     if (!token) throw new HttpError(400, 'Nothing to gather here.');
@@ -100,6 +100,7 @@ export class World {
       const wait = refillHour - t.totalHours;
       throw new HttpError(409, `Depleted. Come back in about ${wait} hours.`);
     }
+    if (charges - 1 < minLeft) throw new HttpError(409, 'Leave the last one for the owner.');
     const p = this.state(account);
     this.spendEnergy(p, g.energyCost); // in memory only: nothing is saved if the gain cap refuses below
     const mult = this.econ.seasons[t.season]?.yield[token] ?? 1;

@@ -42,8 +42,11 @@ export const EXACT: Record<string, string> = {
  "The Homeland world isn't active yet.": "Dunia Homeland belum aktif.",
  "This isn't your Homeland. Guests can only look around.": "Ini bukan Homeland-mu. Tamu hanya boleh jalan-jalan.",
  "Ask the owner to make you a Helper.": "Minta pemilik menjadikanmu Pembantu.",
+ "Leave the last one for the owner.": "Sisakan yang terakhir untuk pemilik.",
  "Only the owner or a Builder can build here.": "Hanya pemilik atau Tukang yang bisa membangun di sini.",
  "Travel isn't active yet.": "Perjalanan belum aktif.",
+ "Unknown role.": "Peran tidak dikenal.",
+ "That player is not on your invite list.": "Pemain itu tidak ada di daftar undanganmu.",
  "Where to?": "Mau ke mana?",
  "You're already there.": "Kamu sudah di sana.",
  "Go to the portal first.": "Pergi ke portal dulu.",
@@ -154,6 +157,10 @@ export const EXACT: Record<string, string> = {
  "Price steady (capped at 10% per hour).": "Harga tetap (dibatasi 10% per jam)."
 };
 export const PATTERNS: Array<[string, string]> = [
+ [
+  "You helped a lot here today ({0}). Come back tomorrow.",
+  "Kamu sudah banyak membantu di sini hari ini ({0}). Kembali besok."
+ ],
  [
   "Send {0} {1} to {2}",
   "Kirim {0} {1} ke {2}"

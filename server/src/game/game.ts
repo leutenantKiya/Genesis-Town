@@ -26,7 +26,7 @@ const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', craft: 'owner', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -263,17 +263,24 @@ export class Game {
     switch (a) {
       case 'gather': {
         w.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
+        // a guest (helper or builder) in someone else's Homeland: a daily share per host and never a node's last charge
+        const guest = !!w.row && w.row.account !== account;
+        const minLeft = guest ? this.econ.coop.guestLeavesCharges : 0;
+        if (guest) {
+          const taken = this.gs.guestTaken(this.clock.time().settleDay, account, wid), cap = this.econ.coop.guestGatherPerHostDay;
+          if (taken >= cap) throw new HttpError(409, `You helped a lot here today (${taken}). Come back tomorrow.`);
+        }
         // a monster can block a gather in the wild part of a Homeland (or the village forest when it is not trade-only)
-        const enc = w.row && w.map instanceof HomelandMap ? this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1), w.map, true)
+        const enc = w.row && w.map instanceof HomelandMap ? this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1), w.map, true, { prefix: `${wid}:`, minLeft })
           : home.publicTradeOnly ? null : this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
         if (enc) { res = { toast: `${enc.name} blocks your way! Fight or run.` }; break; }
-        res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1), w.row ? `${wid}:` : '', w.row && this.econ.gather.tiles[s('tile')] === 'wood' ? this.homelands.effects(account).woodBonus : 0); // Homeland nodes are charged per Homeland
+        res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1), w.row ? `${wid}:` : '', w.row && !guest && this.econ.gather.tiles[s('tile')] === 'wood' ? this.homelands.effects(account).woodBonus : 0, minLeft); // Homeland nodes are charged per Homeland
         break;
       }
       case 'fight': res = this.need(this.monsters).fight(account); break;
       case 'engage': {
         const where = w.row && w.map instanceof HomelandMap ? w.map : this.map!;
-        const enc = this.need(this.monsters).engage(account, s('monster'), (pos ?? body.pos ?? {}) as { x: number; y: number }, where, !!w.row);
+        const enc = this.need(this.monsters).engage(account, s('monster'), (pos ?? body.pos ?? {}) as { x: number; y: number }, where, !!w.row, { prefix: w.row ? `${wid}:` : '' });
         res = { toast: `${enc.name} attacks! Fight or run.` };
         break;
       }
@@ -333,12 +340,17 @@ export class Game {
     for (const [token, def] of Object.entries(this.econ.items)) {
       bag[token] = { settled: this.gs.settledBalance(account, token), today: this.gs.pending(account, token), name: def.name };
     }
+    let here: { world: string; owner_name: string; role: string } | null = null;
+    if (hrow) {
+      try { const a = this.homelands.access(account, hrow.id); here = { world: wid, owner_name: this.store.nameOf(hrow.account) ?? hrow.account.split('.')[0], role: a.role }; } catch { /* fixWorld will move them */ }
+    }
     return {
       time: { ...t, fraction: this.clock.hourFraction(), msPerHour: this.econ.time.realMsPerGameHour, settledThrough: this.settlement.settledThrough() },
       energy: Math.floor(p.energy), energyMax: this.econ.gather.energyMax,
       tool: { uses: p.tool_uses, durability: this.econ.items.tool.durability ?? 20 },
       bag,
       worldId: hrow ? wid : 'public',
+      here,
       homeland: this.homelands.view(account),
       plots: (field ? this.world.plots(`${account}@${wid}`, field) : hrow ? [] : this.world.plots(account)).map((x) => ({ idx: x.idx, state: x.state, grown: x.grown, wateredToday: x.watered_day === t.day })),
       world: this.map ? { seed: this.map.seed, unlocked: this.map.unlocked } : null,

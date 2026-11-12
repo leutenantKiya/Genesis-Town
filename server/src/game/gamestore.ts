@@ -353,6 +353,11 @@ export class GameStore {
       for (const a of accounts) st.run(id, a, keep.get(a) ?? 'visitor');
     });
   }
+  /** Units this account took in one world today from gathering and monsters (ledger refs start with `<wid>:`). */
+  guestTaken(day: number, account: string, wid: string): number {
+    const r = this.db.prepare("SELECT COALESCE(SUM(delta),0) AS n FROM ledger WHERE day = ? AND account = ? AND delta > 0 AND kind IN ('gather','monster_bonus','monster_drop') AND ref LIKE ?").get(day, account, `${wid}:%`) as { n: number };
+    return r.n;
+  }
   setHomelandPartyRole(account: string, role: string | null) { this.db.prepare('UPDATE homelands SET party_role = ? WHERE account = ?').run(role, account); }
   /** Homelands whose invite list holds this account, with the invite role. */
   homelandsInvitedTo(account: string): Array<HomelandRow & { role: string }> {

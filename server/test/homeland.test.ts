@@ -190,7 +190,7 @@ test('guest access: invited 200, stranger 409', () => {
   assert.deepEqual(hl.setInvites(A, ['Budi#22222', A, 'budi#22222']), [B]);
   const g = hl.access(B, row.id);
   assert.equal(g.owner, false);
-  assert.deepEqual(hl.view(A).guests, [{ account: B, name: 'Budi', tag: '22222' }]);
+  assert.deepEqual(hl.view(A).guests, [{ account: B, name: 'Budi', tag: '22222', role: 'visitor' }]);
   assert.deepEqual(hl.invitedTo(B), [{ id: row.id, world: 'HL-1', owner_name: 'Andi', owner_tag: '11111', role: 'visitor', via: 'invite' }]);
   fails(() => hl.setInvites(A, ['Budi']), 400, 'Write the player\'s name#tag (example: Ann#12345).');
   fails(() => hl.setInvites(A, ['Budi#99999']), 400, /Player not found/);

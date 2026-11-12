@@ -19,9 +19,9 @@ export interface HomelandDeps { econ: Econ; gs: GameStore; worldSeed: number; no
 /** Guest roles: visitor < helper < builder < owner. */
 export type Role = 'visitor' | 'helper' | 'builder' | 'owner';
 const RANK: Record<Role, number> = { visitor: 0, helper: 1, builder: 2, owner: 3 };
-const roleOf = (r: string): Role => (r === 'helper' || r === 'builder' || r === 'owner' ? r : 'visitor');
-// Step 4 lifts this cap: until helper powers exist, every guest is effectively a visitor.
-const capRole = (r: Role): Role => (RANK[r] <= RANK.visitor ? r : 'visitor');
+/** Stored invite and party roles only ever grant helper or builder; 'owner' and anything unknown count as visitor (owner comes from row.account alone). */
+const roleOf = (r: unknown): Role => (r === 'helper' || r === 'builder' ? r : 'visitor');
+const SETTABLE = ['visitor', 'helper', 'builder'];
 
 export interface BuildingOption extends BuildingDef { lot: string | null; can: boolean; why: string | null }
 export interface HomelandView {
@@ -30,7 +30,8 @@ export interface HomelandView {
   jobs: Array<{ target: string; kind: string; ends_at: number }>;
   builders: { total: number; busy: number };
   next: { th: TownhallStep | null; chunk: ChunkStep | null; buildings: Record<string, BuildingOption> };
-  guests: Array<{ account: string; name: string; tag: string }>;
+  guests: Array<{ account: string; name: string; tag: string; role: Role }>;
+  party_role: string;
   bots: Array<{ id: number; job: string; name: string; house: string | null; cosmetic: string | null }>;
   workers: Array<{ slot: number; name: string; fatigue: number; busy: boolean; sick_until: number; motivation: number; cosmetic: string | null }>;
   cosmetics: Record<string, { name: string; price: number; boost: number; color: string }>;
@@ -581,7 +582,8 @@ export class Homelands {
         const why = this.hireWhy(account, row.th, job);
         return [job, { name: d.name, price: d.price, rarity: d.rarity, max: d.max, have: gs.homelandBots(account).filter((b) => b.job === job).length, th: d.th ?? (job === 'builder' ? 1 : 2), can: why === null, why }];
       })),
-      guests: gs.homelandInvites(row.id).map((a) => ({ account: a, name: this.d.players?.nameOf(a) ?? a, tag: this.d.players?.tagOf(a) ?? '' })),
+      guests: gs.homelandInviteRoles(row.id).map((g) => ({ account: g.account, name: this.d.players?.nameOf(g.account) ?? g.account, tag: this.d.players?.tagOf(g.account) ?? '', role: roleOf(g.role) })),
+      party_role: row.party_role ?? this.d.econ.coop.partyRoleDefault,
     };
   }
 
@@ -591,10 +593,10 @@ export class Homelands {
   private guestRole(account: string, row: HomelandRow): { role: Role; via: 'invite' | 'party' } | null {
     let best: { role: Role; via: 'invite' | 'party' } | null = null;
     const inv = this.d.gs.homelandInviteRoles(row.id).find((r) => r.account === account);
-    if (inv) best = { role: capRole(roleOf(inv.role)), via: 'invite' };
+    if (inv) best = { role: roleOf(inv.role), via: 'invite' };
     const pr = row.party_role ?? this.d.econ.coop.partyRoleDefault;
     if (pr !== 'none' && this.d.party?.same(account, row.account)) {
-      const role = capRole(roleOf(pr));
+      const role = roleOf(pr);
       if (!best || RANK[role] > RANK[best.role]) best = { role, via: 'party' };
     }
     return best;
@@ -627,6 +629,23 @@ export class Homelands {
     list.splice(MAX_INVITES);
     this.d.gs.setHomelandInvites(row.id, list);
     return list;
+  }
+
+  /** Owner only: sets one invited guest's role (`who` = account or name#tag on the list) or the party's role (`who` = 'party', also 'none'). */
+  setRole(account: string, who: string, role: string): string {
+    const row = this.ensure(account);
+    if (who === 'party') {
+      if (role !== 'none' && !SETTABLE.includes(role)) throw new HttpError(400, 'Unknown role.');
+      this.d.gs.setHomelandPartyRole(account, role);
+      return role;
+    }
+    if (!SETTABLE.includes(role)) throw new HttpError(400, 'Unknown role.');
+    let acct: string | null = who;
+    const m = /^(.+)#(\d{5})$/.exec(who);
+    if (m && this.d.players) acct = this.d.players.accountByNameTag(m[1].trim(), m[2]);
+    if (!acct || !this.d.gs.homelandInviteRoles(row.id).some((g) => g.account === acct)) throw new HttpError(404, 'That player is not on your invite list.');
+    this.d.gs.db.prepare('UPDATE homeland_invites SET role = ? WHERE id = ? AND account = ?').run(role, row.id, acct);
+    return role;
   }
 
   /** Homelands this account may visit as a guest: on the owner's invite list, or the owner's party (unless the owner shut it out). */
