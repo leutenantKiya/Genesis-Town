@@ -11,7 +11,7 @@
   var GT = window.GT, C = null;
   var view = { party: null, invites: [] };
   var shown = {};   // invites already popped up: from|expires_at
-  var panel = null, invitePop = null;
+  var panel = null, invitePop = null, dirty = false;
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function S() { return C && C.state; }
@@ -22,8 +22,10 @@
 
   function set(v) {
     if (!v) return;
-    view = { party: v.party || null, invites: v.invites || [] };
-    if (panel && panel.isOpen()) renderPanel();
+    var nv = { party: v.party || null, invites: v.invites || [] };
+    var changed = JSON.stringify(nv) !== JSON.stringify(view);
+    view = nv;
+    if (panel && panel.isOpen() && changed) renderPanel();
     watchLeader();
     maybePopInvite();
   }
@@ -92,6 +94,10 @@
 
   /* ---------------------------------------------------------------- panel (G) */
   function renderPanel() {
+    // never rebuild the form while the player is typing in it (the presence poll calls this)
+    var ae = document.activeElement;
+    if (panel && panel.el && ae && ae.tagName === 'INPUT' && panel.el.contains(ae)) { dirty = true; return; }
+    dirty = false;
     var body = $('div'), p = view.party;
     if (!p) {
       body.appendChild($('p', 'chain-dim', $t('Kamu belum punya party. Ajak pemain lain lewat nama#tag atau lewat kartu namanya (klik pemainnya).')));
@@ -156,6 +162,7 @@
     if (panel && panel.isOpen()) return;
     if (GT.isUiOpen()) return;
     panel = GT.modal({ title: $t('Party'), body: $('div'), actions: [] });
+    panel.el.addEventListener('focusout', function () { setTimeout(function () { if (dirty && panel && panel.isOpen()) renderPanel(); }, 0); });
     renderPanel();
     C.api('/party').then(set, function () {});
   }
