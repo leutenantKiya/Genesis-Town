@@ -1543,7 +1543,10 @@
       S.busy = true;
       // the axe swing starts right away, the server answer follows (only when there is energy to swing)
       var ecost = (S.cfg && S.cfg.econ.gather && S.cfg.econ.gather.energyCost) || 0;
-      if (tt === 'tree' && window.GT_FX && S.mode !== 'offline' && S.account && (!S.st || S.st.energy >= ecost)) GT_FX.chop({ x: tx, y: ty });
+      if (window.GT_FX && S.mode !== 'offline' && S.account && (!S.st || S.st.energy >= ecost)) {
+        if (tt === 'tree') GT_FX.chop({ x: tx, y: ty });
+        else if (TILE_ITEM[tt] === 'ore' && GT_FX.mine) GT_FX.mine({ x: tx, y: ty }); // the pickaxe swing on a rock
+      }
       return act({ action: 'gather', tile: tt, x: tx, y: ty }).then(function () { if (S.st && S.st.encounter) openFight(); }, function (e) {
         // an emptied pond tile: remember it so its ripples go away until it refills
         var m = /Kembali sekitar (\d+) jam/.exec(e && e.message || '');

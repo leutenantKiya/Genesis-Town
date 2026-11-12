@@ -211,6 +211,21 @@
     g.userData = { tilt: tilt, arm: arm, side: SIDE };
     return g;
   }
+  /* the pickaxe for mining: the axe's handle with a curved two-pointed head across its end */
+  function pickModel(SIDE) {
+    var g = new THREE.Group(), tilt = new THREE.Group(), arm = new THREE.Group();
+    var handle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.74), GT3.mat({ color: '#6a3f22' }));
+    handle.position.z = 0.37;
+    var steel = GT3.mat({ color: '#c8ccd6' }), parts = [handle];
+    [-1, 1].forEach(function (k) {
+      var arm1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.06), steel); arm1.position.set(k * 0.1, 0, 0.7); arm1.rotation.y = -k * 0.25; parts.push(arm1);
+      var tip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.05), steel); tip.position.set(k * 0.22, 0, 0.65); tip.rotation.y = -k * 0.7; parts.push(tip);
+    });
+    parts.forEach(function (m) { m.castShadow = true; m.renderOrder = 10; m.material.depthTest = false; arm.add(m); });
+    tilt.add(arm); g.add(tilt);
+    g.userData = { tilt: tilt, arm: arm, side: SIDE };
+    return g;
+  }
   function bit(color, x, y, z, vx, vy, vz, life, g, size) {
     bitGeo = bitGeo || new THREE.BoxGeometry(1, 1, 1);
     var m = new THREE.Mesh(bitGeo, new THREE.MeshBasicMaterial({ color: color, fog: true }));
@@ -222,6 +237,11 @@
     if (e.kind === 'strike') {
       if (!e.hit) return; // a miss cuts only air
       for (i = 0; i < 9; i++) bit(r() < 0.5 ? '#fff6c8' : '#ffd84a', tx, 0.55, tz, dx * 1.5 + (r() - 0.5) * 2.4, 1.5 + r() * 2, dz * 1.5 + (r() - 0.5) * 2.4, 0.35 + r() * 0.2, 6, 0.05);
+      return;
+    }
+    if (e.kind === 'mine') { // stone chips and a few sparks off the rock
+      for (i = 0; i < 8; i++) bit(r() < 0.5 ? '#8a8698' : '#b8b4c4', tx, 0.35, tz, -dx * (1 + r()) + (r() - 0.5) * 1.6, 2 + r() * 1.6, -dz * (1 + r()) + (r() - 0.5) * 1.6, 0.5 + r() * 0.2, 9, r() < 0.4 ? 0.08 : 0.05);
+      for (i = 0; i < 5; i++) bit('#fff6c8', tx, 0.4, tz, (r() - 0.5) * 2.4, 1.5 + r() * 1.5, (r() - 0.5) * 2.4, 0.3, 6, 0.04);
       return;
     }
     for (i = 0; i < 7; i++) bit(r() < 0.5 ? '#c08848' : '#8e5a30', tx, 0.5, tz, -dx * (1 + r()) + (r() - 0.5) * 1.6, 2 + r() * 1.8, -dz * (1 + r()) + (r() - 0.5) * 1.6, 0.55 + r() * 0.25, 9, r() < 0.4 ? 0.09 : 0.06);
@@ -237,7 +257,7 @@
       if (!s) {
         // wind up on the side away from the camera, so the axe rises behind the shoulder instead of hanging toward us
         var lx = dz, lz = -dx, away = lx * -Math.sin(y) + lz * -Math.cos(y);
-        s = { axe: axeModel(away > 0.05 ? -1 : 1), burst: false }; scene.add(s.axe); swings.set(e, s);
+        s = { axe: (e.kind === 'mine' ? pickModel : axeModel)(away > 0.05 ? -1 : 1), burst: false }; scene.add(s.axe); swings.set(e, s);
       }
       // the grip: half way up the leaning card, a little toward the target, i.e. where the sprite's hand is drawn
       s.axe.position.set(pt.x + up[0] * 0.5 + dx * 0.12, up[1] * 0.5, pt.y + up[2] * 0.5 + dz * 0.12);

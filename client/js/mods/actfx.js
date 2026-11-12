@@ -1,6 +1,7 @@
 /*
  * actfx.js - short action effects drawn over the world. Purely visual: the actions themselves run on the server.
  * - chop(tile): the axe swings into the tree with a white slash trail; on impact a flash, wood chips and leaves.
+ * - mine(tile): the pickaxe (a curved two-pointed steel head) swings into the rock; on impact stone chips and sparks.
  * - strike(tile, hit): the same swing at a monster; on a hit it bursts sparks, on a miss the slash cuts air.
  * - float(tile, text, colour): a number or word that rises and fades over a tile ("-1", "Meleset!", "-4 energi").
  * - flash(tile, colour): a tile blinks (a monster hit white, the player hit red).
@@ -30,6 +31,7 @@
     fx.push({ kind: kind, t: 0, tile: { x: tile.x, y: tile.y }, from: { x: p.x, y: p.y }, dir: dirTo(tile), hit: hit !== false, parts: null });
   }
   function chop(tile) { swing('chop', tile, true); }
+  function mine(tile) { swing('mine', tile, true); }
   function strike(tile, hit) { swing('strike', tile, hit); }
   // callers pass hex colours; the three they use map to tokens (gold, dim, warning), anything else passes through
   var TOKEN_OF = { '#ffd84a': 'gold', '#cfd8ff': 'hud-dim', '#ff8a7a': 'warn' };
@@ -62,6 +64,14 @@
         var s = a + (Math.random() - 0.5) * 1.8, v = 35 + Math.random() * 40;
         parts.push({ x: 0, y: 0, vx: Math.cos(s) * v, vy: Math.sin(s) * v - 20, g: 120, life: 0.35 + Math.random() * 0.2, c: Math.random() < 0.5 ? '#fff6c8' : '#ffd84a', w: 1 });
       }
+      return parts;
+    }
+    if (e.kind === 'mine') {
+      for (i = 0; i < 8; i++) { // stone chips, thrown back toward the player and up
+        var s3 = a + Math.PI + (Math.random() - 0.5) * 1.8, v3 = 30 + Math.random() * 35;
+        parts.push({ x: 0, y: 0, vx: Math.cos(s3) * v3, vy: Math.sin(s3) * v3 - 30, g: 170, life: 0.45 + Math.random() * 0.25, c: Math.random() < 0.5 ? '#8a8698' : '#b8b4c4', w: Math.random() < 0.4 ? 2 : 1 });
+      }
+      for (i = 0; i < 5; i++) { var s4 = a + (Math.random() - 0.5) * 2; parts.push({ x: 0, y: 0, vx: Math.cos(s4) * 50, vy: Math.sin(s4) * 50 - 25, g: 120, life: 0.25 + Math.random() * 0.15, c: '#fff6c8', w: 1 }); } // sparks
       return parts;
     }
     for (i = 0; i < 7; i++) { // wood chips, thrown back toward the player and up
@@ -103,6 +113,17 @@
     ctx.fillStyle = '#7d8290'; ctx.fillRect(Math.round(ex) - 1, Math.round(ey) - 1, 2, 2);
   }
 
+  function drawPick(ctx, hx, hy, ang) {
+    // handle from the hand, a steel head across its end curving back at both points (a pickaxe, not an axe)
+    var L = 7.5, ex = hx + Math.cos(ang) * L, ey = hy + Math.sin(ang) * L, px = Math.cos(ang + Math.PI / 2), py = Math.sin(ang + Math.PI / 2);
+    var bx = Math.cos(ang), by = Math.sin(ang);
+    ctx.strokeStyle = '#6a3f22'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd6'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(ex + px * 4.5 - bx * 1.8, ey + py * 4.5 - by * 1.8); ctx.quadraticCurveTo(ex + bx * 1.2, ey + by * 1.2, ex - px * 4.5 - bx * 1.8, ey - py * 4.5 - by * 1.8); ctx.stroke();
+    ctx.fillStyle = '#7d8290'; ctx.fillRect(Math.round(ex) - 1, Math.round(ey) - 1, 2, 2);
+  }
+
   function onDraw(ctx, camX, camY, T) {
     if (!GT.scene || GT.scene.kind !== 'out') return;
     if (!fx.length && !texts.length && !flashes.length && !puffs.length) return;
@@ -133,7 +154,7 @@
           ctx.arc(hx, hy, reach + w * 1.8, Math.min(trailFrom, ang), Math.max(trailFrom, ang), false);
           ctx.stroke();
         }
-        if (e.t < DUR * 0.8) drawAxe(ctx, hx, hy, ang);
+        if (e.t < DUR * 0.8) (e.kind === 'mine' ? drawPick : drawAxe)(ctx, hx, hy, ang);
       }
       // impact flash on the target
       if (e.hit && e.t >= HIT && e.t < HIT + 0.08) {
@@ -163,7 +184,7 @@
     ctx.restore();
   }
 
-  window.GT_FX = { chop: chop, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; },
+  window.GT_FX = { chop: chop, mine: mine, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; },
     // the swings in progress and their timing, for the 2.5D view's 3D axe (view3d.js)
     swings: function () { return fx; }, DUR: DUR, HIT: HIT };
   GT.register({ id: 'actfx', onFrame: onFrame, init: function (g) { g.register({ id: 'actfx-draw', onDraw: onDraw }); } }); // drawn last, over signs and tags
