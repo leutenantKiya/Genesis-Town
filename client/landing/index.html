@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="en" data-type="software" data-radius="soft" data-buttons="solid" data-motion>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Genesis Town: a pixel-art market sim in your browser</title>
+<meta name="description" content="Fish, chop wood and grow wheat on your own floating islands, then trade with four merchants whose prices follow their stock. Free to play, on NEAR testnet.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Genesis Town: a pixel-art market sim in your browser">
+<meta property="og:description" content="Your own floating islands and a shared market town where prices move with the stock. Free to play in the browser.">
+<meta property="og:image" content="share.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a0d14">
+<!-- <link rel="canonical" href="https://[the game's domain]/landing/"> : the domain is not known yet -->
+<meta name="site-kind" content="gaming">
+<meta name="page-type" content="software">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400..700&family=JetBrains+Mono:wght@400..500&family=Pixelify+Sans:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/system.css">
+<link rel="stylesheet" href="assets/ui/cards.css">
+<link rel="stylesheet" href="assets/motion/motion.css">
+<link rel="stylesheet" href="assets/backgrounds/backgrounds.css">
+<link rel="stylesheet" href="assets/layout/layout.css">
+<link rel="stylesheet" href="assets/icons/icon.css">
+<style>
+:root {
+  /* dealt: palette blue-black-cornflower (night and the islands' sky blue), type epilogue (Epilogue + JetBrains Mono) */
+  --p-bg: #0a0d14; --p-surface: #131824; --p-ink: #e9edf3; --p-muted: #8891a1;
+  --p-accent: #5ab9fc; --p-accent-ink: #0a0d14; --p-action: #5ab9fc; --p-action-ink: #0a0d14;
+  --p-inv-bg: #e9edf3; --p-inv-surface: #d7dbe1; --p-inv-ink: #0a0d14; --p-inv-muted: #54575f;
+  --p-inv-accent: #0a0d14; --p-inv-accent-ink: #e9edf3; --p-inv-action: #0a0d14; --p-inv-action-ink: #e9edf3;
+  --font-display: "Epilogue", system-ui, sans-serif;
+  --font-text: "Epilogue", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display-weight: 400;
+  --display-tracking: -0.035em;
+  --display-tracking-xl: -0.045em;
+  --ly-scale: 0.97;
+}
+</style>
+<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
+<script src="assets/backgrounds/backgrounds.js"></script>
+<script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>
+<link rel="modulepreload" href="assets/moments/moments.js">
+<link rel="modulepreload" href="assets/moments/lib.js">
+<link rel="modulepreload" href="assets/moments/giant-type-pass/moment.js">
+<link rel="modulepreload" href="assets/moments/iris-opens/moment.js">
+<!-- page CSS: the hero's stage and tray, the islands' markers, the shelf, the calculator, the bento, the day -->
+<style>
+  /* the page's own tokens: hairlines from the ink, and the two easings (an entrance, a settle) */
+  :root { --gt-line: color-mix(in oklab, var(--p-ink) 11%, transparent); --gt-line-strong: color-mix(in oklab, var(--p-ink) 24%, transparent);
+    --gt-out: cubic-bezier(.16, 1, .3, 1); --gt-snap: cubic-bezier(.77, 0, .175, 1); }
+  ::selection { background: var(--p-accent); color: var(--p-accent-ink); }
+  /* the wordmark keeps the game's own pixel face; everything else is set in the dealt pair */
+  .nav__logo { font-family: "Pixelify Sans", var(--font-display); font-weight: 500; letter-spacing: 0; }
+  .gt-num, .rows__value, .gt-shelf__table td, .gt-calc b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .gt-item { width: 24px; height: 24px; image-rendering: pixelated; flex: none; }
+  /* the live line over the h1: the game's clock, in the mono face, a dot before it */
+  .hero--world .hero-notice { display: block; font: 500 12px/1.4 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--p-muted); }
+  .hero--world .hero-notice::after { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 0 1px 10px; border-radius: 50%; vertical-align: middle;
+    background: var(--p-accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--p-accent) 28%, transparent); }
+  /* HERO: the head row (the h1 left, the lead and buttons right), then the stage with the world and nothing over it but
+     its hint and its tray, both clear of the drag */
+  .hero--world .hero__head { align-items: start; }
+  .hero--world .hero__head > :first-child { grid-column: 1 / span 6; }
+  .hero--world .hero__head > .hero__side { grid-column: 7 / -1; display: grid; gap: var(--s-5); }
+  .hero--world .hero__side .hero__lead { margin: 0; max-width: none; }
+  .hero--world .hero__side .btn-row { justify-content: flex-start; }
+  .hero--world .hero-notice { font-variant-numeric: tabular-nums; }
+  @media (max-width: 1023px) { .hero--world .hero__head > :first-child, .hero--world .hero__head > .hero__side { grid-column: 1 / -1; } }
+  @media (max-width: 639px) { .hero--world .hero__stage.gt-stage { aspect-ratio: auto; flex: none; height: 250px; min-height: 0; margin-top: var(--s-5); } }
+  .hero--world .hero__stage { margin-top: var(--s-6); min-height: clamp(320px, 50svh, 640px); background: #9fd0f0; isolation: isolate;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .hero--world .hero__stage[data-turn] { cursor: grab; touch-action: pan-y; }
+  .hero--world .hero__stage.is-drag { cursor: grabbing; }
+  .hero--world .hero__stage:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 4px; }
+  .hero--world .hero__stage::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 1px var(--gt-line); }
+  .hero--world .hero__stage > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: var(--ly-pos, 50% 50%); pointer-events: none; }
+  /* the live dot: the game's clock is running */
+  .gt-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--p-accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--p-accent) 28%, transparent); }
+  /* the hint: top left, it never takes the pointer, and it goes after the first turn */
+  .gt-hint { position: absolute; z-index: 2; left: 50%; translate: -50% 0; top: var(--s-4); margin: 0; display: flex; align-items: center; gap: var(--s-2);
+    padding: 9px 14px; border-radius: 999px; background: var(--p-bg); color: var(--p-ink); font-size: var(--t-small); line-height: 1; white-space: nowrap; pointer-events: none;
+    box-shadow: 0 0 0 1px var(--gt-line), 0 10px 24px -12px rgb(0 0 0 / .6); transition: opacity .5s var(--gt-out), translate .5s var(--gt-out); }
+  .gt-hint[hidden] { display: none; }
+  .gt-hint.is-gone { opacity: 0; translate: -50% -8px; }
+  @media (min-width: 1024px) { .gt-hint { left: calc((100% + var(--gutter)) / 2 - 12px); translate: none; } .gt-hint.is-gone { translate: 0 -8px; } }
+  .gt-hint__touch { display: none; }
+  @media (hover: none) { .gt-hint__mouse { display: none; } .gt-hint__touch { display: inline; } }
+  /* keycaps, 8-bit: a hard bottom edge */
+  .hero--world kbd { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; font: 500 11px/1 var(--font-mono);
+    border: 1px solid var(--gt-line-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--p-ink); }
+  /* the tray: a dock of segmented groups at the stage's foot (season, time of day, turn, pause) */
+  /* the dock: a pill that says what the world shows (season, day or night) and opens into the tray; the tray
+     grows out of the pill (clip and scale from the bottom centre, its groups a beat after) and folds back into it */
+  .gt-dock { position: absolute; z-index: 2; left: 50%; bottom: var(--s-4); translate: -50% 0; display: grid; justify-items: center; align-items: end;
+    width: max-content; max-width: calc(100% - 2 * var(--s-4)); animation: gt-dock-in .7s var(--gt-out) both; }
+  .gt-dock[hidden] { display: none; }
+  @keyframes gt-dock-in { from { opacity: 0; transform: translateY(14px) scale(.94); filter: blur(4px); } }
+  .gt-dock > * { grid-area: 1 / 1; }
+  .gt-dock__pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 6px 0 14px; border: 0; border-radius: 999px; cursor: pointer;
+    background: color-mix(in oklab, var(--p-bg) 88%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: var(--p-ink);
+    font: 500 14px/1 var(--font-text); white-space: nowrap; box-shadow: 0 0 0 1px var(--gt-line), 0 14px 32px -16px rgb(0 0 0 / .7);
+    transition: opacity .3s var(--gt-out) .12s, transform .45s var(--gt-out) .08s, filter .3s var(--gt-out) .08s, box-shadow .25s var(--gt-out); }
+  .gt-dock__pill:hover { box-shadow: 0 0 0 1px var(--gt-line-strong), 0 14px 32px -16px rgb(0 0 0 / .7); }
+  .gt-dock__pill:active { transform: scale(.97); transition-delay: 0s; }
+  .gt-dock__pill:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 3px; }
+  .gt-dock__sw { width: 8px; height: 8px; border-radius: 2px; background: var(--sw, #f28fb0); transition: background-color .6s var(--gt-out); }
+  .gt-dock__time { display: grid; width: 14px; height: 14px; margin-left: 6px; color: var(--p-muted); }
+  .gt-dock__time svg { grid-area: 1 / 1; transition: opacity .5s var(--gt-out), transform .6s var(--gt-out); }
+  .gt-dock__moon, .gt-dock.is-night .gt-dock__sun { opacity: 0; transform: rotate(-90deg) scale(.6); }
+  .gt-dock.is-night .gt-dock__moon { opacity: 1; transform: none; }
+  [data-dock-season], [data-dock-time] { display: inline-block; }
+  [data-dock-season].is-swap, [data-dock-time].is-swap { animation: gt-word .5s var(--gt-out); }
+  @keyframes gt-word { from { opacity: 0; transform: translateY(5px); filter: blur(2px); } }
+  .gt-dock__open { display: grid; place-items: center; width: 28px; height: 28px; margin-left: 4px; border-radius: 999px; color: var(--p-muted);
+    background: color-mix(in oklab, var(--p-ink) 8%, transparent); transition: color .2s var(--gt-out), background-color .2s var(--gt-out), transform .45s var(--gt-out); }
+  .gt-dock__pill:hover .gt-dock__open { color: var(--p-ink); background: color-mix(in oklab, var(--p-ink) 14%, transparent); transform: rotate(90deg); }
+  .gt-dock.is-open .gt-dock__pill { opacity: 0; transform: translateY(6px) scale(.9); filter: blur(3px); pointer-events: none;
+    transition: opacity .18s var(--gt-out), transform .3s var(--gt-out), filter .18s var(--gt-out); }
+  .gt-tray { display: flex; align-items: center; gap: 6px; max-width: 100%;
+    padding: 6px; border-radius: 14px; background: var(--p-bg); color: var(--p-ink); cursor: default;
+    box-shadow: 0 0 0 1px var(--gt-line), 0 18px 40px -18px rgb(0 0 0 / .7);
+    opacity: 0; visibility: hidden; transform: translateY(8px) scale(.96); transform-origin: 50% 100%; clip-path: inset(0 32% 0 32% round 999px);
+    transition: opacity .25s var(--gt-out), transform .4s var(--gt-out), clip-path .4s var(--gt-out), visibility 0s linear .4s; }
+  .gt-dock.is-open .gt-tray { opacity: 1; visibility: visible; transform: none; clip-path: inset(0 0 0 0 round 14px);
+    transition: opacity .3s var(--gt-out), transform .55s var(--gt-out), clip-path .55s var(--gt-out), visibility 0s; }
+  .gt-tray .gt-seg { opacity: 0; transform: translateY(4px); transition: opacity .15s var(--gt-out), transform .2s var(--gt-out); }
+  .gt-dock.is-open .gt-tray .gt-seg { opacity: 1; transform: none;
+    transition: opacity .35s var(--gt-out) calc(80ms + var(--i, 0) * 40ms), transform .45s var(--gt-out) calc(80ms + var(--i, 0) * 40ms); }
+  .gt-tray .gt-seg:nth-child(2) { --i: 1; } .gt-tray .gt-seg:nth-child(3) { --i: 2; } .gt-tray .gt-seg:nth-child(4) { --i: 3; }
+  .gt-tray .gt-seg:nth-child(5) { --i: 4; } .gt-tray .gt-seg:nth-child(6) { --i: 5; }
+  .gt-close svg { transition: transform .35s var(--gt-out); } .gt-close:hover svg { transform: rotate(90deg); }
+  .gt-seg { display: flex; gap: 2px; }
+  .gt-tray svg { width: 14px; height: 14px; flex: none; }
+  .nowrap { white-space: nowrap; }
+  .gt-seg + .gt-seg { padding-left: 6px; border-left: 1px solid var(--gt-line); }
+  .gt-tray button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; min-width: 36px; padding: 0 10px;
+    border: 0; border-radius: 9px; background: transparent; color: var(--p-muted); font: 500 14px/1 var(--font-text); white-space: nowrap; cursor: pointer;
+    transition: background-color .22s var(--gt-out), color .22s var(--gt-out), transform var(--m-press, 90ms) var(--gt-out); }
+  .gt-tray button:active { transform: scale(.96); }
+  .gt-tray button:hover { color: var(--p-ink); background: color-mix(in oklab, var(--p-ink) 9%, transparent); }
+  .gt-tray button:focus-visible { outline: 2px solid var(--p-accent); outline-offset: -2px; }
+  .gt-tray button[aria-pressed="true"] { background: var(--p-ink); color: var(--p-bg); }
+  .gt-tray button.is-key { background: var(--p-accent); color: var(--p-accent-ink); }
+  .gt-tray button[aria-pressed="true"] .gt-dot { box-shadow: none; }
+  .gt-tray [data-set-season]::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--sw); }
+  .gt-tray [data-set-season="semi"] { --sw: #f28fb0; } .gt-tray [data-set-season="panas"] { --sw: #34c3c9; }
+  .gt-tray [data-set-season="gugur"] { --sw: #f0903a; } .gt-tray [data-set-season="dingin"] { --sw: #8fc8f2; }
+  .gt-pause span { display: block; width: 10px; height: 12px; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
+  .gt-pause[aria-pressed="true"] span { width: 0; height: 0; border: 0; border-left: 10px solid currentColor; border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
+  .gt-tray .gt-pause[aria-pressed="true"] { background: transparent; color: var(--p-ink); }
+  @media (max-width: 1023px) { .gt-tray kbd { display: none; } }
+  @media (max-width: 639px) {
+    /* a phone: one row that scrolls sideways, the pause first; a swipe on the world turns it, so no turn buttons */
+    .gt-dock { left: var(--s-3); right: var(--s-3); bottom: var(--s-3); translate: none; width: auto; max-width: none; }
+    .gt-tray { width: 100%; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; touch-action: pan-x; }
+    .gt-tray::-webkit-scrollbar { display: none; }
+    .gt-tray > .gt-seg--close { order: -2; padding-left: 0; border-left: 0; }
+    .gt-tray > .gt-seg--pause { order: -1; }
+    .gt-tray > .gt-seg:has([data-turn-by]) { display: none; }
+    .gt-tray > .gt-seg--live { padding-left: 6px; border-left: 1px solid var(--gt-line); }
+    .gt-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .gt-tray button { height: 40px; min-width: 40px; }
+  }
+  /* WORK: the bento, the sea island large on the left, the other two stacked on the right */
+  .gt-bento { grid-template-rows: auto auto; }
+  .gt-bento > .card { min-height: 0; }
+  .gt-bento__big { grid-row: 1 / span 2; }
+  .gt-bento > .card { display: flex; flex-direction: column; }
+  .gt-bento .panel { position: relative; overflow: hidden; }
+  .gt-bento .panel > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .gt-bento__big .panel { flex: 1 1 0; height: auto; min-height: 200px; }
+  .gt-bento__side .panel { flex: none; height: 124px; }
+  @media (max-width: 1023px) { .gt-bento__big { grid-row: auto; } .gt-bento__big .panel { flex: none; height: 220px; } }
+  @media (max-width: 639px) { .gt-bento .panel, .gt-bento__big .panel { height: 300px; } }
+  /* DAY: lanes on a 24-hour grid, the hour now one line across them */
+  .gt-day { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 12px; margin: var(--s-6) 0 var(--s-7); }
+  .gt-day__track { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); column-gap: 2px; height: 36px; }
+  .gt-day__sky i { display: block; height: 100%; }
+  .gt-day__sky i { border-radius: 3px; } .gt-day__sky .is-night { background: #1a2131; } .gt-day__sky .is-dawn { background: #e9c27a; }
+  .gt-day__sky .is-day { background: #9fd0f0; } .gt-day__sky .is-dusk { background: #e58a4e; }
+  .gt-day__bar { grid-column: calc(var(--a) + 1) / calc(var(--b) + 1); grid-row: 1; display: flex; align-items: center; padding: 0 10px; overflow: hidden;
+    border-radius: 4px; font: 500 11px/1 var(--font-mono); letter-spacing: .02em; white-space: nowrap; }
+  .gt-day__bar.is-concert { background: var(--p-accent); color: var(--p-accent-ink); }
+  .gt-day__bar.is-monster { background: #e0715c; color: var(--p-bg); }
+  .gt-day__pin { grid-column: calc(var(--a) + 1) / span 8; grid-row: 1; display: flex; align-items: center; padding-left: 10px; border-left: 3px solid var(--p-ink);
+    font: 500 11px/1 var(--font-mono); letter-spacing: .02em; white-space: nowrap; }
+  .gt-day__axis { display: flex; justify-content: space-between; font: 400 11px/1 var(--font-mono); color: var(--muted); }
+  .gt-day__axis span { width: 0; display: flex; justify-content: center; white-space: nowrap; }
+  .gt-day__axis span:first-child { justify-content: flex-start; } .gt-day__axis span:last-child { justify-content: flex-end; }
+  .gt-day__now { position: absolute; grid-column: 1; grid-row: 1 / 5; top: -26px; bottom: 0; left: calc(100% * var(--h, 0.5));
+    width: 2px; margin-left: -1px; background: var(--p-ink); pointer-events: none; transition: left 1s linear; }
+  .gt-day__now[hidden] { display: none; }
+  .gt-day__now span { position: absolute; top: 0; left: 6px; font: 500 11px/1 var(--font-mono); letter-spacing: .02em; white-space: nowrap; color: var(--p-ink); }
+  .gt-day__now b { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .gt-day__now.is-right span { left: auto; right: 6px; }
+  @media (max-width: 639px) {
+    .gt-day__track { height: 28px; } .gt-day__bar { font-size: 0; } .gt-day__pin { font-size: 11px; }
+    #day .rows p { display: none; }
+  }
+  #day .rows__name, .gt-faq .faq__item > h3 { display: flex; align-items: center; gap: var(--s-3); }
+  #day .rows__name .ic, .gt-faq h3 .ic { color: var(--p-accent); }
+  /* FAQ: the heading over the first column, the second column from the top */
+  .gt-faq .section-head { margin-bottom: var(--s-6); }
+  .gt-faq .faq > .faq__item:first-child { padding-top: var(--s-5); }
+  .gt-faq .group.start-7 .faq > .faq__item:first-child { padding-top: 0; }
+  /* PRICES: a changed price rolls to its new value, up or down */
+  .gt-tick { display: inline-grid; overflow: hidden; height: 1.25em; line-height: 1.25em; vertical-align: bottom; }
+  .gt-tick > span { grid-area: 1 / 1; transition: transform .6s var(--ease); }
+  .gt-tick.is-up > span:last-child { transform: translateY(100%); } .gt-tick.is-down > span:last-child { transform: translateY(-100%); }
+  .gt-tick.is-up.go > span:first-child { transform: translateY(-100%); } .gt-tick.is-down.go > span:first-child { transform: translateY(100%); }
+  .gt-tick.go > span:last-child { transform: none; }
+  #prices .rows__value small.is-up::before { content: "\25B2  "; font-size: .8em; } #prices .rows__value small.is-down::before { content: "\25BC  "; font-size: .8em; }
+
+  /* ISLANDS: the markers sit over the picture (the frame clips only the picture); their place follows the crop */
+  #islands .frame { --ratio: 46.875%; overflow: visible; }
+  #islands .frame__img { border-radius: inherit; }
+  @media (min-width: 1024px) { #islands .frame { --ratio: 33%; } }
+  .gt-spot { --x: var(--xf); --y: var(--yf); }
+  #islands .gt-map > .gt-spot { position: absolute; z-index: 2; }
+  html:not(.mo-js) .gt-spot { display: none; }
+  @media (min-width: 1024px) { .gt-spot { --x: var(--xd); --y: var(--yd); } }
+  .gt-spot > button { transition: transform .3s var(--gt-out), box-shadow .3s var(--gt-out), background-color .2s var(--gt-out); }
+  .gt-spot.is-open > button, .gt-spot > button:hover { background: var(--p-accent); color: var(--p-accent-ink); }
+  .gt-spot .ly-spot__card { border: 1px solid var(--gt-line); }
+  @media (max-width: 639px) {
+    #islands .frame { --ratio: 118%; }
+    .gt-spot { --x: var(--xp); --y: var(--yp); } .gt-spot--wide { display: none; }
+  }
+
+  /* MARKET: the merchants as tabs (the chosen one marked by a bar that slides in), the shelf beside them */
+  #market .grid { align-items: stretch; }
+  .gt-merchants { display: flex; flex-direction: column; border-top: 1px solid var(--gt-line); }
+  .gt-merchant { position: relative; display: grid; gap: 6px; padding: var(--s-5) 0; text-align: left; border: 0;
+    border-bottom: 1px solid var(--gt-line); background: transparent; color: var(--p-muted); font: inherit; cursor: pointer;
+    transition: color .3s var(--gt-out), background-color .3s var(--gt-out); }
+  .gt-merchant::before { content: ""; position: absolute; left: -14px; top: 14px; bottom: 14px; width: 2px; border-radius: 2px; background: var(--p-accent);
+    transform: scaleY(0); transition: transform .45s var(--gt-out); }
+  .gt-merchant:hover { color: var(--p-ink); }
+  .gt-merchant[aria-selected="true"] { color: var(--p-ink); }
+  .gt-merchant[aria-selected="true"]::before { transform: none; }
+  .gt-merchant:focus-visible { outline: 2px solid var(--p-accent); outline-offset: -2px; }
+  .gt-merchant__name { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); font-size: var(--t-lead); font-weight: 500; color: inherit; }
+  .gt-merchant__shop { font: 400 12px/1 var(--font-mono); letter-spacing: .04em; color: var(--p-muted); }
+  .gt-merchant__line { font-size: var(--t-small); line-height: 1.5; }
+  .gt-shelf { display: flex; flex-direction: column; }
+  .gt-shelf:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 2px; }
+  .gt-shelf__pic { position: relative; flex: 1 1 0; min-height: 120px; overflow: hidden; border-radius: var(--r-lg); }
+  .gt-shelf__pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 60%; }
+  .gt-shelf__body { padding: var(--s-5) 0 0; }
+  .gt-shelf__body.is-swap { animation: gt-swap .5s var(--gt-out); }
+  @keyframes gt-swap { from { opacity: 0; transform: translateY(6px); clip-path: inset(0 0 30% 0); } to { opacity: 1; transform: none; clip-path: inset(0); } }
+  .gt-shelf__head { display: flex; justify-content: space-between; gap: var(--s-4); margin: 0 0 var(--s-3); font: 500 12px/1.4 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--p-muted); }
+  .gt-shelf__table { width: 100%; border-collapse: collapse; font-size: var(--t-small); }
+  .gt-shelf__table th, .gt-shelf__table td { padding: 10px 0; border-bottom: 1px solid var(--gt-line); text-align: right; font-weight: 400; }
+  .gt-shelf__table thead th { padding-top: 0; font: 500 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--p-muted); }
+  .gt-shelf__table th:first-child { text-align: left; }
+  .gt-shelf__table tbody th { font-weight: 500; color: var(--p-ink); }
+  .gt-good, .gt-stock { display: flex; align-items: center; gap: var(--s-3); }
+  .gt-stock { justify-content: flex-end; }
+  .gt-shelf__table tbody tr:last-child > * { border-bottom: 0; }
+  .gt-bar { position: relative; width: 72px; height: 4px; border-radius: 4px; background: var(--gt-line); overflow: hidden; }
+  .gt-bar i { position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: inherit; background: var(--p-accent); transition: width .7s var(--gt-out); }
+  @media (max-width: 639px) {
+    #market .wrap > .fill { flex: 0 0 auto; }
+    #market .grid { display: flex; flex-direction: column; gap: var(--s-5); }
+    #market .gt-shelf { height: auto; }
+    #market .grid > .gt-merchants { align-items: flex-start; flex-direction: row; overflow-x: auto; scrollbar-width: none; border-top: 0; }
+    .gt-merchant { flex: 0 0 auto; padding: var(--s-3) 0; margin-right: var(--s-5); border-bottom: 1px solid var(--gt-line); }
+    .gt-merchant__line, .gt-merchant__shop { display: none; }
+    .gt-merchant { display: block; }
+    .gt-merchant::before { top: auto; left: 0; right: 0; bottom: -1px; width: auto; height: 2px; transform: scaleX(0); }
+    .gt-merchant[aria-selected="true"]::before { transform: none; }
+    .gt-shelf__pic { flex: none; height: 180px; min-height: 0; }
+    .gt-shelf__body { padding: var(--s-4) 0 0; }
+    .gt-bar { width: 40px; }
+  }
+
+  /* PRICES: the rows on the paper, the calculator card beside them */
+  #prices .rows__name { display: flex; align-items: center; gap: var(--s-3); }
+  #prices .rows li { padding-block: 10px; }
+  #prices .rows p { font-size: var(--t-small); }
+  #prices .rows__value b { font-weight: 500; }
+  #prices .rows__value small { margin-left: 10px; font: 400 12px/1.4 var(--font-mono); letter-spacing: .02em; color: var(--muted); }
+  #prices .rows__value small.is-up { color: #a1302b; } #prices .rows__value small.is-down { color: #1d6b45; }
+  #prices .rows li.is-lit { background: color-mix(in oklab, var(--ink) 5%, transparent); }
+  #prices .rows li { transition: background-color .3s var(--gt-out); }
+  .gt-calc { display: flex; flex-direction: column; gap: var(--s-5); }
+  .gt-calc__top { display: grid; gap: var(--s-4); }
+  .gt-calc__top h3 { margin: 0; }
+  .gt-segs { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 4px; border-radius: 12px;
+    background: color-mix(in oklab, var(--ink) 7%, transparent); isolation: isolate; }
+  .gt-segs::before { content: ""; position: absolute; z-index: -1; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 3); border-radius: 9px;
+    background: var(--bg); box-shadow: 0 1px 2px rgb(0 0 0 / .12), 0 0 0 1px var(--line); transform: translateX(calc(var(--i, 0) * 100%)); transition: transform .45s var(--gt-out); }
+  .gt-segs button { height: 40px; border: 0; background: transparent; color: var(--muted); font: 500 var(--t-small)/1 var(--font-text); cursor: pointer; border-radius: 9px;
+    transition: color .25s var(--gt-out); }
+  .gt-segs button[aria-selected="true"] { color: var(--ink); }
+  .gt-segs button:focus-visible { outline: 2px solid var(--action); outline-offset: -2px; }
+  .gt-calc__lines { list-style: none; margin: 0; padding: 0; }
+  .gt-calc__lines li { display: flex; align-items: center; gap: var(--s-3); padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .gt-calc__lines li b { margin-left: auto; font-weight: 500; }
+  .gt-calc__lines li.is-out { border-bottom: 0; border-top: 1px solid var(--ink); margin-top: -1px; font-weight: 500; }
+  .gt-calc__lines.is-swap li { animation: gt-line .5s var(--gt-out) both; }
+  .gt-calc__lines.is-swap li:nth-child(2) { animation-delay: 50ms; } .gt-calc__lines.is-swap li:nth-child(3) { animation-delay: 100ms; } .gt-calc__lines.is-swap li:nth-child(4) { animation-delay: 150ms; }
+  @keyframes gt-line { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  .gt-calc__sum { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); margin: 0; }
+  .gt-calc__sum > span { font: 500 12px/1.4 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .gt-calc__sum strong { font: 400 clamp(32px, 2vw + 16px, 44px)/1 var(--font-display); letter-spacing: -.03em; }
+  .gt-calc__sum strong span { font-variant-numeric: tabular-nums; }
+  @media (max-width: 639px) { #prices .rows__value small, #prices .rows p { display: none; } #prices .rows li { padding-block: 10px; } }
+
+  /* WORK: the bento of linked cards (the kit lifts a linked card and zooms its picture); the arrow walks on hover */
+  .gt-bento { grid-template-rows: auto auto; }
+  .gt-bento > .card { min-height: 0; display: flex; flex-direction: column; color: inherit; text-decoration: none; }
+  .gt-bento__big { grid-row: 1 / span 2; }
+  .gt-bento .panel { position: relative; overflow: hidden; }
+  .gt-bento .panel > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .gt-bento__big .panel { flex: 1 1 0; height: auto; min-height: 200px; }
+  .gt-bento__side .panel { flex: none; height: 124px; }
+  .gt-bento h3 { display: flex; align-items: center; gap: 10px; }
+  .gt-bento h3 .m-arrow { color: var(--p-accent); }
+  #work .panel { --p-h: 124px; } #work .gt-bento__big .panel { --p-h: 200px; }
+  @media (max-width: 1023px) { .gt-bento__big { grid-row: auto; } .gt-bento__big .panel { flex: none; height: 220px; } }
+  @media (max-width: 639px) { .gt-bento .panel, .gt-bento__big .panel, #work .panel, #work .gt-bento__big .panel { height: 300px; --p-h: 300px; } }
+
+  /* DAY: a row under the pointer lights its lane, a lane its row */
+  .gt-day__track { transition: opacity .3s var(--gt-out); }
+  .gt-day.is-lit .gt-day__track:not(.is-lit) { opacity: .28; }
+  #day .rows li { transition: color .3s var(--gt-out); cursor: default; }
+  #day .rows.is-lit li:not(.is-lit) { color: var(--p-muted); }
+  #day .rows li:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 2px; }
+  @media (max-width: 639px) {
+    #islands .frame { --ratio: 118%; }
+    :is(#seasons) > .wrap > .fill { flex: 0 0 auto; } :is(#seasons) .frame { aspect-ratio: 4 / 3; height: auto; min-height: 0; flex: none; }
+  }
+</style>
+</head>
+<body>
+<!-- type: software, site-kind gaming
+     deal: hero product (the head row, then the stage holding the game's live 2.5D world, its still as the poster), nav nav-cards,
+     close close-type, footer footer-dark, rhythm media-band, buttons solid, mark arc, grounds none
+     palette blue-black-cornflower (the night under the islands and their sky blue), type epilogue; the wordmark in the game's Pixelify Sans
+     effect: the live world in the hero (one WebGL context, its pause control in the frame)
+     moments: iris-opens on #prices (the market's paper window opens through a disc), giant-type-pass in #own (the night village through the words "Market goods on NEAR") -->
+
+<header class="nav">
+  <div class="wrap nav__bar">
+    <a class="skip-link" href="#top">Skip to content</a>
+    <a class="nav__logo" href="#top"><span class="mark" data-mark="arc" aria-hidden="true"></span>Genesis Town</a>
+    <nav class="nav__links" aria-label="Main">
+      <div class="nav__item">
+        <a class="nav__link" href="#islands">World <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <div class="nav__menu">
+          <div class="wrap grid">
+            <a class="menu-card span-4" href="#islands">
+              <div class="panel"><img class="frame__img" src="img/islands.webp" width="1920" height="900" alt="A Homeland's islands joined by plank bridges, with houses, a farm and a waterfall" loading="lazy" data-source="client" data-subject="floating islands"></div>
+              <span class="t-card">Your islands</span>
+              <span class="t-small muted">Nine to open, one by one</span>
+            </a>
+            <a class="menu-card span-4" href="#market">
+              <div class="panel"><img class="frame__img" src="img/market.webp" width="1200" height="900" alt="The village market square with its fountain, striped stalls and a crowd of players" loading="lazy" data-source="client" data-subject="market square"></div>
+              <span class="t-card">The market town</span>
+              <span class="t-small muted">One map for every player</span>
+            </a>
+            <a class="menu-card span-4" href="#seasons">
+              <div class="panel"><img class="frame__img" src="img/season-gugur.webp" width="1200" height="900" alt="The islands in autumn, the trees turned orange" loading="lazy" data-source="client" data-subject="islands in autumn"></div>
+              <span class="t-card">Seasons</span>
+              <span class="t-small muted">Spring, summer, autumn, winter</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="nav__item"><a class="nav__link" href="#market">Market</a></div>
+      <div class="nav__item"><a class="nav__link" href="#prices">Prices</a></div>
+      <div class="nav__item"><a class="nav__link" href="#work">Jobs</a></div>
+      <div class="nav__item"><a class="nav__link" href="#day">Day</a></div>
+      <div class="nav__item"><a class="nav__link" href="#faq">Questions</a></div>
+    </nav>
+    <div class="nav__actions">
+      <a class="btn btn--primary" href="../">Play now</a>
+    </div>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+  <!-- HERO (hero-product with a world scene on its stage): the head row says what the game is; the stage below holds
+       the game's own 2.5D world, drawn live by world.js with the game's files (a Homeland's floating islands, villagers
+       walking, water running). No words lie over the world: a drag, Q and E or the arrow keys turn it, and the tray at
+       its foot follows the game's live clock or pins a season and the time of day. Its still is the poster. -->
+  <section class="hero hero--product hero--world" data-enter aria-labelledby="hero-h">
+    <div class="wrap"><div class="hero-text hero__in">
+      <div class="hero__head">
+        <div>
+          <p class="hero-notice" data-gt-now>One game day lasts 24 minutes</p>
+          <h1 id="hero-h">A market town on floating islands</h1>
+        </div>
+        <div class="hero__side">
+          <p class="hero__lead">Genesis Town is a pixel-art life sim in your browser. Fish, chop wood and grow wheat on your own islands, then sell to 4 merchants whose prices move with their stock. Free, on NEAR testnet.</p>
+          <div class="btn-row"><a class="btn btn--primary" href="../">Play now<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a><a class="btn btn--secondary" href="#islands">See the islands</a></div>
+        </div>
+      </div>
+      <div class="hero__stage gt-stage" data-visual>
+        <video data-gt-world="home" poster="img/hero.webp" muted playsinline disablepictureinpicture aria-hidden="true" tabindex="-1" style="--ly-pos: 50% 50%" data-source="client" data-subject="a Homeland's floating islands"></video>
+        <p class="gt-hint" aria-hidden="true" hidden>
+          <svg viewBox="0 0 16 16" width="16" height="16"><path d="M1 8h14M1 8l3-3M1 8l3 3M15 8l-3-3M15 8l-3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/></svg>
+          <span class="gt-hint__mouse">Drag to turn, or press <kbd>Q</kbd> <kbd>E</kbd></span><span class="gt-hint__touch">Swipe to turn</span>
+        </p>
+        <div class="gt-dock" hidden>
+        <button class="gt-dock__pill" type="button" aria-expanded="false" aria-controls="gt-tray" aria-label="Show the world's controls">
+          <i class="gt-dock__sw" aria-hidden="true"></i><span data-dock-season>Spring</span>
+          <span class="gt-dock__time" aria-hidden="true"><svg class="gt-dock__sun" viewBox="0 0 16 16" width="14" height="14"><path d="M6 2h4v2H6zM6 12h4v2H6zM2 6h2v4H2zM12 6h2v4h-2zM5 5h6v6H5z" fill="currentColor"/></svg><svg class="gt-dock__moon" viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h4v2H9v2H7v4h2v2h4v2H7v-2H5V8H3V4h2V2z" fill="currentColor"/></svg></span><span data-dock-time>Day</span>
+          <span class="gt-dock__open" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M2 4h7M13 4h1M2 12h1M7 12h7" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></span>
+        </button>
+        <div class="gt-tray" id="gt-tray" role="toolbar" aria-label="The world's controls" inert>
+          <div class="gt-seg gt-seg--live">
+            <button type="button" data-set-time="auto" aria-pressed="true" title="Turn the camera and run the seasons and the clock by themselves"><span class="gt-dot" aria-hidden="true"></span>Auto</button>
+          </div>
+          <div class="gt-seg gt-seg--season" role="group" aria-label="Season">
+            <button type="button" data-set-season="semi" aria-pressed="true">Spring</button>
+            <button type="button" data-set-season="panas" aria-pressed="false">Summer</button>
+            <button type="button" data-set-season="gugur" aria-pressed="false">Autumn</button>
+            <button type="button" data-set-season="dingin" aria-pressed="false">Winter</button>
+          </div>
+          <div class="gt-seg" role="group" aria-label="Time of day">
+            <button type="button" data-set-time="day" aria-pressed="true"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 2h4v2H6zM6 12h4v2H6zM2 6h2v4H2zM12 6h2v4h-2zM5 5h6v6H5z" fill="currentColor"/></svg><span class="gt-lbl">Day</span></button>
+            <button type="button" data-set-time="night" aria-pressed="false"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M7 2h4v2H9v2H7v4h2v2h4v2H7v-2H5V8H3V4h2V2z" fill="currentColor"/></svg><span class="gt-lbl">Night</span></button>
+          </div>
+          <div class="gt-seg" role="group" aria-label="Turn the camera">
+            <button type="button" data-turn-by="-1" aria-label="Turn left (Q)"><kbd>Q</kbd><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3 2 7l4 4M2 7h8a4 4 0 0 1 0 8H8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
+            <button type="button" data-turn-by="1" aria-label="Turn right (E)"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m10 3 4 4-4 4M14 7H6a4 4 0 0 0 0 8h2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><kbd>E</kbd></button>
+          </div>
+          <div class="gt-seg gt-seg--pause">
+            <button class="gt-pause" type="button" aria-pressed="false" aria-label="Pause the world"><span aria-hidden="true"></span></button>
+          </div>
+          <div class="gt-seg gt-seg--close">
+            <button class="gt-close" type="button" aria-label="Hide the controls"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></svg></button>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ISLANDS: the world across the wrap, six markers on it (layout.css .ly-spot): a tap, hover or focus opens what
+       each part of a Homeland is for -->
+  <section class="section" id="islands" aria-labelledby="islands-h">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="islands-h">A Homeland of nine floating islands above the town. <span class="muted">One for every player.</span></h2>
+        <p>Open an island and a plank bridge crosses the gap. Tap a marker on the picture to see what each part is for.</p>
+      </div>
+      <figure class="frame frame--photo fit-screen gt-map">
+        <img class="frame__img" src="img/islands.webp" width="1920" height="900" alt="A Homeland seen low across its islands: red and blue roofs, a farm, bridges and a waterfall falling into the sky" loading="lazy" data-source="client" data-subject="floating islands">
+          <div class="ly-spot gt-spot" style="--xd: 45.8%; --yd: 31.1%; --xf: 45.8%; --yf: 36.7%; --xp: 39.6%; --yp: 36.7%"><button type="button" aria-label="Town Hall" aria-expanded="false"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button><div class="ly-spot__card"><strong>Town Hall</strong>Level it up to open more islands and new buildings. One builder takes one job at a time.</div></div>
+          <div class="ly-spot gt-spot" style="--xd: 44.5%; --yd: 60.3%; --xf: 44.5%; --yf: 57.2%; --xp: 36.3%; --yp: 57.2%"><button type="button" aria-label="Farm" aria-expanded="false"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button><div class="ly-spot__card"><strong>Farm</strong>Plant wheat, water it every day and harvest it after 3 days. Two wheat bake one loaf.</div></div>
+          <div class="ly-spot gt-spot gt-spot--wide" style="--xd: 31.0%; --yd: 45.3%; --xf: 31.0%; --yf: 46.7%"><button type="button" aria-label="Waterfall" aria-expanded="false"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button><div class="ly-spot__card"><strong>Waterfall</strong>Where a pond or the sea reaches the edge, the water falls into the clouds below.</div></div>
+          <div class="ly-spot gt-spot gt-spot--wide" style="--xd: 75.0%; --yd: 37.4%; --xf: 75.0%; --yf: 41.1%"><button type="button" aria-label="Forest" aria-expanded="false"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button><div class="ly-spot__card"><strong>Forest</strong>Pines and fruit trees. Chop wood to sell to the merchants or to build with.</div></div>
+          <div class="ly-spot gt-spot gt-spot--wide" style="--xd: 92.7%; --yd: 61.1%; --xf: 92.7%; --yf: 57.8%"><button type="button" aria-label="Fish pond" aria-expanded="false"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button><div class="ly-spot__card"><strong>Fish pond</strong>Cast from the shore. Sell fish raw, or grill it over one piece of wood.</div></div>
+          <div class="ly-spot gt-spot" style="--xd: 59.9%; --yd: 65.1%; --xf: 59.9%; --yf: 60.6%; --xp: 74.9%; --yp: 60.6%"><button type="button" aria-label="Plank bridge" aria-expanded="false"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button><div class="ly-spot__card"><strong>Plank bridge</strong>Opening an island lays a bridge across the gap, and the server checks every step on it.</div></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- MARKET: the four merchants as tabs beside the chosen one's shelf: the square, then each good's stock against the
+       merchant's target and the price to buy and to sell, live from /api/market (Sari's at base prices until it answers) -->
+  <section class="section" id="market" aria-labelledby="market-h">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="market-h">Four merchants on the market square. <span class="muted">Pick one to see their shelf.</span></h2>
+      </div>
+      <div class="grid grid--top fill">
+        <div class="span-6 gt-merchants" role="tablist" aria-label="Merchants" aria-orientation="vertical">
+          <button class="gt-merchant" type="button" role="tab" id="tab-sari" aria-selected="true" tabindex="0" data-merchant="sari"><span class="gt-merchant__name">Sari<span class="gt-merchant__shop">Lapak Ikan Sari</span></span><span class="gt-merchant__line">Buys fish and wood. Sells fish and grilled fish.</span></button>
+          <button class="gt-merchant" type="button" role="tab" id="tab-budi" aria-selected="false" tabindex="-1" data-merchant="budi"><span class="gt-merchant__name">Budi<span class="gt-merchant__shop">Bengkel Budi</span></span><span class="gt-merchant__line">Buys ore and wood. Sells tools.</span></button>
+          <button class="gt-merchant" type="button" role="tab" id="tab-wati" aria-selected="false" tabindex="-1" data-merchant="wati"><span class="gt-merchant__name">Wati<span class="gt-merchant__shop">Toko Roti Wati</span></span><span class="gt-merchant__line">Buys wheat. Sells wheat and bread.</span></button>
+          <button class="gt-merchant" type="button" role="tab" id="tab-joko" aria-selected="false" tabindex="-1" data-merchant="joko"><span class="gt-merchant__name">Joko<span class="gt-merchant__shop">Toko Serba Ada Joko</span></span><span class="gt-merchant__line">Buys wood, wheat and fish. Sells wood and bread.</span></button>
+        </div>
+        <div class="span-6 start-7 gt-shelf" data-visual id="shelf" role="tabpanel" aria-labelledby="tab-sari" tabindex="0">
+          <div class="gt-shelf__pic"><img class="frame__img" src="img/market.webp" width="1200" height="900" alt="The village square at noon: a fountain in the middle, striped stalls and players walking between them" loading="lazy" data-source="client" data-subject="market square"></div>
+          <div class="gt-shelf__body" data-shelf>
+            <p class="gt-shelf__head"><span data-shelf-shop>Lapak Ikan Sari</span><span data-shelf-cash></span></p>
+            <table class="gt-shelf__table">
+              <thead><tr><th scope="col">Good</th><th scope="col">Stock / target</th><th scope="col">Buy</th><th scope="col">Sell</th></tr></thead>
+              <tbody data-shelf-rows><tr><th scope="row"><span class="gt-good"><img class="gt-item" src="img/item-fish.png" width="48" height="48" alt="">Fish</span></th><td><span class="gt-stock"><span class="gt-bar" style="--w: 100%"><i></i></span><span class="gt-num">20/20</span></span></td><td class="gt-num">9</td><td class="gt-num">7</td></tr><tr><th scope="row"><span class="gt-good"><img class="gt-item" src="img/item-wood.png" width="48" height="48" alt="">Wood</span></th><td><span class="gt-stock"><span class="gt-bar" style="--w: 100%"><i></i></span><span class="gt-num">10/10</span></span></td><td class="gt-num">&ndash;</td><td class="gt-num">5</td></tr><tr><th scope="row"><span class="gt-good"><img class="gt-item" src="img/item-meal.png" width="48" height="48" alt="">Grilled fish</span></th><td><span class="gt-stock"><span class="gt-bar" style="--w: 100%"><i></i></span><span class="gt-num">8/8</span></span></td><td class="gt-num">22</td><td class="gt-num">&ndash;</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICES: the paper window of the game's market: the seven goods' live prices (/api/market; economy/config.json's base
+       prices until it answers) beside a recipe calculator, what a craft adds at the merchants' middle prices. The iris
+       moment opens the paper ground. -->
+  <section class="section ground-inverse" id="prices" aria-labelledby="prices-h" data-moment="iris-opens" data-moment-opts='{"from": "base"}'>
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="prices-h">Market prices for seven goods. <span class="muted">Craft them up for more.</span></h2>
+        <p class="t-small muted" data-gt-live aria-live="polite">Base prices from the game's economy file.</p>
+      </div>
+      <div class="grid grid--top">
+        <ul class="rows span-6 gt-prices">
+          <li><span class="rows__name"><img class="gt-item" src="img/item-fish.png" width="48" height="48" alt="">Fish</span><p>Sari sells it. Sari and Joko buy it.</p><span class="rows__value"><b data-price="fish">8</b> coin<small data-chg="fish">base</small></span></li>
+          <li><span class="rows__name"><img class="gt-item" src="img/item-wood.png" width="48" height="48" alt="">Wood</span><p>Joko sells it. All four buy it.</p><span class="rows__value"><b data-price="wood">6</b> coin<small data-chg="wood">base</small></span></li>
+          <li><span class="rows__name"><img class="gt-item" src="img/item-ore.png" width="48" height="48" alt="">Ore</span><p>Needs a tool to mine. Budi buys it.</p><span class="rows__value"><b data-price="ore">12</b> coin<small data-chg="ore">base</small></span></li>
+          <li><span class="rows__name"><img class="gt-item" src="img/item-wheat.png" width="48" height="48" alt="">Wheat</span><p>Wati sells it. Wati and Joko buy it.</p><span class="rows__value"><b data-price="wheat">5</b> coin<small data-chg="wheat">base</small></span></li>
+          <li><span class="rows__name"><img class="gt-item" src="img/item-bread.png" width="48" height="48" alt="">Bread</span><p>Two wheat. Wati and Joko sell it.</p><span class="rows__value"><b data-price="bread">16</b> coin<small data-chg="bread">base</small></span></li>
+          <li><span class="rows__name"><img class="gt-item" src="img/item-meal.png" width="48" height="48" alt="">Grilled fish</span><p>One fish and one wood. Sari sells it.</p><span class="rows__value"><b data-price="meal">20</b> coin<small data-chg="meal">base</small></span></li>
+          <li><span class="rows__name"><img class="gt-item" src="img/item-tool.png" width="48" height="48" alt="">Tool</span><p>Two ore and one wood. Budi sells it.</p><span class="rows__value"><b data-price="tool">45</b> coin<small data-chg="tool">base</small></span></li>
+        </ul>
+        <div class="card m-nolift span-6 start-7 gt-calc">
+          <div class="gt-calc__top">
+            <h3 id="calc-h">Recipe value at the market</h3>
+            <div class="gt-segs" role="tablist" aria-label="Recipe">
+              <button type="button" role="tab" aria-selected="true" tabindex="0" data-recipe="meal">Grilled fish</button>
+              <button type="button" role="tab" aria-selected="false" tabindex="-1" data-recipe="bread">Bread</button>
+              <button type="button" role="tab" aria-selected="false" tabindex="-1" data-recipe="tool">Tool</button>
+            </div>
+          </div>
+          <div class="gt-calc__body" id="calc" role="tabpanel" aria-labelledby="calc-h">
+            <ul class="gt-calc__lines" data-calc-lines>
+              <li><img class="gt-item" src="img/item-fish.png" width="48" height="48" alt=""><span>1 &times; Fish</span><b class="gt-num">8</b></li>
+              <li><img class="gt-item" src="img/item-wood.png" width="48" height="48" alt=""><span>1 &times; Wood</span><b class="gt-num">6</b></li>
+              <li class="is-out"><img class="gt-item" src="img/item-meal.png" width="48" height="48" alt=""><span>Grilled fish</span><b class="gt-num">20</b></li>
+            </ul>
+            <p class="gt-calc__sum"><span>Added by one craft</span><strong><span data-calc-gain>+6</span> coin</strong></p>
+            <p class="t-small muted" data-calc-note>At base prices; the crafting fee is taken off.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WORK: a bento of three linked cards (the sea island large on the left, the forest and the farm stacked on the
+       right); each opens its recipe in the calculator above -->
+  <section class="section" id="work" style="--hm: 2" aria-labelledby="work-h">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="work-h">Three jobs that fill your bag. <span class="muted">All of it sells at the market.</span></h2>
+      </div>
+      <div class="grid gt-bento">
+        <a class="card card--open gt-bento__big span-6" href="#prices" data-go-recipe="meal">
+          <h3>Fish for Sari's stall<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></h3>
+          <p>Cast from the shore. Sell fish raw to Sari or Joko, or grill it over one piece of wood.</p>
+          <div class="panel"><img class="frame__img" src="img/fish.webp" width="900" height="675" alt="A sea island with sandy paths around blue ponds and a house in the middle" loading="lazy" data-source="client" data-subject="sea island"></div>
+        </a>
+        <a class="card card--open gt-bento__side span-6 start-7" href="#prices" data-go-recipe="tool">
+          <h3>Mine 2 ore and chop wood for a tool<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></h3>
+          <p>Forests ring the islands and the mine is in the north. Budi buys both.</p>
+          <div class="panel"><img class="frame__img" src="img/forest.webp" width="900" height="675" alt="A forest island with pines and blossoming fruit trees beside a house" loading="lazy" data-source="client" data-subject="forest island"></div>
+        </a>
+        <a class="card card--open gt-bento__side span-6 start-7" href="#prices" data-go-recipe="bread">
+          <h3>Grow wheat in 3 days<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></h3>
+          <p>Plant it on your farm, water it daily, then harvest. Two wheat bake one loaf.</p>
+          <div class="panel"><img class="frame__img" src="img/farm.webp" width="900" height="675" alt="A fenced farm plot of tilled soil next to a house, two villagers standing by" loading="lazy" data-source="client" data-subject="farm plot"></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAY: the game's 24-hour day as a scheduler of lanes (the sky, the concert, the monsters, the settlement), the hour
+       now marked live from the game server; the rows under it say the same in words -->
+  <section class="section" id="day" aria-labelledby="day-h">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="day-h">One game day in 24 real minutes. <span class="muted">The same clock for every player.</span></h2>
+        <p>A game hour lasts one real minute. The server keeps the clock, so night falls on every island at once.</p>
+      </div>
+      <div class="gt-day" role="img" aria-label="The game's 24-hour day: night until 05:00, daylight from 06:00 to 19:00, the settlement on NEAR at 06:00, the concert from 19:00 to 01:00 and monsters from 19:00 to 06:00" data-visual>
+        <div class="gt-day__track gt-day__sky" data-lane="day"><i class="is-night"></i><i class="is-night"></i><i class="is-night"></i><i class="is-night"></i><i class="is-night"></i><i class="is-dawn"></i><i class="is-dawn"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-day"></i><i class="is-dusk"></i><i class="is-dusk"></i><i class="is-night"></i><i class="is-night"></i><i class="is-night"></i><i class="is-night"></i></div>
+        <div class="gt-day__track" data-lane="settle"><b class="gt-day__pin" style="--a: 6">Settlement on NEAR, 06:00</b></div>
+        <div class="gt-day__track" data-lane="concert"><b class="gt-day__bar is-concert" style="--a: 0; --b: 1"></b><b class="gt-day__bar is-concert" style="--a: 19; --b: 24">Concert 19:00</b></div>
+        <div class="gt-day__track" data-lane="monster"><b class="gt-day__bar is-monster" style="--a: 0; --b: 6">Boars and bats</b><b class="gt-day__bar is-monster" style="--a: 19; --b: 24">Monsters 19:00</b></div>
+        <div class="gt-day__axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+        <div class="gt-day__now" data-gt-day-now hidden><span>Now <b data-gt-day-time>12:00</b></span></div>
+      </div>
+      <div class="grid grid--top">
+        <ul class="rows span-6">
+          <li data-lane="settle" tabindex="0"><span class="rows__name"><svg class="ic ic-svg ic-20" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></g></svg>Settlement on NEAR</span><p>The day's trades are added up and written to the contract with the ledger's Merkle root.</p><span class="rows__value">06:00</span></li>
+          <li data-lane="day" tabindex="0"><span class="rows__name"><svg class="ic ic-svg ic-20" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></g></svg>Daylight</span><p>Fish, chop, mine and farm, then sell what you made in the town.</p><span class="rows__value">06:00 to 19:00</span></li>
+        </ul>
+        <ul class="rows span-6 start-7">
+          <li data-lane="concert" tabindex="0"><span class="rows__name"><svg class="ic ic-svg ic-20" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></g></svg>Concert on the square</span><p>A band plays the town's chiptune on the stage by the fountain.</p><span class="rows__value">19:00 to 01:00</span></li>
+          <li data-lane="monster" tabindex="0"><span class="rows__name"><svg class="ic ic-svg ic-20" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>Boars and bats</span><p>They roam the open forest and rock islands, and drop wood and ore when you beat them.</p><span class="rows__value">19:00 to 06:00</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEASONS: rows beside one picture that changes to the season under the pointer, the focus or a tap (system.js peek) -->
+  <section class="section" id="seasons" aria-labelledby="seasons-h">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="seasons-h">Four seasons, the same for every player. <span class="muted">Seven game days each.</span></h2>
+      </div>
+      <div class="grid grid--top fill" data-peek>
+        <ul class="rows span-6">
+          <li data-peek-to="semi" tabindex="0"><span class="rows__name">Spring</span><p>Blossom on the fruit trees, green fields.</p><span class="rows__value">7 days</span></li>
+          <li data-peek-to="panas" tabindex="0"><span class="rows__name">Summer</span><p>Bright water and the brightest grass.</p><span class="rows__value">7 days</span></li>
+          <li data-peek-to="gugur" tabindex="0"><span class="rows__name">Autumn</span><p>Orange crowns and amber evening light.</p><span class="rows__value">7 days</span></li>
+          <li data-peek-to="dingin" tabindex="0"><span class="rows__name">Winter</span><p>Snow on the ground, bare oaks, no wheat grows.</p><span class="rows__value">7 days</span></li>
+        </ul>
+        <div class="frame frame--photo frame--fill span-6 start-7">
+          <img class="frame__img" data-peek-for="semi" src="img/season-semi.webp" width="1200" height="900" alt="The centre island in spring, with green trees and red and blue roofs" loading="lazy" data-source="client" data-subject="islands in spring">
+          <img class="frame__img" data-peek-for="panas" src="img/season-panas.webp" width="1200" height="900" alt="The centre island in summer at noon" loading="lazy" data-source="client" data-subject="islands in summer" hidden>
+          <img class="frame__img" data-peek-for="gugur" src="img/season-gugur.webp" width="1200" height="900" alt="The centre island in autumn, its trees orange in the afternoon light" loading="lazy" data-source="client" data-subject="islands in autumn" hidden>
+          <img class="frame__img" data-peek-for="dingin" src="img/season-dingin.webp" width="1200" height="900" alt="The centre island in winter, under snow at dusk" loading="lazy" data-source="client" data-subject="islands in winter" hidden>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ: two columns of open answers (system.css .faq), each question with its icon, the facts from the game's
+       README; a phone takes two screens, three questions each (.g2m) -->
+  <section class="section g2m" id="faq" aria-labelledby="faq-h">
+    <div class="wrap grid grid--top gt-faq">
+      <div class="group span-6">
+        <div class="section-head">
+          <h2 id="faq-h">Questions about Genesis Town</h2>
+        </div>
+        <div class="faq">
+            <div class="faq__item"><h3><svg class="ic ic-svg ic-24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M13.744 17.736a6 6 0 1 1-7.48-7.48M15 6h1v4"/><path d="m6.134 14.768l.866-.5l2 3.464"/><circle cx="16" cy="8" r="6"/></g></svg>What does the sim cost?</h3><p>Nothing. The game is free and runs on NEAR testnet, where coin and items have no cash value.</p></div>
+            <div class="faq__item"><h3><svg class="ic ic-svg ic-24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></g></svg>How do I sign in to the town?</h3><p>With Google or email, no wallet. Your browser keeps a key that can only call the game's contract, and the game pays the gas.</p></div>
+            <div class="faq__item"><h3><svg class="ic ic-svg ic-24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8m-2 4v-3.96v3.15M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/></g></svg>Which browser can I play in?</h3><p>Any current one, on a computer or a phone. A computer draws the 2.5D view and a phone draws 2D. The menus are in Indonesian.</p></div>
+        </div>
+      </div>
+      <div class="group span-6 start-7">
+        <div class="faq">
+            <div class="faq__item"><h3><svg class="ic ic-svg ic-24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></g></svg>Which market goods go on NEAR?</h3><p>Your items and coin, as tokens in one contract. Gathering, crafting and merchant trades are written once a game day; Pasar listings and gifts at once.</p></div>
+            <div class="faq__item"><h3><svg class="ic ic-svg ic-24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 3L4 7l4 4M4 7h16m-4 14l4-4l-4-4m4 4H4"/></svg>Can I trade with players outside the market?</h3><p>Yes. Hand goods to a player within 3 tiles in the town, list them on the Pasar (5% of each sale is burned), or use the consignment stall.</p></div>
+            <div class="faq__item"><h3><svg class="ic ic-svg ic-24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3.128a4 4 0 0 1 0 7.744M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></g></svg>Can friends visit my Homeland?</h3><p>Invite them by name and tag. Guests walk your islands and chat with you; only you build there.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OWN: the statement moment, the night village passing through the words -->
+  <section class="section" id="own" aria-labelledby="own-h" data-moment="giant-type-pass" data-moment-opts='{"image": "../../../img/night.webp", "travel": 60, "focusY": 55}'>
+    <div class="wrap">
+      <h2 class="mo-gt__type" id="own-h">Market goods on NEAR</h2>
+      <div class="mo-gt__row">
+        <p>Your items and coin are tokens in one NEAR contract, written once a day at 06:00 game time. Sign in with Google or email: no seed phrase, no wallet pop-up and no gas while you play.</p>
+        <a class="link" href="https://github.com/leutenantKiya/Genesis-Town">Read the code on GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer closing footer--dark" id="contact" aria-labelledby="close-h">
+  <div class="wrap">
+    <div class="closing__cta close--type">
+      <div class="section-head">
+        <h2 id="close-h">Play Genesis Town in your browser</h2>
+        <p>Nothing to install and no wallet to set up. Sign in, pick your character and you land on your islands.</p>
+      </div>
+      <a class="btn btn--primary btn--xl" href="../">Play now<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+    </div>
+    <div class="closing__links">
+      <div class="grid">
+        <div class="span-4 stack-4">
+          <a class="nav__logo" href="#top"><span class="mark" data-mark="arc" aria-hidden="true"></span>Genesis Town</a>
+          <p class="footer__lede">A pixel-art market sim whose goods and coin live on NEAR testnet.</p>
+        </div>
+        <div class="span-3 start-6 footer__col"><h3>World</h3><ul><li><a href="#islands">Islands</a></li><li><a href="#day">Day</a></li><li><a href="#seasons">Seasons</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Trade</h3><ul><li><a href="#market">Market</a></li><li><a href="#work">Jobs</a></li></ul></div>
+        <div class="span-2 start-11 footer__col"><h3>Code</h3><ul><li><a href="#own">Ownership</a></li><li><a href="#faq">Questions</a></li><li><a href="https://github.com/leutenantKiya/Genesis-Town">GitHub</a></li></ul></div>
+      </div>
+      <div class="footer__legal">
+        <span>&copy; 2026 Genesis Town</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script type="module" src="assets/system.js"></script>
+<script type="module" src="assets/motion/motion.js"></script>
+<script type="module" src="assets/layout/layout.js"></script>
+<script src="../vendor/env.js"></script>
+<script src="world.js" data-game="../"></script>
+<script>
+/* live from the game server: the clock and season (the hero's world and the day strip follow them), the merchants'
+   shelves and prices, and what a recipe adds. The page reads finished without it: base prices, the poster, Sari's
+   shelf. The hero's world tours by itself (it turns, the clock runs, the seasons go round); its tray pins a season
+   or the time of day, and Auto hands both back to the tour. */
+(function () {
+  var API = (window.GT_API || '') + '/api', SEASON = { semi: 'Spring', panas: 'Summer', gugur: 'Autumn', dingin: 'Winter' };
+  var BASE = { fish: 8, wood: 6, ore: 12, wheat: 5, bread: 16, meal: 20, tool: 45 };
+  var NAME = { fish: 'Fish', wood: 'Wood', ore: 'Ore', wheat: 'Wheat', bread: 'Bread', meal: 'Grilled fish', tool: 'Tool' };
+  var RECIPE = { meal: { in: { fish: 1, wood: 1 }, fee: 0 }, bread: { in: { wheat: 2 }, fee: 0 }, tool: { in: { ore: 2, wood: 1 }, fee: 3 } };
+  // the shelves at base prices (economy/config.json), until the server answers
+  function it(token, stock, ask, bid) { return { token: token, stock: stock, target: stock, ask: ask, bid: bid, mid: BASE[token] }; }
+  var SHOPS = {
+    sari: { shop: 'Lapak Ikan Sari', items: [it('fish', 20, 9, 7), it('wood', 10, null, 5), it('meal', 8, 22, null)] },
+    budi: { shop: 'Bengkel Budi', items: [it('ore', 15, null, 10), it('wood', 10, null, 5), it('tool', 4, 50, null)] },
+    wati: { shop: 'Toko Roti Wati', items: [it('wheat', 30, 6, 4), it('bread', 12, 18, null)] },
+    joko: { shop: 'Toko Serba Ada Joko', items: [it('wood', 25, 7, 5), it('wheat', 15, null, 4), it('fish', 10, null, 7), it('bread', 6, 18, null)] }
+  };
+  var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var live = window.live = { view: null, time: null, at: 0, pin: { season: null, time: null }, market: null };
+  function $(q, r) { return (r || document).querySelector(q); }
+  function $$(q, r) { return Array.prototype.slice.call((r || document).querySelectorAll(q)); }
+  function get(path) { return fetch(API + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function hhmm(h) { h = ((h % 24) + 24) % 24; return pad(Math.floor(h)) + ':' + pad(Math.floor((h % 1) * 60)); }
+  function swap(el) { if (still || !el) return; el.classList.remove('is-swap'); el.getBoundingClientRect(); el.classList.add('is-swap'); }
+  // a changed number rolls to its new value, up or down (its text may carry a sign)
+  function roll(el, text) {
+    text = String(text); var old = el.textContent;
+    if (old === text) return;
+    var a = parseFloat(old), b = parseFloat(text);
+    if (still || isNaN(a) || isNaN(b)) { el.textContent = text; return; }
+    el.innerHTML = '<span class="gt-tick ' + (b > a ? 'is-up' : 'is-down') + '"><span>' + old + '</span><span>' + text + '</span></span>';
+    var t = el.firstChild; t.getBoundingClientRect(); t.classList.add('go');
+    setTimeout(function () { if (el.firstChild === t) el.textContent = text; }, 700);
+  }
+
+  /* ---- the clock */
+  live.hour = function () { return live.time ? (live.time.hour + (Date.now() - live.at) / 60000) % 24 : 9.5; }; // one game hour a real minute
+  live.season = function () { return live.pin.season || (live.time ? live.time.season : 'semi'); };
+  live.shown = function () { var p = live.pin.time; return p === 'day' ? 10 : p === 'night' ? 21.5 : live.hour(); };
+  live.apply = function (smooth) {
+    var t = live.time, h = live.hour(), now = $('[data-gt-now]'), mark = $('[data-gt-day-now]');
+    if (t && now) now.textContent = 'In the game now: ' + SEASON[t.season] + ', day ' + (t.dayOfSeason || 1) + ', ' + hhmm(h);
+    if (t && mark) { mark.hidden = false; mark.style.setProperty('--h', (h / 24).toFixed(4)); mark.classList.toggle('is-right', h > 19); $('[data-gt-day-time]', mark).textContent = hhmm(h); }
+    var v = live.view;
+    if (v) {
+      v.auto({ spin: 7, time: !live.pin.time, season: !live.pin.season });
+      if (live.pin.season) v.season(live.pin.season);
+      if (live.pin.time) v.hour(live.pin.time === 'day' ? 10 : 21.5, smooth);
+    }
+    paintTray();
+  };
+  // the tray and the pill show what the world shows now
+  var shownKey = '';
+  function paintTray() {
+    var v = live.view, g = v ? v.get() : { season: live.season(), night: false }, dock = $('.gt-dock');
+    $$('[data-set-season]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-set-season') === g.season)); });
+    $$('[data-set-time]').forEach(function (b) {
+      var k = b.getAttribute('data-set-time');
+      b.setAttribute('aria-pressed', String(k === 'auto' ? !live.pin.time && !live.pin.season : k === (g.night ? 'night' : 'day')));
+    });
+    if (!dock) return;
+    var sEl = $('[data-dock-season]', dock), tEl = $('[data-dock-time]', dock), sw = { semi: '#f28fb0', panas: '#34c3c9', gugur: '#f0903a', dingin: '#8fc8f2' };
+    if (sEl.textContent !== SEASON[g.season]) { sEl.textContent = SEASON[g.season]; if (shownKey) swap(sEl); }
+    var tt = g.night ? 'Night' : 'Day';
+    if (tEl.textContent !== tt) { tEl.textContent = tt; if (shownKey) swap(tEl); }
+    dock.style.setProperty('--sw', sw[g.season]); dock.classList.toggle('is-night', g.night);
+    shownKey = g.season + g.night;
+  }
+  function clock() { get('/time').then(function (t) { live.time = t; live.at = Date.now(); live.apply(); }).catch(function () {}); }
+
+  /* ---- the hero's world: the poster stands under reduced motion, without WebGL or when the game files fail */
+  var stage = $('.gt-stage'), v = stage && $('video[data-gt-world]', stage);
+  if (v && window.GTWorld && !still) {
+    var view = GTWorld.mount(v, { shot: GTWorld.shots[v.getAttribute('data-gt-world')], intro: true, drift: true });
+    view.ready.then(function () {
+      var tray = $('.gt-tray', stage), hint = $('.gt-hint', stage), pause = $('.gt-pause', stage), turned = 0,
+        dock = $('.gt-dock', stage), pill = $('.gt-dock__pill', dock), idle = 0;
+      dock.hidden = false; hint.hidden = false;
+      view.auto({ on: paintTray });
+      // the dock opens on the pill and closes on its cross, on Escape, or after 8 s without a hand or focus on it
+      function openDock(on, focus) {
+        dock.classList.toggle('is-open', on); tray.inert = !on; pill.setAttribute('aria-expanded', String(on));
+        pill.setAttribute('aria-label', on ? "Hide the world's controls" : "Show the world's controls");
+        clearTimeout(idle); if (on) rest();
+        if (focus) (on ? $('button', tray) : pill).focus({ preventScroll: true });
+      }
+      function rest() { clearTimeout(idle); idle = setTimeout(function () { if (!dock.matches(':hover') && !dock.contains(document.activeElement)) openDock(false); else rest(); }, 8000); }
+      pill.addEventListener('click', function (e) { openDock(true, e.detail === 0); });
+      dock.addEventListener('pointermove', rest); dock.addEventListener('focusin', rest);
+      dock.addEventListener('keydown', function (e) { if (e.key === 'Escape' && dock.classList.contains('is-open')) { e.stopPropagation(); openDock(false, true); } });
+      stage.setAttribute('data-turn', ''); stage.tabIndex = 0;
+      stage.setAttribute('role', 'group'); stage.setAttribute('aria-label', "A Homeland's floating islands, live, turning through the seasons and the day by itself. Drag, or press Q and E or the arrow keys, to turn the camera.");
+      function gone() { if (!hint.classList.contains('is-gone')) { hint.classList.add('is-gone'); setTimeout(function () { hint.hidden = true; }, 600); } }
+      setTimeout(gone, 9000);
+      live.view = view; live.apply();
+      tray.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        if (b.classList.contains('gt-close')) { openDock(false, e.detail === 0); return; }
+        rest();
+        if (b.hasAttribute('data-set-season')) { live.pin.season = b.getAttribute('data-set-season'); live.apply(true); }
+        else if (b.hasAttribute('data-set-time')) { var k = b.getAttribute('data-set-time'); if (k === 'auto') { live.pin.time = null; live.pin.season = null; } else live.pin.time = k; live.apply(true); }
+        else if (b.hasAttribute('data-turn-by')) { turn(+b.getAttribute('data-turn-by')); }
+        else if (b === pause) {
+          var on = pause.getAttribute('aria-pressed') !== 'true';
+          pause.setAttribute('aria-pressed', String(on)); pause.setAttribute('aria-label', on ? 'Play the world' : 'Pause the world');
+          view.pause(on);
+        }
+      });
+      function turn(dir) {
+        view.turn(dir); gone();
+        var b = $('[data-turn-by="' + dir + '"]', tray); b.classList.add('is-key'); clearTimeout(b._t); b._t = setTimeout(function () { b.classList.remove('is-key'); }, 160);
+      }
+      var seen = true;
+      if (window.IntersectionObserver) new IntersectionObserver(function (es) { seen = es[0].intersectionRatio > 0.35; }, { threshold: [0, 0.35, 1] }).observe(stage);
+      document.addEventListener('keydown', function (e) {
+        if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+        if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+        var k = (e.key || '').toLowerCase(), dir = k === 'q' ? -1 : k === 'e' ? 1 : 0, focus = document.activeElement === stage;
+        if (!dir && focus) dir = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+        if (!dir || !(seen || focus)) return;
+        if (focus) e.preventDefault();
+        turn(dir);
+      });
+      var drag = null, vel = 0, spin = 0, held = 0;
+      stage.addEventListener('pointerdown', function (e) {
+        if (e.button > 0 || e.target.closest('.gt-dock')) return;
+        cancelAnimationFrame(spin); vel = 0;
+        drag = { x: e.clientX, t: performance.now() }; stage.classList.add('is-drag'); view.hold();
+        clearInterval(held); held = setInterval(view.hold, 400); // a hand on the world keeps the tour from turning it
+        try { stage.setPointerCapture(e.pointerId); } catch (x) { /* old browsers */ }
+      });
+      stage.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        var now = performance.now(), d = (e.clientX - drag.x) * -0.25, dt = Math.max(8, now - drag.t);
+        if (!d) return;
+        view.nudge(d); turned += Math.abs(d); if (turned > 8) gone();
+        vel = vel * 0.5 + (d / dt) * 0.5; drag.x = e.clientX; drag.t = now;
+      });
+      function end() {
+        if (!drag) return;
+        var fresh = performance.now() - drag.t < 90; drag = null; stage.classList.remove('is-drag'); clearInterval(held);
+        if (!fresh || Math.abs(vel) < 0.02) return;
+        vel = Math.max(-0.5, Math.min(0.5, vel)); // at most about 70 degrees of coasting
+        var last = performance.now();
+        (function coast(now) {
+          var dt = Math.min(40, now - last); last = now; view.nudge(vel * dt); vel *= Math.pow(0.993, dt);
+          if (Math.abs(vel) > 0.004) spin = requestAnimationFrame(coast);
+        })(last);
+      }
+      stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
+    }, function () { /* the poster stays */ });
+  }
+
+  /* ---- tabs: a click, or the arrow keys between them, picks one */
+  function tabs(list, pick) {
+    var all = $$('[role="tab"]', list);
+    all.forEach(function (b, i) {
+      b.addEventListener('click', function () { pick(b, true); });
+      b.addEventListener('keydown', function (e) {
+        var d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+        if (e.key === 'Home') d = -i; if (e.key === 'End') d = all.length - 1 - i;
+        if (d == null) return;
+        e.preventDefault(); var n = all[(i + d + all.length) % all.length]; n.focus(); pick(n, true);
+      });
+    });
+  }
+  function select(all, b) { all.forEach(function (x) { var on = x === b; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; }); }
+
+  /* ---- the market: the chosen merchant's shelf */
+  var shelf = $('[data-shelf]'), merchant = 'sari';
+  function shops() {
+    var out = {}; Object.keys(SHOPS).forEach(function (k) { out[k] = SHOPS[k]; });
+    if (live.market) live.market.forEach(function (m) { if (out[m.id]) out[m.id] = { shop: m.shop, cash: m.cash, open: m.open, items: m.items, live: true }; });
+    return out;
+  }
+  function paintShelf(animate) {
+    var m = shops()[merchant]; if (!m || !shelf) return;
+    $('[data-shelf-shop]', shelf).textContent = m.shop;
+    $('[data-shelf-cash]', shelf).textContent = m.live ? (m.open === false ? 'Closed' : m.cash + ' coin in the till') : 'Base prices';
+    $('[data-shelf-rows]', shelf).innerHTML = m.items.map(function (i) {
+      var w = i.target ? Math.min(100, Math.round(i.stock / i.target * 100)) : 0;
+      return '<tr><th scope="row"><span class="gt-good"><img class="gt-item" src="img/item-' + i.token + '.png" width="48" height="48" alt="">' + NAME[i.token] + '</span></th>' +
+        '<td><span class="gt-stock"><span class="gt-bar" style="--w: ' + w + '%"><i></i></span><span class="gt-num">' + i.stock + '/' + i.target + '</span></span></td>' +
+        '<td class="gt-num">' + (i.ask != null ? i.ask : '&ndash;') + '</td><td class="gt-num">' + (i.bid != null ? i.bid : '&ndash;') + '</td></tr>';
+    }).join('');
+    if (animate) swap(shelf);
+  }
+  var mlist = $('.gt-merchants');
+  if (mlist) tabs(mlist, function (b, animate) {
+    if (b.getAttribute('data-merchant') === merchant) return;
+    select($$('[role="tab"]', mlist), b); merchant = b.getAttribute('data-merchant');
+    $('#shelf').setAttribute('aria-labelledby', b.id); paintShelf(animate);
+  });
+
+  /* ---- the prices, and what a recipe adds at the merchants' middle prices */
+  var recipe = 'meal';
+  function mids() {
+    var sum = {}, n = {};
+    if (live.market) live.market.forEach(function (m) { (m.items || []).forEach(function (i) { if (i.mid == null) return; sum[i.token] = (sum[i.token] || 0) + i.mid; n[i.token] = (n[i.token] || 0) + 1; }); });
+    var out = {}; Object.keys(BASE).forEach(function (k) { out[k] = n[k] ? Math.round(sum[k] / n[k]) : BASE[k]; });
+    return out;
+  }
+  function paintCalc(animate) {
+    var r = RECIPE[recipe], p = mids(), cost = 0, lines = $('[data-calc-lines]');
+    var html = Object.keys(r.in).map(function (k) {
+      cost += p[k] * r.in[k];
+      return '<li><img class="gt-item" src="img/item-' + k + '.png" width="48" height="48" alt=""><span>' + r.in[k] + ' &times; ' + NAME[k] + '</span><b class="gt-num">' + p[k] * r.in[k] + '</b></li>';
+    }).join('');
+    if (r.fee) html += '<li><span class="gt-item" aria-hidden="true"></span><span>Crafting fee</span><b class="gt-num">' + r.fee + '</b></li>';
+    html += '<li class="is-out"><img class="gt-item" src="img/item-' + recipe + '.png" width="48" height="48" alt=""><span>' + NAME[recipe] + '</span><b class="gt-num">' + p[recipe] + '</b></li>';
+    lines.innerHTML = html; if (animate) swap(lines);
+    var gain = p[recipe] - cost - r.fee;
+    roll($('[data-calc-gain]'), (gain >= 0 ? '+' : '') + gain);
+    $('[data-calc-note]').textContent = (live.market ? 'At the merchants’ middle prices, live' : 'At base prices') + (r.fee ? '; Budi’s fee is taken off.' : '; no fee for this recipe.');
+    $$('#prices .gt-prices li').forEach(function (li) { var k = $('[data-price]', li).getAttribute('data-price'); li.classList.toggle('is-lit', k === recipe || !!r.in[k]); });
+  }
+  var segs = $('.gt-segs');
+  function pickRecipe(b, animate) {
+    if (!b) return;
+    var all = $$('[role="tab"]', segs); select(all, b); recipe = b.getAttribute('data-recipe');
+    segs.style.setProperty('--i', all.indexOf(b)); paintCalc(animate);
+  }
+  if (segs) tabs(segs, function (b, animate) { if (b.getAttribute('data-recipe') !== recipe) pickRecipe(b, animate); });
+  // a job card opens its recipe
+  $$('[data-go-recipe]').forEach(function (a) { a.addEventListener('click', function () { pickRecipe($('.gt-segs [data-recipe="' + a.getAttribute('data-go-recipe') + '"]'), true); }); });
+
+  function prices() {
+    get('/market').then(function (d) {
+      live.market = d.merchants || [];
+      var best = {};
+      live.market.forEach(function (m) { if (m.open === false) return; (m.items || []).forEach(function (i) {
+        var b = best[i.token] || (best[i.token] = { ask: null, bid: null });
+        if (i.ask != null && (b.ask == null || i.ask < b.ask)) b.ask = i.ask;
+        if (i.bid != null && (b.bid == null || i.bid > b.bid)) b.bid = i.bid;
+      }); });
+      Object.keys(BASE).forEach(function (k) {
+        var b = best[k]; if (!b) return;
+        var p = b.ask != null ? b.ask : b.bid, el = $('[data-price="' + k + '"]'), ch = $('[data-chg="' + k + '"]');
+        if (p == null || !el) return;
+        var pct = Math.round((p - BASE[k]) / BASE[k] * 100);
+        roll(el, p);
+        ch.textContent = b.ask != null ? (pct > 0 ? '+' + pct + '%' : pct < 0 ? '−' + -pct + '%' : 'base') : 'sell';
+        ch.title = b.ask != null ? 'The cheapest price to buy, against the base price' : 'Nobody sells it: what a merchant pays you';
+        ch.className = b.ask == null ? '' : pct > 0 ? 'is-up' : pct < 0 ? 'is-down' : '';
+      });
+      var note = $('[data-gt-live]');
+      if (note) note.textContent = 'Live from the game server at ' + new Date().toTimeString().slice(0, 5) + ': the cheapest price to buy each good, and its change against the base price.';
+      paintShelf(false); paintCalc(false);
+    }).catch(function () {});
+  }
+  clock(); prices();
+  setInterval(function () { if (live.time) live.apply(); }, 5000);
+  setInterval(clock, 120000); setInterval(prices, 30000);
+
+  /* ---- the day: a row lights its lane, a lane its row */
+  var day = $('.gt-day'), drows = $$('#day .rows');
+  function light(lane) {
+    if (!day) return;
+    day.classList.toggle('is-lit', !!lane); drows.forEach(function (r) { r.classList.toggle('is-lit', !!lane); });
+    $$('[data-lane]').forEach(function (el) { el.classList.toggle('is-lit', !!lane && el.getAttribute('data-lane') === lane); });
+  }
+  $$('#day [data-lane]').forEach(function (el) {
+    el.addEventListener('pointerenter', function () { light(el.getAttribute('data-lane')); });
+    el.addEventListener('pointerleave', function () { light(null); });
+    el.addEventListener('focus', function () { light(el.getAttribute('data-lane')); });
+    el.addEventListener('blur', function () { light(null); });
+  });
+})();
+</script>
+</body>
+</html>
