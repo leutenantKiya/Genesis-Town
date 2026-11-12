@@ -146,11 +146,27 @@
       R(g, w - 8, 0, 1, roofRows - 2, '#6a6a6a'); R(g, w - 7, 1, 7, 5, '#00ec97'); R(g, w - 6, 2, 1, 3, '#000'); R(g, w - 2, 2, 1, 3, '#000'); R(g, w - 5, 2, 1, 1, '#000'); R(g, w - 4, 3, 1, 1, '#000'); R(g, w - 3, 4, 1, 1, '#000');
     }
     if (kind === 'kolam') { R(g, 2, h - 6, w - 4, 2, '#3d7fc2'); R(g, 2, h - 6, w - 4, 1, '#9ad8ff'); }
+    if (HOME[kind]) homeTrim(g, w, h, wallTop, kind);
     sign(g, cx, h - 24, st, ICON[kind]);
     door(g, cx, h - 1, kind === 'clinic' || kind === 'rumahsakit' ? '#5cb8b0' : kind === 'rumah' ? '#6a4020' : kind === 'post' ? '#c86028' : kind === 'gudang' ? '#f2ead8' : null);
     if (kind === 'gudang') { R(g, cx - 4, h - 13, 8, 12, '#8e3c2c'); for (var k = 0; k < 12; k++) { R(g, cx - 4 + Math.floor(k * 8 / 12), h - 13 + k, 1, 1, '#f2ead8'); R(g, cx + 3 - Math.floor(k * 8 / 12), h - 13 + k, 1, 1, '#f2ead8'); } }
     if (kind === 'kincir' && !bare) sails(g, cx, 7, 14);
     return cv;
+  }
+
+  /* Homeland buildings look lived-in, unlike the public village's: a fieldstone base instead of the plain grey plinth,
+     and flower boxes under the front windows (the 2.5D view uses this facade, so it shows there too) */
+  var HOME = { townhall: 1, kolam: 1, tambang: 1, restoran: 1, rumah: 1, rumahsakit: 1, penggergajian: 1, kincir: 1, gudang: 1 };
+  function homeTrim(g, w, h, wallTop, kind) {
+    R(g, 2, h - 4, w - 4, 3, '#8a8478');
+    for (var x = 2, k = 0; x < w - 2; x += 4, k++) { R(g, x, h - 4 + (k % 2), 3, 1, '#b4ac9c'); R(g, x + 3, h - 4, 1, 3, '#5e5850'); }
+    if (kind === 'tambang' || kind === 'penggergajian' || kind === 'gudang') return; // work fronts have no windows to dress
+    [5, w - 13].forEach(function (bx) {
+      var by = wallTop + 13;
+      R(g, bx - 1, by, 10, 3, OL); R(g, bx, by, 8, 2, '#8a5a30');
+      for (var f = 0; f < 4; f++) R(g, bx + 1 + f * 2, by - 1, 1, 1, f % 2 ? '#f0d048' : '#e85a6a');
+      R(g, bx, by - 1, 8, 0, '#4a9a40');
+    });
   }
 
   /* the windmill's four sails over the roof, as an X: a wooden spar and lattice cloth on each, a hub in the middle;

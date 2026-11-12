@@ -901,7 +901,7 @@
   function init() {
     C = window.GT_CHAIN || null;
     GT.hotkey('B', function () { openPortal(); });
-    upBtn = GT.addHudButton({ id: 'gt-upbtn', label: '▲ ' + $t('Tingkatkan'), secondary: false, onClick: function () { if (inOwnHome()) openWin('hall', $t('Balai Kota')); } });
+    upBtn = GT.addHudButton({ id: 'gt-upbtn', label: $t('Tingkatkan'), secondary: false, onClick: function () { if (inOwnHome()) openWin('hall', $t('Balai Kota')); } });
     if (upBtn) { upBtn.hidden = true; upBtn.title = $t('Naikkan Balai Kota, buka wilayah, dan lihat pembangun'); }
     window.GT_HOME = { hoe: hoe, enter: enter, travel: travel, openPortal: openPortal, refresh: function () { return load(true); }, state: function () { return H; } };
   }
