@@ -209,8 +209,20 @@ All new text goes through `$t()` with English lines in `client/js/lang/en.js`. B
 
 ## Decisions for the owner
 
-1. Bot wallets as keyless ids (recommended), or real NEAR sub-accounts (needs a `bots` parent key on the server and
-   0.01 NEAR per bot)?
-2. Wallets for producing bots only (recommended, saves `max_players` slots), or for every bot?
-3. Who tops up the contract storage, and from which faucet? This must happen before step 3 runs on testnet.
-4. Use the "genesis-town" Auth0 tenant for an email login, or leave it?
+Settled 2026-11-12:
+- **Wallet type:** keyless ids inside the game contract, like the merchants' wallets. No private key, no NEAR per bot.
+- **What a bot does with its wallet:** holds its output, sells to merchants, buys from merchants (spend capped per
+  day). No daily wage.
+- **Merchant bots** (Sari, Budi, Wati, Joko) already have wallets and need no work here:
+  - they are real NEAR accounts (`<id>.genesistown.testnet`) and registered merchants in the contract (`get_config`
+    `merchants`);
+  - their stock and cash move only through settlement;
+  - they are exempt from the daily gain caps and do not use player slots.
+  - Balances on 2026-11-12: Sari 16 fish, 2 meal; Budi 7 wood, 1 tool; Wati 4 bread; Joko 45 coin, 10 fish, 4 wood,
+    15 wheat.
+  - The README should link their explorer pages as the first "NPCs with wallets".
+
+Still open:
+1. Which worker bots get a wallet: producing bots only (recommended), every bot, or one wallet per Homeland?
+2. Who tops up the contract storage, and from which faucet? This must happen before step 3 runs on testnet.
+3. Use the "genesis-town" Auth0 tenant for an email login, or leave it?
