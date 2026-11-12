@@ -742,7 +742,14 @@
     else {
       var prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl });
       ready = Promise.all([prov.viewAccessKey({ accountId: S.account, publicKey: kp.getPublicKey() }), prov.viewBlock({ finality: 'final' })])
-        .then(function (r) { return { nonce: BigInt(r[0].nonce) + 1n, height: BigInt(r[1].header.height) }; });
+        .then(function (r) { return { nonce: BigInt(r[0].nonce) + 1n, height: BigInt(r[1].header.height) }; }, function (e) {
+          // this device's game key is not on the NEAR account yet (a new device, or an account adopted by a fresh
+          // database): the same answer the relayer would give, so signedCall runs the device approval
+          if (/does not exist|UNKNOWN_ACCESS_KEY/i.test(String(e && (e.type || '') + ' ' + (e.message || e)))) {
+            var a = new Error($t('Perangkat ini perlu disetujui dengan NEAR Auth dulu.')); a.code = 'approve_device'; throw a;
+          }
+          throw e;
+        });
     }
     return ready.then(function (x) {
       var da = L.buildDelegateAction({

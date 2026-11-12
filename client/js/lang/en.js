@@ -194,6 +194,7 @@
     "Masuk pakai Google atau email. Tanpa dompet, tanpa biaya, langsung di browser.": "Sign in with Google or email. No wallet, no fees, right in the browser.",
     "Login belum aktif di alamat ini: NEAR Auth hanya menerima alamat yang sudah didaftarkan, dan login Google belum dipasang di server ini. Kamu tetap bisa melihat-lihat desa sebagai tamu.": "Sign-in is not available at this address yet: NEAR Auth only accepts addresses it has registered, and Google sign-in is not set up on this server. You can still look around the village as a guest.",
     "Oke": "OK",
+    "Perangkat ini perlu disetujui dengan NEAR Auth dulu.": "This device needs to be approved with NEAR Auth first.",
     "Masuk pakai Google. Tanpa dompet, tanpa biaya, langsung di browser.": "Sign in with Google. No wallet, no fees, right in the browser.",
     "Semi": "Spring",
     "Panas": "Summer",
