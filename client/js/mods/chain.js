@@ -453,13 +453,20 @@
     if (sc && sc.kind !== 'out' && sc.house) return { x: sc.house.dx, y: sc.house.dy + 1 };
     return { x: p.x, y: p.y };
   }
-  /* ---- Langkah pertama: a newcomer's next step, one at a time, ticked off by what they actually do ---- */
+  /* ---- Misi: a newcomer's next step through the whole first loop (village, then Homeland), one at a time, ticked off
+     by what they actually do (history rows, the Homeland's state, the farm plots) ---- */
   var GOALS = [
     { id: 'signin', text: $t('Tekan Masuk untuk membuat akunmu (Google atau email). Tanpa dompet, tanpa gas.') },
     { id: 'gather', text: $t('Klik kolam, pohon atau batu (atau hadap lalu tekan F). Hasilnya masuk ke Tas.') },
+    { id: 'craft', text: $t('Buat sesuatu di Meja Kerja: 2 Gandum jadi Roti, atau Ikan + Kayu jadi Ikan Bakar.') },
     { id: 'sell', text: $t('Jalan ke Pasar di timur rumahmu dan jual hasilmu ke Sari, Budi, Wati atau Joko.') },
+    { id: 'home', text: $t('Berdiri di portal batu dekat alun-alun dan tunggu sebentar: kamu pindah ke Homeland-mu sendiri.') },
+    { id: 'build', text: $t('Di Homeland, buka lahan kosong (klik pintunya) dan bangun Kolam Ikan.') },
+    { id: 'th', text: $t('Tekan Tingkatkan di atas dan naikkan Balai Kota ke level 2: bangunan baru terbuka.') },
+    { id: 'plant', text: $t('Cangkul petak kebun, lalu pegang Gandum dan klik kanan petaknya untuk menanam.') },
     { id: 'board', text: $t('Masuk ke Balai Desa di samping pasar dan lihat papan proyek di rak belakang.') }
   ];
+  var lastGoal = null, goalsSince = 0; // no 'done' toast while the first loads catch up (history arrives late)
   var goalBox = null;
   function goalKey() { return 'gt.chain.goals.' + (S.account || 'guest'); }
   function goalsDone() { try { return JSON.parse(lsGet(goalKey()) || '{}') || {}; } catch (e) { return {}; } }
@@ -472,16 +479,26 @@
     if (S.account) d.signin = 1;
     if (S.history && S.history.some(function (h) { return h.kind === 'gather'; })) d.gather = 1;
     if (S.history && S.history.some(function (h) { return h.kind === 'sell'; })) d.sell = 1;
+    if (S.history && S.history.some(function (h) { return h.kind === 'craft'; })) d.craft = 1;
+    var HM = window.GT_HOME && GT_HOME.state && GT_HOME.state();
+    if (/^HL-/.test(worldNow()) || (HM && HM.world && d.home)) d.home = 1;
+    if (HM && HM.built && HM.built.length) d.build = 1;
+    if (HM && HM.th >= 2) d.th = 1;
+    if (S.st && S.st.plots && S.st.plots.some(function (p) { return p && p.state && p.state !== 'empty' && p.state !== 'tilled'; })) d.plant = 1;
+    ['home', 'build', 'th', 'plant', 'craft'].forEach(function (k) { if (d[k] && !goalsDone()[k]) { var dd = goalsDone(); dd[k] = 1; lsSet(goalKey(), JSON.stringify(dd)); } });
     var next = GOALS.filter(function (g) { return !d[g.id]; })[0];
+    if (!goalsSince) goalsSince = Date.now() + 8000;
+    if (lastGoal && next !== lastGoal && !lastGoal.rescue && S.account && Date.now() > goalsSince) GT.toast('🎯 ' + $t('Misi selesai! Lanjut ke misi berikutnya.'));
+    lastGoal = next || null;
     var hidden = lsGet('gt.chain.goalsHidden') === '1';
     // Every shop closed: nobody can sell, so say what the easiest board still needs (beats the first-steps guide).
     var rescue = closedHint();
     if (rescue && lsGet('gt.chain.rescueHidden') !== String(S.st && S.st.time.day)) { next = rescue; hidden = false; }
-    goalBox.style.display = !next || hidden || S.mode === 'offline' || worldNow() !== 'public' ? 'none' : ''; // the guide points at the public town
+    goalBox.style.display = !next || hidden || S.mode === 'offline' ? 'none' : ''; // the missions follow the player into the Homeland too
     if (!next) return;
     goalBox.textContent = '';
     var head = $('div', 'gt-goals-head');
-    head.appendChild($('b', null, next.rescue ? $t('Semua toko tutup') : $t('Langkah pertama · {0}/{1}', [GOALS.indexOf(next) + 1, GOALS.length])));
+    head.appendChild($('b', null, next.rescue ? $t('Semua toko tutup') : '🎯 ' + $t('Misi {0}/{1}', [GOALS.indexOf(next) + 1, GOALS.length])));
     var x = $('button', 'gt-goals-x', $t('Tutup')); x.type = 'button'; x.setAttribute('aria-label', next.rescue ? $t('Sembunyikan untuk hari ini') : $t('Sembunyikan langkah pertama'));
     x.addEventListener('click', function (e) {
       e.stopPropagation();
