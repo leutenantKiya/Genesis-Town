@@ -1,7 +1,8 @@
 /*
  * Public-area economy (client of server/src/game/trade.ts, consign.ts, leaderboard.ts):
- *  - "Ajak dagang" on another player's card: offer items/coin for items/coin (both stand within 3 tiles in the public area)
- *  - incoming offers pop up with Terima / Tolak
+ *  - "Ajak dagang" on a player card, "Dagang" in the party panel and /dagang nama#tag open a live trade window (client of the
+ *    /api/trade/open|join|set|ready|close sessions): both put in items and coin, both press Siap, any change clears both, then a 3 s countdown
+ *    works in the village and in a Homeland; an invitation pops up with Buka / Tolak
  *  - Titip Jual stall (Mbok Darmi): leave items with a minimum price, she sells hourly even while you are away
  *  - Papan Juara board: top sellers today / of all time
  * The stall and the board stand at fixed plaza tiles from GTVillage.landmarks (same on the server). Only in the public area.
@@ -9,8 +10,7 @@
 (function () {
   'use strict';
   var GT = window.GT, C = null;
-  var offers = {}, pollT = 2, polling = false;
-  var seen = {}, popup = null;
+  var pollT = 2;
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function S() { return C && C.state; }
@@ -46,86 +46,232 @@
     return GTVillage.landmarks(GT.world.layout);
   }
 
-  /* ---------------------------------------------------------------- line editor (pick a token and an amount, up to 4 lines) */
-  function lineEditor(tokens, max, maxQty) {
-    var box = $('div', 'tr-editor'), rows = [];
-    var addBtn = $('button', 'mbtn tr-add', $t('+ barang')); addBtn.type = 'button';
-    addBtn.addEventListener('click', add);
-    function add() {
-      if (rows.length >= max) return;
-      var row = $('div', 'tr-line'), sel = $('select', 'tr-sel'), num = $('input', 'tr-num');
-      tokens.forEach(function (t) { var o = $('option', null, iname(t)); o.value = t; sel.appendChild(o); });
-      num.type = 'number'; num.min = '1'; num.step = '1'; num.value = '1'; num.setAttribute('aria-label', 'jumlah'); sel.setAttribute('aria-label', 'barang');
-      var del = $('button', 'mbtn tr-del', 'x'); del.type = 'button'; del.setAttribute('aria-label', $t('Hapus baris'));
-      del.addEventListener('click', function () { box.removeChild(row); rows.splice(rows.indexOf(r), 1); });
-      var r = { sel: sel, num: num };
-      row.appendChild(sel); row.appendChild(num); row.appendChild(del);
-      rows.push(r); box.insertBefore(row, addBtn);
-    }
-    box.appendChild(addBtn);
-    return {
-      el: box, add: add,
-      value: function () {
-        var out = {};
-        rows.forEach(function (r) { var q = Math.floor(Number(r.num.value)); if (q >= 1) out[r.sel.value] = Math.min(q, maxQty || 100000); });
-        return out;
-      }
-    };
+  /* ---------------------------------------------------------------- live trade window (sessions: /api/trade/open|join|set|ready|close) */
+  var sess = null;          // my live (or just ended) session view
+  var win = null;           // the open window handle
+  var winKey = '';          // id + phase the window was built for
+  var ui = null;            // refs into the built window
+  var dismissed = {};       // id:status of ended sessions already shown
+  var seenInv = {};         // invites already popped up
+  var invPop = null;
+  var draft = {};           // my side as typed: token -> qty
+  var setT = null, dirty = false, sending = null, countT = null, deadline = 0;
+
+  function worldNow() { return (GT.worldId && GT.worldId()) || 'public'; }
+  function maxKinds() { var s = S(), t = s && s.cfg && s.cfg.econ && s.cfg.econ.trade; return (t && t.maxLines) || 4; }
+  function live(s) { return !!s && (s.status === 'invite' || s.status === 'open' || s.status === 'locked'); }
+  function otherName(s) { return s.other.name + (s.other.tag ? '#' + s.other.tag : ''); }
+  function tpost(path, body) { body = body || {}; body.world = worldNow(); return post(path, body); }
+
+  function stopWin(reason) {
+    if (setT) { clearTimeout(setT); setT = null; }
+    if (countT) { clearInterval(countT); countT = null; }
+    dirty = false; ui = null; winKey = '';
+    var w = win; win = null;
+    if (w && w.isOpen()) w.close(reason || 'end');
+  }
+  function finish(s, text, refresh) {
+    dismissed[s.id + ':' + s.status] = 1;
+    sess = null; stopWin('end');
+    if (text) GT.toast(text);
+    if (refresh && C.refresh) C.refresh(true);
   }
 
-  /* ---------------------------------------------------------------- direct trade */
-  function offerModal(o) {
-    if (!signedIn()) { GT.toast($t('Masuk dulu.')); return; }
-    var mine = Object.keys(items()).filter(function (t) { return have(t) > 0; });
-    var all = Object.keys(items());
-    var body = $('div');
-    body.appendChild($('p', 'chain-dim', $t('Kalian harus berdiri berdekatan di area publik. Tawaran berlaku 2 menit.')));
-    var gc = cell($t('Kamu beri')), wc = cell($t('Kamu minta'));
-    var give = lineEditor(mine, 4, 100000); gc.appendChild(give.el); if (mine.length) give.add();
-    var want = lineEditor(all, 4, 100000); wc.appendChild(want.el); want.add();
-    body.appendChild(gc); body.appendChild(wc);
-    GT.modal({
-      title: $t('Ajak dagang: {0}{1}', [o.nick, o.tag ? '#' + o.tag : '']), body: body, actions: [
-        { label: $t('Kirim tawaran'), primary: true, onClick: function (h) {
-          post('/trade/offer', { to: o.nick + '#' + o.tag, give: give.value(), want: want.value() })
-            .then(function () { GT.toast($t('Tawaran terkirim ke {0}.', [o.nick])); h.close('ok'); }, fail);
-        } },
-        { label: $t('Batal'), close: true }
-      ]
+  /* my side: a coin box and up to maxKinds-1 item rows, every edit is sent after 400 ms */
+  function currentLines() {
+    var out = {};
+    if (!ui) return out;
+    var c = Math.floor(Number(ui.coin.value));
+    if (c >= 1) out.coin = Math.min(c, have('coin'));
+    ui.rows.forEach(function (r) {
+      var q = Math.floor(Number(r.num.value));
+      if (q >= 1) out[r.sel.value] = Math.min(q, have(r.sel.value));
+    });
+    return out;
+  }
+  function changed() {
+    dirty = true;
+    if (setT) clearTimeout(setT);
+    setT = setTimeout(flush, 400);
+  }
+  // send the edited side now (if it changed); resolves when the server has it
+  function flush() {
+    if (setT) { clearTimeout(setT); setT = null; }
+    if (!dirty || !sess || !live(sess)) return sending || Promise.resolve();
+    dirty = false;
+    var id = sess.id, lines = currentLines();
+    sending = tpost('/trade/set', { id: id, lines: lines }).then(function (r) { if (sess && sess.id === id) take(r.session); }, fail)
+      .then(function () { sending = null; });
+    return sending;
+  }
+  function addRow(token, qty) {
+    if (ui.rows.length >= maxKinds() - 1) return;
+    var tokens = Object.keys(items()).filter(function (t) { return t !== 'coin' && (have(t) > 0 || t === token); });
+    if (!tokens.length) { GT.toast($t('Tasmu kosong.')); return; }
+    var row = $('div', 'tr-line'), sel = $('select', 'tr-sel'), num = $('input', 'tr-num');
+    tokens.forEach(function (t) { var o = $('option', null, iname(t) + ' (' + have(t) + ')'); o.value = t; sel.appendChild(o); });
+    if (token) sel.value = token;
+    num.type = 'number'; num.min = '1'; num.step = '1'; num.value = String(qty || 1);
+    sel.setAttribute('aria-label', $t('barang')); num.setAttribute('aria-label', $t('jumlah'));
+    var del = $('button', 'mbtn tr-del', 'x'); del.type = 'button'; del.setAttribute('aria-label', $t('Hapus baris'));
+    var r = { sel: sel, num: num, row: row };
+    del.addEventListener('click', function () { ui.list.removeChild(row); ui.rows.splice(ui.rows.indexOf(r), 1); ui.add.style.display = ""; changed(); });
+    [sel, num].forEach(function (e) { e.addEventListener('input', changed); e.addEventListener('change', changed); });
+    num.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    num.addEventListener('keyup', function (e) { e.stopPropagation(); });
+    row.appendChild(sel); row.appendChild(num); row.appendChild(del);
+    ui.rows.push(r); ui.list.appendChild(row);
+    if (ui.rows.length >= maxKinds() - 1) ui.add.style.display = "none";
+    if (!token) changed();
+  }
+
+  function tick(el, ok) { el.textContent = ok ? '✓ ' + $t('Siap') : $t('Belum siap'); el.className = 'tr-tick' + (ok ? ' ok' : ''); }
+
+  function buildWin(s) {
+    var body = $('div', 'tr-win');
+    ui = { rows: [] };
+    if (s.status === 'invite') {
+      body.appendChild($('p', null, $t('Menunggu {0} membuka jendela dagang…', [otherName(s)])));
+      body.appendChild($('p', 'chain-dim', $t('Ajakan berlaku 1 menit.')));
+    } else {
+      var cols = $('div', 'tr-cols');
+      var mine = cell($t('Kamu beri')), theirs = cell($t('{0} beri', [s.other.name]));
+      var cf = $('label', 'tr-f'); cf.appendChild($('span', null, $t('Koin') + ' (' + have('coin') + ')'));
+      ui.coin = $('input', 'tr-num'); ui.coin.type = 'number'; ui.coin.min = '0'; ui.coin.step = '1'; ui.coin.value = s.mine.coin ? String(s.mine.coin) : '';
+      ui.coin.setAttribute('aria-label', $t('Koin'));
+      ui.coin.addEventListener('input', changed); ui.coin.addEventListener('change', changed);
+      ui.coin.addEventListener('keydown', function (e) { e.stopPropagation(); }); ui.coin.addEventListener('keyup', function (e) { e.stopPropagation(); });
+      cf.appendChild(ui.coin); mine.appendChild(cf);
+      ui.list = $('div', 'tr-editor'); mine.appendChild(ui.list);
+      ui.add = $('button', 'mbtn tr-add', $t('+ barang')); ui.add.type = 'button';
+      ui.add.addEventListener('click', function () { addRow(); });
+      mine.appendChild(ui.add);
+      ui.myTick = $('div'); mine.appendChild(ui.myTick);
+      ui.theirs = $('div'); theirs.appendChild(ui.theirs);
+      ui.theirTick = $('div'); theirs.appendChild(ui.theirTick);
+      cols.appendChild(mine); cols.appendChild(theirs); body.appendChild(cols);
+      Object.keys(s.mine).forEach(function (t) { if (t !== 'coin') addRow(t, s.mine[t]); });
+    }
+    ui.note = $('div', 'tr-note'); ui.count = $('div', 'tr-count');
+    body.appendChild(ui.note); body.appendChild(ui.count);
+    var acts = $('div', 'tr-acts');
+    if (s.status !== 'invite') {
+      ui.ready = $('button', 'mbtn primary', $t('Siap')); ui.ready.type = 'button';
+      ui.ready.addEventListener('click', function () {
+        var id = sess && sess.id; if (!id) return;
+        ui.ready.disabled = true;
+        Promise.resolve(flush()).then(function () {
+          if (!sess || sess.id !== id) return;
+          return tpost('/trade/ready', { id: id, version: sess.version }).then(function (r) { take(r.session); }, function (e) { fail(e); poll(true); });
+        }).then(function () { if (ui && ui.ready) ui.ready.disabled = false; });
+      });
+      acts.appendChild(ui.ready);
+    }
+    var cancel = $('button', 'mbtn', s.status === 'invite' ? $t('Batalkan ajakan') : $t('Batal')); cancel.type = 'button';
+    cancel.addEventListener('click', function () { cancelTrade(); });
+    acts.appendChild(cancel); body.appendChild(acts);
+    return body;
+  }
+
+  function cancelTrade() {
+    var s = sess;
+    if (s && live(s)) { dismissed[s.id + ':cancelled'] = 1; tpost('/trade/close', { id: s.id }).then(function () {}, function () {}); }
+    sess = null; stopWin('end');
+  }
+
+  function showWin(s) {
+    var key = s.id + ':' + (s.status === 'invite' ? 'invite' : 'live');
+    if (win && win.isOpen() && winKey === key) return;
+    if (!win || !win.isOpen()) {
+      if (GT.isUiOpen()) return; // another window is up: try again at the next poll
+    }
+    var wasOpen = win && win.isOpen();
+    if (wasOpen) { var old = win; win = null; old.close('end'); }
+    draft = {};
+    var body = buildWin(s);
+    winKey = key;
+    var mineId = s.id;
+    win = GT.modal({
+      title: $t('Dagang dengan {0}', [otherName(s)]), body: body, wide: true, actions: [],
+      onClose: function (reason) {
+        if (reason === 'end') return;           // closed by us after the outcome
+        if (setT) { clearTimeout(setT); setT = null; }
+        if (countT) { clearInterval(countT); countT = null; }
+        win = null; ui = null; winKey = '';
+        if (sess && sess.id === mineId && live(sess)) cancelTrade(); // closing the window cancels the trade
+      }
     });
   }
 
-  function incomingModal(of) {
-    if (popup && popup.isOpen()) return;
-    var body = $('div');
-    body.appendChild($('p', null, $t('{0}#{1} menawarkan:', [of.from, of.from_tag])));
-    var rc = cell($t('Kamu terima')), gv = cell($t('Kamu beri'));
-    rc.appendChild(linesList(of.give)); gv.appendChild(linesList(of.want));
-    body.appendChild(rc); body.appendChild(gv);
-    body.appendChild($('p', 'chain-dim', $t('Berdirilah berdekatan dengannya untuk menerima.')));
-    popup = GT.modal({
-      title: $t('Tawaran dagang'), body: body, actions: [
-        { label: $t('Terima'), primary: true, onClick: function (h) {
-          post('/trade/accept', { id: of.id }).then(function (r) { refreshState(r); GT.toast(r.toast); h.close('ok'); }, function (e) { fail(e); h.close('err'); });
+  // apply a fresh session view
+  function take(s) {
+    if (!s) { if (sess && live(sess)) { sess = null; stopWin('end'); } sess = null; return; }
+    if (!live(s)) {
+      if (dismissed[s.id + ':' + s.status]) { sess = null; return; }
+      sess = s;
+      if (s.status === 'done') finish(s, $t('Dagang selesai.'), true);
+      else if (s.status === 'expired') finish(s, $t('Dagang kedaluwarsa.'));
+      else finish(s, $t('{0} membatalkan dagang.', [s.other.name]));
+      return;
+    }
+    if (dismissed[s.id + ':cancelled']) return;
+    if (s.status === 'invite' && s.me === 'b') { sess = null; return; } // an invitation for me: the pop-up handles it
+    sess = s;
+    showWin(s);
+    if (!ui) return;
+    if (ui.theirs) {
+      ui.theirs.textContent = ''; ui.theirs.appendChild(linesList(s.theirs));
+      tick(ui.myTick, s.my_ok); tick(ui.theirTick, s.their_ok);
+      if (ui.ready) ui.ready.textContent = s.my_ok ? $t('Siap ✓') : $t('Siap');
+    }
+    ui.note.textContent = s.note || '';
+    if (s.status === 'locked') {
+      var left = s.swap_at - Date.now();
+      deadline = Date.now() + (left > 0 && left <= 3500 ? left : 3000); // clocks may differ a little: never wait more than the countdown
+      if (!countT) countT = setInterval(function () {
+        if (!ui) return;
+        var n = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+        ui.count.textContent = $t('Bertukar dalam {0}…', [n]);
+      }, 200);
+      ui.count.textContent = $t('Bertukar dalam {0}…', [Math.max(0, Math.ceil((deadline - Date.now()) / 1000))]);
+    } else {
+      if (countT) { clearInterval(countT); countT = null; }
+      ui.count.textContent = '';
+    }
+  }
+
+  function startWith(to) {
+    if (!signedIn()) { GT.toast($t('Masuk dulu.')); return Promise.resolve(); }
+    to = String(to || '').trim();
+    if (!to) { GT.toast($t('Tulis nama#tag pemain yang mau diajak.')); return Promise.resolve(); }
+    return tpost('/trade/open', { to: to }).then(function (r) { refreshState(r); take(r.session); }, fail);
+  }
+
+  function inviteModal(i) {
+    if (invPop && invPop.isOpen()) return;
+    seenInv[i.id] = 1;
+    GT.toast($t('{0} mengajak dagang!', [i.other.name]));
+    invPop = GT.modal({
+      title: $t('Ajakan dagang'), body: $t('{0} mengajak dagang', [otherName(i)]), actions: [
+        { label: $t('Buka'), primary: true, onClick: function (h) {
+          tpost('/trade/join', { id: i.id }).then(function (r) { refreshState(r); h.close('ok'); take(r.session); }, function (e) { fail(e); h.close('err'); });
         } },
-        { label: $t('Tolak'), onClick: function (h) { post('/trade/cancel', { id: of.id }).then(function () { h.close('no'); }, function (e) { fail(e); h.close('err'); }); } },
+        { label: $t('Tolak'), onClick: function (h) { tpost('/trade/close', { id: i.id }).then(function () { h.close('no'); }, function (e) { fail(e); h.close('err'); }); } },
         { label: $t('Nanti'), close: true }
       ]
     });
   }
 
-  function poll() {
-    if (polling || !signedIn() || !inPublic()) return;
+  var polling = false;
+  function poll(force) {
+    if (polling || !signedIn() || (sending && !force)) return;
     polling = true;
     C.api('/trade').then(function (r) {
-      offers = {};
-      r.incoming.forEach(function (o) {
-        offers[o.id] = o;
-        if (!seen[o.id]) { seen[o.id] = 1; GT.toast($t('{0} mengajak dagang!', [o.from])); }
-      });
       polling = false;
-      var next = r.incoming.filter(function (o) { return !(popup && popup.isOpen()); })[0];
-      if (next && !GT.isUiOpen()) incomingModal(next);
+      if (!dirty) take(r.session);
+      else if (r.session && !live(r.session)) take(r.session); // an outcome always shows
+      var inv = (r.invites || []).filter(function (i) { return !seenInv[i.id]; })[0];
+      if (inv && !sess && !GT.isUiOpen()) inviteModal(inv);
     }, function () { polling = false; });
   }
 
@@ -223,7 +369,7 @@
   }
   function onFrame(dt) {
     pollT -= dt;
-    if (pollT <= 0) { pollT = 3; poll(); }
+    if (pollT <= 0) { pollT = (sess || ui) ? 1 : 3; poll(); }
   }
   function label(ctx, txt, x, y) { GT_THEME.label(ctx, txt, x, y + 4, { tone: 'paper', size: 6, bold: true }); }
   function onDraw(ctx, camX, camY, T) {
@@ -255,11 +401,11 @@
     C = window.GT_CHAIN || null;
     if (window.GT_PLAYERS && GT_PLAYERS.addCardAction) {
       GT_PLAYERS.addCardAction(function (o) {
-        if (!signedIn() || !inPublic() || o.npc) return null;
-        return { label: $t('Ajak dagang'), onClick: function (h) { h.close('ok'); offerModal(o); return true; } };
+        if (!signedIn() || o.npc || !o.tag) return null;
+        return { label: $t('Ajak dagang'), onClick: function (h) { h.close('ok'); startWith(o.nick + '#' + o.tag); return true; } };
       });
     }
-    window.GT_TRADE = { offer: offerModal, consign: consignModal, board: boardModal };
+    window.GT_TRADE = { start: startWith, consign: consignModal, board: boardModal };
   }
   GT.register({ id: 'trade', init: init, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw });
 })();

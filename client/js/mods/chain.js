@@ -471,6 +471,7 @@
       var sp = standPos();
       jobs.push(api('/state?x=' + sp.x + '&y=' + sp.y + '&world=' + encodeURIComponent(worldNow())).then(function (st) { S.st = st; syncClock(st.time); followWorld(st.world); }));
       if (full || S.modal) jobs.push(api('/history').then(function (h) { S.history = h.history || []; }));
+      if (S.modal && S.modal.kind === 'history' && !S.modal.arg && S.histFilter === 'trade') jobs.push(api('/history?kind=trade').then(function (h) { S.tradeHistory = h.history || []; }));
       if (S.modal && S.modal.kind === 'history' && S.modal.arg) {
         var ht = S.modal.arg;
         jobs.push(api('/history?token=' + encodeURIComponent(ht)).then(function (h) { S.itemHistory = { token: ht, rows: h.history || [] }; }));
@@ -1470,7 +1471,7 @@
   // Riwayat in plain words: what happened, with the item's icon, grouped by day; repeats are folded ("+1 Ikan ×5").
   // Anyone who wants the technical record follows "Detail ↗" to the block explorer.
   var ST_LABEL = { pending: $t('diproses…'), ok: $t('tersimpan'), failed: $t('gagal'), mock: $t('tiruan'), offchain: $t('disimpan 06:00') };
-  var KIND_ICON = { account: 'coin', storage: 'coin', device: 'coin', settle: 'coin', buy: 'coin', sell: 'coin', ship: 'coin', fight: 'tool', engage: 'tool' };
+  var KIND_ICON = { account: 'coin', storage: 'coin', device: 'coin', trade: 'coin', settle: 'coin', buy: 'coin', sell: 'coin', ship: 'coin', fight: 'tool', engage: 'tool' };
   function shortName(a) { a = String(a || ''); var p = a.split('.')[0]; return p.length > 12 ? p.slice(0, 10) + '…' : p; }
   function projName(id) { var pj = (S.projects || []).filter(function (x) { return x.id === id; })[0]; return pj ? pj.name : id; }
   function merchName(id) { return id ? id.charAt(0).toUpperCase() + id.slice(1) : ''; }
@@ -1499,7 +1500,14 @@
   function clock(d) { return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
   function historyBody(token) {
     var wrap = $('div', 'gt-hist'), details = chainUI();
-    var rows = S.history;
+    var rows = S.histFilter === 'trade' && !token ? S.tradeHistory : S.history;
+    if (!token && S.mode !== 'offline') {
+      var fl = $('div', 'gt-detail-acts');
+      [['all', $t('Semua')], ['trade', $t('Dagang')]].forEach(function (p) {
+        fl.appendChild(button(p[1], function () { S.histFilter = p[0]; if (p[0] === 'trade') S.tradeHistory = null; redraw(); refresh(true); }, (S.histFilter || 'all') === p[0] ? 'primary' : ''));
+      });
+      wrap.appendChild(fl);
+    }
     if (token) {
       if (S.mode === 'offline') rows = S.history.filter(function (h) { return (h.tokens || '').indexOf(',' + token + ',') >= 0; });
       else rows = S.itemHistory && S.itemHistory.token === token ? S.itemHistory.rows : null;
@@ -1509,7 +1517,7 @@
       wrap.appendChild(nav);
     }
     if (!rows) wrap.appendChild($('p', null, $t('Memuat…')));
-    else if (!rows.length) wrap.appendChild($('p', null, token ? $t('Belum ada riwayat untuk barang ini.') : $t('Belum ada kegiatan. Coba mancing di kolam!')));
+    else if (!rows.length) wrap.appendChild($('p', null, token ? $t('Belum ada riwayat untuk barang ini.') : S.histFilter === 'trade' ? $t('Belum ada dagang.') : $t('Belum ada kegiatan. Coba mancing di kolam!')));
     // fold consecutive identical off-chain rows (same text, same day, no transaction to link)
     var items = [];
     (rows || []).forEach(function (h) {

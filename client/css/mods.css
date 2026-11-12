@@ -151,3 +151,12 @@ html.gt-phone .tr-form .tr-num{width:100%}
 html.gt-phone .tr-line .tr-num{width:84px;flex:none}
 html.gt-phone .tr-lot{flex-wrap:wrap}
 .hl-stats>.hl-stat:only-child{grid-column:1 / -1}
+.tr-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tr-cols .tr-cell{margin:0}
+.tr-tick{margin-top:8px;font-weight:600;color:var(--paper-dim)}
+.tr-tick.ok{color:var(--ok,#2f7d3a)}
+.tr-note{color:#b3261e;font-weight:600;min-height:1.2em;margin-top:6px}
+.tr-count{font-size:calc(22px*var(--ts));font-weight:700;text-align:center;min-height:1.4em;font-variant-numeric:tabular-nums}
+.tr-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+html.gt-phone .tr-cols{grid-template-columns:1fr}
+html.gt-phone .tr-acts .mbtn{min-height:44px;flex:1}

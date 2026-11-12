@@ -250,6 +250,11 @@
       if (window.GT_PARTY) GT_PARTY.invite(m[2].trim()).then(function () { closeChat(); });
       return;
     }
+    if ((m = /^\/(dagang|trade)\s+(.+)$/i.exec(text))) {
+      input.value = '';
+      if (window.GT_TRADE) GT_TRADE.start(m[2].trim()).then(function () { closeChat(); });
+      return;
+    }
     if ((m = /^\/(nama|name|nick)\s+(.+)$/i.exec(text))) {
       C().api('/name', { method: 'POST', body: { name: m[2].trim() } }).then(function (r) { me = r.name; meTag = r.tag || meTag; named = r.named !== false; if (GT.setPlayerName) GT.setPlayerName(r.name); renderHead(); note($t('Namamu sekarang {0}#{1}.', [r.name, r.tag])); }, function (e) { note(e.message); });
       input.value = ''; return;

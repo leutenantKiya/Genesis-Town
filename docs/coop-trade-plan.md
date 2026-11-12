@@ -27,9 +27,9 @@
 - [x] Step 5: Farming together (planter gets the harvest, guest plot limit)
 - [x] Step 6: Building together (builder pays, `assist` speeds jobs, helpers collect for the owner)
 - [x] Step 7: Trade sessions on the server (two-sided, version-checked confirmations, countdown, any world)
-- [ ] Step 8: Trade window on the client, started from a card, the party panel or `/dagang`; Riwayat "Dagang" filter
-- [ ] Step 9: Fighting together (shared monster HP inside a party, a beaten monster is gone for the hour). Can be cut.
-- [ ] Step 10: Docs and rules wrap-up (threat model, world, economy); optional party shopping list
+- [x] Step 8: Trade window on the client, started from a card, the party panel or `/dagang`; Riwayat "Dagang" filter
+- [ ] Step 9: Fighting together (shared monster HP inside a party, a beaten monster is gone for the hour). Can be cut. (skipped for now, 2026-11-12)
+- [ ] Step 10: Docs and rules wrap-up (threat model, world, economy); optional party shopping list (skipped for now, 2026-11-12)
 
 ## How to resume (for every worker, every session)
 

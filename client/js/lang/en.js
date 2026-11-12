@@ -1346,6 +1346,26 @@
     "Dibayar dari tasmu; bangunannya milik {0}.": "Paid from your bag; the building belongs to {0}.",
     "Hanya pemilik dan Tukang yang bisa membangun di sini.": "Only the owner and Builders can build here.",
     "Pembangun menganggur.": "The builder is idle.",
-    "pemilik": "the owner"
+    "pemilik": "the owner",
+    "Semua": "All",
+    "Dagang": "Trade",
+    "Belum ada dagang.": "No trades yet.",
+    "barang": "item",
+    "jumlah": "amount",
+    "Siap": "Ready",
+    "Siap ✓": "Ready ✓",
+    "Belum siap": "Not ready",
+    "Buka": "Open",
+    "Batalkan ajakan": "Cancel invitation",
+    "Menunggu {0} membuka jendela dagang…": "Waiting for {0} to open the trade window…",
+    "Ajakan berlaku 1 menit.": "The invitation lasts 1 minute.",
+    "{0} beri": "{0} gives",
+    "Dagang dengan {0}": "Trade with {0}",
+    "Dagang selesai.": "Trade complete.",
+    "Dagang kedaluwarsa.": "The trade expired.",
+    "{0} membatalkan dagang.": "{0} cancelled the trade.",
+    "Bertukar dalam {0}…": "Swapping in {0}…",
+    "{0} mengajak dagang": "{0} invites you to trade",
+    "Ajakan dagang": "Trade invitation"
   });
 })();

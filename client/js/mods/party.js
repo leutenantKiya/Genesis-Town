@@ -107,6 +107,11 @@
           jn.addEventListener('click', function () { if (panel && panel.isOpen()) panel.close(); follow(m.world); });
           row.appendChild(jn);
         }
+        if (m.account !== me() && m.online && m.world && m.world === ((GT.worldId && GT.worldId()) || 'public') && window.GT_TRADE) {
+          var tb = $('button', 'mbtn', $t('Dagang')); tb.type = 'button';
+          tb.addEventListener('click', function () { if (panel && panel.isOpen()) panel.close(); GT_TRADE.start(m.account); });
+          row.appendChild(tb);
+        }
         if (isLeader() && m.account !== me()) {
           var kick = $('button', 'mbtn', $t('Keluarkan')); kick.type = 'button';
           kick.addEventListener('click', function () { answer('/party/kick', { account: m.account }, $t('{0} dikeluarkan dari party.', [m.name])); });
