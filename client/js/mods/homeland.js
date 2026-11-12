@@ -272,12 +272,8 @@
     var bs = cell($t('Pembangun'), $t('{0} dari {1} sibuk', [v.builders.busy, v.builders.total]));
     if (v.jobs.length) jobRows(bs, v, rl); else bs.appendChild($('p', 'chain-dim', $t('Pembangun menganggur.')));
     wrap.appendChild(bs);
-    if (rl !== 'builder') { wrap.appendChild($('p', 'hl-p', $t('Hanya pemilik dan Tukang yang bisa membangun di sini.'))); return wrap; }
-    var busy = busyJob(), th = v.next && v.next.th;
-    if (th) {
-      var short = shortOf(th.cost), can = !busy && !short.length;
-      wrap.appendChild(stepBlock($t('Naikkan ke level {0}', [th.level]), $t('Dibayar dari tasmu; bangunannya milik {0}.', [hostName()]), th, can, busy ? $t('Pembangun sedang bekerja.') : null, $t('Naikkan ke level {0}', [th.level]), function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
-    }
+    // raising the Town Hall and opening land are the owner's alone; builders build on lots (lot windows)
+    wrap.appendChild($('p', 'hl-p', rl === 'builder' ? $t('Balai Kota dan wilayah baru hanya bisa diurus pemilik. Tukang membangun di lahan.') : $t('Hanya pemilik dan Tukang yang bisa membangun di sini.')));
     return wrap;
   }
   /* ---- Balai Kota ---- */

@@ -66,7 +66,7 @@ If `git push` is rejected, run `git pull --rebase --autostash origin main`, run 
 4. **Homeland access** is the best of two grants:
    - an **invite role**: a new `homeland_invites.role` column, default `'visitor'`, so today's behaviour is kept;
    - a **party role**: a new `homelands.party_role` column, `NULL` = the config default `coop.partyRoleDefault` = `'visitor'` (party mates may enter, walk, chat, eat and trade; work rights need the owner's choice, because the party leader can invite strangers), `'none'` = party mates get no access.
-   The ranks are `visitor < helper < builder < owner`. Only the owner edits roles. Hire, dress, cook, stock, forage, invites and roles stay owner-only.
+   The ranks are `visitor < helper < builder < owner`. Only the owner edits roles. Raising the Town Hall (`build` kind `th`) and opening land (`chunk`) are owner-only too (decided 2026-11-12: builders build on lots only, `Only the owner can upgrade the Town Hall or open new land.`). Hire, dress, cook, stock, forage, invites and roles stay owner-only.
 5. **Who receives what:**
    - Gather, fish and monster drops go to the actor, under the actor's own daily cap.
    - A harvest goes to the **planter** (a new `plots.planter` column), so harvesting someone else's crop only delivers it to them.
@@ -416,7 +416,7 @@ CREATE TABLE IF NOT EXISTS party_invites (from_acct TEXT NOT NULL, account TEXT 
 - `hallBody` and `lotBody` replace `inOwnHome()` checks with `role()`:
   - visitor: read-only text (as today);
   - helper: collect buttons ("Ambil untuk pemilik") and "Bantu tukang (−10 energi)" on running jobs;
-  - builder: also the build buttons with the line "Dibayar dari tasmu; bangunannya milik {0}.";
+  - builder: also the lot build buttons with the line "Dibayar dari tasmu; bangunannya milik {0}." (not the Town Hall upgrade or new land: owner-only);
   - owner-only cells (Pekerja, Kosmetik, Restoran pantry, Undang teman) stay hidden for non-owners.
 - `placeBuilder` and job countdowns should also draw for guests (they read `HV.jobs`).
 

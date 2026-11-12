@@ -178,3 +178,27 @@ test('a co-op day settles with no shortfall and the chain matches the game', asy
   const chain = w.game.chain as any;
   for (const a of [P, Q]) for (const t of ['wood', 'fish', 'coin']) assert.equal(String(w.bal(a, t)), String(chain.get(a, t)), `${a} ${t}`);
 });
+
+test('a builder cannot raise the Town Hall or open new land, but still builds on lots', async () => {
+  const { w, h } = await setup('builder');
+  w.give(Q, 'wood', 50); w.give(Q, 'stone', 50); w.give(Q, 'coin', 500);
+  const spawn = h.map.layout.spawn;
+  const hall = (a: string, body: Record<string, unknown>) => {
+    w.game.positions!.setWorld(a, h.wid, spawn, Date.now());
+    w.game.reportPosition(a, spawn, h.wid);
+    w.adv(1000); full(w, a);
+    return w.game.act(a, { world: h.wid, pos: spawn, ...body }) as any;
+  };
+  const wood0 = w.bal(Q, 'wood'), coin0 = w.bal(Q, 'coin');
+  fails(() => hall(Q, { action: 'build', kind: 'th', target: 'th' }), 409, 'Only the owner can upgrade the Town Hall or open new land.');
+  fails(() => hall(Q, { action: 'build', kind: 'chunk', target: 'n' }), 409, 'Only the owner can upgrade the Town Hall or open new land.');
+  assert.equal(w.game.gs.homelandJobs(P).length, 0);
+  assert.equal(w.bal(Q, 'wood'), wood0);
+  assert.equal(w.bal(Q, 'coin'), coin0);
+  // a lot build by the same builder still works
+  w.give(Q, 'wood', 5);
+  build(w, Q, h);
+  assert.equal(w.game.gs.homelandJobs(P).length, 1);
+  // the owner is not blocked by this rule (any refusal here comes from the plan: cost, level)
+  try { hall(P, { action: 'build', kind: 'th', target: 'th' }); } catch (e: any) { assert.doesNotMatch(String(e.message), /Only the owner can upgrade/); }
+});

@@ -237,6 +237,7 @@ export class Game {
     const wid = s('world') || 'public';
     const w = this.worldFor(account, wid, NEED[a as (typeof ACTIONS)[number]]);
     const home = this.econ.homeland;
+    if (a === 'build' && w.row && w.row.account !== account && (s('kind') === 'th' || s('kind') === 'chunk')) throw new HttpError(409, 'Only the owner can upgrade the Town Hall or open new land.');
     if (this.map && wid === 'public' && home.publicTradeOnly && (a === 'gather' || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
     if (w.row && a === 'ship') throw new HttpError(409, 'The Shipping Box is only in the public area.');
     if ((a === 'build' || a === 'collect' || a === 'assist' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Build and harvest in your own Homeland.');

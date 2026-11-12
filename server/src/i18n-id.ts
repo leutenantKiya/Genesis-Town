@@ -54,6 +54,7 @@ export const EXACT: Record<string, string> = {
  "Ask the owner to make you a Helper.": "Minta pemilik menjadikanmu Pembantu.",
  "Leave the last one for the owner.": "Sisakan yang terakhir untuk pemilik.",
  "Only the owner or a Builder can build here.": "Hanya pemilik atau Tukang yang bisa membangun di sini.",
+ "Only the owner can upgrade the Town Hall or open new land.": "Hanya pemilik yang bisa menaikkan Balai Kota atau membuka lahan baru.",
  "Travel isn't active yet.": "Perjalanan belum aktif.",
  "Unknown role.": "Peran tidak dikenal.",
  "That player is not on your invite list.": "Pemain itu tidak ada di daftar undanganmu.",
