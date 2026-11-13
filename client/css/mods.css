@@ -38,6 +38,11 @@
 .hl-tab-w{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hl-tab-dot{position:absolute;top:5px;right:6px;width:8px;height:8px;border-radius:50%;background:#e04040;box-shadow:0 0 0 2px var(--paper)}
 .hl-pane{display:flex;flex-direction:column;gap:10px}
+/* the Town Hall keeps one size whatever the tab: a fixed width, and every tab's pane the same height (it scrolls inside) */
+.hl-hall{width:min(820px,calc(100vw - 64px));max-width:100%}
+.hl-hall .hl-tabs + .hl-pane{height:min(470px,calc(100vh - 260px));min-height:220px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+html.gt-phone .hl-hall{width:auto}
+html.gt-phone .hl-hall .hl-tabs + .hl-pane{height:calc(100dvh - 230px)}
 @media (max-width:480px){.hl-tab{flex-direction:column;gap:2px;padding:4px 2px;font-size:calc(12px*var(--ts))}}
 /* 2.5D: the view's buttons hold the top right, so the chip goes to the top middle (phone.css: top left) */
 html.gt-3d:not(.gt-phone) .hl-where{right:auto;left:50%;top:16px;transform:translateX(-50%);max-width:min(30%,240px)}

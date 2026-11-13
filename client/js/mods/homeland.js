@@ -373,7 +373,7 @@
     return names.length ? $t('Level {0} membuka: {1}. Juga petak kebun dan wilayah baru.', [n, names.join(', ')]) : $t('Level lebih tinggi membuka bangunan baru, petak kebun, dan wilayah.');
   }
   function hallBody() {
-    var wrap = $('div', 'gt-isl hl');
+    var wrap = $('div', 'gt-isl hl hl-hall');
     if (!H) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     var owner = inOwnHome();
     if (!owner) return guestHall(wrap);
