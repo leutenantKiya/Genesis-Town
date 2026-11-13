@@ -2016,6 +2016,11 @@ function lerpPos(o){
   var a = o.moving ? o.fx : o.x, b = o.x, c = o.moving ? o.fy : o.y, e = o.y;
   return { px:Math.round((a + (b - a) * t) * T), py:Math.round((c + (e - c) * t) * T) };
 }
+function smoothAt(){
+  if (P.cx != null) return { x:P.cx - 0.5, y:P.cy - 0.5 };
+  var t = P.moving ? Math.min(1, P.t) : 1;
+  return P.moving ? { x:P.fx + (P.x - P.fx) * t, y:P.fy + (P.y - P.fy) * t } : { x:P.x, y:P.y };
+}
 function charStep(o){
   if (!o.moving) return 0;
   return o.flip ? 1 : 2;
@@ -2625,7 +2630,9 @@ Object.defineProperties(GT, {
   world: { get: function(){ return world; } },
   scene: { get: function(){ return scene; } },
   outScene: { get: function(){ return outScene; } },
-  player: { get: function(){ return { x:P.x, y:P.y, dir:P.dir, moving:P.moving }; } },
+  // sx / sy: where the player is drawn, in tiles, between two tiles while walking (players.js sends it so others see
+  // the same smooth walk); x / y stay the tile, which is what the server checks
+  player: { get: function(){ var l = smoothAt(); return { x:P.x, y:P.y, dir:P.dir, moving:P.moving, sx:l.x, sy:l.y }; } },
   sitting: { get: function(){ return sitSpot ? { x:sitSpot.x, y:sitSpot.y, dir:sitSpot.dir } : null; } },
   time: { get: function(){ return clockInfo(); } },
   buildings: { get: function(){ return world ? world.buildings : []; } },

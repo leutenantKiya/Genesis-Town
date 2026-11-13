@@ -1,6 +1,11 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Other players walk in step** (2026-11-13): a friend in the public village or your Homeland used to show up about
+>   a second late and in stop-and-go steps. Now each client reports about 4 times a second while someone is near (and at
+>   once when it starts, stops or turns), sends where it is between tiles and how fast it walks, and the others draw it
+>   pushed on by that speed for as long as the report is old, gliding instead of easing tile to tile. On a 240 ms round
+>   trip the friend is about a third of a second behind instead of about a second (`client/js/mods/players.js`).
 > - **Settlement guards** (2026-11-12): before sending a day, the server asks the contract which day it last closed; if
 >   the chain is already further (an older database, or a second server on the same contract), settlement stops instead
 >   of paying gas for transactions that must fail, and `/api/health` says so. The Neon copy stores how far it is settled,

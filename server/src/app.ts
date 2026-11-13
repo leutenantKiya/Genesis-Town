@@ -135,7 +135,7 @@ export function createApp(deps: AppDeps) {
       .then((r) => { social.npcSay(npc, from, r.line); }, () => { /* the player simply gets no answer */ });
   };
   const acctLang = new LangMemory(); // last language each account played in (merchant chat replies follow it)
-  const presenceLimiter = new RateLimiter(240, 100_000); // about 2 reports a second per account
+  const presenceLimiter = new RateLimiter(480, 450_000); // about 4.5 reports a second while players are near (players.js FAST_MS), more while turning, a long day of play included
   // Public read routes shared by every caller, held briefly. Anything the server itself changes clears them at once.
   const READ_CACHE_MS = 4000;
   const readCache = new TtlCache<unknown>(READ_CACHE_MS);
@@ -482,13 +482,13 @@ export function createApp(deps: AppDeps) {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
         if (!presenceLimiter.take(acct)) throw new HttpError(429, 'too many presence reports');
-        const b = parseJson(raw) as { world?: unknown; x?: unknown; y?: unknown; dir?: unknown; scene?: unknown; since?: unknown };
+        const b = parseJson(raw) as { world?: unknown; x?: unknown; y?: unknown; fx?: unknown; fy?: unknown; vx?: unknown; vy?: unknown; dir?: unknown; scene?: unknown; since?: unknown };
         game.fixWorld(acct); // a guest uninvited while standing there: back to the public area first
         const w = await checkedWorld(acct, b.world, { x: Number(b.x), y: Number(b.y) });
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
         if (b.scene === 'out' && game.map) { try { const m = game.worldFor(acct, w, 'visit').map; onTile = !m || m.walkable(Number(b.x), Number(b.y)); } catch { onTile = false; } }
         if (onTile) social.report(acct, w, b);
-        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
+        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, fx: s.fx, fy: s.fy, vx: s.vx, vy: s.vy, age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
         return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w) });
       }

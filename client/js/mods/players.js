@@ -12,13 +12,18 @@
   var GT = window.GT;
   if (!GT) return;
 
-  var others = {};        // account -> { nick, title, x, y, fx, fy, dir, t0, moving, seen }
+  var others = {};        // account -> { nick, title, x, y (tile), sx, sy, vx, vy, rt (last report), dx, dy, dt (drawn), spd, dir, seen }
   var meTag = '', me = null, online = 0, last = 0, timer = 0, busy = false, backoff = 0, curWorld = null, named = true; // named: has the server a chosen display name for me
   var lines = [];         // chat lines shown in the box
   var bubbles = {};       // nick (lower) -> { text, t }
   var box = null, list = null, input = null, head = null;
   var LS_BLOCK = 'gt.chat.blocked';
-  var STEP_MS = 450; // poll and ease time: other players look about 0.5 s behind; the server allows 2.4 reports a second (app.ts presenceLimiter)
+  /* How often this client reports and asks: often while someone else is near or I am walking, so a friend walks in step
+     with what they see on their own screen; seldom when alone and still. The server allows 7 a second (app.ts presenceLimiter).
+     Others are drawn where they reported, pushed on by their walking speed for as long as the report is old (the server
+     says how old it was, half the round trip adds the way here; LEAD_S at most), and the drawn figure glides there: no
+     fixed ease, no stop-and-go between reports. Starting, stopping and turning are reported at once, so the push ends soon. */
+  var STEP_MS = 450, FAST_MS = 220, SLOW_MS = 900, LEAD_S = 0.3, GLIDE = 12, rtt = 250, nextAt = 0, holdUntil = 0, guestNext = 0, myLast = null, myMovedAt = 0;
 
   function C() { return window.GT_CHAIN; }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -62,8 +67,15 @@
     list.forEach(function (q) {
       keep[q.account] = 1;
       var o = others[q.account];
-      if (!o) o = others[q.account] = { fx: q.x, fy: q.y, x: q.x, y: q.y, t0: now };
-      if (o.x !== q.x || o.y !== q.y) { o.fx = curX(o, now); o.fy = curY(o, now); o.x = q.x; o.y = q.y; o.t0 = now; }
+      var sx = q.fx != null ? q.fx : q.x, sy = q.fy != null ? q.fy : q.y;
+      if (!o) o = others[q.account] = { dx: sx, dy: sy, dt: now, sx: sx, sy: sy, vx: 0, vy: 0, rt: now, spd: 0 };
+      if (q.vx != null) { o.vx = q.vx; o.vy = q.vy; }
+      else { // an older client or a guest sends only tiles: the speed comes from the last two reports
+        var gap = (now - o.rt) / 1000, moved = sx !== o.sx || sy !== o.sy;
+        if (moved && gap > 0.05 && gap < 1.5) { o.vx = clampV((sx - o.sx) / gap); o.vy = clampV((sy - o.sy) / gap); }
+        else if (!moved) { o.vx = 0; o.vy = 0; }
+      }
+      o.sx = sx; o.sy = sy; o.rt = now; o.x = q.x; o.y = q.y; o.age = ((q.age || 0) + rtt / 2) / 1000;
       o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; o.account = q.account; o.party = !!q.party; o.seen = now;
     });
     Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
@@ -72,13 +84,26 @@
 
   /* ---------------------------------------------------------------- presence loop */
   function tick() {
-    if (guestMode()) { guestTick(); return; }
+    if (guestMode()) { var gt = performance.now(); if (gt >= guestNext) { guestNext = gt + STEP_MS; guestTick(); } return; }
     if (guestId) leaveGuest();
     if (busy || !active() || document.hidden) return;
-    var c = C(), sc = GT.scene, p = GT.player, pos = c.standPos(), w = (GT.worldId && GT.worldId()) || 'public';
+    var c = C(), sc = GT.scene, p = GT.player, pos = c.standPos(), w = (GT.worldId && GT.worldId()) || 'public', t = performance.now();
+    var out = sc && sc.kind === 'out', sx = p.sx != null ? p.sx : pos.x, sy = p.sy != null ? p.sy : pos.y;
+    if (myLast && (Math.abs(sx - myLast.x) > 0.01 || Math.abs(sy - myLast.y) > 0.01)) myMovedAt = t;
+    var fast = t - myMovedAt < 1500 || Object.keys(others).some(function (a) { return !others[a].npc; });
+    var turned = myLast && out && (!!p.moving !== myLast.moving || p.dir !== myLast.dir) && t - myLast.t > 150; // start, stop, turn: tell now
+    if (t < holdUntil || (!turned && t < nextAt - (fast ? SLOW_MS - FAST_MS : 0))) return;
     if (curWorld !== w) { curWorld = w; others = {}; } // other players belong to the world they are in
+    // my walking speed since the last report, in tiles a second: the others push me on by it until the next one
+    var gap = myLast ? (t - myLast.t) / 1000 : 0, vx = 0, vy = 0;
+    if (myLast && gap > 0.05 && gap < 1.5 && p.moving) { vx = clampV((sx - myLast.x) / gap); vy = clampV((sy - myLast.y) / gap); }
+    myLast = { x: sx, y: sy, t: t, moving: !!p.moving, dir: p.dir };
+    nextAt = t + SLOW_MS;
+    var body = { world: w, x: pos.x, y: pos.y, dir: p.dir, scene: out ? 'out' : 'in', since: last };
+    if (out) { body.fx = Math.round(sx * 1000) / 1000; body.fy = Math.round(sy * 1000) / 1000; body.vx = Math.round(vx * 100) / 100; body.vy = Math.round(vy * 100) / 100; }
     busy = true;
-    c.api('/presence', { method: 'POST', body: { world: w, x: pos.x, y: pos.y, dir: p.dir, scene: sc && sc.kind === 'out' ? 'out' : 'in', since: last } }).then(function (r) {
+    c.api('/presence', { method: 'POST', body: body }).then(function (r) {
+      rtt += (Math.min(3000, performance.now() - t) - rtt) * 0.2;
       if (r.world !== curWorld) return;
       backoff = 0;
       me = r.me; meTag = r.tag || meTag; online = r.online;
@@ -89,11 +114,22 @@
       last = r.last || last;
       presenceFns.forEach(function (f) { try { f(r); } catch (e) { /* a listener must not break the loop */ } });
       renderHead();
-    }, function () { backoff = Math.min(8, backoff + 1); }).then(function () { busy = false; });
+    }, function () { backoff = Math.min(8, backoff + 1); holdUntil = performance.now() + backoff * STEP_MS; }).then(function () { busy = false; });
   }
-  function ease(o, now) { return Math.min(1, (now - o.t0) / STEP_MS); }
-  function curX(o, now) { return o.fx + (o.x - o.fx) * ease(o, now); }
-  function curY(o, now) { return o.fy + (o.y - o.fy) * ease(o, now); }
+  function clampV(v) { return Math.max(-8, Math.min(8, v)); }
+  // Move the drawn figure once per frame: toward the reported spot pushed on by the walking speed, quickly but never in
+  // a jump (a far jump, a portal or a respawn, is a snap)
+  function glide(o, now) {
+    if (o.dt === now) return;
+    var dt = Math.min(0.1, Math.max(0, (now - o.dt) / 1000)), lead = Math.min(LEAD_S, (o.age || 0) + (now - o.rt) / 1000);
+    var tx = o.sx + o.vx * lead, ty = o.sy + o.vy * lead, ex = tx - o.dx, ey = ty - o.dy, d = Math.hypot(ex, ey);
+    var k = 1 - Math.exp(-dt * GLIDE), px = o.dx, py = o.dy;
+    if (d > 6) { o.dx = tx; o.dy = ty; } else { o.dx += ex * k; o.dy += ey * k; }
+    var sp = dt > 0 ? Math.hypot(o.dx - px, o.dy - py) / dt : 0;
+    o.spd = o.spd + (sp - o.spd) * Math.min(1, dt * 10); o.dt = now;
+  }
+  function curX(o, now) { glide(o, now); return o.dx; }
+  function curY(o, now) { glide(o, now); return o.dy; }
 
   /* ---------------------------------------------------------------- drawing */
   function onEntities(ents, ctx, camX, camY, T) {
@@ -103,7 +139,7 @@
       var o = others[a];
       if (o.npc) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
       var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
-      var moving = ease(o, now) < 1, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
+      var moving = o.spd > 0.4, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
       var look = o.look != null ? o.look : pal(o.nick || a);
       // px/py/pal/dir/step/id: the 2.5D view (mods/view3d.js) draws the same player as a 3D card
       ents.push({ py: py, px: px, pal: look, dir: o.dir, step: step, id: 'player:' + a, draw: function () { GT.drawChar(ctx, px - camX, py - camY, look, o.dir, step); } });
@@ -344,7 +380,7 @@
   }
 
   function init() {
-    timer = setInterval(function () { if (backoff) { backoff--; return; } tick(); }, STEP_MS);
+    timer = setInterval(tick, 60); // tick decides itself when the next report is due (FAST_MS or SLOW_MS)
     setInterval(fade, 2000);
     var cv = document.getElementById('cv');
     if (cv) cv.addEventListener('click', function (e) {
@@ -358,7 +394,7 @@
     var wait = setInterval(function () { if (active()) { build(); clearInterval(wait); } }, 1000);
   }
 
-  function refresh() { others = {}; curWorld = null; backoff = 0; tick(); } // after sailing: forget the old world's players at once
+  function refresh() { others = {}; curWorld = null; backoff = 0; nextAt = 0; holdUntil = 0; tick(); } // after sailing: forget the old world's players at once
   window.GT_PLAYERS = { onPresence: function (f) { presenceFns.push(f); }, addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
   GT.register({ id: 'players', init: function (g) { init(g); g.register({ id: 'players-labels', onDraw: onDraw }); }, onEntities: onEntities, onKey: onKey }); // tags and bubbles register last from init, so they draw over every other mod's signs
 })();
