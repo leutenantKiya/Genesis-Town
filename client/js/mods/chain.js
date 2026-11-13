@@ -778,6 +778,26 @@
     GT.toast($t('Kamu pingsan. Warga membawamu pulang. Istirahat sampai pukul 06:00.'));
   }
 
+  // which sound an /api/act makes (body.action, plus the answer r); see GT_SFX in mods/sfx.js
+  function actSound(body, r) {
+    var a = body.action, tile = body.tile;
+    if (a === 'gather') return tile === 'tree' ? 'chop' : tile === 'rock' ? 'mine' : tile === 'water' ? 'catch' : 'pickup';
+    if (a === 'farm') return body.op === 'plant' ? 'plant' : body.op === 'water' ? 'water' : body.op === 'harvest' ? 'harvest' : 'dig';
+    if (a === 'hoe') return 'dig';
+    if (a === 'craft') return 'craft';
+    if (a === 'cook') return 'cook';
+    if (a === 'eat') return 'eat';
+    if (a === 'sell' || a === 'ship' || a === 'stock') return 'sell';
+    if (a === 'mall' || a === 'hire' || a === 'dress') return 'buy';
+    if (a === 'build' || a === 'assist') return 'build';
+    if (a === 'collect') return 'coin';
+    if (a === 'fight') return 'hit';
+    if (a === 'gamble') return r && r.win ? 'win' : 'lose';
+    if (a === 'travel' || a === 'boat') return 'portal';
+    return 'pickup';
+  }
+  function sfx(n) { try { window.GT_SFX && GT_SFX.play(n); } catch (e) { /* no sound */ } }
+
   function act(body, quiet) {
     if (S.mode === 'offline') {
       if (body.action === 'gather') { OFF.gather(TILE_ITEM[body.tile]); GT.toast($t('+1 {0} (offline)', [item(TILE_ITEM[body.tile])])); return Promise.resolve(); }
@@ -789,9 +809,10 @@
     return api('/act', { method: 'POST', body: body }).then(function (r) {
       S.st = r.state; renderHud(); redraw();
       if (body.action === 'gather' || body.action === 'sell') markGoal(body.action);
+      sfx(actSound(body, r));
       if (!quiet) GT.toast(r.toast);
       return r;
-    }).catch(function (e) { GT.toast(e.message); throw e; });
+    }).catch(function (e) { if (!quiet) sfx('error'); GT.toast(e.message); throw e; });
   }
 
   /* ------------------------------------------------------------ on-chain player actions (signed delegate -> relayer) */
@@ -801,7 +822,7 @@
     return signedCallOnce(method, args, extra).catch(function (e) {
       if (!e || e.code !== 'approve_device') throw e;
       return approveDevice().then(function () { return signedCallOnce(method, args, extra); });
-    });
+    }).then(function (r) { sfx(/^(buy|purchase)/.test(method) ? 'trade_done' : /^(list_item|send_item)/.test(method) ? 'sell' : 'coin'); return r; }, function (e) { sfx('error'); throw e; });
   }
   function signedCallOnce(method, args, extra) {
     var L = window.NearLib, kp = sessionKey(), ready;

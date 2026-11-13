@@ -37,6 +37,7 @@ var pending = null;           // petugas yang menunggu UI kosong untuk konfronta
 var hl = { pAt:-1e9, nAt:-1e9, playerFirst:false, firstAt:-1e9, victim:'' };
 var acc = 0, devDone = false, gen = 0, badge = null, lastBadge = '';
 
+function sfx(n){ try { window.GT_SFX && GT_SFX.play(n); } catch(e){} }
 function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
 /* ---------- persistence (count only) ---------- */
@@ -327,7 +328,7 @@ function onArrive(o){
     if (!wanted) setWanted('assault', hl.victim);
     if (GT.isUiOpen()) pending = o; else confront(n);
   } else {
-    GT.toast('Polisi memperingatkan: jangan berkelahi di kota ini.');
+    sfx('notify'); GT.toast('Polisi memperingatkan: jangan berkelahi di kota ini.');
   }
   finishResp(o);
 }
@@ -425,7 +426,7 @@ function setWanted(reason, victim){
   var t = (GT.time && GT.time.total) || 0, was = !!wanted;
   wanted = { reason:reason, victim:victim ? String(victim).slice(0, 24) : '', since:t, fine:FINES[reason] };
   updateBadge();
-  if (!was){ try { GT.toast('Kamu dicari polisi!'); } catch(e){} }
+  if (!was){ try { sfx('notify'); GT.toast('Kamu dicari polisi!'); } catch(e){} }
   try { GT.emit('wanted', { wanted:wanted }); } catch(e){}
   return wanted;
 }
@@ -471,6 +472,7 @@ function arrest(reason, by){
   if (own) GT.teleportPlayer('out', own.dx, own.dy + 1, 'down');
   var lines = ['Kamu ditangkap!', 'Denda ' + fine + ' koin.' + (conf ? ' Obeng disita.' : '') + ' Reputasimu turun. Kamu dipulangkan ke rumah.'];
   var res = { reason:reason, fine:fine, rep:repD, confiscated:conf };
+  sfx('hurt');
   if (GT.isUiOpen()) GT.toast('Kamu ditangkap! Denda ' + fine + ' koin.');
   else GT.dialog(lines, (by && by.name) || 'Polisi', by || null);
   try { GT.emit('arrest', res); } catch(e){}
@@ -497,7 +499,7 @@ function payFine(npc){
     GT.spendCoins(w.fine);
     clearWanted();
     GT.addReputation(5);
-    GT.toast('Denda ' + w.fine + ' koin dibayar. Reputasi naik.');
+    sfx('coin'); GT.toast('Denda ' + w.fine + ' koin dibayar. Reputasi naik.');
     if (npc) GT.npcSay(npc, 'Baik. Jangan diulangi, ya.');
     try { GT.emit('finepaid', { fine:w.fine }); } catch(e){}
     return true;

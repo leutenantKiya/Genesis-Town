@@ -115,7 +115,7 @@
       b.addEventListener('click', function () { pick(i); });
       grid.appendChild(b); sw.push(b);
     })(i);
-    function pick(i) { look = i; sw.forEach(function (b, k) { b.setAttribute('aria-checked', k === i ? 'true' : 'false'); b.classList.toggle('on', k === i); }); }
+    function pick(i) { if (i !== look) { try { window.GT_SFX && GT_SFX.play('ui_click'); } catch (e) { /* no sound */ } } look = i; sw.forEach(function (b, k) { b.setAttribute('aria-checked', k === i ? 'true' : 'false'); b.classList.toggle('on', k === i); }); }
     pick(look);
     var msg = el('p', 'gt-cs-msg'); msg.setAttribute('role', 'status');
     var go = el('button', 'gt-cs-go', $t('Mulai')); go.type = 'button';
@@ -138,6 +138,7 @@
       var v = String(input.value || '').trim().replace(/ {2,}/g, ' ');
       if (!NAME_RE.test(v)) { msg.textContent = $t('Nama 3-16 karakter: huruf, angka, spasi, _ atau -.'); input.focus(); return; }
       busy = true; go.disabled = true; msg.textContent = '';
+      try { window.GT_SFX && GT_SFX.play('quest_done'); } catch (e) { /* no sound */ }
       var body = { look: look };
       if (v !== mine.name) body.name = v;
       c.api('/name', { method: 'POST', body: body }).then(function (r) {

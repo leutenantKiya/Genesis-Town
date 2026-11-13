@@ -221,6 +221,13 @@ function knockback(att, tgt){
   }
 }
 
+function snd(name, who){
+  try {
+    if (!window.GT_SFX) return;
+    var o = (who && !isP(who) && isFinite(who.x) && isFinite(who.y)) ? { x:who.x, y:who.y } : undefined;
+    GT_SFX.play(name, o);
+  } catch(e){}
+}
 function hit(attacker, target, opts){
   opts = opts || {};
   var A = norm(attacker), B = norm(target);
@@ -247,6 +254,7 @@ function hit(attacker, target, opts){
   // efek
   var wb = worldPos(B), wa = worldPos(A), sc = sa;
   fx(B, 'hit');
+  snd('swing', A); snd(isP(B) ? 'hurt' : 'hit', B);
   var hx = wb.x - dv[0] * 4, hy = wb.y - 3 - Math.abs(dv[1]) * 0;
   star(sc, hx, hy, 0.22, true);
   burst(sc, hx, hy, rint(3, 6), ['#ffffff', '#ffe066', '#ff9a3c', '#ff5a4a'], 46);
@@ -270,6 +278,7 @@ function hit(attacker, target, opts){
 function knockOut(c, by){
   var kb = isP(by) ? 'player' : (by ? keyOf(by) : null);
   fx(c, 'ko');
+  if (!isP(c)) snd('monster_die', c);
   if (isP(c)){ playerKO(by); }
   else {
     c._ko = KO_T; c._hp = 0; damaged.add(c);

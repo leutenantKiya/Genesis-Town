@@ -96,12 +96,22 @@
   function signature(h) {
     return [h.world, h.seed, h.th, (h.open || []).slice().sort().join('.'), (h.built || []).map(function (b) { return b.lot + ':' + b.kind; }).sort().join('.')].join('|');
   }
+  function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound must never break the game */ } }
+  var seenTh = null, seenJobs = null;
+  // level up and finished builder jobs, noticed when a fresh own-Homeland answer comes in
+  function sfxWatch(r) {
+    if (!r) return;
+    if (seenTh !== null && r.th > seenTh) sfx('levelup');
+    var n = (r.jobs || []).length;
+    if (seenJobs !== null && n < seenJobs) sfx('quest_done');
+    seenTh = r.th; seenJobs = n;
+  }
   function load(force) {
     if (!C || !S() || !S().account || S().mode === 'offline') return Promise.resolve(H);
     if (loading) return loading;
     if (!force && Date.now() - lastLoad < 1500) return Promise.resolve(H);
     loading = C.api('/homeland').then(function (r) {
-      H = r; lastLoad = Date.now();
+      H = r; lastLoad = Date.now(); sfxWatch(r);
       if (inOwnHome() && signature(H) !== layoutSig) rebuild();
       builderSig = ''; placeBuilder(); placeBots();
     }, function () { /* keep the old numbers */ })
@@ -512,7 +522,7 @@
       b.tabIndex = hallTab === t.id ? 0 : -1;
       var ic = $('span', 'hl-tab-ic', t.icon); ic.setAttribute('aria-hidden', 'true'); b.appendChild(ic); b.appendChild($('span', 'hl-tab-w', t.word()));
       if (ready[t.id]) { var dot = $('span', 'hl-tab-dot'); dot.title = $t('bisa dimulai'); b.appendChild(dot); }
-      b.addEventListener('click', function () { pickTab(t.id, false); });
+      b.addEventListener('click', function () { if (hallTab !== t.id) sfx('ui_click'); pickTab(t.id, false); });
       b.addEventListener('keydown', function (e) {
         var k = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
         if (!k) return;

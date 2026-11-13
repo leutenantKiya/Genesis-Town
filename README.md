@@ -201,6 +201,11 @@
 >   and action button sit inside the game picture, above the item bar; a guest no longer gets a "Sign in first" toast that
 >   never goes away (the portal check ran every frame). A player's `#tag` now comes from their account name, so a restart that
 >   came back from an older database copy gives them the same tag instead of a new random one.
+> - **Sound effects** (2026-11-13): every activity makes a short sound, all synthesized with WebAudio (no audio files,
+>   `mods/sfx.js`, `GT_SFX.play(name, {vol, pitch, x, y})`): gathering, farming, crafting, cooking, eating, selling and
+>   building (one table in chain.js `act`), fishing phases (also other players' fishing, quieter with distance), swings
+>   and brawls, doors, furniture, the carousel, the ferry, chat, party and trade invites, the Luck Table, hotbar and
+>   windows; Settings has 'Sound effects' on/off and a volume slider (localStorage `gt.sfx`, `gt.sfxVol`).
 > - **Playtest fixes, round 3** (2026-11-13, [plan](docs/superpowers/plans/2026-11-13-playtest-round-3.md)): new players
 >   start with 5 Wheat, and the hotbar shows the Hoe, the Pickaxe and a Fishing Rod (a free tool like the Hoe) first;
 >   clicking to walk no longer fights W A S D (mouse.js holds its own direction, `GT.walkDir`, and any player direction

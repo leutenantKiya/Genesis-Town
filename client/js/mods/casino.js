@@ -93,6 +93,7 @@ function say(text){ var d = dealerNpc(); if (d) { try { GT.npcSay(d, text); } ca
 // bet = stake, payout = coins returned. Returns 'win' | 'push' | 'lose' plus an optional streak note.
 function record(bet, payout){
   var cat = payout > bet ? 'win' : payout === bet ? 'push' : 'lose', note = '';
+  try { if (window.GT_SFX) GT_SFX.play(cat === 'win' ? 'win' : cat === 'lose' ? 'lose' : 'ui_click'); } catch(e){}
   stats.games++;
   try { GT.addAffinity(dealerNpc(), 1); } catch(e){}
   if (cat === 'win'){ stats.loseStreak = 0; stats.won += payout - bet; say(pick(BANDAR_WIN)); }

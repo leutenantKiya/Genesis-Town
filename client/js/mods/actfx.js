@@ -28,6 +28,7 @@
   }
   function swing(kind, tile, hit) {
     var p = GT.player;
+    try { if (window.GT_SFX) GT_SFX.play('swing'); } catch (e) { /* sound never blocks */ }
     fx.push({ kind: kind, t: 0, tile: { x: tile.x, y: tile.y }, from: { x: p.x, y: p.y }, dir: dirTo(tile), hit: hit !== false, parts: null });
   }
   function chop(tile) { swing('chop', tile, true); }

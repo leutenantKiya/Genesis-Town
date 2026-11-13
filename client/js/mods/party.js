@@ -18,6 +18,7 @@
   function signedIn() { var s = S(); return !!(s && s.account && s.mode !== 'offline' && s.mode !== 'loading'); }
   function me() { var s = S(); return s && s.account; }
   function fail(e) { GT.toast((e && e.message) || $t('Gagal.')); }
+  function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound never breaks play */ } }
   function post(path, body) { return C.api(path, { method: 'POST', body: body || {} }); }
 
   function set(v) {
@@ -145,9 +146,9 @@
       view.invites.forEach(function (i) {
         var row = $('div', 'tr-lot'); row.appendChild($('div', 'tr-lot-n gt-data', i.name + '#' + i.tag));
         var ok = $('button', 'mbtn primary', $t('Terima')); ok.type = 'button';
-        ok.addEventListener('click', function () { answer('/party/accept', { from: i.from }, $t('Kamu masuk party.')); });
+        ok.addEventListener('click', function () { sfx('ui_click'); answer('/party/accept', { from: i.from }, $t('Kamu masuk party.')); });
         var no = $('button', 'mbtn', $t('Tolak')); no.type = 'button';
-        no.addEventListener('click', function () { answer('/party/decline', { from: i.from }); });
+        no.addEventListener('click', function () { sfx('ui_click'); answer('/party/decline', { from: i.from }); });
         row.appendChild(ok); row.appendChild(no); ic.appendChild(row);
       });
       body.appendChild(ic);
@@ -173,10 +174,11 @@
     var i = view.invites.filter(function (x) { return !shown[x.from + '|' + x.expires_at]; })[0];
     if (!i) return;
     shown[i.from + '|' + i.expires_at] = 1;
+    sfx('notify');
     invitePop = GT.modal({
       title: $t('Ajakan party'), body: $t('{0}#{1} mengajakmu ke party', [i.name, i.tag]), actions: [
-        { label: $t('Terima'), primary: true, onClick: function (h) { answer('/party/accept', { from: i.from }, $t('Kamu masuk party.')); h.close('ok'); } },
-        { label: $t('Tolak'), onClick: function (h) { answer('/party/decline', { from: i.from }); h.close('no'); } },
+        { label: $t('Terima'), primary: true, onClick: function (h) { sfx('ui_click'); answer('/party/accept', { from: i.from }, $t('Kamu masuk party.')); h.close('ok'); } },
+        { label: $t('Tolak'), onClick: function (h) { sfx('ui_click'); answer('/party/decline', { from: i.from }); h.close('no'); } },
         { label: $t('Nanti'), close: true }
       ]
     });

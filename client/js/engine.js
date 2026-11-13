@@ -1340,6 +1340,7 @@ function modal(o){
   // initial focus
   setTimeout(function(){ if (!h.closed && modals[modals.length - 1] === h) focusInto(h); }, 0);
   focusInto(h);
+  try { window.GT_SFX && GT_SFX.play('ui_open'); } catch(e){}
   emit('modalOpen', {id:h.id});
   return h;
 }
@@ -1364,6 +1365,7 @@ function closeModal(h, reason){
     if (held.length) waitRelease = true;
   }
   if (h.opts.onClose){ try { h.opts.onClose(reason); } catch(e){ console.error('[GT] modal onClose', e); } }
+  try { window.GT_SFX && GT_SFX.play('ui_close'); } catch(e){}
   emit('modalClose', {id:h.id, reason:reason});
 }
 function closeAllModals(){ modals.slice().reverse().forEach(function(m){ m.close('all'); }); }

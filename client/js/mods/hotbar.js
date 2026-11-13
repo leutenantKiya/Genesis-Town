@@ -48,7 +48,7 @@
   // kept by item, not by slot number, so a new slot order never puts something else in your hand
   var held = 0;
   try { var hv = SLOTS.indexOf(localStorage.getItem('gt.hotbar.item')); if (hv >= 0) held = hv; } catch (e) { /* storage blocked */ }
-  function setHeld(i) { held = (i + SLOTS.length) % SLOTS.length; try { localStorage.setItem('gt.hotbar.item', SLOTS[held]); } catch (e) { /* storage blocked */ } render(); }
+  function setHeld(i) { var was = held; held = (i + SLOTS.length) % SLOTS.length; if (held !== was) { try { window.GT_SFX && GT_SFX.play('ui_click'); } catch (e) { /* no sound */ } } try { localStorage.setItem('gt.hotbar.item', SLOTS[held]); } catch (e) { /* storage blocked */ } render(); }
   function nameOf(id, names) { return TOOL_NAME[id] ? TOOL_NAME[id]() : (names[id] && names[id].name) || id; }
 
   function chain() { return window.GT_CHAIN; }

@@ -76,7 +76,8 @@
         else if (!moved) { o.vx = 0; o.vy = 0; }
       }
       o.sx = sx; o.sy = sy; o.rt = now; o.x = q.x; o.y = q.y; o.age = ((q.age || 0) + rtt / 2) / 1000;
-      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.seen = now;
+      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; if (q.fish && !q.npc && (!o.fish || o.fish.phase !== q.fish.phase)) { var fp = q.fish.phase; var fs = fp === 'cast' ? 'cast' : fp === 'bite' ? 'bite' : fp === 'reel' ? 'reel' : ''; if (fs) sfx(fs, { vol: 0.6, x: q.x, y: q.y }); } // another player's rod
+      o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.seen = now;
     });
     Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
   }
@@ -279,8 +280,10 @@
     if (!head) return;
     head.textContent = (me ? $t('Kamu: {0}', [me]) : $t('Obrolan')) + (online ? $t(' · {0} online', [online]) : '');
   }
+  function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound never breaks play */ } }
   function addLine(m) {
     if (!m.note && isBlocked(m.from, m.fromTag)) return;
+    if (!m.note && key(m.from, m.fromTag) !== key(me || '', meTag)) sfx('chat', { vol: 0.5 }); // a message from someone else
     lines.push(m);
     if (lines.length > 60) lines.shift();
     if (!m.to && !m.party) bubbles[key(m.from, m.fromTag)] = { text: m.text, t: performance.now() };
@@ -361,7 +364,7 @@
       input.value = ''; return;
     }
     input.value = '';
-    C().api('/chat', { method: 'POST', body: { world: (GT.worldId && GT.worldId()) || 'public', text: text } }).then(function () { tick(); }, function (e) { note(e.message); input.value = text; });
+    C().api('/chat', { method: 'POST', body: { world: (GT.worldId && GT.worldId()) || 'public', text: text } }).then(function () { sfx('chat', { vol: 0.5 }); tick(); }, function (e) { note(e.message); sfx('error', { vol: 0.6 }); input.value = text; });
   }
 
   /* ---------------------------------------------------------------- player card */

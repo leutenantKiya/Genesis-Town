@@ -16,6 +16,9 @@
   var GT = window.GT;
   if (!GT) return;
   var napping = false;
+  function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound must never break the game */ } }
+  var lastKind = null; // door sound when the scene switches between outside and a room
+  function doorWatch() { var k = GT.scene && GT.scene.kind; if (lastKind !== null && k && k !== lastKind && (k === 'out' || lastKind === 'out')) sfx('door'); if (k) lastKind = k; }
 
   var TIPS = [
     $t('Buku "Pedagang Pintar": harga naik kalau stok pedagang sedikit. Jual saat stoknya kosong, beli saat penuh.'),
@@ -29,7 +32,7 @@
   function float(text) { if (window.GT_FX && GT_FX.float) GT_FX.float({ x: GT.player.x, y: GT.player.y - 1 }, text, '#ffffff'); }
   function nap() {
     if (napping) return;
-    napping = true;
+    napping = true; sfx('notify');
     var dim = document.createElement('div'); dim.className = 'gt-nap'; document.body.appendChild(dim);
     float('Zzz');
     setTimeout(function () { float('Zzz'); }, 600);
@@ -52,7 +55,7 @@
   var watered = {};
   function water(ctx) {
     var k = (ctx.scene.key || '') + ':' + ctx.tile.x + ',' + ctx.tile.y, n = watered[k] = (watered[k] || 0) + 1;
-    if (n === 3) { float('🌸'); GT.toast($t('Tanamannya berbunga! Rumahmu jadi lebih segar.')); return; }
+    sfx('water'); if (n === 3) { float('🌸'); GT.toast($t('Tanamannya berbunga! Rumahmu jadi lebih segar.')); return; }
     float('💧'); GT.toast(n > 3 ? $t('Tanamannya sudah mekar dan segar.') : $t('Kamu menyiram tanamannya. Daunnya berkilau.'));
   }
   // the chest is the player's own storage: in your own house it opens the bag; in someone else's it stays shut
@@ -66,11 +69,11 @@
     if (ctx.scene.kind === 'out' || ctx.npc || ctx.mode !== 'talk' || ctx.door) return false;
     var t = ctx.tileType;
     if (t === 'bed') { nap(); return true; }
-    if (t === 'bookshelf') { GT.dialog([TIPS[Math.floor(Math.random() * TIPS.length)]], '📚 ' + $t('Rak Buku')); return true; }
-    if (t === 'tv') { news(); return true; }
-    if (t === 'fridge') { float('🧃'); GT.toast($t('Segelas jus jeruk dingin. Segar!')); return true; }
+    if (t === 'bookshelf') { sfx('ui_click'); GT.dialog([TIPS[Math.floor(Math.random() * TIPS.length)]], '📚 ' + $t('Rak Buku')); return true; }
+    if (t === 'tv') { sfx('ui_click'); news(); return true; }
+    if (t === 'fridge') { sfx('eat'); float('🧃'); GT.toast($t('Segelas jus jeruk dingin. Segar!')); return true; }
     if (t === 'plant') { water(ctx); return true; }
-    if (t === 'table') { float('🍌'); GT.toast($t('Kamu makan sepotong pisang goreng. Enak!')); return true; }
+    if (t === 'table') { sfx('eat'); float('🍌'); GT.toast($t('Kamu makan sepotong pisang goreng. Enak!')); return true; }
     if (t === 'chest' && ctx.scene.house) { chest(ctx); return true; }
     return false;
   }
@@ -94,5 +97,5 @@
     ctx.restore();
   }
 
-  GT.register({ id: 'interior', onInteract: onInteract, init: function (g) { g.register({ id: 'interior-hint', onDraw: onDraw }); } });
+  GT.register({ id: 'interior', onInteract: onInteract, onFrame: doorWatch, init: function (g) { g.register({ id: 'interior-hint', onDraw: onDraw }); } });
 })();

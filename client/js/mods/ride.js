@@ -12,6 +12,7 @@
   var R = window.GT_RIDE = { on: false, at: null, hidden: false };
   var bars = null, MOVE = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1 };
 
+  function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound must never break the game */ } }
   function carousel() {
     var L = GT.world, w = (GT.worldId && GT.worldId()) || 'public';
     var fun = L && (L.fun || (L.layout && L.layout.fun)); // the engine's world keeps the generator's spots under layout
@@ -22,7 +23,7 @@
   function start() {
     if (R.on) return;
     var p = GT.player;
-    R.on = true; R.at = { x: Math.round(p.x), y: Math.round(p.y) };
+    sfx('ride'); R.on = true; R.at = { x: Math.round(p.x), y: Math.round(p.y) };
     document.documentElement.classList.add('gt-riding');
     if (GT.setCleanView) GT.setCleanView(true); // no tags, bubbles or markers over the ride
     if (!bars) { bars = document.createElement('div'); bars.className = 'gt-ride-bars'; bars.setAttribute('aria-hidden', 'true'); bars.innerHTML = '<i></i><i></i>'; }
@@ -34,7 +35,7 @@
   }
   function stop() {
     if (!R.on) return;
-    R.on = false; R.at = null;
+    sfx('ui_close'); R.on = false; R.at = null;
     document.documentElement.classList.remove('gt-riding');
     if (GT.setCleanView) GT.setCleanView(false);
     if (bars && bars.parentNode) bars.parentNode.removeChild(bars);

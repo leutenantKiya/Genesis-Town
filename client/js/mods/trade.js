@@ -45,7 +45,8 @@
       return C.approveDevice().then(once);
     });
   }
-  function fail(e) { GT.toast(e.message || $t('Gagal.')); }
+  function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound never breaks play */ } }
+  function fail(e) { sfx('error'); GT.toast(e.message || $t('Gagal.')); }
   function refreshState(r) { if (r && r.state) { S().st = r.state; if (C.refresh) C.refresh(true); } }
 
   /* ---------------------------------------------------------------- landmarks */
@@ -81,6 +82,7 @@
   function finish(s, text, refresh) {
     dismissed[s.id + ':' + s.status] = 1;
     sess = null; stopWin('end');
+    if (s.status === 'done') sfx('trade_done'); else sfx('ui_close', { vol: 0.6 });
     if (text) GT.toast(text);
     if (refresh && C.refresh) C.refresh(true);
   }
@@ -98,6 +100,7 @@
     return out;
   }
   function changed() {
+    sfx('ui_click', { vol: 0.5 });
     dirty = true;
     if (setT) clearTimeout(setT);
     setT = setTimeout(flush, 400);
@@ -167,6 +170,7 @@
       ui.ready = $('button', 'mbtn primary', $t('Siap')); ui.ready.type = 'button';
       ui.ready.addEventListener('click', function () {
         var id = sess && sess.id; if (!id) return;
+        sfx('ui_click');
         ui.ready.disabled = true;
         Promise.resolve(flush()).then(function () {
           if (!sess || sess.id !== id) return;
@@ -258,6 +262,7 @@
   function inviteModal(i) {
     if (invPop && invPop.isOpen()) return;
     seenInv[i.id] = 1;
+    sfx('notify');
     GT.toast($t('{0} mengajak dagang!', [i.other.name]));
     invPop = GT.modal({
       title: $t('Ajakan dagang'), body: $t('{0} mengajak dagang', [otherName(i)]), actions: [

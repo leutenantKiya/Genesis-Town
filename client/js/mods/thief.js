@@ -100,7 +100,9 @@ function conditions(door){
   var night = isNight(), lamp = door ? lampNear(f) : false;
   return { night:night, dark:night && !lamp, lampNear:lamp, policeSees:door ? policeSees(f) : false };
 }
+function sfx(n){ try { window.GT_SFX && GT_SFX.play(n); } catch(e){} }
 function caught(){
+  sfx('hurt');
   var amt = Math.min(50, GT.state.coins);
   if (amt > 0) GT.spendCoins(amt);
   GT.addReputation(-10);
@@ -169,9 +171,10 @@ function startPicking(door){
     if (g.handle) g.handle.close('done');
     cur = null;
     if (ok){
-      GT.toast('Klik! Kunci terbuka.');
+      sfx('door'); GT.toast('Klik! Kunci terbuka.');
       whenFree(function(){ GT.enterBuilding(door2); });
     } else {
+      sfx('error');
       var broke = rng() < 0.5;
       if (broke){ GT.removeItem('obeng', 1); GT.toast('Gagal membongkar. Obengmu patah!'); }
       else GT.toast('Gagal membongkar, tapi obengmu masih utuh.');
@@ -184,13 +187,13 @@ function startPicking(door){
     else if (typeof forced === 'boolean') hit = forced;
     else hit = Math.abs(pos() - g.zone) <= g.zw / 2;
     if (hit){
-      g.pin++;
+      g.pin++; sfx('ui_click');
       msg.className = 'thf-msg ok'; msg.textContent = 'Pas! Pin ' + g.pin + ' terpasang.';
       dots();
       if (g.pin >= PINS){ finish(true); return true; }
       newPin();
     } else {
-      g.strikes++;
+      g.strikes++; sfx('error');
       msg.className = 'thf-msg bad'; msg.textContent = 'Meleset! (' + g.strikes + '/' + MAX_STRIKES + ')';
       dots();
       if (g.strikes >= MAX_STRIKES){ finish(false); return false; }
@@ -257,7 +260,7 @@ function steal(house){
   var coins = rint(15, 60);
   if (conditions(house).dark) coins = Math.floor(coins * 1.5);
   var lines = ['Kamu membuka peti diam-diam...'], txt = 'Kamu dapat ' + coins + ' koin';
-  GT.addCoins(coins);
+  GT.addCoins(coins); sfx('coin');
   if (rng() < 0.4){
     var it = LOOT[Math.floor(rng() * LOOT.length)];
     GT.addItem(it, 1);

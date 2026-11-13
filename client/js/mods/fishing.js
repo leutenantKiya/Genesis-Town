@@ -19,6 +19,8 @@
   var HOLD_KEYS = { Space: 1, KeyF: 1, Enter: 1, KeyZ: 1 };
 
   function hash(a, b, c) { var h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 2147483647)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+  function snd(name, opts) { try { if (window.GT_SFX) GT_SFX.play(name, opts); } catch (e) { /* sound never blocks */ } }
+  var lastReel = 0;
   function chain() { return window.GT_CHAIN; }
   function bucket() { var c = chain(), st = c && c.state.st; return st && st.time ? Math.floor(st.time.totalHours / 2) : Math.floor(Date.now() / 120000); }
   function empty(x, y) { var c = chain(), e = c && c.state.emptyWater; return !!(e && e[x + ',' + y] && e[x + ',' + y] > Date.now()); }
@@ -186,6 +188,7 @@
     if (!ui) ui = buildUi();
     if (ui) ui.root.hidden = false;
     document.documentElement.classList.add('gt-fishing');
+    snd('cast');
     render();
     return true;
   }
@@ -201,7 +204,7 @@
   function press() {
     if (!F) return;
     if (F.phase === 'cast' || F.phase === 'wait') return end($t('Umpan ditarik. Belum ada ikan yang makan.'));
-    if (F.phase === 'bite') { F.phase = 'reel'; F.t = 0; F.hold = true; F.zy = Math.max(0, Math.min(1 - F.zone, F.fy - F.zone / 2)); render(); return; }
+    if (F.phase === 'bite') { F.phase = 'reel'; F.t = 0; lastReel = 0; F.hold = true; F.zy = Math.max(0, Math.min(1 - F.zone, F.fy - F.zone / 2)); render(); return; }
     if (F.phase === 'reel') F.hold = true;
   }
 
@@ -210,9 +213,9 @@
     if (GT.isUiOpen()) return end(null); // a window (a monster, a dialog) took over
     dt = Math.min(dt, 0.05);
     F.t += dt;
-    if (F.phase === 'cast' && F.t >= 0.45) { F.phase = 'wait'; F.t = 0; }
-    else if (F.phase === 'wait' && F.t >= F.bite) { F.phase = 'bite'; F.t = 0; }
-    else if (F.phase === 'bite' && F.t >= 1.1) return end($t('Ikannya lepas. Tekan begitu tanda "!" muncul.'));
+    if (F.phase === 'cast' && F.t >= 0.45) { F.phase = 'wait'; F.t = 0; snd('splash'); }
+    else if (F.phase === 'wait' && F.t >= F.bite) { F.phase = 'bite'; F.t = 0; snd('bite'); }
+    else if (F.phase === 'bite' && F.t >= 1.1) { snd('lose'); return end($t('Ikannya lepas. Tekan begitu tanda "!" muncul.')); }
     else if (F.phase === 'reel') {
       // the green zone: holding lifts it, letting go drops it; it bounces softly off the ends
       F.zv += (F.hold ? 2.4 : -2.1) * dt;
@@ -227,8 +230,9 @@
       F.fy += Math.sign(d) * Math.min(Math.abs(d), F.speed * dt * (0.6 + Math.random() * 0.8));
       var inside = F.fy >= F.zy && F.fy <= F.zy + F.zone;
       F.prog += (inside ? 0.3 : -0.2) * dt;
+      if (inside && F.hold && F.t - lastReel > 0.45) { lastReel = F.t; snd('reel', { vol: 0.6 }); }
       if (F.prog >= 1) return end(null, true);
-      if (F.prog <= 0) return end($t('Ikannya lepas! Jaga ikan tetap di area hijau.'));
+      if (F.prog <= 0) { snd('lose'); return end($t('Ikannya lepas! Jaga ikan tetap di area hijau.')); }
     }
     render();
   }

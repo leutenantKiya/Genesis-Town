@@ -450,6 +450,18 @@
       mu.appendChild(mc); mu.appendChild($('span', null, $t('Musik konser (malam, di panggung alun-alun)')));
       wrap.appendChild(mu);
     }
+    if (window.GT_SFX) { // sound effects (mods/sfx.js)
+      var sl = $('label', 'dchk'), sc = $('input'); sc.type = 'checkbox'; sc.checked = GT_SFX.on();
+      sc.addEventListener('change', function () { GT_SFX.setOn(sc.checked); GT_SFX.play('ui_click'); });
+      sl.appendChild(sc); sl.appendChild($('span', null, $t('Efek suara')));
+      wrap.appendChild(sl);
+      var vl = $('label', 'dchk'), vr = $('input'); vr.type = 'range'; vr.min = '0'; vr.max = '100'; vr.value = String(Math.round(GT_SFX.vol() * 100));
+      vr.setAttribute('aria-label', $t('Volume efek suara'));
+      vr.addEventListener('change', function () { GT_SFX.setVol(vr.value / 100); GT_SFX.play('ui_click'); });
+      vr.addEventListener('input', function () { GT_SFX.setVol(vr.value / 100); });
+      vl.appendChild($('span', null, $t('Volume efek suara'))); vl.appendChild(vr);
+      wrap.appendChild(vl);
+    }
     var keys = $('div');
     var h = $('h3', null, $t('Tombol')); keys.appendChild(h);
     keys.appendChild($('p', 'mnote', $t('Klik sebuah kotak lalu tekan tombol baru. Esc membatalkan. Tombol yang sudah dipakai aksi lain akan dipindahkan.')));

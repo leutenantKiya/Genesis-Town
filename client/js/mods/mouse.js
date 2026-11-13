@@ -50,6 +50,7 @@
 
   function go(path, then) {
     cancel();
+    try { window.GT_SFX && GT_SFX.play('ui_click', { vol: 0.3 }); } catch (e) { /* no sound */ }
     walk = { path: (path || []).map(function (q) { return { x: q.x, y: q.y }; }), held: null, then: then || null, last: performance.now(), lastPos: '' };
   }
 

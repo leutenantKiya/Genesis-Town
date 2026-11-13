@@ -11,6 +11,7 @@
   if (!GT) return;
   var busy = false;
 
+  function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound must never break the game */ } }
   function world() { return (GT.worldId && GT.worldId()) || 'public'; }
   function ferry() {
     var L = GT.world, V = window.GTVillage;
@@ -25,6 +26,7 @@
     if (busy || !C || !C.state || !C.state.account) { if (!busy) GT.toast($t('Masuk dulu untuk naik perahu.')); return; }
     busy = true;
     C.act({ action: 'boat', world: 'public' }, true).then(function (r) {
+      
       if (r && r.arrive) GT.teleportPlayer(null, r.arrive.x, r.arrive.y);
     }, function () { /* act() already said why */ }).then(function () { busy = false; });
   }
