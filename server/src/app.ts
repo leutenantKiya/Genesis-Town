@@ -8,6 +8,7 @@ import type { Store } from './db.ts';
 import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
 import { spendGuard } from './spend.ts';
+import { ChainCheck, spendTokens, offeredTokens } from './chaincheck.ts';
 import { Dialogue } from './dialogue.ts';
 import { langOf, localizeJson, LangMemory, type Lang } from './lang.ts';
 import { TransferStore } from './transfer.ts';
@@ -120,6 +121,12 @@ export function createApp(deps: AppDeps) {
   const dialogue = deps.dialogue ?? new Dialogue({ ...deps.cfg.nearai, ...deps.cfg.dialogue });
   const clientRoot = resolve(deps.clientDir);
   const checkSpend = spendGuard(deps.chain, game);
+  // Every off-chain spend is also compared with the chain's balance (chaincheck.ts); settlement and in-flight relays are skipped.
+  const chainCheck = new ChainCheck({
+    chain: deps.chain, settled: (a, t) => game.gs.settledBalance(a, t), mode: deps.cfg.chainCheck.mode, ttlMs: deps.cfg.chainCheck.ttlMs,
+    settling: () => game.settlement.busy, holding: (a) => game.gs.hasReserved(a),
+  });
+  game.settlement.onSettled = (accts) => chainCheck.invalidate(accts);
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
   social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs, perIp: game.econ.guest.perIp, maxMinutes: game.econ.guest.maxMinutes };
@@ -329,6 +336,13 @@ export function createApp(deps: AppDeps) {
     if (!actLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
     game.assertActive(acct);
     const b = parseJson(raw);
+    // what this request puts up from the caller is also checked against the chain before it counts
+    let spend: string[] = [];
+    if (p === '/api/trade/set' || p === '/api/trade/offer' || p === '/api/consign') spend = offeredTokens(game.econ, b);
+    else if (p === '/api/trade/ready') spend = Object.keys(game.trade.session(acct)?.mine ?? {});
+    else if (p === '/api/trade/accept') spend = Object.keys(game.trade.list(acct).incoming.find((o) => o.id === b.id)?.want ?? {});
+    if (spend.length) await chainCheck.verify(acct, spend, p.slice('/api/'.length));
+    try {
     const isSession = /^\/api\/trade\/(open|join|set|ready|close)$/.test(p);
     const tw = isSession ? worldOf(b.world) : 'public'; // live sessions run in any world the player stands in; the old offers stay public
     if (b.pos !== undefined) game.reportPosition(acct, b.pos as { x: number; y: number }, tw); // the client's tile, checked like any report
@@ -349,6 +363,7 @@ export function createApp(deps: AppDeps) {
     else if (p === '/api/consign/withdraw') send(res, 200, { ...game.consign.withdraw(acct, b.token), state: game.state(acct) });
     else throw new HttpError(404, 'no such route');
     return true;
+    } finally { if (spend.length) chainCheck.invalidate(acct); }
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
@@ -452,7 +467,8 @@ export function createApp(deps: AppDeps) {
           return send(res, 200, {
             day: t.day, hour: t.hour, settleDay: t.settleDay, settledThrough: game.settlement.settledThrough(),
             retry: [...game.settlement.retry.entries()].map(([day, r]) => ({ day, inSeconds: Math.max(0, Math.round((r.until - now) / 1000)), delaySeconds: Math.round(r.delay / 1000) })),
-            settlements: game.gs.settlements(8)
+            settlements: game.gs.settlements(8),
+            chainCheck: { mode: deps.cfg.chainCheck.mode, ttlMs: deps.cfg.chainCheck.ttlMs, mismatches: chainCheck.mismatches.slice().reverse() }
           });
         } else if (req.method === 'POST' && p === '/api/admin/unfreeze') {
           const raw = await readRaw(req);
@@ -546,7 +562,10 @@ export function createApp(deps: AppDeps) {
         if (ab.token !== undefined && ab.token !== '' && !has(game.econ.items, ab.token)) throw new HttpError(400, 'Unknown item.');
         if (ab.recipe !== undefined && !has(game.econ.recipes, ab.recipe)) throw new HttpError(400, 'Unknown recipe.');
         await game.prepare(acct, ab); // owner changes on chain show up here, before the act checks who owns what
+        const spend = spendTokens(game.econ, String(ab.action ?? ''), ab); // a spend is also checked against the chain first
+        if (spend.length) { game.assertActive(acct); await chainCheck.verify(acct, spend, String(ab.action)); }
         const out = game.act(acct, ab) as { world?: string; arrive?: { x: number; y: number } } & Record<string, unknown>;
+        if (spend.length) chainCheck.invalidate(acct);
         return send(res, 200, out);
       }
       if (req.method === 'GET' && p === '/api/news') {

@@ -1,6 +1,7 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Every spend also checks the testnet** (2026-11-13): before a sell, buy, craft, cook, build, hire, Mall, repair, tool, ride, casino, luck-table bet, shipping, pantry stock, live trade offer or consignment, the server reads the player's balance from the contract (cached 15 s) and refuses with a 409 when the chain holds less than the database's settled amount (`server/src/chaincheck.ts`; `CHAIN_CHECK` strict | lenient (default) | off, `CHAIN_CHECK_TTL_MS`). Settlement runs and relays in flight are skipped, a chain read that fails or takes over 1.5 s is allowed in lenient and refused in strict, and `/api/admin/status` lists the last 50 mismatches.
 > - **Phones either way up** (2026-11-13): a phone held sideways no longer shows an empty frame with the old D-pad; it
 >   gets its own layout: the game takes the whole height under a one-line status bar, Tas, Pasar, Peta, Chat and Menu
 >   stand in a rail at the right edge, and the joystick and action button sit low in the corners beside the item bar

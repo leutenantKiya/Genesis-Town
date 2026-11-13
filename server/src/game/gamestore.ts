@@ -123,6 +123,8 @@ export class GameStore {
   reservedOf(account: string, token: string): number { return this.reserved.get(account)?.get(token) ?? 0; }
   reserve(account: string, need: Map<string, number>) { this.reserved.set(account, new Map(need)); }
   release(account: string) { this.reserved.delete(account); }
+  /** True while a guarded on-chain relay holds amounts back for this account (its chain and settled balances differ for a moment). */
+  hasReserved(account: string): boolean { return this.reserved.has(account); }
 
   /**
    * A settlement debit the chain could not cover (or an entry dropped for an unregistered account). `wanted` and `applied`

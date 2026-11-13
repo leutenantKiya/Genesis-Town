@@ -60,6 +60,9 @@ export class Settlement {
    *  (or another server settles the same contract). Every settle_day would fail and still cost gas, so settlement stops
    *  until a restart with the right database. Shown by /api/health. */
   blocked: { chainDay: number; ourDay: number } | null = null;
+  /** Told when settled balances changed under the cached chain reads (a settlement run ended, or `refresh` re-read accounts):
+   *  chaincheck.ts drops its cache for them (no argument: for everyone). */
+  onSettled?: (accounts?: string[]) => void;
 
   constructor(d: SettleDeps) { this.d = d; }
 
@@ -118,6 +121,7 @@ export class Settlement {
       }
     } finally {
       this.busy = false;
+      this.onSettled?.();
     }
     return done;
   }
@@ -373,6 +377,7 @@ export class Settlement {
       const b = await this.d.chain.balances(a, tokens);
       tokens.forEach((t, i) => this.d.gs.setSettled(a, t, Number(b[i])));
     }
+    this.onSettled?.(accounts);
   }
 
   async refreshShops() {
