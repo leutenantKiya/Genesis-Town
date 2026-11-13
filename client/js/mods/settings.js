@@ -124,7 +124,7 @@
     return window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 900;
   }
   // Phone (portrait, narrow): the game view fills the screen between a one-line status bar and the thumb zone
-  // (no D-pad and no A/E: tap the map to walk, one contextual action button, and a bottom bar with the places players go).
+  // (no D-pad and no A/E: a joystick or a tap on the map walks, one contextual action button, and a bottom bar with the places players go).
   // css/phone.css lays it out.
   function wantsPhone() {
     if (wantsFull() || st.layout === 'boxed') return false;
@@ -329,6 +329,43 @@
   }
   window.GT_ACTBTN = { add: function (fn) { if (typeof fn === 'function') actProbes.push(fn); }, ahead: actionAhead };
 
+  // The phone's joystick (#joy, bottom left of the game view): push the knob to walk. In the 2.5D view outdoors it is
+  // analog (any direction, GT.setStick); in 2D and indoors it holds the nearest of the four directions (GT.padDir).
+  // Tapping the map to walk (mods/mouse.js) still works beside it.
+  var JOY_R = 32, JOY_DEAD = 0.28, joyTick = function () {};
+  function buildJoy() {
+    var joy = document.getElementById('joy');
+    if (!joy || !GT.padDir) return;
+    var knob = joy.firstElementChild, held = null, lastPt = null;
+    function steer(e) {
+      lastPt = { clientX: e.clientX, clientY: e.clientY };
+      var r = joy.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      var d = Math.hypot(dx, dy), k = d > JOY_R ? JOY_R / d : 1;
+      knob.style.transform = 'translate(' + dx * k + 'px,' + dy * k + 'px)';
+      if (d < JOY_R * JOY_DEAD || GT.isUiOpen()) { GT.setStick(null); GT.padDir(null); return; }
+      if (GT.freeWalk && GT.freeWalk()) { GT.padDir(null); GT.setStick(dx / d, dy / d); }
+      else { GT.setStick(null); GT.padDir(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')); }
+    }
+    // each frame again: a door or the view switching (2.5D outdoors <-> tiles) while the thumb stays put keeps walking
+    joyTick = function () { if (held != null && lastPt) steer(lastPt); };
+    function end(e) {
+      if (held == null || (e && e.pointerId !== held)) return;
+      held = null; lastPt = null; joy.classList.remove('down'); knob.style.transform = '';
+      GT.setStick(null); GT.padDir(null);
+    }
+    joy.addEventListener('pointerdown', function (e) {
+      if (held != null) return;
+      e.preventDefault(); held = e.pointerId; joy.classList.add('down');
+      try { joy.setPointerCapture(e.pointerId); } catch (_) { /* old browsers */ }
+      steer(e);
+    });
+    joy.addEventListener('pointermove', function (e) { if (e.pointerId === held) steer(e); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (t) { joy.addEventListener(t, end); });
+    joy.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    // a window opening or the page losing focus lets go, so the player never walks on by themselves
+    window.addEventListener('blur', function () { end({ pointerId: held }); });
+  }
+
   /* ------------------------------------------------------------ settings modal */
   var modal = null;
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -471,9 +508,9 @@
   window.GT_SETTINGS = { label: label, keyName: keyName, open: openSettings, toggleFullscreen: toggleFullscreen, _state: st };
   GT.register({
     id: 'settings',
-    onFrame: actTick,
+    onFrame: function () { actTick(); joyTick(); },
     init: function () {
-      buildActBtn();
+      buildActBtn(); buildJoy();
       GT.addHudButton({ id: 'setbtn', label: $t('Atur'), onClick: openSettings, secondary: false });
       // A calmer HUD: Tas, Pasar, Peta and Simulasi stay in view; everything else lives in Lainnya
       // (css/phone.css hides the rest). Their keyboard shortcuts still work.

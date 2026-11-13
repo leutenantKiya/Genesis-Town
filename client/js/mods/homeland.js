@@ -846,6 +846,7 @@
     }
     if (txt === whereTxt) return;
     whereTxt = txt;
+    document.documentElement.classList.toggle('gt-where', !!txt); // phone.css moves the mission card under the chip
     if (!txt) { if (whereEl) whereEl.style.display = 'none'; return; }
     if (!whereEl) {
       var screen = document.getElementById('screen');

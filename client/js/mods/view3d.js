@@ -80,13 +80,19 @@
     b.addEventListener('click', function (e) { e.currentTarget.blur(); fn(); });
     return b;
   }
+  function worldBtn(ico, name, fn) {
+    var b = button('', name, fn);
+    b.appendChild(el('span', 'ico', ico)).setAttribute('aria-hidden', 'true'); b.appendChild(el('span', 'lbl', name)); b.title = name;
+    return b;
+  }
   function buildUi() {
     var scr = document.getElementById('screen'), c2 = document.getElementById('cv');
     if (!scr || !c2) return;
     ui = { bar: el('div', 'gt3d-bar'), hint: el('div', 'gt3d-hint'), stick: el('div', 'gt3d-stick') };
     var t1 = el('div', 'gt3d-tray'); t1.setAttribute('role', 'group'); t1.setAttribute('aria-label', $t('Dunia'));
-    ui.desa = button($t('Desa'), null, function () { goWorld('public'); });
-    ui.home = button($t('Homeland'), null, function () { goWorld('home'); });
+    // a phone shows only the icon (css/phone.css), so the names go in aria-label too
+    ui.desa = worldBtn('🏘️', $t('Desa'), function () { goWorld('public'); });
+    ui.home = worldBtn('🏡', $t('Homeland'), function () { goWorld('home'); });
     t1.appendChild(ui.desa); t1.appendChild(ui.home);
     var t2 = el('div', 'gt3d-tray'); t2.setAttribute('role', 'group'); t2.setAttribute('aria-label', $t('Kamera'));
     t2.appendChild(button('+', $t('Perbesar'), function () { zoom = rig.zoom(zoom * 1.2); }));

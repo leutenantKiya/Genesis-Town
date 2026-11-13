@@ -2,8 +2,9 @@
    The screen is one column, read top to bottom and played with the thumbs:
      status bar (where you are, coins, time, energy)
      the game view, filling every pixel that is left (engine.js layoutPhone)
-     no D-pad and no A / E buttons: you walk by tapping the map (mods/mouse.js), and ONE round action button floats
-       at the bottom right of the game view only while the tile you face can be used (mods/settings.js, #btnAct)
+     no D-pad and no A / E buttons: a joystick at the bottom left walks (#joy, or tap the map: mods/mouse.js), and ONE
+       round action button floats at the bottom right of the game view only while the tile you face can be used
+       (mods/settings.js, #btnAct)
      bottom bar: Tas, Pasar, Peta, Chat, Pengaturan, one tap each
      controls (action button, bottom bar) are frosted glass over the game's dark backdrop; opaque when transparency is off
    Margins 16px; every control at least 44px tall; no frame around the screen, so no space is lost. */
@@ -46,6 +47,31 @@ html.gt-phone .actbtn:focus-visible{outline:3px solid var(--accent);outline-offs
 /* the item bar (hotbar.js) sits along the bottom of the view: float the button above it */
 html.gt-phone.gt-has-hotbar .actbtn:not([hidden]){bottom:84px}
 html.gt-fishing .actbtn,html.gt-fighting .actbtn{display:none!important}
+
+/* the joystick (settings.js buildJoy): bottom left of the game view, above the item bar; the knob follows the thumb */
+.joy{display:none}
+html.gt-phone .joy{display:block;position:absolute;left:16px;bottom:16px;z-index:6;width:112px;height:112px;border-radius:50%;
+  touch-action:none;user-select:none;-webkit-user-select:none;
+  background:color-mix(in srgb,var(--hud) 40%,transparent);border:2px solid var(--glass-line);box-shadow:0 2px 10px var(--glass-shade),inset 0 1px 0 var(--glass-hi);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+html.gt-phone .joy i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;pointer-events:none;
+  background:color-mix(in srgb,var(--accent) 85%,transparent);box-shadow:0 2px 6px var(--glass-shade),inset 0 1px 0 var(--glass-hi)}
+html.gt-phone .joy.down{background:color-mix(in srgb,var(--hud) 60%,transparent)}
+html.gt-phone .joy.down i{background:var(--accent-hi)}
+html.gt-phone.gt-has-hotbar .joy{bottom:92px}
+html.gt-fishing .joy,html.gt-fighting .joy,html.gt-titlecard .joy{display:none!important}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){html.gt-phone .joy{background:color-mix(in srgb,var(--hud) 70%,transparent)}}
+
+/* the 2.5D view's buttons on a phone: one slim column at the top right (icons only, names stay for screen readers),
+   and the mission card keeps clear of it, so nothing sits on top of anything */
+html.gt-phone .gt3d-bar{flex-direction:column;flex-wrap:nowrap;align-items:flex-end;gap:6px}
+html.gt-phone .gt3d-tray{flex-direction:column;gap:4px;padding:4px}
+html.gt-phone .gt3d-tray button{width:40px;height:40px;min-width:40px;padding:0;font-size:18px}
+html.gt-phone .gt3d-tray .lbl{display:none}
+html.gt-phone.gt-3d .gt-goals{max-width:calc(100% - 76px)}
+/* the Homeland chip (where you are) sits top left on a phone, the mission card just under it */
+html.gt-phone .hl-where{left:8px;right:auto;max-width:calc(100% - 76px)}
+html.gt-phone.gt-where .gt-goals{top:38px}
 @keyframes gt-actpop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 
 /* glass controls: the one place translucency and blur are allowed (owner, 2026-11-04). The tab bar only (the action button is tinted glass above).
@@ -86,6 +112,9 @@ html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:
   html.gt-phone .actbtn:not([hidden]){width:64px;height:64px;right:12px;bottom:12px}
   html.gt-phone.gt-has-hotbar .actbtn:not([hidden]){bottom:80px}
   html.gt-phone .actbtn .ico{font-size:24px}
+  html.gt-phone .joy{width:96px;height:96px;left:12px;bottom:12px}
+  html.gt-phone.gt-has-hotbar .joy{bottom:84px}
+  html.gt-phone .gt3d-tray button{width:36px;height:36px;min-width:36px;font-size:16px}
 }
 @media (prefers-reduced-motion:reduce){html.gt-phone .actbtn:not([hidden]){animation:none}}
 

@@ -2605,6 +2605,10 @@ var GT = {
   },
   // an analog walk on screen axes (-1..1 each), e.g. a drag in the 2.5D view; null lets go
   setStick: function(x, y){ stick = x == null ? null : {x:+x || 0, y:+y || 0}; },
+  // a direction held by an on-screen control (the phone's joystick), like a held arrow key; null lets go
+  padDir: function(d){ releaseDir('joy'); if (d === 'up' || d === 'down' || d === 'left' || d === 'right') pressDir(d, 'joy'); },
+  // true while the player walks freely (2.5D outdoors), where GT.setStick steers; else held directions step tiles
+  freeWalk: function(){ return freeOn(); },
   view3dOn: function(){ return v3on(); }
 };
 GT.dev = {};
