@@ -52,9 +52,11 @@
     var signing = S.account && window.NearLib ? signHeaders(method, '/api' + path, body) : Promise.resolve({});
     return signing.then(function (sh) {
       for (var k in sh) headers[k] = sh[k];
-      return fetch(API_BASE + '/api' + path, { method: method, headers: headers, body: body || undefined });
+      return fetch(API_BASE + '/api' + path, { method: method, headers: headers, body: body || undefined })
+        .catch(function (e) { netDown(); throw e; }); // no answer at all: the connection is gone
     })
       .then(function (r) {
+        if (r.status === 502 || r.status === 503 || r.status === 504) netDown(); else netUp(); // a proxy with no server behind it (a deploy)
         return r.json().catch(function () { return {}; }).then(function (j) {
           if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; if (j.code) e.code = j.code; if (e.code === 'superseded') onSuperseded(); throw e; }
           return j;
@@ -405,6 +407,36 @@
     } }] });
     setTimeout(function () { input.focus(); }, 50);
   }
+
+  /* ------------------------------------------------------------ connection health: notice, retry, reconnect
+     A request that gets no answer (or a 502/503/504 from the host while the server restarts) marks the connection down:
+     a small badge says so and /api/health is tried every few seconds. The first answer brings the game back: state,
+     bag and presence reload (players.js keeps polling on its own). A game that had to start offline because the
+     server could not be reached reloads the page once the server answers, to come up online. */
+  var net = { down: false, bootFailed: false, timer: 0, badge: null };
+  function netBadge(on) {
+    if (on && !net.badge) {
+      net.badge = $('div', 'gt-net', '📡 ' + $t('Koneksi ke server terputus · menyambung ulang…'));
+      net.badge.setAttribute('role', 'status'); document.body.appendChild(net.badge);
+    } else if (!on && net.badge) { net.badge.remove(); net.badge = null; }
+  }
+  function netCheckSoon(ms) { clearTimeout(net.timer); net.timer = setTimeout(netCheck, ms || 3000); }
+  function netCheck() {
+    if (!net.down) return;
+    fetch(API_BASE + '/api/health', { cache: 'no-store' }).then(function (r) {
+      if (r.status === 502 || r.status === 503 || r.status === 504) netCheckSoon(); else netUp();
+    }, function () { netCheckSoon(); });
+  }
+  function netDown() { if (net.down) return; net.down = true; netBadge(true); netCheckSoon(); }
+  function netUp() {
+    if (!net.down) return;
+    net.down = false; clearTimeout(net.timer); netBadge(false);
+    if (net.bootFailed) { location.reload(); return; }
+    GT.toast('📡 ' + $t('Tersambung lagi ke server.'));
+    refresh(true);
+  }
+  window.addEventListener('online', function () { if (net.down) netCheckSoon(200); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && net.down) netCheckSoon(200); });
 
   /* ------------------------------------------------------------ state refresh + clock sync */
   function refresh(full) {
@@ -1650,7 +1682,7 @@
           api('/dev/night', { method: 'POST' }).then(function () { GT.toast($t('Sekarang malam.')); refresh(true); }, function (e) { GT.toast(e.message); });
         }));
       });
-    }).catch(function () { S.mode = 'offline'; }).then(function () {
+    }).catch(function () { S.mode = 'offline'; if (!forceOffline) { net.bootFailed = true; netDown(); } }).then(function () {
       renderBanner(); return refresh(true);
     }).then(schedulePoll);
     renderBanner();

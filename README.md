@@ -201,6 +201,19 @@
 >   and action button sit inside the game picture, above the item bar; a guest no longer gets a "Sign in first" toast that
 >   never goes away (the portal check ran every frame). A player's `#tag` now comes from their account name, so a restart that
 >   came back from an older database copy gives them the same tag instead of a new random one.
+> - **Playtest fixes, round 3** (2026-11-13, [plan](docs/superpowers/plans/2026-11-13-playtest-round-3.md)): new players
+>   start with 5 Wheat, and the hotbar shows the Hoe, the Pickaxe and a Fishing Rod (a free tool like the Hoe) first;
+>   clicking to walk no longer fights W A S D (mouse.js holds its own direction, `GT.walkDir`, and any player direction
+>   cancels it, hook `onPlayerDir`); tilled soil uses the field's own soil art, an empty plot shows corner marks, the hoe
+>   squares are lighter; the owner's Town Hall is in four tabs with icons (Town, Build, Workers, Guests), Build shows a
+>   dot when something can start, and two regions with the same name say their side; the mission card is an icon, a
+>   few words and one hint, and moves under the floating top bar; a closed shop shows one row per missing good with a
+>   progress bar; the carousel ride is a clean, brighter picture with a warm light on the rider (`GT.setCleanView`), and
+>   getting off puts the player back on the ground; the fishing rod is a 3D model in the 2.5D view (`three/rod.js`),
+>   and other players see you fish (presence `fish`: phase and float tile, checked on water); players inside the same
+>   building in a world see each other there (presence `room`, `rx`, `ry`); a lost connection shows a badge and
+>   reconnects by itself (chain.js `netDown`/`netUp`, `/api/health` every 3 s); arriving through a portal no longer
+>   sends you straight back (the portal waits until you have stepped off it once).
 >
 > - **Work buildings** (2026-11-12, after Kingshot's resource buildings): every Homeland has a **Penggergajian** (sawmill,
 >   wood) on a forest island, a **Kincir Angin** (windmill, wheat) with sails that turn in the 2.5D view, and a **Gudang**

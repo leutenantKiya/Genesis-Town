@@ -60,8 +60,9 @@
   /* The rod, drawn like the axe: from the hand, a brown butt with a cork grip and a reel, a slim tip that lifts up and
      out over the water. While reeling the tip bends toward the fish and the reel's crank turns. */
   var ROD = { up: [[7, 6], [2, -13]], down: [[8, 8], [4, -9]], left: [[4, 7], [-11, -8]], right: [[8, 7], [11, -8]] };
-  function rodGeom() {
-    var p = GT.player, a = GT.at(p.x, p.y), r = ROD[p.dir] || ROD.right;
+  // who: { x, y, dir } in tiles (the player, or another angler at their smooth position)
+  function rodGeom(who) {
+    var p = who || GT.player, a = GT.at(p.x, p.y), r = ROD[p.dir] || ROD.right;
     var hand = { x: a.x + r[0][0], y: a.y + r[0][1] };
     return { hand: hand, tip: { x: hand.x + r[1][0], y: hand.y + r[1][1] } };
   }
@@ -86,33 +87,44 @@
     return tp;
   }
 
-  function onDraw(ctx, camX, camY, T) {
-    if (!F) return;
-    var g = rodGeom(), t = performance.now() / 1000, tip = g.tip;
-    var fa = GT.at(F.tile.x, F.tile.y), bx = fa.x + T / 2, by = fa.y + T / 2;
-    if (F.phase === 'cast') { // the float flies in an arc
-      var k = Math.min(1, F.t / 0.45);
+  /* One angler: rod, line, float and splash rings. s = { phase, x, y (float tile), hold, t (seconds in the phase) }.
+     In the 2.5D view the rod is a 3D model instead (three/rod.js, placed by view3d.js from the entities' `fish`). */
+  function drawAngler(ctx, T, who, s) {
+    var g = rodGeom(who), t = performance.now() / 1000, tip = g.tip;
+    var fa = GT.at(s.x, s.y), bx = fa.x + T / 2, by = fa.y + T / 2;
+    if (s.phase === 'cast') { // the float flies in an arc
+      var k = Math.min(1, (s.t || 0) / 0.45);
       bx = tip.x + (bx - tip.x) * k; by = tip.y + (by - tip.y) * k - Math.sin(k * Math.PI) * 10;
-    } else if (F.phase === 'wait') by += Math.round(Math.sin(t * 4) * 0.8);
-    else if (F.phase === 'bite') by += 2;
-    else if (F.phase === 'reel') { bx += Math.round(Math.sin(t * 9) * 1.5); by += 1; }
+    } else if (s.phase === 'wait') by += Math.round(Math.sin(t * 4) * 0.8);
+    else if (s.phase === 'bite') by += 2;
+    else if (s.phase === 'reel') { bx += Math.round(Math.sin(t * 9) * 1.5); by += 1; }
     ctx.save();
     // rod and line: reeling bends the tip toward the float and spins the crank (fast while the button is held)
-    var pull = F.phase === 'reel' ? 1 : F.phase === 'bite' ? 0.5 : 0, bl = Math.hypot(bx - tip.x, by - tip.y) || 1;
+    var pull = s.phase === 'reel' ? 1 : s.phase === 'bite' ? 0.5 : 0, bl = Math.hypot(bx - tip.x, by - tip.y) || 1;
     var bend = { x: (bx - tip.x) / bl * 3 * pull, y: (by - tip.y) / bl * 3 * pull + 1.5 * pull };
-    var crank = F.phase === 'reel' ? t * (F.hold ? 18 : 6) : 0;
+    var crank = s.phase === 'reel' ? t * (s.hold ? 18 : 6) : 0;
     tip = drawRod(ctx, g, bend, crank);
     ctx.strokeStyle = 'rgba(245,245,235,0.85)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(tip.x + 0.5, tip.y + 0.5);
-    ctx.quadraticCurveTo((tip.x + bx) / 2, Math.max(tip.y, by) + (F.phase === 'reel' ? -2 : 4), bx, by); ctx.stroke();
+    ctx.quadraticCurveTo((tip.x + bx) / 2, Math.max(tip.y, by) + (s.phase === 'reel' ? -2 : 4), bx, by); ctx.stroke();
     // float: red top, white bottom
     ctx.fillStyle = '#e8503c'; ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 2, 2, 2);
     ctx.fillStyle = '#f4f4ec'; ctx.fillRect(Math.round(bx) - 1, Math.round(by), 2, 1);
-    if (F.phase === 'bite' || F.phase === 'reel') { // splash rings
+    if (s.phase === 'bite' || s.phase === 'reel') { // splash rings
       var ph = (t * 1.6) % 1;
       ctx.strokeStyle = 'rgba(232,248,246,' + (1 - ph).toFixed(3) + ')';
       ctx.beginPath(); ctx.ellipse(Math.round(bx) + 0.5, Math.round(by) + 1.5, 2 + ph * 5, (2 + ph * 5) * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
     }
+    ctx.restore();
+  }
+  function onDraw(ctx, camX, camY, T) {
+    var flat = !(GT.view3dOn && GT.view3dOn() && window.GT3 && GT3.Rod);
+    // other players fishing (players.js), in 2D; the 2.5D view gives them a 3D rod
+    if (flat && window.GT_PLAYERS && GT_PLAYERS.anglers) GT_PLAYERS.anglers().forEach(function (a) { drawAngler(ctx, T, a, a.fish); });
+    if (!F) return;
+    var t = performance.now() / 1000;
+    if (flat) drawAngler(ctx, T, null, state());
+    ctx.save();
     if (F.phase === 'bite') { // "!" over the player
       var pa = GT.at(GT.player.x, GT.player.y), px = pa.x + T / 2, py = pa.y - 7 + Math.round(Math.sin(t * 20));
       var TH = window.GT_THEME;
@@ -239,6 +251,10 @@
     }
   }
 
-  window.GT_FISH = { start: start, active: function () { return !!F; }, isSpot: isSpot, _state: function () { return F; } };
-  GT.register({ id: 'fishing', init: init, onFrame: onFrame, onKey: onKey, onDraw: onDraw, onDrawGround: onDrawGround });
+  // what the player's fishing looks like right now: for the 3D rod (via the entity) and the others (presence)
+  function state() { return F ? { phase: F.phase, x: F.tile.x, y: F.tile.y, hold: !!F.hold, t: F.t } : null; }
+  function onEntities(ents) { if (!F) return; for (var i = 0; i < ents.length; i++) if (ents[i].me) ents[i].fish = state(); }
+
+  window.GT_FISH = { start: start, active: function () { return !!F; }, isSpot: isSpot, state: state, _state: function () { return F; } };
+  GT.register({ id: 'fishing', init: init, onFrame: onFrame, onKey: onKey, onDraw: onDraw, onDrawGround: onDrawGround, onEntities: onEntities });
 })();

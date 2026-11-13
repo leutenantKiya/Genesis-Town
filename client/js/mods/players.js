@@ -76,7 +76,7 @@
         else if (!moved) { o.vx = 0; o.vy = 0; }
       }
       o.sx = sx; o.sy = sy; o.rt = now; o.x = q.x; o.y = q.y; o.age = ((q.age || 0) + rtt / 2) / 1000;
-      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; o.account = q.account; o.party = !!q.party; o.seen = now;
+      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.seen = now;
     });
     Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
   }
@@ -89,18 +89,24 @@
     if (busy || !active() || document.hidden) return;
     var c = C(), sc = GT.scene, p = GT.player, pos = c.standPos(), w = (GT.worldId && GT.worldId()) || 'public', t = performance.now();
     var out = sc && sc.kind === 'out', sx = p.sx != null ? p.sx : pos.x, sy = p.sy != null ? p.sy : pos.y;
+    var room = !out && sc && sc.key ? String(sc.key) : null;
+    if (room) { sx = p.x; sy = p.y; } // indoors: where I stand in the room (the others in it see me there)
     if (myLast && (Math.abs(sx - myLast.x) > 0.01 || Math.abs(sy - myLast.y) > 0.01)) myMovedAt = t;
     var fast = t - myMovedAt < 1500 || Object.keys(others).some(function (a) { return !others[a].npc; });
-    var turned = myLast && out && (!!p.moving !== myLast.moving || p.dir !== myLast.dir) && t - myLast.t > 150; // start, stop, turn: tell now
+    var fishNow = out && window.GT_FISH && GT_FISH.state ? GT_FISH.state() : null, fishKey = fishNow ? fishNow.phase + fishNow.x + ',' + fishNow.y : '';
+    // start, stop, turn, or a new fishing phase (cast, bite, reel, done): tell now
+    var turned = myLast && (out || room) && (!!p.moving !== myLast.moving || p.dir !== myLast.dir || fishKey !== myLast.fish) && t - myLast.t > 150;
     if (t < holdUntil || (!turned && t < nextAt - (fast ? SLOW_MS - FAST_MS : 0))) return;
     if (curWorld !== w) { curWorld = w; others = {}; } // other players belong to the world they are in
     // my walking speed since the last report, in tiles a second: the others push me on by it until the next one
     var gap = myLast ? (t - myLast.t) / 1000 : 0, vx = 0, vy = 0;
     if (myLast && gap > 0.05 && gap < 1.5 && p.moving) { vx = clampV((sx - myLast.x) / gap); vy = clampV((sy - myLast.y) / gap); }
-    myLast = { x: sx, y: sy, t: t, moving: !!p.moving, dir: p.dir };
+    myLast = { x: sx, y: sy, t: t, moving: !!p.moving, dir: p.dir, fish: fishKey };
     nextAt = t + SLOW_MS;
     var body = { world: w, x: pos.x, y: pos.y, dir: p.dir, scene: out ? 'out' : 'in', since: last };
     if (out) { body.fx = Math.round(sx * 1000) / 1000; body.fy = Math.round(sy * 1000) / 1000; body.vx = Math.round(vx * 100) / 100; body.vy = Math.round(vy * 100) / 100; }
+    if (fishNow) body.fish = { phase: fishNow.phase, x: fishNow.x, y: fishNow.y }; // others see me fishing
+    if (room) { body.room = room; body.rx = p.x; body.ry = p.y; } // inside a building: players in the same room meet
     busy = true;
     c.api('/presence', { method: 'POST', body: body }).then(function (r) {
       rtt += (Math.min(3000, performance.now() - t) - rtt) * 0.2;
@@ -132,17 +138,32 @@
   function curY(o, now) { glide(o, now); return o.dy; }
 
   /* ---------------------------------------------------------------- drawing */
+  // another player's fishing as last reported; the time in the phase runs on locally so the float flies and bobs
+  function fishOf(o, now) {
+    var f = o.fish; if (!f) return null;
+    if (o.fishKey !== f.phase + f.x + ',' + f.y) { o.fishKey = f.phase + f.x + ',' + f.y; o.fishAt = now; }
+    return { phase: f.phase, x: f.x, y: f.y, hold: f.phase === 'reel', t: (now - o.fishAt) / 1000 };
+  }
+  // the others fishing now, at their drawn position: fishing.js draws their rods in the 2D view
+  function anglers() {
+    if (!GT.scene || GT.scene.kind !== 'out') return [];
+    var now = performance.now(), out = [];
+    Object.keys(others).forEach(function (a) { var o = others[a], f = !o.npc && fishOf(o, now); if (f) out.push({ x: curX(o, now), y: curY(o, now), dir: o.dir, fish: f }); });
+    return out;
+  }
+  // a player is drawn where I am: outdoors the ones outdoors, inside a building the ones in the same room
+  function here(o) { var sc = GT.scene; if (!sc) return false; return sc.kind === 'out' ? !o.room : !!o.room && o.room === String(sc.key); }
   function onEntities(ents, ctx, camX, camY, T) {
-    if (!GT.scene || GT.scene.kind !== 'out') return;
+    if (!GT.scene) return;
     var now = performance.now();
     Object.keys(others).forEach(function (a) {
       var o = others[a];
-      if (o.npc) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
+      if (o.npc || !here(o)) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
       var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
       var moving = o.spd > 0.4, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
       var look = o.look != null ? o.look : pal(o.nick || a);
       // px/py/pal/dir/step/id: the 2.5D view (mods/view3d.js) draws the same player as a 3D card
-      ents.push({ py: py, px: px, pal: look, dir: o.dir, step: step, id: 'player:' + a, draw: function () { GT.drawChar(ctx, px - camX, py - camY, look, o.dir, step); } });
+      ents.push({ py: py, px: px, pal: look, dir: o.dir, step: step, id: 'player:' + a, fish: fishOf(o, now), draw: function () { GT.drawChar(ctx, px - camX, py - camY, look, o.dir, step); } });
     });
   }
   // Name tags and bubbles are collected first, then placed so none sits on another: tags that share a row within a
@@ -162,13 +183,14 @@
   function overlaps(a, b) { return overlapX(a, b) && Math.abs(a.y - b.y) < 9 * Math.max(a.sc, b.sc); }
   function onDraw(ctx, camX, camY, T) {
     var TH = tone();
-    if (!TH || !GT.scene || GT.scene.kind !== 'out') return;
+    if (!TH || !GT.scene) return;
     var now = performance.now(), W = ctx.canvas.width / (ctx.getTransform().a || 1);
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     var tags = [], bubs = [], placed = [];
     Object.keys(others).forEach(function (a) {
-      var o = others[a], cx = curX(o, now);
+      var o = others[a]; if (!here(o)) return;
+      var cx = curX(o, now);
       var at = GT.at(cx, curY(o, now)); // in 2.5D this follows the head at any camera turn
       var x = GT.snap(at.x + T / 2), y = GT.snap(at.y - 3); // every tag starts right above its owner's head
       var small = o.guest || !!guestId, sz = small ? 5 : 7; // a guest's own tag is small and dim; a guest sees everyone's tags small
@@ -345,7 +367,7 @@
   /* ---------------------------------------------------------------- player card */
   function playerAt(t) {
     var now = performance.now(), hit = null;
-    Object.keys(others).forEach(function (a) { var o = others[a]; if (Math.round(curX(o, now)) === t.x && Math.round(curY(o, now)) === t.y) hit = o; });
+    Object.keys(others).forEach(function (a) { var o = others[a]; if (here(o) && Math.round(curX(o, now)) === t.x && Math.round(curY(o, now)) === t.y) hit = o; });
     return hit;
   }
   var presenceFns = []; // other mods listen to each successful presence answer
@@ -384,7 +406,7 @@
     setInterval(fade, 2000);
     var cv = document.getElementById('cv');
     if (cv) cv.addEventListener('click', function (e) {
-      if (e.button !== 0 || GT.isUiOpen() || !GT.screenToTile || !GT.scene || GT.scene.kind !== 'out') return;
+      if (e.button !== 0 || GT.isUiOpen() || !GT.screenToTile || !GT.scene) return;
       var t = GT.screenToTile(e.clientX, e.clientY), o = t && playerAt(t);
       if (!o) return;
       e.stopImmediatePropagation(); e.preventDefault();
@@ -395,6 +417,6 @@
   }
 
   function refresh() { others = {}; curWorld = null; backoff = 0; nextAt = 0; holdUntil = 0; tick(); } // after sailing: forget the old world's players at once
-  window.GT_PLAYERS = { onPresence: function (f) { presenceFns.push(f); }, addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
+  window.GT_PLAYERS = { anglers: anglers, onPresence: function (f) { presenceFns.push(f); }, addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
   GT.register({ id: 'players', init: function (g) { init(g); g.register({ id: 'players-labels', onDraw: onDraw }); }, onEntities: onEntities, onKey: onKey }); // tags and bubbles register last from init, so they draw over every other mod's signs
 })();

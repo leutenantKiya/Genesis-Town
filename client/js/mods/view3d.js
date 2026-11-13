@@ -21,7 +21,7 @@
   var LS = 'gt.view', T = 12, STEP = Math.PI / 4;
   var DV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var KIT = ['vendor/three.js', 'js/three/kit.js', 'js/three/ground.js', 'js/three/building.js', 'js/three/nature.js', 'js/three/props.js',
-    'js/three/actor.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/fun.js', 'js/three/life.js', 'js/three/world.js', 'js/three/room.js', 'js/three/monsters.js'];
+    'js/three/actor.js', 'js/three/rod.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/fun.js', 'js/three/life.js', 'js/three/world.js', 'js/three/room.js', 'js/three/monsters.js'];
   var mode = saved() || '3d';
   var loading = null, ok = false, failed = false, booted = false;
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
@@ -161,7 +161,7 @@
     if (world) { world.dispose(); world = null; see = null; }
     if (gtex) { scene.remove(gtex.userData.mesh); gtex.userData.mesh.geometry.dispose(); gtex.userData.mesh.material.dispose(); gtex.dispose(); gtex = null; gctx = null; }
     if (mtex) { scene.remove(mtex.userData.mesh); mtex.userData.mesh.geometry.dispose(); mtex.userData.mesh.material.dispose(); mtex.dispose(); mtex = null; mctx = null; mAny = false; }
-    actors.forEach(function (a) { a.actor.dispose(); }); actors.clear();
+    actors.forEach(function (a) { a.actor.dispose(); }); actors.clear(); rods.forEach(function (r) { r.dispose(); }); rods.clear();
     built = m; seasonKey = ''; snapNext = true; stumpSynced = false; stumpSt = null; // a new world: its stumps appear, none fall
     var L = m.layout;
     // the engine's own tiles: it adds the street lamps to the layout's
@@ -298,6 +298,22 @@
      the rider: a cinematic shot. Only the picture changes; the player still stands on their tile for the game. */
   // a warm light that rides with the player, so the ride reads bright at any hour
   var rideLamp = null;
+  /* ---------------------------------------------------------------- fishing rods (three/rod.js)
+     Every character with e.fish (the player: fishing.js; others: their presence report, players.js) holds a 3D rod
+     with its line and float on the water tile they cast to. Outdoors only. */
+  var rods = new Map();
+  function updateRods(o, now) {
+    var want = {};
+    if (!o.house && GT3.Rod) o.ents.forEach(function (e) {
+      var f = e.fish, key = e.me ? 'me' : (e.n || e.id);
+      if (!f || !key || e.px == null || e.hidden) return;
+      var r = rods.get(key);
+      if (!r) { r = GT3.Rod(); scene.add(r.group); rods.set(key, r); }
+      r.update({ x: mx(e.px / T + 0.5), z: mz(e.py / T + 0.5), dir: e.dir, phase: f.phase, fx: mx(f.x + 0.5), fz: mz(f.y + 0.5), hold: !!f.hold, t: f.t }, now / 1000);
+      want[key] = 1;
+    });
+    rods.forEach(function (r, k) { if (!want[k]) { r.dispose(); rods.delete(k); } });
+  }
   function rideLight(on) {
     if (!rideLamp) { if (!on) return; rideLamp = new THREE.PointLight(0xffe0b0, 0, 7, 1.2); scene.add(rideLamp); }
     rideLamp.intensity = on ? 2.2 + 5 * (sky ? sky.night : 0) : 0;
@@ -521,6 +537,7 @@
         seen.add(key);
         if (e.me) { pt.x = x; pt.y = z; }
       });
+      updateRods(o, now);
       // walking in, the people outside stay where they were until the mist has closed over them (then they go)
       var keepOut = !!o.house && unfold.p < 1 && world.group.visible;
       actors.forEach(function (a, k) { if (!seen.has(k) && !(keepOut && a.outdoor)) { a.actor.dispose(); actors.delete(k); } });

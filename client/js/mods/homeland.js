@@ -178,9 +178,14 @@
     if (!dizzyOn) { root.classList.add('gt-dizzy'); dizzyOn = true; }
     root.style.setProperty('--dz', Math.min(1, k).toFixed(3));
   }
+  // arriving through a portal puts you by the ring: it only takes you on after you have stepped off it once
+  var portalArmed = false, portalWid = null;
   function portalTick(dt) {
+    var wnow = wid();
+    if (wnow !== portalWid) { portalWid = wnow; portalArmed = false; }
+    if (!portalArmed && !inPortal()) portalArmed = true;
     // signedIn, not loggedIn: this runs every frame, and loggedIn's toast would stay up for good for a guest
-    var on = !travelling && !portalBusy && signedIn() && !GT.isUiOpen() && inPortal();
+    var on = portalArmed && !travelling && !portalBusy && signedIn() && !GT.isUiOpen() && !(window.GT_FISH && GT_FISH.active()) && inPortal();
     portalT = on ? portalT + dt : Math.max(0, portalT - dt * 3);
     dizzy(portalT / PORTAL_WAIT);
     if (on && portalT >= PORTAL_WAIT) {

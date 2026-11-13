@@ -10,7 +10,10 @@ import { randomBytes } from 'node:crypto';
 /** A visitor who has not signed in: in memory only, public village only, no chat. `ip` is who created it. */
 export interface Guest extends Seen { id: string; pub: string; ip: string; since: number }
 
-export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; fx?: number; fy?: number; vx?: number; vy?: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean; guest?: boolean }
+/** What a player is busy with, for the others to draw: fishing, with the phase and the float's water tile. */
+export interface Fishing { phase: 'cast' | 'wait' | 'bite' | 'reel'; x: number; y: number }
+const FISH_PHASES = new Set(['cast', 'wait', 'bite', 'reel']);
+export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; fx?: number; fy?: number; vx?: number; vy?: number; fish?: Fishing; room?: string; rx?: number; ry?: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean; guest?: boolean }
 /** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
 export interface Npc { id: string; account: string; name: string; look: number; x: number; y: number; title: string }
 export const NPC_TAG = 'NPC';
@@ -37,6 +40,15 @@ const ROUGH = ['anjing', 'anjir', 'bangsat', 'bajingan', 'kontol', 'memek', 'nge
   'fuck', 'fucking', 'shit', 'bitch', 'cunt', 'asshole', 'dick', 'pussy'];
 const ROUGH_RE = new RegExp('\\b(' + ROUGH.join('|') + ')\\b', 'gi');
 const DIRS = new Set(['up', 'down', 'left', 'right']);
+/** A fishing report checked for shape only: a known phase and a float within two tiles of the player (the route also
+ *  checks that the tile is water on that world's map). Anything else: not fishing. */
+export function fishingOf(f: unknown, x: number, y: number): Fishing | null {
+  if (!f || typeof f !== 'object') return null;
+  const o = f as { phase?: unknown; x?: unknown; y?: unknown }, fx = Number(o.x), fy = Number(o.y);
+  if (typeof o.phase !== 'string' || !FISH_PHASES.has(o.phase) || !Number.isInteger(fx) || !Number.isInteger(fy)) return null;
+  if (Math.abs(fx - x) + Math.abs(fy - y) > 2) return null;
+  return { phase: o.phase as Fishing['phase'], x: fx, y: fy };
+}
 
 export function cleanText(s: string) {
   // no control characters, one line, trimmed, and rude words masked
@@ -124,7 +136,7 @@ export class Social {
   }
 
   /** Where a player is now, in `world` (only outdoor positions are shown to others). */
-  report(account: string, world: string, p: { x?: unknown; y?: unknown; fx?: unknown; fy?: unknown; vx?: unknown; vy?: unknown; dir?: unknown; scene?: unknown }) {
+  report(account: string, world: string, p: { x?: unknown; y?: unknown; fx?: unknown; fy?: unknown; vx?: unknown; vy?: unknown; dir?: unknown; scene?: unknown; fish?: unknown; room?: unknown; rx?: unknown; ry?: unknown }) {
     const x = Number(p.x), y = Number(p.y);
     if (!worldIdOk(world)) throw new HttpError(400, 'bad world');
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 999 || y > 999) throw new HttpError(400, 'bad position');
@@ -136,13 +148,19 @@ export class Social {
     const near = Number.isFinite(fx) && Number.isFinite(fy) && Math.abs(fx - x) <= 1 && Math.abs(fy - y) <= 1;
     const v = (n: number) => Number.isFinite(n) ? Math.round(Math.max(-8, Math.min(8, n)) * 100) / 100 : 0;
     const smooth = near ? { fx: Math.round(fx * 1000) / 1000, fy: Math.round(fy * 1000) / 1000, vx: v(vx), vy: v(vy) } : {};
-    this.seen.set(account, { account, world, nick: this.nick(account), tag: this.tag(account), look: this.look(account), x, y, ...smooth, dir, scene, t: this.now() });
+    const fish = scene === 'out' ? fishingOf(p.fish, x, y) : null;
+    // indoors: which room (the building's scene key) and where in it, so players in the same room meet
+    const rx = Number(p.rx), ry = Number(p.ry);
+    const inRoom = scene === 'in' && typeof p.room === 'string' && /^[a-z0-9:_-]{1,40}$/i.test(p.room) && Number.isInteger(rx) && Number.isInteger(ry) && rx >= 0 && ry >= 0 && rx < 80 && ry < 80;
+    const room = inRoom ? { room: p.room as string, rx, ry } : {};
+    this.seen.set(account, { account, world, nick: this.nick(account), tag: this.tag(account), look: this.look(account), x, y, ...(scene === 'out' ? smooth : {}), ...room, ...(fish ? { fish } : {}), dir, scene, t: this.now() });
   }
   /** Other players outdoors in the same world within `radius` tiles who reported in the last 15 seconds. */
   nearby(account: string, world: string, radius = 30, maxAge = 15_000) {
     const isGuest = this.guests.has(account);
     const me = this.seen.get(account) ?? this.guests.get(account), now = this.now(), out: Seen[] = [], mates = new Set(isGuest ? [] : this.mates(account));
-    if (world === 'public') {
+    const myRoom = me && me.scene === 'in' ? (me as Seen).room ?? null : null;
+    if (world === 'public' && !myRoom) {
       for (const n of this.npcs) {
         if (me && (Math.abs(n.x - me.x) > radius || Math.abs(n.y - me.y) > radius)) continue;
         out.push({ account: n.account, world, nick: n.name, tag: NPC_TAG, look: n.look, x: n.x, y: n.y, dir: 'down', scene: 'out', t: now, npc: true, title: n.title, merchant: n.id });
@@ -150,13 +168,15 @@ export class Social {
     }
     for (const s of this.seen.values()) {
       if (now - s.t > maxAge) { this.seen.delete(s.account); continue; }
-      if (s.account === account || s.scene !== 'out' || s.world !== world) continue;
+      if (s.account === account || s.world !== world) continue;
+      // outdoors you see the others outdoors; inside a building, the others in the same room
+      if (myRoom ? !(s.scene === 'in' && s.room === myRoom) : s.scene !== 'out') continue;
       if (!this.access(s.account, world)) continue; // an uninvited guest vanishes from the Homeland at once
       const mate = mates.has(s.account); // party mates skip the radius: you can always find them
-      if (!mate && me && (Math.abs(s.x - me.x) > radius || Math.abs(s.y - me.y) > radius)) continue;
+      if (!myRoom && !mate && me && (Math.abs(s.x - me.x) > radius || Math.abs(s.y - me.y) > radius)) continue;
       out.push(mate ? { ...s, party: true } : s);
     }
-    if (world === 'public') {
+    if (world === 'public' && !myRoom) { // guests walk the village outdoors only
       this.dropIdleGuests();
       for (const g of this.guests.values()) {
         if (g.id === account || now - g.t > maxAge || g.scene !== 'out') continue;

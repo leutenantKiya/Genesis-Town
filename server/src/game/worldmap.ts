@@ -48,6 +48,8 @@ export const Homeland = (globalThis as unknown as { GTHomeland: HomelandApi }).G
 export interface GameMap {
   layout: { spawn: Pos };
   walkable(x: number, y: number): boolean;
+  /** The tile type at x, y (water, grass, ...), null outside the map. */
+  tileAt(x: number, y: number): string | null;
   nearStall(p: Pos, d?: number): boolean;
   nearPlot(p: Pos, idx: number): boolean;
   atOwnHouse(p: Pos): boolean;

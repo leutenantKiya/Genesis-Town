@@ -148,3 +148,47 @@ test('presence carries the party roster with positions only in the same world', 
     assert.equal(indoor.x, undefined);
   } finally { r.close(); }
 });
+
+test('a player fishing is shown fishing to the others: phase and float on water, nothing else', async () => {
+  const r = await rig();
+  try {
+    await r.post(P1, '/api/name', { name: 'Ayu' });
+    // a walkable tile with water next to it, in the public village
+    const m = r.game.map!; let shore: { x: number; y: number; wx: number; wy: number } | null = null;
+    const L = (m as any).layout as { w: number; h: number };
+    for (let y = 1; y < L.h - 1 && !shore; y++) for (let x = 1; x < L.w - 1 && !shore; x++) {
+      if (!m.walkable(x, y)) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (m.tileAt(x + dx, y + dy) === 'water') { shore = { x, y, wx: x + dx, wy: y + dy }; break; }
+    }
+    assert.ok(shore, 'the village has a shore');
+    const at = { world: 'public', x: shore!.x, y: shore!.y, dir: 'down', scene: 'out', since: 0 };
+    const seen = async () => (await r.post(P2, '/api/presence', { ...at })).json.players.find((p: any) => p.account === P1);
+    await r.post(P1, '/api/presence', { ...at, fish: { phase: 'wait', x: shore!.wx, y: shore!.wy } });
+    assert.deepEqual((await seen()).fish, { phase: 'wait', x: shore!.wx, y: shore!.wy });
+    await r.post(P1, '/api/presence', { ...at, fish: { phase: 'dance', x: shore!.wx, y: shore!.wy } });
+    assert.equal((await seen()).fish, undefined, 'an unknown phase is not fishing');
+    await r.post(P1, '/api/presence', { ...at, fish: { phase: 'reel', x: shore!.x, y: shore!.y } });
+    assert.equal((await seen()).fish, undefined, 'a float on dry land is not fishing');
+    await r.post(P1, '/api/presence', { ...at, fish: { phase: 'reel', x: shore!.wx + 9, y: shore!.wy } });
+    assert.equal((await seen()).fish, undefined, 'a float far away is not fishing');
+    await r.post(P1, '/api/presence', { ...at, fish: { phase: 'bite', x: shore!.wx, y: shore!.wy } });
+    assert.equal((await seen()).fish.phase, 'bite');
+    await r.post(P1, '/api/presence', { ...at });
+    assert.equal((await seen()).fish, undefined, 'the next report without fishing clears it');
+  } finally { r.close(); }
+});
+
+test('players inside the same building see each other there, and not the ones outside or in another room', async () => {
+  const r = await rig();
+  try {
+    const out = { world: 'public', x: r.sp.x, y: r.sp.y, dir: 'down', since: 0 };
+    await r.post(P1, '/api/presence', { ...out, scene: 'in', room: 'house:3', rx: 4, ry: 5 });
+    await r.post(P3, '/api/presence', { ...out, scene: 'out' });
+    const p2in = (await r.post(P2, '/api/presence', { ...out, scene: 'in', room: 'house:3', rx: 2, ry: 2 })).json.players.filter((p: any) => !p.npc);
+    assert.deepEqual(p2in.map((p: any) => [p.account, p.room, p.fx, p.fy]), [[P1, 'house:3', 4, 5]], 'only the one in the same room, at the room position');
+    const other = (await r.post(P2, '/api/presence', { ...out, scene: 'in', room: 'house:7', rx: 2, ry: 2 })).json.players;
+    assert.equal(other.length, 0, 'another room: nobody, no merchants');
+    const outside = (await r.post(P2, '/api/presence', { ...out, scene: 'out' })).json.players.filter((p: any) => !p.npc).map((p: any) => p.account);
+    assert.deepEqual(outside, [P3], 'outdoors: only the ones outdoors');
+  } finally { r.close(); }
+});

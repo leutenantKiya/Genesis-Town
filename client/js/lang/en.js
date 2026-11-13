@@ -117,7 +117,7 @@
     "Misi {0}/{1}": "Mission {0}/{1}",
     "Cangkul": "Hoe",
     "Pancing": "Fishing Rod",
-    "Di tangan: {0} · hadap air lalu tekan F (atau klik airnya) untuk memancing": "In hand: {0} · face the water and press F (or click it) to fish",
+    "Di tangan: {0} · hadap air, tekan F untuk memancing": "In hand: {0} · face water, press F to fish",
     "Berdiri di tepi air, hadap airnya, lalu pakai Pancing.": "Stand at the water's edge, face the water, then use the Fishing Rod.",
     "Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul": "In hand: {0} · click a green square inside the farm fence to hoe it",
     "Cangkul dipakai di kebun Homeland.": "The hoe is used in a Homeland farm.",
@@ -1537,6 +1537,8 @@
     "timur": "east",
     "barat daya": "southwest",
     "selatan": "south",
-    "tenggara": "southeast"
+    "tenggara": "southeast",
+    "Koneksi ke server terputus · menyambung ulang…": "Lost the connection to the server · reconnecting…",
+    "Tersambung lagi ke server.": "Connected to the server again."
   });
 })();

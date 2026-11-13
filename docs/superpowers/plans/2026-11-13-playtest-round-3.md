@@ -1,6 +1,6 @@
 # Playtest fixes, round 3 (plan)
 
-Status: **waiting**. Nothing here is built until the owner says "Kerjakan Plan". New playtest findings are added
+Status: **built** (owner said "Kerjakan Planning nya", 2026-11-13); items 11 and 12 were added while it was being built. New playtest findings are added
 below as numbered items; each says what the player sees, why, and the planned fix.
 
 ## 1. The farm field shows three different soil textures
@@ -199,3 +199,18 @@ of text (why it closed, how to reopen, each good with a long "look for" hint, a 
 **Fix**: each mission is an icon, a few words and one short hint (the full how-to stays as the card's tooltip); the
 closed shop shows one line why, one line what to do with the donor count, and per good a row with its icon, a
 progress bar, ✓ or "N short · you have M" with a short where-to-get-it; one short line at the bottom.
+
+## 11. Players inside the same building cannot meet
+
+**What the owner saw** (screenshot, 2026-11-13, a house in the public village): inside a building nobody else shows.
+**Why**: presence only passed on players outdoors (`social.ts` `nearby` skipped `scene: 'in'`). **Fix**: indoors the
+client reports the room (its scene key) and where it stands in it (`room`, `rx`, `ry`); the server shows the others in
+the same room of the same world (no merchants, no village guests); players.js draws, tags and clicks only the players
+where you are. Test: `presence.test.ts`.
+
+## 12. Reconnect by itself after losing the server
+
+**Fix**: a request with no answer (or 502/503/504 while the host restarts) shows a badge and tries `/api/health` every
+3 s; the first answer reloads state and bag (presence keeps polling); a game that started offline because the server
+was down reloads the page to come up online. Also found while testing: arriving through a portal could bounce you
+straight back (you land beside the ring facing it); the portal now waits until you have stepped off it once.
