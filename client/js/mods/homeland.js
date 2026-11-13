@@ -301,6 +301,13 @@
     c.appendChild(h); return c;
   }
   function acts(parent) { var a = $('div', 'hl-acts'); parent.appendChild(a); return a; }
+  // "Masuk": walk into the building whose door opened this window (its room is the engine's, GT.enterRoom). lotId null = the Town Hall.
+  var lastDoor = null;
+  function enterBtn(wrap, lotId) {
+    var d = lastDoor;
+    if (!d || !GT.enterRoom || (lotId == null ? d.kind !== 'townhall' : d.lot !== lotId)) return;
+    acts(wrap).appendChild(btn('🚪 ' + $t('Masuk'), function () { var door = d; if (win && win.h) win.h.close('enter'); GT.enterRoom(door); }, ''));
+  }
   function bar(v, max, tone) {
     var p = $('progress', 'hl-bar' + (tone ? ' ' + tone : '')); p.max = Math.max(1, max); p.value = Math.max(0, Math.min(max, v)); return p;
   }
@@ -377,6 +384,7 @@
     stat($t('Balai Kota'), $t('level {0}', [H.th]));
     stat($t('Wilayah terbuka'), $t('{0} dari 9', [H.open.length + 1]));
     pane.town.appendChild(stats);
+    enterBtn(pane.town, null);
 
     var bs = cell('👷 ' + $t('Pembangun'), $t('{0} dari {1} sibuk', [H.builders.busy, H.builders.total]));
     if (H.jobs.length) H.jobs.forEach(function (j) {
@@ -547,6 +555,7 @@
     var stats = $('div', 'hl-stats'), st1 = $('div', 'hl-stat');
     st1.appendChild($('span', 'hl-k', name)); st1.appendChild($('b', 'hl-n', chunkName(lot.chunk))); stats.appendChild(st1);
     wrap.appendChild(stats);
+    if (b) enterBtn(wrap, lotId);
     var job = null;
     v.jobs.forEach(function (j) { if (j.kind === 'build' && j.target === lotId) job = j; });
     if (!owner && b && def && (def.cooks || def.furniture || def.healGameHours || def.storeBonus)) { wrap.appendChild($('p', 'hl-p', $t('Bangunan milik pemilik dunia ini.'))); return wrap; }
@@ -850,7 +859,10 @@
   }
 
   /* ---- the Mall in the market: gear for your own workers (Tukang and hired bots), bought from anywhere in town ---- */
-  function mallSpot() { var L = GT.world; if (wid() !== 'public' || !L || !L.market || !window.GTVillage || !GTVillage.landmarks) return null; try { return GTVillage.landmarks(L).mall || null; } catch (e) { return null; } }
+  // With the Mall building in the village the old plaza stand is gone (its landmark is now the building's door): worker gear is bought
+  // from the Mall window instead (GT_MALL button "Perlengkapan pekerja" -> window.GT_HLGEAR.open).
+  function hasMallBuilding(L) { return !!(L && L.buildings && L.buildings.some(function (b) { return b.kind === 'mall'; })); }
+  function mallSpot() { var L = GT.world; if (wid() !== 'public' || !L || !L.market || !window.GTVillage || !GTVillage.landmarks || hasMallBuilding(L)) return null; try { return GTVillage.landmarks(L).mall || null; } catch (e) { return null; } }
   function mallModal() {
     if (!loggedIn()) { GT.toast($t('Masuk dulu.')); return; }
     var body = $('div', 'gt-isl hl'), h = GT.modal({ title: '🛍️ ' + $t('Mall'), wide: true, body: body });
@@ -872,6 +884,7 @@
     }
     paint(); load(true).then(function () { if (h.isOpen()) paint(); }, function () {});
   }
+  window.GT_HLGEAR = { open: function () { if (GT.worldId && GT.worldId() !== 'public') { GT.toast($t('Perlengkapan pekerja dibeli di Mall kota.')); return; } mallModal(); } };
 
   function onInteract(ctx) {
     if (ctx.scene.kind !== 'out' || ctx.npc) return false;
@@ -884,6 +897,7 @@
     if (!isHL(wid())) return false;
     var d = ctx.door;
     if (d && HOME_KINDS[d.kind]) {
+      lastDoor = d;
       if (ctx.mode === 'bump' && Date.now() - lastClose < 700) return true; // key still held after closing the window
       if (ctx.mode === 'message') return false;
       if (!loggedIn()) return true;

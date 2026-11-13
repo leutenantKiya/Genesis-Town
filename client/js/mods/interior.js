@@ -8,6 +8,9 @@
  *   plant      you water it; the third time it blooms
  *   table      a snack at the table
  *   chest      in your own house it opens your bag (your storage); in someone else's it stays locked
+ *   Genesis Mall counter     GT_MALL.open()           (the client's shop mod; nothing happens until it exists)
+ *   Genesis Casino tables    GT_CASINO.open(tile)     tile = slot | card_table | dice_table | roulette (the roulette is the Luck Table)
+ *   News Hall wall / board   GT_BOARD.leaderboard()   the big leaderboard wall;  GT_BOARD.news()  the news boards
  * The furniture you face shows an icon and a verb above it (chairs too: the engine seats you), so the room says what
  * it can do. Every other tile keeps the engine's own line of text.
  */
@@ -65,9 +68,27 @@
     GT.dialog([h && h.own ? $t('Peti penyimpananmu. Masuk dulu untuk melihat isi tasmu.') : $t('Peti milik pemilik rumah. Terkunci rapat.')], '📦 ' + $t('Peti'));
   }
 
+  // Spots of the new public buildings. Each calls a hook another mod adds later; without it the engine shows the tile's own text.
+  var CASINO_TILES = { slot: 1, card_table: 1, dice_table: 1, roulette: 1 };
+  function hook(name, fn, arg) {
+    var o = window[name];
+    if (!o || typeof o[fn] !== 'function') return false;
+    sfx('ui_click'); try { o[fn](arg); } catch (e) { /* a broken shop mod must not break the room */ }
+    return true;
+  }
+  function spot(ctx, t) {
+    var k = ctx.scene.house && ctx.scene.house.kind;
+    if (k === 'mall' && t === 'counter') return hook('GT_MALL', 'open');
+    if (k === 'casino' && ctx.scene.kind === 'kasino' && CASINO_TILES[t]) return hook('GT_CASINO', 'open', t);
+    if (k === 'papan' && t === 'lb_wall') return hook('GT_BOARD', 'leaderboard');
+    if (k === 'papan' && t === 'news_board') return hook('GT_BOARD', 'news');
+    return false;
+  }
+
   function onInteract(ctx) {
     if (ctx.scene.kind === 'out' || ctx.npc || ctx.mode !== 'talk' || ctx.door) return false;
     var t = ctx.tileType;
+    if (spot(ctx, t)) return true;
     if (t === 'bed') { nap(); return true; }
     if (t === 'bookshelf') { sfx('ui_click'); GT.dialog([TIPS[Math.floor(Math.random() * TIPS.length)]], '📚 ' + $t('Rak Buku')); return true; }
     if (t === 'tv') { sfx('ui_click'); news(); return true; }
@@ -83,12 +104,21 @@
     bed: ['😴', 'Tidur'], bookshelf: ['📚', 'Baca'], tv: ['📺', 'Nonton'], fridge: ['🧃', 'Minum'], plant: ['💧', 'Siram'],
     table: ['🍌', 'Makan'], chair: ['🪑', 'Duduk'], chest: ['📦', 'Buka']
   };
+  // the icon + verb of the new spots, only while their hook exists
+  function spotVerb(sc, t) {
+    var k = sc.house && sc.house.kind;
+    if (k === 'mall' && t === 'counter' && window.GT_MALL) return ['🛍️', 'Belanja'];
+    if (k === 'casino' && sc.kind === 'kasino' && CASINO_TILES[t] && window.GT_CASINO) return ['🎲', 'Main'];
+    if (k === 'papan' && t === 'lb_wall' && window.GT_BOARD) return ['🏆', 'Papan Juara'];
+    if (k === 'papan' && t === 'news_board' && window.GT_BOARD) return ['📰', 'Berita'];
+    return null;
+  }
   function onDraw(ctx, camX, camY, T) {
     var sc = GT.scene, TH = window.GT_THEME;
     if (!TH || !sc || sc.kind === 'out' || !sc.map || napping || GT.isUiOpen() || GT.sitting || (GT.player && GT.player.moving)) return;
     var f = GT.facing(), m = sc.map;
     if (!f || f.x < 0 || f.y < 0 || f.x >= m.w || f.y >= m.h) return;
-    var t = m.tiles[f.y * m.w + f.x], v = VERB[t];
+    var t = m.tiles[f.y * m.w + f.x], v = spotVerb(sc, t) || VERB[t];
     if (!v || (t === 'chest' && !sc.house)) return;
     var a = GT.at(f.x, f.y);
     ctx.save();

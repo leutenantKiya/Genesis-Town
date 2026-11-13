@@ -201,6 +201,16 @@
 >   and action button sit inside the game picture, above the item bar; a guest no longer gets a "Sign in first" toast that
 >   never goes away (the portal check ran every frame). A player's `#tag` now comes from their account name, so a restart that
 >   came back from an older database copy gives them the same tag instead of a new random one.
+> - **Town expansion** (2026-11-13): new public buildings: the **Genesis Mall** (28 player cosmetics in 7 slots, 20-400
+>   coin, worn items seen by everyone in 2D and 2.5D; acts `mall buy|wear`, `mods/mall.js`), the **Genesis Casino** (a
+>   15-coin pass for 30 min; inside the Luck Table, goods only, and chip mini-games whose chips never become coin or goods,
+>   prizes are titles), the **News Hall** (Papan Juara and town news, `GET /api/news`, `mods/board.js`) and the **Public
+>   Mine** beside a public forest and rock field for new players; 8 more house styles (12 in all) and medieval touches;
+>   almost every building has a room to walk into (`GT.enterRoom`, Homeland buildings via "Masuk"). Tools are equipment
+>   with durability (Pickaxe 60, Axe 60, Fishing Rod 40, Hoe 80 uses; acts `repair`, `maketool`; `/api/state` `tools`);
+>   new players start with 3 Wheat and the four tools. The carousel costs 10 coin (act `ride`) and its horses now face
+>   the way they turn. 12 missions teach tools and basic items (act `mission claim`). The HUD shows the player's own
+>   account balance as read-only "Savings" coin (1000 per NEAR, never spent). Prices stay in coin; no NEAR words in UI.
 > - **Sound effects** (2026-11-13): every activity makes a short sound, all synthesized with WebAudio (no audio files,
 >   `mods/sfx.js`, `GT_SFX.play(name, {vol, pitch, x, y})`): gathering, farming, crafting, cooking, eating, selling and
 >   building (one table in chain.js `act`), fishing phases (also other players' fishing, quieter with distance), swings

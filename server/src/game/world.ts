@@ -9,7 +9,12 @@ export type Rng = () => number;
 
 export interface ActionResult { toast: string; gained?: Record<string, number>; credit?: { account: string; token: string; n: number } }
 
+/** Tool wear (server/src/game/extras.ts): the World asks before a gather or hoe and reports each use. */
+export interface ToolBox { toolFor(use: string): string | null; need(account: string, kind: string | null): void; wear(account: string, kind: string | null): string }
+
 export class World {
+  /** Set by the Game; absent in tools-free unit setups. */
+  tools: ToolBox | null = null;
   econ: Econ;
   gs: GameStore;
   clock: Clock;
@@ -95,7 +100,8 @@ export class World {
     if (!token) throw new HttpError(400, 'Nothing to gather here.');
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 999 || y > 999) throw new HttpError(400, 'bad tile');
     const def = this.econ.items[token];
-    if (def.needsTool) this.need(account, 'tool', 1);
+    const toolKind = this.tools?.toolFor(tile) ?? null; // rock: Pickaxe, tree: Axe, water: Fishing Rod
+    this.tools?.need(account, toolKind);
     const t = this.clock.time();
     const key = `${nodePrefix}${tile}:${x},${y}`;
     const node = this.gs.node(key);
@@ -119,14 +125,7 @@ export class World {
 
     if (amount > 0) this.gs.add(t.settleDay, account, token, amount, 'gather', key);
     let toast = amount > 0 ? `+${amount} ${def.name}` : `You didn't get any ${def.name.toLowerCase()} this time.`;
-    if (def.needsTool) {
-      p.tool_uses += 1;
-      if (p.tool_uses >= (this.econ.items.tool.durability ?? 20)) {
-        this.gs.add(t.settleDay, account, 'tool', -1, 'tool_break');
-        p.tool_uses = 0;
-        toast += ' · Your Pickaxe broke!';
-      }
-    }
+    toast += this.tools?.wear(account, toolKind) ?? '';
     this.gs.savePlayer(p);
     return { toast, gained: amount > 0 ? { [token]: amount } : {} };
   }
@@ -199,9 +198,10 @@ export class World {
     let credit: ActionResult['credit'];
     if (op === 'till') {
       if (plot.state !== 'empty') throw new HttpError(409, 'This plot is already hoed.');
+      this.tools?.need(account, 'hoe');
       this.spendEnergy(p, f.energyCost);
       plot.state = 'tilled';
-      toast = 'The soil is hoed.';
+      toast = 'The soil is hoed.' + (this.tools?.wear(account, 'hoe') ?? '');
     } else if (op === 'plant') {
       if (plot.state !== 'tilled') throw new HttpError(409, 'Hoe the plot first.');
       if (f.noGrowthSeasons.includes(t.season)) throw new HttpError(409, 'Wheat does not grow in winter.');

@@ -4,7 +4,7 @@
  * shadow on the ground. The card is lit like the world (it darkens at night and in shade) but never casts a flat
  * card-shaped shadow. Its depth is that of an upright card at its feet, so a wall behind the player never cuts into the sprite.
  *
- *   var a = GT3.Actor(3); scene.add(a.group);
+ *   var a = GT3.Actor(3 + (SPRITES.wornCombo(defs) << 4)); scene.add(a.group);   (the worn part is optional: the Mall's cosmetics)
  *   a.set(x, z, dir, step)    tile units (feet at x, z), dir: up | down | left | right, step 0..2
  *   a.face(camera)            turn the card to the camera (call every frame)
  */
@@ -16,10 +16,19 @@
   var frames = {}; // palette -> {dir+step: texture}
   var shadowTex = null;
 
+  // The card is the 12x16 sprite plus room around it for worn cosmetics (hats up to 8 px above the head, a cape, a pet or
+  // a banner 4 px to each side), the sprite standing where it always stood: its feet keep their height, so a player with
+  // nothing on looks exactly as before. The palette number is the look (low 4 bits) plus a worn-pieces number from
+  // SPRITES.wornCombo (the rest), made by the mods that know what a player wears.
+  var PAD = S && S.WORN_PAD ? S.WORN_PAD : { l: 4, t: 8, r: 4, b: 0 };
+  var CW = 12 + PAD.l + PAD.r, CH = 16 + PAD.t + PAD.b;
   function frame(pal, dir, step) {
     var set = frames[pal] || (frames[pal] = {}), key = dir + step;
     if (set[key]) return set[key];
-    var c = GT3.canvas(12, 16); S.drawCharacter(c.getContext('2d'), 0, 2, pal, dir, step);
+    var c = GT3.canvas(CW, CH), g = c.getContext('2d'), look = pal & 15, defs = pal >> 4 ? S.wornDefsOf(pal >> 4) : null;
+    if (defs) S.drawWorn(g, PAD.l, PAD.t + 2, defs, dir, step, 'back');
+    S.drawCharacter(g, PAD.l, PAD.t + 2, look, dir, step);
+    if (defs) S.drawWorn(g, PAD.l, PAD.t + 2, defs, dir, step, 'front');
     var t = GT3.tex(c); t.userData.shared = true;
     return (set[key] = t);
   }
@@ -37,7 +46,7 @@
   GT3.Actor = function (palette) {
     var group = new THREE.Group(), pal = palette | 0, dir = 'down', step = 0;
     var mat = GT3.mat({ map: frame(pal, dir, step), alphaTest: 0.5, side: THREE.DoubleSide });
-    var w = 12 * PX, h = 16 * PX;
+    var w = CW * PX, h = CH * PX;
     // The card leans back about a tile, so next to a wall its top half sat inside the building and the wall hid it
     // (the player "sank" into it). Each pixel takes its depth from where its camera ray crosses an upright plane at the
     // feet (facing the camera, 0.35 nearer so ground and the wall at the tile edge never win): what stands behind the

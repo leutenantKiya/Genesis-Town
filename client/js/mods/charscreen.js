@@ -26,6 +26,8 @@
   function reduced() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
 
   /* ---------------------------------------------------------------- own look in the world */
+  // what the signed-in player wears (state.cosmetics.worn, fresh after every buy or wear in the Mall)
+  function ownWorn() { var c = C(), st = c && c.state && c.state.st, w = st && st.cosmetics && st.cosmetics.worn; return w && Object.keys(w).length ? w : null; }
   function wrapCharDraw() {
     if (GT.charDraw === wrapped) return;
     var prev = GT.charDraw;
@@ -33,7 +35,10 @@
       if (n) return prev ? prev(g, n, x, y, pal, dir, step) : false;   // NPCs are untouched
       var look = mine.look | 0;
       if (prev && prev(g, n, x, y, look, dir, step) === true) return true;
+      var W = window.GT_WORN, worn = W ? ownWorn() : null;
+      if (worn) W.back(g, x, y, worn, dir, step);
       GT.drawChar(g, x, y, look, dir, step);
+      if (worn) W.front(g, x, y, worn, dir, step);
       return true;
     };
     GT.charDraw = wrapped;
@@ -47,6 +52,13 @@
     GT.drawChar(g, 0, 2, look, dir || 'down', step || 0);
   }
   function pixelCanvas() { var cv = document.createElement('canvas'); cv.width = 16; cv.height = 20; return cv; }
+  // the big preview has room for hats and capes: 20x24, the character at (4, 10)
+  function stageCanvas() { var cv = document.createElement('canvas'); cv.width = 20; cv.height = 24; cv.style.width = '140px'; cv.style.height = '168px'; return cv; }
+  function paintStage(cv, look, dir, step) {
+    var g = cv.getContext('2d'), W = window.GT_WORN, worn = W ? ownWorn() : null;
+    g.clearRect(0, 0, cv.width, cv.height);
+    if (worn) W.draw(g, 4, 10, look, worn, dir || 'down', step || 0); else SPRITES.drawCharacter(g, 4, 10, look, dir || 'down', step || 0);
+  }
 
   /* ---------------------------------------------------------------- the screen */
   // force: the player asked for it (Lainnya > Ubah karakter). Otherwise a named account skips the screen and goes
@@ -100,7 +112,7 @@
     var tag = el('span', 'gt-cs-tag', '#' + mine.tag); tag.title = $t('Tag tetapmu: membedakanmu dari pemain bernama sama');
     nameRow.appendChild(input); nameRow.appendChild(tag);
     var stage = el('div', 'gt-cs-stage');
-    var prev = pixelCanvas(); prev.className = 'gt-cs-prev'; prev.setAttribute('aria-hidden', 'true');
+    var prev = stageCanvas(); prev.className = 'gt-cs-prev'; prev.setAttribute('aria-hidden', 'true');
     stage.appendChild(prev);
     left.appendChild(nameRow); left.appendChild(stage);
 
@@ -119,18 +131,22 @@
     pick(look);
     var msg = el('p', 'gt-cs-msg'); msg.setAttribute('role', 'status');
     var go = el('button', 'gt-cs-go', $t('Mulai')); go.type = 'button';
-    right.appendChild(grid); right.appendChild(msg); right.appendChild(go);
+    right.appendChild(grid);
+    var wardrobe = el('div', 'gt-cs-wardrobe'); right.appendChild(wardrobe);
+    right.appendChild(msg); right.appendChild(go);
+    function wardrobePaint() { paintWardrobe(wardrobe, function () { wardrobePaint(); paintStage(prev, look, 'down', 0); }); }
+    wardrobePaint();
     card.appendChild(left); card.appendChild(right);
 
     // the preview breathes: a slow two-frame idle, and turns to look around
     var dirs = ['down', 'left', 'down', 'right'], tick = 0;
     var idle = setInterval(function () {
       if (!root) { clearInterval(idle); return; }
-      tick++; paint(prev, look, dirs[Math.floor(tick / 4) % dirs.length], tick % 2 ? 1 : 0);
+      tick++; paintStage(prev, look, dirs[Math.floor(tick / 4) % dirs.length], tick % 2 ? 1 : 0);
     }, 300);
-    paint(prev, look, 'down', 0);
+    paintStage(prev, look, 'down', 0);
     // the look only changes on click/tap or Enter/Space on a swatch (pick above); hovering just outlines it (CSS)
-    grid.addEventListener('click', function () { paint(prev, look, 'down', 0); });
+    grid.addEventListener('click', function () { paintStage(prev, look, 'down', 0); });
 
     function fail(text) { msg.textContent = text; busy = false; go.disabled = false; }
     function start() {
@@ -159,6 +175,35 @@
     go.addEventListener('click', start);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); start(); } });
     setTimeout(function () { try { input.focus(); } catch (e) { /* detached */ } }, 0);
+  }
+
+  /* ---------------------------------------------------------------- wearing what you own (bought in the Mall) */
+  function paintWardrobe(host, changed) {
+    var c = C(), W = window.GT_WORN, st = c && c.state.st, k = st && st.cosmetics;
+    host.textContent = '';
+    if (!W || !k) return;
+    var owned = k.owned || [], worn = k.worn || {};
+    host.appendChild(el('h3', 'gt-cs-h2', $t('Pakaianmu')));
+    if (!owned.length) { host.appendChild(el('p', 'gt-cs-note', $t('Belum ada. Topi, baju, jubah dan hewan peliharaan dijual di Genesis Mall.'))); return; }
+    var busy = false;
+    W.slots.forEach(function (slot) {
+      var mine = owned.map(W.item).filter(function (it) { return it && it.slot === slot; });
+      if (!mine.length) return;
+      var row = el('div', 'gt-cs-wrow');
+      var none = el('button', 'gt-cs-wb' + (worn[slot] ? '' : ' on'), '–'); none.type = 'button'; none.title = $t('Lepas');
+      row.appendChild(none);
+      function wear(id, btn) {
+        if (busy) return; busy = true;
+        c.act({ action: 'mall', op: 'wear', slot: slot, id: id }, true).then(function () { busy = false; changed(); }, function () { busy = false; });
+      }
+      none.addEventListener('click', function () { wear(null); });
+      mine.forEach(function (it) {
+        var b = el('button', 'gt-cs-wb' + (worn[slot] === it.id ? ' on' : ''), W.name(it.id)); b.type = 'button';
+        b.addEventListener('click', function () { wear(it.id); });
+        row.appendChild(b);
+      });
+      host.appendChild(row);
+    });
   }
 
   function finish() {
@@ -250,7 +295,10 @@
   function onKey() { return !!root; }
   // the 2.5D view draws the player from the engine's `me` entity (pal 0 by default), not through GT.charDraw:
   // give it the chosen look so you see yourself as the other players see you
-  function onEntities(ents) { for (var i = 0; i < ents.length; i++) if (ents[i].me) ents[i].pal = mine.look | 0; }
+  function onEntities(ents) {
+    var W = window.GT_WORN, worn = W ? ownWorn() : null;
+    for (var i = 0; i < ents.length; i++) if (ents[i].me) ents[i].pal = worn ? W.pal(mine.look | 0, worn) : mine.look | 0; // the worn pieces ride in the high bits (sprites.js wornCombo)
+  }
 
   window.GT_CHARSCREEN = { open: function (force) { return open(force === true); }, setMine: setMine, _mine: function () { return mine; } };
   GT.register({ id: 'charscreen', init: wrapCharDraw, onFrame: onFrame, onKey: onKey, onEntities: onEntities });

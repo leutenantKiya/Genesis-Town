@@ -17,7 +17,9 @@ import type { Clock } from './clock.ts';
 import { Homeland, HomelandMap, type HomelandProgress } from './worldmap.ts';
 
 export interface PlayerDir { nameOf(account: string): string | null; tagOf(account: string): string; accountByNameTag(name: string, tag: string): string | null; isPlayer(account: string): boolean }
-export interface HomelandDeps { econ: Econ; gs: GameStore; worldSeed: number; now: () => number; players?: PlayerDir; town: string; clock?: Clock; party?: { same(a: string, b: string): boolean; mates(a: string): string[] } }
+export interface HomelandDeps { econ: Econ; gs: GameStore; worldSeed: number; now: () => number; players?: PlayerDir; town: string; clock?: Clock; party?: { same(a: string, b: string): boolean; mates(a: string): string[] };
+  /** A building finished (for the town news). */
+  built?: (account: string, kind: string, t: number) => void }
 
 /** Guest roles: visitor < helper < builder < owner. */
 export type Role = 'visitor' | 'helper' | 'builder' | 'owner';
@@ -119,7 +121,7 @@ export class Homelands {
         else if (j.kind === 'light') gs.setFurnitureLevel(account, LIGHT_KEY, gs.furnitureLevel(account, LIGHT_KEY) + 1);
         else if (j.kind === 'furniture') gs.setFurnitureLevel(account, j.target, gs.furnitureLevel(account, j.target) + 1);
         else if (j.kind === 'upgrade') { const lot = j.target.split(':')[0]; gs.setFurnitureLevel(account, lot, Math.max(1, gs.furnitureLevel(account, lot)) + 1); }
-        else gs.addHomelandBuilding(account, j.target, j.target.split('-')[0], j.ends_at);
+        else { gs.addHomelandBuilding(account, j.target, j.target.split('-')[0], j.ends_at); this.d.built?.(account, j.target.split('-')[0], j.ends_at); }
         const w = workers.get(j.worker);
         if (w) {
           w.fatigue = Math.min(100, w.fatigue + fc.perJobMinute * (j.base_secs / 60) * (1 - this.boostOf(account, w.slot)));

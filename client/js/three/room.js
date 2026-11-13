@@ -23,8 +23,9 @@
   // the engine draws these from flat colours too (engine.js FB_COL): no sprite exists for them
   var FB = { card_table: ['#2d7a3e', '#1b5128'], dice_table: ['#2d7a3e', '#f4f1dc'], slot: ['#8a8fa8', '#c0392b'], chest: ['#8a5a2b', '#f2c94c'],
     carpet_red: ['#9c2f40', '#7d2433'], floor_dark: ['#3a3550', '#2d2940'] };
-  var TALL = { fridge: 1.3, bookshelf: 1.3, shelf: 1.1, tv: 0.8, slot: 1.2 };
-  var LOW = { bed: 0.45, table: 0.55, counter: 0.75, chest: 0.45, chair: 0.35, dice_table: 0.6, card_table: 0.6 };
+  var TALL = { fridge: 1.3, bookshelf: 1.3, shelf: 1.1, tv: 0.8, slot: 1.2, ore_rock: 1.0, lb_wall: 1.25, news_board: 1.1, rack: 1.15, stove: 0.95 }; // the last five: engine.js room furniture
+  var LOW = { bed: 0.45, table: 0.55, counter: 0.75, chest: 0.45, chair: 0.35, dice_table: 0.6, card_table: 0.6,
+    roulette: 0.6, pew: 0.45, sack: 0.4, crate_i: 0.6, barrel_i: 0.7, tank: 0.8, display: 0.8, log: 0.45 };
   var FLAT = { rug: 1, doormat: 1, carpet_red: 1 };
   var FLOORS = { floor_wood: 1, floor_tile: 1, floor_dark: 1 };
 

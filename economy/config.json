@@ -10,7 +10,7 @@
   "items": {
     "coin":  { "name": "Coin",       "kind": "currency", "base": 1 },
     "fish":  { "name": "Fish",       "kind": "raw",      "base": 8 },
-    "ore":   { "name": "Ore",      "kind": "raw",      "base": 12, "needsTool": true },
+    "ore":   { "name": "Ore",      "kind": "raw",      "base": 12 },
     "wood":  { "name": "Wood",       "kind": "raw",      "base": 6 },
     "wheat": { "name": "Wheat",     "kind": "raw",      "base": 5 },
     "bread": { "name": "Bread",       "kind": "crafted",  "base": 16, "energy": 25 },
@@ -119,7 +119,61 @@
     "marketPct": 0.05
   },
   "starter": {
-    "coin": 100, "tool": 1, "bread": 3, "wheat": 5
+    "coin": 100, "bread": 3, "wheat": 3
+  },
+  "tools": {
+    "pickaxe": { "name": "Pickaxe", "use": "rock", "durability": 60, "make": { "wood": 2, "ore": 2 }, "makeAlt": { "tool": 1 }, "repair": { "wood": 1, "coin": 5 } },
+    "axe": { "name": "Axe", "use": "tree", "durability": 60, "make": { "wood": 3, "ore": 1 }, "repair": { "wood": 1, "coin": 3 } },
+    "rod": { "name": "Fishing Rod", "use": "water", "durability": 40, "make": { "wood": 3 }, "repair": { "wood": 1 } },
+    "hoe": { "name": "Hoe", "use": "farm", "durability": 80, "make": { "wood": 2, "ore": 1 }, "repair": { "wood": 1 } }
+  },
+  "fun": { "ride": 10, "rideSecs": 90, "casino": 15, "casinoPassMinutes": 30 },
+  "missions": [
+    { "id": "wood5", "name": "Chop 5 wood", "hint": "Stand next to a tree and use your Axe.", "counter": "gather:wood", "need": 5, "reward": { "wood": 2 } },
+    { "id": "ore3", "name": "Mine 3 ore", "hint": "Hit a rock in the public mine with your Pickaxe.", "counter": "gather:ore", "need": 3, "reward": { "coin": 5 } },
+    { "id": "fish3", "name": "Catch 3 fish", "hint": "Cast your Fishing Rod at the water.", "counter": "gather:fish", "need": 3, "reward": { "coin": 5 } },
+    { "id": "makeaxe", "name": "Make an Axe", "hint": "Make a new Axe from wood and ore (act maketool).", "counter": "maketool:axe", "need": 1, "reward": { "coin": 10 } },
+    { "id": "till", "name": "Hoe a garden plot", "hint": "Use your Hoe on a plot in your Homeland.", "counter": "farm:till", "need": 1, "reward": { "wheat": 1 } },
+    { "id": "bread", "name": "Bake a loaf of bread", "hint": "Craft bread from 2 wheat at your workbench.", "counter": "craft:bread", "need": 1, "reward": { "coin": 10 } },
+    { "id": "meal", "name": "Cook a grilled fish", "hint": "Craft a meal from a fish and a piece of wood.", "counter": "craft:meal", "need": 1, "reward": { "coin": 10 } },
+    { "id": "repair", "name": "Repair a worn tool", "hint": "Repair a tool that has lost some durability.", "counter": "repair", "need": 1, "reward": { "coin": 10 } },
+    { "id": "makepick", "name": "Make a Pickaxe", "hint": "Make a fresh Pickaxe from wood and ore.", "counter": "maketool:pickaxe", "need": 1, "reward": { "ore": 2 } },
+    { "id": "sell", "name": "Sell goods to a merchant", "hint": "Sell something at a market stall.", "counter": "sell", "need": 1, "reward": { "coin": 10 } },
+    { "id": "ride", "name": "Ride the carousel", "hint": "Take a ride on the horse carousel.", "counter": "ride", "need": 1, "reward": { "coin": 10 } },
+    { "id": "mall", "name": "Buy something at the Mall", "hint": "Pick a cosmetic in the Mall.", "counter": "mall:buy", "need": 1, "reward": { "coin": 15 } }
+  ],
+  "mall": {
+    "slots": ["hat", "outfit", "cape", "pet", "emote", "namecolor", "decor"],
+    "items": [
+      { "id": "hat_straw", "name": "Straw Hat", "slot": "hat", "price": 20, "color": "#d8b04a", "color2": "#a07a2c", "shape": "brim" },
+      { "id": "hat_cap", "name": "Farmer's Cap", "slot": "hat", "price": 30, "color": "#4a7ac8", "color2": "#2c4a86", "shape": "cap" },
+      { "id": "hat_beret", "name": "Painter's Beret", "slot": "hat", "price": 45, "color": "#b83a5a", "color2": "#7c2038", "shape": "beret" },
+      { "id": "hat_wizard", "name": "Starry Wizard Hat", "slot": "hat", "price": 120, "color": "#4a3a9a", "color2": "#f2d030", "shape": "wizard" },
+      { "id": "hat_knight", "name": "Knight's Helm", "slot": "hat", "price": 200, "color": "#a8b0b8", "color2": "#d84a4a", "shape": "helm" },
+      { "id": "hat_crown", "name": "Golden Crown", "slot": "hat", "price": 400, "color": "#f2d030", "color2": "#d84a4a", "shape": "crown" },
+      { "id": "outfit_tunic", "name": "Village Tunic", "slot": "outfit", "price": 40, "color": "#5a8a4a", "color2": "#3a5a2c", "shape": "tunic" },
+      { "id": "outfit_vest", "name": "Merchant Vest", "slot": "outfit", "price": 70, "color": "#8a4a2c", "color2": "#d8b04a", "shape": "vest" },
+      { "id": "outfit_overalls", "name": "Carpenter Overalls", "slot": "outfit", "price": 90, "color": "#3a5a9a", "color2": "#d8b04a", "shape": "overalls" },
+      { "id": "outfit_robe", "name": "Scholar Robe", "slot": "outfit", "price": 150, "color": "#7a3a9a", "color2": "#f2e0a0", "shape": "robe" },
+      { "id": "outfit_dress", "name": "Festival Dress", "slot": "outfit", "price": 180, "color": "#d84a7a", "color2": "#f2e0a0", "shape": "dress" },
+      { "id": "outfit_armor", "name": "Town Guard Armor", "slot": "outfit", "price": 300, "color": "#8a929a", "color2": "#3a4a6a", "shape": "armor" },
+      { "id": "cape_short", "name": "Traveller's Cape", "slot": "cape", "price": 60, "color": "#c8442c", "color2": "#8a2c1c", "shape": "short" },
+      { "id": "cape_long", "name": "Royal Cape", "slot": "cape", "price": 250, "color": "#7a1c3a", "color2": "#f2d030", "shape": "long" },
+      { "id": "pet_cat", "name": "Tabby Cat", "slot": "pet", "price": 80, "color": "#d89a4a", "color2": "#8a5a2c", "shape": "cat" },
+      { "id": "pet_dog", "name": "Loyal Pup", "slot": "pet", "price": 100, "color": "#b88a5a", "color2": "#6a4a2c", "shape": "dog" },
+      { "id": "pet_bird", "name": "Little Songbird", "slot": "pet", "price": 60, "color": "#4ab8d8", "color2": "#2c7a9a", "shape": "bird" },
+      { "id": "pet_fox", "name": "Ember Fox", "slot": "pet", "price": 220, "color": "#e0642c", "color2": "#f2e0c0", "shape": "fox" },
+      { "id": "emote_wave", "name": "Friendly Wave", "slot": "emote", "price": 20, "color": "#f2c230", "color2": "#a07a2c", "shape": "wave" },
+      { "id": "emote_dance", "name": "Village Dance", "slot": "emote", "price": 50, "color": "#d84a7a", "color2": "#7c2038", "shape": "dance" },
+      { "id": "emote_cheer", "name": "Big Cheer", "slot": "emote", "price": 35, "color": "#5ac85a", "color2": "#2c7a2c", "shape": "cheer" },
+      { "id": "name_gold", "name": "Golden Name", "slot": "namecolor", "price": 100, "color": "#f2c230", "color2": "#a07a2c", "shape": "plain" },
+      { "id": "name_sky", "name": "Sky Name", "slot": "namecolor", "price": 60, "color": "#5ab8f2", "color2": "#2c7ab8", "shape": "plain" },
+      { "id": "name_rose", "name": "Rose Name", "slot": "namecolor", "price": 60, "color": "#f27aa8", "color2": "#b83a6a", "shape": "plain" },
+      { "id": "decor_banner", "name": "House Banner", "slot": "decor", "price": 50, "color": "#c8442c", "color2": "#f2d030", "shape": "banner" },
+      { "id": "decor_lantern", "name": "Hanging Lantern", "slot": "decor", "price": 70, "color": "#f2a230", "color2": "#5a3a1c", "shape": "lantern" },
+      { "id": "decor_flowers", "name": "Flower Boxes", "slot": "decor", "price": 40, "color": "#e04a8a", "color2": "#3a7a3a", "shape": "flowerbox" },
+      { "id": "decor_statue", "name": "Garden Statue", "slot": "decor", "price": 350, "color": "#b8b8b0", "color2": "#6a6a64", "shape": "statue" }
+    ]
   },
   "caps": {
     "dailyGainPerItem": 200,
@@ -187,7 +241,6 @@
         "upgrade": [ { "cost": { "wood": 80, "ore": 40, "coin": 200 }, "secs": 600 }, { "cost": { "wood": 120, "ore": 60, "coin": 400 }, "secs": 1200 } ] }
     }
   },
-  "gamble": { "winChance": 0.45, "maxBet": 5, "dailyBets": 20, "goods": ["fish", "wood", "ore", "wheat", "bread", "meal"] },
   "gamble": { "winChance": 0.45, "maxBet": 5, "dailyBets": 20, "goods": ["fish", "wood", "ore", "wheat", "bread", "meal"] },
   "monsters": {
     "chunk": "hutan",

@@ -39,7 +39,8 @@ const bal = (g: Game, a: string, t: string) => g.gs.balance(a, t);
 test('starter kit, gathering with energy, node charges and respawn', async () => {
   const { game, clock } = await world();
   assert.equal(bal(game, P, 'coin'), 100);
-  assert.equal(bal(game, P, 'tool'), 1);
+  assert.equal(bal(game, P, 'tool'), 0, 'tools are equipment now, not bag items');
+  assert.deepEqual(Object.keys(game.state(P).tools).sort(), ['axe', 'hoe', 'pickaxe', 'rod']);
   for (let i = 0; i < 4; i++) game.act(P, { action: 'gather', tile: 'water', x: 5, y: 5 });
   assert.equal(bal(game, P, 'fish'), 4);
   assert.equal(game.state(P).energy, 100 - 4 * 4);
@@ -66,18 +67,42 @@ test('a felled tree is a stump in the state until it grows back', async () => {
   assert.equal(game.state(P).stumps.length, 0);
 });
 
-test('ore and wood need a tool, and the tool breaks after 20 uses', async () => {
-  const { game, clock } = await world();
-  game.gs.add(0, Q, 'tool', -1, 'test');
-  assert.throws(() => game.act(Q, { action: 'gather', tile: 'rock', x: 1, y: 1 }), /Ore|Pickaxe/);
-  let broke = '';
-  for (let i = 0; i < 20; i++) {
-    const r = game.act(P, { action: 'gather', tile: 'rock', x: i, y: 0 });
-    if (/broke/.test(r.toast)) broke = r.toast;
-    if (game.state(P).energy < 10) { game.act(P, { action: 'eat', token: 'bread' }); clock.advanceHours(0); }
-  }
-  assert.ok(broke, 'tool broke on the 20th use');
-  assert.equal(bal(game, P, 'tool'), 0);
+test('tools wear one use per gather and refuse at 0 until repaired or made again', async () => {
+  const { game, econ } = await world();
+  const st = (a: string) => game.state(a).tools as Record<string, { uses: number; max: number; broken: boolean }>;
+  assert.deepEqual(Object.values(st(P)).map((x) => x.max), [econ.tools.pickaxe.durability, econ.tools.axe.durability, econ.tools.rod.durability, econ.tools.hoe.durability]);
+  game.act(P, { action: 'gather', tile: 'rock', x: 1, y: 1 });
+  game.act(P, { action: 'gather', tile: 'tree', x: 2, y: 2 });
+  game.act(P, { action: 'gather', tile: 'water', x: 3, y: 3 });
+  game.act(P, { action: 'farm', op: 'till', plot: 0 });
+  assert.equal(st(P).pickaxe.uses, econ.tools.pickaxe.durability - 1);
+  assert.equal(st(P).axe.uses, econ.tools.axe.durability - 1);
+  assert.equal(st(P).rod.uses, econ.tools.rod.durability - 1);
+  assert.equal(st(P).hoe.uses, econ.tools.hoe.durability - 1);
+  assert.equal(st(Q).pickaxe.uses, econ.tools.pickaxe.durability, 'wear is per account');
+  // the last use wears the tool out; the next gather is refused with a clear message
+  game.extras.st.setTool(P, 'pickaxe', 1);
+  assert.match(game.act(P, { action: 'gather', tile: 'rock', x: 4, y: 4 }).toast, /Pickaxe wore out/);
+  assert.equal(st(P).pickaxe.broken, true);
+  const ore = bal(game, P, 'ore');
+  assert.throws(() => game.act(P, { action: 'gather', tile: 'rock', x: 5, y: 5 }), (e: any) => e.status === 409 && /Pickaxe is broken/.test(e.message));
+  assert.equal(bal(game, P, 'ore'), ore, 'the refused gather gave nothing');
+  // repair: wood and coin from the config, back to full
+  game.gs.add(0, P, 'wood', 5, 'test');
+  const coin = bal(game, P, 'coin'), wood = bal(game, P, 'wood');
+  game.act(P, { action: 'repair', tool: 'pickaxe' });
+  assert.equal(st(P).pickaxe.uses, econ.tools.pickaxe.durability);
+  assert.equal(bal(game, P, 'wood'), wood - econ.tools.pickaxe.repair.wood);
+  assert.equal(bal(game, P, 'coin'), coin - econ.tools.pickaxe.repair.coin);
+  assert.throws(() => game.act(P, { action: 'repair', tool: 'pickaxe' }), /already like new/);
+  assert.throws(() => game.act(P, { action: 'repair', tool: 'spade' }), /Unknown tool/);
+  // a new Axe from wood and ore, durability full again; short of materials it is refused
+  game.extras.st.setTool(P, 'axe', 0);
+  assert.throws(() => game.act(P, { action: 'gather', tile: 'tree', x: 6, y: 6 }), /Axe is broken/);
+  game.gs.add(0, P, 'wood', 3, 'test'); game.gs.add(0, P, 'ore', 1, 'test');
+  game.act(P, { action: 'maketool', tool: 'axe' });
+  assert.equal(st(P).axe.uses, econ.tools.axe.durability);
+  assert.throws(() => game.act(Q, { action: 'maketool', tool: 'axe' }), /Not enough/);
 });
 
 test('crafting: simple recipes cost energy, complex ones cost coin; eating restores energy', async () => {
@@ -86,6 +111,7 @@ test('crafting: simple recipes cost energy, complex ones cost coin; eating resto
   game.act(P, { action: 'craft', recipe: 'bread' });
   assert.equal(bal(game, P, 'wheat'), 2);
   assert.equal(bal(game, P, 'bread'), 4);
+  assert.equal((game.state(P).missions.list as any[]).find((m) => m.id === 'bread').done, true, 'crafting bread counts for its mission');
   assert.equal(bal(game, P, 'coin'), 100);
   assert.equal(game.state(P).energy, 95);
   assert.throws(() => game.act(P, { action: 'craft', recipe: 'tool' }), /Not enough/);
@@ -413,8 +439,9 @@ test('when every shop is closed, the village relief fund pledges the coin part o
   assert.equal((await chain.listShops()).find((s) => s.account_id === 'sari.gt.test')!.open, true, 'Sari reopened');
 });
 
-test('a new player starts with the starter kit from the config: a Pickaxe and 5 Wheat to plant', () => {
+test('a new player starts with the starter kit from the config: 3 Wheat to plant and no Pickaxe item (tools are equipment)', () => {
   const econ = loadEcon();
-  assert.equal(econ.starter.wheat, 5);
-  assert.equal(econ.starter.tool, 1);
+  assert.equal(econ.starter.wheat, 3);
+  assert.equal((econ.starter as Record<string, number>).tool, undefined);
+  assert.deepEqual(Object.keys(econ.tools).sort(), ['axe', 'hoe', 'pickaxe', 'rod']);
 });

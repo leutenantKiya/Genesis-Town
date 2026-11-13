@@ -542,7 +542,16 @@
     { roof: '#b8442e', roofD: '#7a2a22', roofL: '#e2774a', wall: '#f2e2c4', wallD: '#d8bc94', trim: '#fff6dc', chimney: false },
     { roof: '#4a64a8', roofD: '#2e3d6a', roofL: '#7ea0d8', wall: '#e8e2d4', wallD: '#c8bea8', trim: '#ffffff', chimney: true },
     { roof: '#7a4a82', roofD: '#4a2a4e', roofL: '#b07ab0', wall: '#f4e8c8', wallD: '#d6c49c', trim: '#fffbe8', chimney: false },
-    { roof: '#c58a38', roofD: '#8e5a2c', roofL: '#e8b062', wall: '#f2d8c4', wallD: '#d4b098', trim: '#fff0e6', chimney: true }
+    { roof: '#c58a38', roofD: '#8e5a2c', roofL: '#e8b062', wall: '#f2d8c4', wallD: '#d4b098', trim: '#fff0e6', chimney: true },
+    // medieval looks (version 3): 'look' picks the extra drawing in buildHouse; the four above are the plain cottages
+    { look: 'timber', roof: '#9a4a34', roofD: '#64301f', roofL: '#c47454', wall: '#efe2c2', wallD: '#d4c298', trim: '#fff4d8', beam: '#5a3a22', chimney: true },
+    { look: 'stone', roof: '#6a5a4c', roofD: '#443a30', roofL: '#907e6c', wall: '#aaa59c', wallD: '#807a72', trim: '#d8d2c4', chimney: true },
+    { look: 'slate', roof: '#4e5870', roofD: '#303848', roofL: '#7684a0', wall: '#f0ece0', wallD: '#d0c8b4', trim: '#ffffff', chimney: true },
+    { look: 'thatch', roof: '#cfa84a', roofD: '#9a7a30', roofL: '#ecd078', wall: '#e6d2a8', wallD: '#c4aa7c', trim: '#fff0cc', chimney: false },
+    { look: 'tower', roof: '#a8402e', roofD: '#6c261c', roofL: '#d6704e', wall: '#b4aea4', wallD: '#8a847a', trim: '#e8e2d6', chimney: false },
+    { look: 'merchant', roof: '#3e7a58', roofD: '#244c36', roofL: '#6aa882', wall: '#f2e6c8', wallD: '#d6c496', trim: '#fff6dc', beam: '#6a4a2c', shutter: '#2e6a4a', chimney: true },
+    { look: 'timber', roof: '#58803e', roofD: '#385026', roofL: '#82aa5e', wall: '#e8e6d0', wallD: '#c8c6a8', trim: '#fffff0', beam: '#4a3a2a', chimney: false },
+    { look: 'stone', roof: '#3f5f94', roofD: '#283c60', roofL: '#6c90c8', wall: '#bab6ac', wallD: '#908c82', trim: '#e6e2d6', chimney: true }
   ];
   var houseCache = {};
 
@@ -554,6 +563,57 @@
     R(c, x + 1, y + 1, 1, 1, '#d4f0ff');  R(c, x + 4, y + 1, 1, 1, '#d4f0ff');
     R(c, x - 1, y + 7, 9, 1, st.trim);
     R(c, x - 1, y + 8, 9, 1, st.wallD);
+  }
+
+  /* medieval house looks: each paints over the plain cottage body that buildHouse draws first (same doors, windows, footprint) */
+  function fieldstone(c, st) {
+    var light = shade(st.wall, 1.14), y, x, r = 0;
+    R(c, 3, 17, 30, 15, st.wall);
+    for (y = 17; y < 32; y += 4, r++) {
+      R(c, 3, y + 3, 30, 1, st.wallD);
+      for (x = 3 + (r % 2) * 3 + (r * 5) % 4; x < 33; x += 6) { R(c, x, y, 1, 3, st.wallD); R(c, x + 1, y, 3, 1, light); }
+    }
+  }
+  function timberWall(c, st) {
+    R(c, 3, 17, 30, 15, st.wall);
+    R(c, 3, 17, 2, 15, st.beam); R(c, 31, 17, 2, 15, st.beam); R(c, 12, 17, 1, 6, st.beam); R(c, 23, 17, 1, 6, st.beam);
+    R(c, 3, 17, 30, 1, st.beam); R(c, 3, 29, 10, 1, st.beam); R(c, 23, 29, 10, 1, st.beam);
+    for (var i = 0; i < 6; i++) { R(c, 5 + i, 30 - Math.floor(i / 2), 1, 1, st.beam); R(c, 30 - i, 30 - Math.floor(i / 2), 1, 1, st.beam); } // low braces
+  }
+  function slateRoof(c, st) {
+    for (var y = 2; y <= 13; y++) {
+      var ins = Math.floor((14 - y) / 3.5);
+      for (var x = ins + 1; x < 35 - ins; x++) {
+        var k = (x + (y >> 1) * 2) % 4;
+        if (k === 0) R(c, x, y, 1, 1, st.roofD); else if (k === 2 && y % 2 === 0) R(c, x, y, 1, 1, st.roofL);
+      }
+    }
+  }
+  function thatchRoof(c, st) {
+    var y, x;
+    for (y = 2; y <= 13; y++) {
+      var ins = Math.floor((14 - y) / 3.5);
+      for (x = ins + 1; x < 35 - ins; x++) { var h = (x * 7 + y * 3) % 5; if (h === 0) R(c, x, y, 1, 2, st.roofD); else if (h === 3) R(c, x, y, 1, 1, st.roofL); }
+    }
+    R(c, 0, 13, 36, 1, st.roof);
+    for (x = 0; x < 36; x++) R(c, x, 14, 1, 2 + (x * 5) % 3, st.roofD); // shaggy eave hanging over the wall
+    R(c, 0, 14, 1, 1, OL); R(c, 35, 14, 1, 1, OL);
+  }
+  function towerBody(c, st) {
+    var y, hw;
+    R(c, 1, 11, 12, 25, OL); R(c, 2, 11, 10, 24, st.wall);
+    for (y = 13; y < 33; y += 4) { R(c, 2, y, 10, 1, st.wallD); R(c, 2 + ((y / 4) % 2) * 3, y + 1, 1, 3, st.wallD); R(c, 8 - ((y / 4) % 2) * 2, y + 1, 1, 3, st.wallD); }
+    R(c, 2, 32, 10, 3, '#a8a098'); R(c, 2, 32, 10, 1, '#c4bcb4'); R(c, 1, 35, 12, 1, OL);
+    R(c, 1, 11, 12, 1, st.wallD); // shadow under the cone
+    for (y = 1; y <= 10; y++) {
+      hw = 1 + Math.round((y - 1) * 0.66);
+      R(c, 7 - hw, y, hw * 2, 1, y % 3 === 0 ? st.roofD : st.roof);
+      R(c, 7 - hw, y, Math.max(1, hw - 1), 1, y === 1 ? st.roofL : y % 3 === 0 ? st.roofD : st.roofL);
+      R(c, 7 - hw, y, 1, 1, OL); R(c, 6 + hw, y, 1, 1, OL);
+    }
+    R(c, 0, 11, 14, 1, OL);
+    R(c, 7, 0, 1, 2, '#6a6a6a'); R(c, 8, 0, 3, 2, '#d83c3c'); // pennant on the spire
+    R(c, 6, 17, 2, 5, OL); R(c, 6, 27, 2, 5, OL); // arrow slits
   }
 
   function buildHouse(style, locked) {
@@ -573,6 +633,8 @@
     R(c, 2, 35, 32, 1, OL);
     // eave shadow
     R(c, 3, 15, 30, 2, st.wallD);
+    if (st.look === 'stone' || st.look === 'tower') fieldstone(c, st);
+    else if (st.look === 'timber' || st.look === 'merchant') timberWall(c, st);
 
     // roof (trapezoid w/ shingles)
     function inset(yy) { return Math.floor((14 - yy) / 3.5); }
@@ -594,6 +656,8 @@
     R(c, 0, 14, 36, 1, st.roofD);
     R(c, 0, 15, 36, 1, OL);
     R(c, 0, 14, 1, 1, OL); R(c, 35, 14, 1, 1, OL);
+    if (st.look === 'slate') slateRoof(c, st);
+    else if (st.look === 'thatch') thatchRoof(c, st);
 
     if (st.chimney) {
       R(c, 25, 2, 5, 8, OL);
@@ -603,8 +667,14 @@
     }
 
     // windows
-    window7(c, 5, 19, st);
+    if (st.look === 'tower') towerBody(c, st); else window7(c, 5, 19, st);
     window7(c, 24, 19, st);
+    if (st.look === 'merchant') {
+      // green shutters, and a shop sign hanging over the door
+      R(c, 3, 19, 2, 7, st.shutter); R(c, 31, 19, 2, 7, st.shutter);
+      R(c, 14, 16, 8, 1, st.beam); R(c, 14, 17, 1, 1, st.beam); R(c, 21, 17, 1, 1, st.beam);
+      R(c, 14, 18, 8, 5, OL); R(c, 15, 19, 6, 3, '#f0d070'); R(c, 16, 20, 4, 1, st.shutter); R(c, 17, 19, 2, 1, '#fff2b0');
+    }
 
     // door
     R(c, 13, 23, 10, 13, OL);
@@ -642,7 +712,7 @@
   }
 
   function drawHouse(ctx, x, y, style, locked) {
-    var s = ((Math.floor(style) || 0) % 4 + 4) % 4;
+    var n = HOUSE_STYLES.length, s = ((Math.floor(style) || 0) % n + n) % n;
     var key = s + ':' + (locked ? 1 : 0);
     var c = houseCache[key] || (houseCache[key] = buildHouse(s, !!locked));
     ctx.drawImage(c, Math.round(x), Math.round(y));
@@ -950,6 +1020,105 @@
     ctx.drawImage(c, Math.round(x), Math.round(y) - 2);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* WORN COSMETICS (Mall): drawn over / under the 12x14 character       */
+  /* ------------------------------------------------------------------ */
+  // defs = [{slot, shape, color, color2}] (hat, outfit, cape, pet, decor; the other slots draw nothing here). Same x, y,
+  // dir and step as drawCharacter. layer 'back' goes under the character (cape, pet, decor), 'front' over it (outfit, hat,
+  // a cape seen from behind, a bird): call back, then drawCharacter, then front. Things reach up to 8 px above the head
+  // and 4 px to each side (WORN_PAD), so a card made for them needs that room.
+  var PETS = {
+    cat: ['k.k...', 'kakk..', 'keaak.', '.kaaak', '.kbaak', '.k.kbk'],
+    dog: ['kk....', 'kbkkk.', 'kbeak.', '.kaaak', '.kaaak', '.k..kk'],
+    fox: ['k.k...', 'kakk..', 'keaak.', '.kaaak', '.kbaak', '.k.kwk']
+  };
+  function drawWorn(ctx, x, y, defs, dir, step, layer) {
+    if (!defs || !defs.length) return;
+    var d = (dir === 'up' || dir === 'left' || dir === 'right') ? dir : 'down';
+    var ox = Math.round(x), oy = Math.round(y) - 2, flip = d === 'right', front = layer === 'front';
+    var back = layer === 'back';
+    function r(px, py, w, h, c) { ctx.fillStyle = c; ctx.fillRect(ox + px, oy + py, w, h); }
+    ctx.save();
+    if (flip) { ctx.translate(2 * ox + 12, 0); ctx.scale(-1, 1); }
+    defs.forEach(function (it) {
+      if (!it || !it.color) return;
+      var c = it.color, c2 = it.color2 || c, dk = shade(c, 0.7), lt = shade(c, 1.22), k = it.slot, s = it.shape, sd = d === 'left' || d === 'right';
+      /* ---- cape: behind the body, or in front of it when seen from behind */
+      if (k === 'cape') {
+        var h = s === 'long' ? 8 : 5;
+        if (d === 'up' && front) {
+          r(0, 8, 12, h, OL); r(1, 8, 10, h - 1, c); r(1, 8, 10, 1, c2); r(2, 9, 1, h - 2, dk); r(9, 9, 1, h - 2, dk); r(3, 7 + h - 1, 6, 1, dk);
+        } else if (d !== 'up' && back) {
+          // an A-line cape hanging behind: as wide as the shoulders at the top, flaring a little towards the hem
+          var mid = sd ? 8 : 6;
+          for (var cr = 0; cr < h; cr++) {
+            var hw = sd ? 3 + (cr >> 1) : 5 + (cr >> 1), left = mid - hw;
+            r(left - 1, 8 + cr, 1, 1, OL); r(mid + hw, 8 + cr, 1, 1, OL);
+            r(left, 8 + cr, hw * 2, 1, cr === 0 ? c2 : cr === h - 1 ? dk : c);
+            if (cr > 1 && cr < h - 1) r(mid - 1, 8 + cr, 1, 1, dk);
+          }
+          r(mid - hw - 1, 7 + h, hw * 2 + 2, 1, OL);
+        }
+        return;
+      }
+      /* ---- pet and decor stand beside the feet (under the character) */
+      if (k === 'pet' && s !== 'bird') {
+        if (!back) return;
+        var rows = PETS[s] || PETS.cat, pal = { k: OL, e: '#14101c', w: '#ffffff', a: c, b: c2 }, py = 14 - rows.length;
+        for (var yy = 0; yy < rows.length; yy++) for (var xx = 0; xx < rows[yy].length; xx++) { var ch = rows[yy].charAt(xx); if (ch !== '.' && pal[ch]) r(10 + xx, py + yy, 1, 1, pal[ch]); }
+        return;
+      }
+      if (k === 'pet') { // a small bird on the shoulder
+        if (!front) return;
+        r(9, 5, 4, 3, OL); r(10, 5, 2, 2, c); r(12, 6, 1, 1, '#f0b030'); r(10, 6, 2, 1, c2); r(9, 4, 1, 1, c2);
+        return;
+      }
+      if (k === 'decor') {
+        if (!back) return;
+        if (s === 'banner') { r(-3, 0, 1, 14, '#6a4a2c'); r(-2, 1, 5, 4, OL); r(-2, 1, 4, 3, c); r(-2, 4, 4, 1, c2); r(0, 2, 1, 1, c2); }
+        else if (s === 'lantern') { r(-3, 6, 1, 8, '#6a4a2c'); r(-4, 5, 3, 1, '#6a4a2c'); r(-4, 6, 3, 4, OL); r(-3, 7, 1, 2, c); r(-4, 9, 3, 1, c2); }
+        else if (s === 'flowerbox') { r(-4, 12, 5, 2, OL); r(-3, 12, 3, 1, '#9a6a3a'); r(-4, 10, 1, 2, '#3a7a3a'); r(-3, 9, 1, 3, c); r(-1, 10, 1, 2, '#3a7a3a'); r(-1, 9, 1, 1, c2); r(-2, 11, 1, 1, c2); }
+        else { r(-4, 12, 4, 2, OL); r(-3, 12, 2, 1, c2); r(-3, 8, 2, 4, OL); r(-3, 9, 2, 3, c); r(-4, 8, 1, 2, c); r(-2, 7, 1, 1, c2); }
+        return;
+      }
+      if (front === false) return; // outfits and hats are all in the front layer
+      /* ---- outfit: over the shirt (rows 8-10), robes and dresses down over the legs */
+      if (k === 'outfit') {
+        var up = d === 'up';
+        if (s === 'tunic') { r(2, 8, 8, 3, c); r(1, 9, 10, 1, c); r(2, 10, 8, 1, c2); if (!up && !sd) r(5, 8, 2, 1, dk); }
+        else if (s === 'vest') { r(2, 8, 3, 3, c); r(7, 8, 3, 3, c); r(5, 8, 2, 3, lt); if (!up) r(5, 9, 1, 1, c2); r(2, 10, 8, 1, dk); }
+        else if (s === 'overalls') { r(2, 9, 8, 2, c); r(2, 11, 8, 1, c); r(3, 8, 1, 1, c2); r(8, 8, 1, 1, c2); if (!up) { r(4, 9, 4, 1, dk); r(5, 10, 2, 1, c2); } }
+        else if (s === 'robe') { r(1, 8, 10, 3, c); r(2, 11, 8, 3, c); r(2, 13, 8, 1, c2); r(2, 10, 8, 1, c2); if (!up) r(5, 8, 2, 6, c2); r(2, 11, 1, 3, dk); r(9, 11, 1, 3, dk); }
+        else if (s === 'dress') { r(2, 8, 8, 3, c); r(1, 9, 10, 1, c); r(2, 10, 8, 1, c2); r(1, 11, 10, 1, c); r(0, 12, 12, 1, c); r(0, 13, 12, 1, c2); r(5, 11, 1, 2, dk); }
+        else if (s === 'armor') { r(2, 8, 8, 3, c); r(4, 8, 4, 2, lt); r(0, 8, 2, 2, c2); r(10, 8, 2, 2, c2); r(0, 8, 2, 1, lt); r(10, 8, 2, 1, lt); r(2, 10, 8, 1, dk); r(5, 10, 2, 1, c2); }
+        else { r(2, 8, 8, 3, c); }
+        return;
+      }
+      /* ---- hat: from the hair line up */
+      if (k === 'hat') {
+        if (s === 'brim') { r(-1, 0, 14, 2, OL); r(0, 1, 12, 1, c2); r(0, 0, 12, 1, c); r(2, -3, 8, 4, OL); r(3, -2, 6, 3, c); r(3, 0, 6, 1, c2); r(4, -2, 2, 1, lt); }
+        else if (s === 'cap') { r(1, -2, 10, 5, OL); r(2, -1, 8, 3, c); r(2, 0, 8, 1, lt); r(5, -2, 2, 1, c2); if (d === 'down') { r(1, 2, 10, 2, OL); r(2, 2, 8, 1, c2); } else if (sd) { r(-1, 2, 5, 2, OL); r(0, 2, 4, 1, c2); } }
+        else if (s === 'beret') { r(1, -2, 11, 5, OL); r(2, -1, 9, 3, c); r(3, -2, 5, 1, c); r(2, 1, 8, 1, c2); r(6, -3, 2, 1, OL); r(6, -3, 1, 1, c2); }
+        else if (s === 'wizard') {
+          r(4, -8, 4, 1, OL); r(5, -7, 2, 1, c); r(3, -7, 6, 6, OL); r(5, -7, 2, 1, c); r(4, -6, 4, 1, c); r(4, -5, 4, 1, c); r(3, -4, 6, 2, c); r(2, -2, 8, 2, c); r(-1, 0, 14, 3, OL); r(0, 1, 12, 1, dk); r(0, 0, 12, 1, c); r(2, -1, 8, 1, c2);
+          r(5, -5, 1, 1, c2); r(7, -3, 1, 1, c2); r(3, -3, 1, 1, c2);
+        }
+        else if (s === 'helm') { r(0, -2, 12, 6, OL); r(1, -1, 10, 5, c); r(1, -1, 10, 1, lt); r(5, -4, 2, 3, OL); r(5, -3, 2, 2, c2); if (d === 'up') r(1, 4, 10, 2, c); else { r(2, 3, 8, 1, OL); r(5, 4, 2, 1, c); r(2, 2, 1, 3, c); r(9, 2, 1, 3, c); } }
+        else if (s === 'crown') { r(1, -2, 10, 4, OL); r(2, -1, 8, 2, c); r(2, 1, 8, 1, dk); r(2, -2, 1, 1, c); r(5, -3, 2, 2, c); r(9, -2, 1, 1, c); r(4, 0, 1, 1, c2); r(7, 0, 1, 1, c2); r(5, -2, 2, 1, lt); }
+        else { r(2, -1, 8, 3, c); }
+      }
+    });
+    ctx.restore();
+  }
+  // a pile of worn pieces gets one small whole number, so a 3D actor (which is made from one number: the look) can carry them
+  var wornIds = [null], wornIx = {};
+  function wornCombo(defs) {
+    if (!defs || !defs.length) return 0;
+    var key = defs.map(function (d) { return [d.slot, d.shape, d.color, d.color2].join(':'); }).join('|'), id = wornIx[key];
+    if (!id) { id = wornIds.length; if (id > 4000) return 0; wornIds.push(defs); wornIx[key] = id; }
+    return id;
+  }
+
 
   /* ------------------------------------------------------------------ */
   /* ICONS (8x8)                                                         */
@@ -1006,6 +1175,10 @@
     drawHouse: drawHouse,
     drawMart: drawMart,
     drawCharacter: drawCharacter,
+    drawWorn: drawWorn,
+    wornCombo: wornCombo,
+    wornDefsOf: function (id) { return wornIds[id | 0] || null; },
+    WORN_PAD: { l: 4, t: 8, r: 4, b: 0 },
     drawCasino: drawCasino,
     drawIcon: drawIcon,
     ICON_IDS: Object.keys(ICONS),

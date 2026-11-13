@@ -1,8 +1,10 @@
 /*
  * hotbar.js - item slots along the bottom of the game view, like a crafting game's hotbar.
  * Every item the player can hold has a slot with its icon and count (on chain plus today). Like a crafting game, one
- * slot is in your hand: pick it with a click, 1-9 or the mouse wheel. The three tools come first: the Hoe and the
- * Fishing Rod every player has (not tokens), then the Pickaxe (a token that wears out). Right-click in the world, R, or clicking the
+ * slot is in your hand: pick it with a click, 1-9 or the mouse wheel. The four tools come first: Hoe, Pickaxe, Axe and
+ * Fishing Rod. Every player has them (not tokens in the bag); each wears out, and its slot shows a durability bar that
+ * goes from green to red (state.tools {kind: {uses, max, name, broken}}); a broken tool shows a crack and a click opens the
+ * Tools window (Tas > Alat) to repair it or make a new one. Right-click in the world, R, or clicking the
  * held slot again uses it (food is eaten, Gandum is planted on a tilled plot). Left-click and F act on the world
  * (mouse.js). Right-click on a slot (a long press on phones) opens its menu: send, sell, or the whole bag. E (or I, or the round E button on phones) opens the bag. Reads and acts through window.GT_CHAIN.
  */
@@ -11,10 +13,10 @@
   var GT = window.GT;
   if (!GT) return;
 
-  // tools first: the hoe (cangkul) and the rod (pancing) are tools every player has, not tokens in the bag
-  var SLOTS = ['hoe', 'tool', 'rod', 'wheat', 'fish', 'wood', 'ore', 'bread', 'meal'];
-  var FREE = { hoe: 1, rod: 1 };
-  var TOOL_NAME = { hoe: function () { return $t('Cangkul'); }, rod: function () { return $t('Pancing'); } };
+  // tools first: Hoe, Pickaxe, Axe and Fishing Rod are tools every player has, not tokens in the bag
+  var SLOTS = ['hoe', 'pickaxe', 'axe', 'rod', 'wheat', 'fish', 'wood', 'ore', 'bread', 'meal'];
+  var FREE = { hoe: 1, pickaxe: 1, axe: 1, rod: 1 };
+  var TOOL_NAME = { hoe: function () { return $t('Cangkul'); }, pickaxe: function () { return $t('Beliung'); }, axe: function () { return $t('Kapak'); }, rod: function () { return $t('Pancing'); } };
   var OL = '#2a2430';
   // 8x8 icons in the prototype's style (one character per pixel, '.' is empty)
   var ICONS = {
@@ -26,10 +28,13 @@
     meal:  { k: OL, b: '#c86a30', B: '#8a4020', p: '#f0f0f0', y: '#f8d838', rows: ['........', '.kkkk.k.', 'kbbybkbk', 'kbBbbbbk', 'kbbbbkBk', '.kkkk.k.', 'kppppppk', '.kkkkkk.'] },
     // the pickaxe (Beliung): a steel head curving down to a point at each end, on a wooden handle
     tool:  { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#8a5a30', rows: ['.kkkkkk.', 'kggggGgk', 'kgkkwkGk', 'k..kwk.k', '...kwk..', '...kwk..', '...kwk..', '....k...'] },
+    // the axe (Kapak): a wooden handle with a steel blade on top
+    axe:   { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#a8703a', rows: ['..kkk...', '.kgggk..', 'kgggGkk.', 'kgGkwk..', '.kkkwk..', '...kwk..', '...kwk..', '....k...'] },
     hoe:   { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#a8703a', rows: ['kkkkk...', 'kgggGk..', '.kkkwk..', '...kwk..', '...kwk..', '...kwk..', '...kwk..', '....k...'] },
     // the fishing rod: a slim pole from a cork grip and reel up to the tip, the line hanging to a red float
     rod:   { k: OL, b: '#a8703a', c: '#e0b878', r: '#8a90a4', l: '#e8f4ff', f: '#e04040', rows: ['......bl', '.....b.l', '....b..l', '...b...f', '..b....k', '.rb.....', 'crr.....', 'cc......'] }
   };
+  ICONS.pickaxe = ICONS.tool; // the Pickaxe tool looks like the Pickaxe item
   function icon(id, size) {
     var c = document.createElement('canvas'), d = ICONS[id], px = size / 8;
     c.width = c.height = size; c.setAttribute('aria-hidden', 'true');
@@ -54,6 +59,16 @@
   function chain() { return window.GT_CHAIN; }
   function bag() { var c = chain(); return c && c.state.st ? c.state.st.bag : null; }
 
+  // a crack across a broken tool: a dark zigzag with a red heart, drawn in code
+  function crack() {
+    var c = document.createElement('canvas'); c.width = c.height = 24; c.className = 'gt-slot-crack'; c.setAttribute('aria-hidden', 'true');
+    var g = c.getContext('2d'), p = [[12, 1], [9, 6], [14, 10], [9, 15], [13, 19], [11, 23]];
+    [['#14101c', 3], ['#e04a3c', 1]].forEach(function (st) { g.strokeStyle = st[0]; g.lineWidth = st[1]; g.beginPath(); p.forEach(function (q, i) { if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.stroke(); });
+    return c;
+  }
+  // the state's view of one tool (uses, max, name, broken), or null
+  function toolOf(id) { var c = chain(), t = c && c.state.st && c.state.st.tools; return TOOL_NAME[id] && t && t[id] ? t[id] : null; }
+
   function build() {
     var screen = document.getElementById('screen');
     if (!screen || bar) return;
@@ -61,8 +76,9 @@
     SLOTS.forEach(function (id, i) {
       var b = $('button', 'gt-slot'); b.type = 'button'; b.dataset.item = id;
       b.appendChild(icon(id, 24));
+      if (TOOL_NAME[id]) { var du = $('i', 'gt-slot-dur'); du.appendChild($('b')); b.appendChild(du); b.appendChild(crack()); }
       b.appendChild($('span', 'gt-slot-n', '0'));
-      b.appendChild($('span', 'gt-slot-k', String(i + 1)));
+      b.appendChild($('span', 'gt-slot-k', String((i + 1) % 10)));
       // click: hold this item (click it again to use it); right-click or a long press: its menu
       b.addEventListener('click', function (e) { e.stopPropagation(); e.currentTarget.blur(); closePop(); if (held === i) useHeld(); else setHeld(i); });
       b.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); toggle(i); });
@@ -97,11 +113,24 @@
       var nm = nameOf(id, names);
       el.setAttribute('aria-label', nm + ': ' + n + (it.today ? $t(' ({0}{1} hari ini)', [it.today > 0 ? '+' : '', it.today]) : ''));
       el.title = nm;
+      var tl = toolOf(id);
+      el.classList.toggle('broken', !!(tl && tl.broken));
+      if (tl) {
+        var pct = Math.max(0, Math.min(1, tl.uses / Math.max(1, tl.max))), durB = el.querySelector('.gt-slot-dur b');
+        if (durB) { durB.style.width = Math.round(pct * 100) + '%'; durB.style.background = 'hsl(' + Math.round(pct * 120) + ',72%,46%)'; }
+        el.title = nm + ' ' + tl.uses + '/' + tl.max + (tl.broken ? ' · ' + $t('rusak: perbaiki atau buat baru') : '');
+        el.setAttribute('aria-label', el.title);
+      }
     });
     if (label && on) {
       var hid = SLOTS[held], hn = nameOf(hid, names), hit = b[hid] || { settled: 0, today: 0 };
       var how = document.documentElement.classList.contains('gt-phone') ? $t('ketuk lagi') : $t('klik kanan / R');
-      label.textContent = hid === 'hoe' ? $t('Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul', [hn])
+      var htl = toolOf(hid);
+      label.classList.toggle('broken', !!(htl && htl.broken));
+      label.textContent = htl && htl.broken ? $t('{0} rusak ({1}/{2}) · klik lagi untuk memperbaiki atau membuat baru', [hn, htl.uses, htl.max])
+        : hid === 'pickaxe' ? $t('Di tangan: {0} ({1}/{2}) · pukul batu di tambang, otomatis saat menambang', [hn, htl ? htl.uses : 0, htl ? htl.max : 0])
+        : hid === 'axe' ? $t('Di tangan: {0} ({1}/{2}) · hadap pohon, tekan F untuk menebang', [hn, htl ? htl.uses : 0, htl ? htl.max : 0])
+        : hid === 'hoe' ? $t('Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul', [hn])
         : hid === 'rod' ? $t('Di tangan: {0} · hadap air, tekan F untuk memancing', [hn]) : $t('Di tangan: {0} ({1}) · {2}: {3}', [hn, hit.settled + hit.today, how, useVerb(hid)]);
     }
     if (pop && selected >= 0) fillPop();
@@ -115,6 +144,8 @@
     if (!c || !b || GT.isUiOpen() || (window.GT_FISH && GT_FISH.active()) || document.documentElement.classList.contains('gt-fighting')) return;
     var econ = (c.state.cfg && c.state.cfg.econ && c.state.cfg.econ.items[id]) || {}, it = b[id] || { settled: 0, today: 0 }, n = it.settled + it.today;
     closePop();
+    var utl = toolOf(id);
+    if (utl && utl.broken) { GT.toast($t('{0} rusak. Perbaiki atau buat baru.', [nameOf(id, {})])); c.open('tools'); return; }
     if (id === 'hoe') { if (window.GT_HOME && GT_HOME.hoe) GT_HOME.hoe(tile); return; }
     if (id === 'rod') {
       // fish the water you face (or the water you right-clicked next to you), as F does
@@ -141,7 +172,8 @@
       c.act({ action: 'farm', op: 'plant', plot: pi }).catch(function () {});
       return;
     }
-    if (id === 'tool') return GT.toast($t('Beliung dipakai otomatis saat menambang batu.'));
+    if (id === 'pickaxe') return GT.toast($t('Beliung dipakai otomatis saat menambang batu.'));
+    if (id === 'axe') return GT.toast($t('Hadap pohon, lalu tekan F untuk menebang dengan Kapak.'));
     toggle(held); // raw goods: what you can do with them (send, sell)
   }
 
@@ -181,8 +213,8 @@
 
   function onKey(e) {
     if (e.type !== 'keydown' || e.repeat || GT.isUiOpen()) return false;
-    var n = /^Digit([1-9])$/.exec(e.code);
-    if (n && bar && bar.style.display !== 'none') { closePop(); setHeld(+n[1] - 1); return true; }
+    var n = /^Digit([0-9])$/.exec(e.code); // 1-9 are the first nine slots, 0 the tenth
+    if (n && bar && bar.style.display !== 'none') { closePop(); setHeld((+n[1] + 9) % 10); return true; }
     if (e.code === 'KeyR' && bar && bar.style.display !== 'none') { useHeld(); return true; }
     if (e.code === 'Escape' && pop) { closePop(); return true; }
     return false;
@@ -217,6 +249,8 @@
 
   // shared with the shop, bag and market windows (js/mods/chain.js), so every item looks the same everywhere
   // SLOTS for the shop, bag and market grids: tokens only (the free tools are not in the bag)
-  window.GT_ITEMS = { icon: icon, SLOTS: SLOTS.filter(function (id) { return !FREE[id]; }), holding: function (id) { return SLOTS[held] === id && !!bar && bar.style.display !== 'none'; }, hold: function (id) { var i = SLOTS.indexOf(id); if (i >= 0) setHeld(i); }, held: function () { return SLOTS[held]; } };
+  // the Pickaxe item (token 'tool', an optional ingredient of a new Pickaxe) is bought and sold but has no slot: holding it picks the Pickaxe tool
+  function slotOf(id) { return id === 'tool' ? 'pickaxe' : id; }
+  window.GT_ITEMS = { icon: icon, SLOTS: ['tool'].concat(SLOTS.filter(function (id) { return !FREE[id]; })), holding: function (id) { return SLOTS[held] === slotOf(id) && !!bar && bar.style.display !== 'none'; }, hold: function (id) { var i = SLOTS.indexOf(slotOf(id)); if (i >= 0) setHeld(i); }, held: function () { var h = SLOTS[held]; return h === 'pickaxe' ? 'tool' : h; } };
   GT.register({ id: 'hotbar', init: init, onKey: onKey });
 })();

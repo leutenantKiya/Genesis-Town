@@ -221,7 +221,7 @@
     var sc = c.scene, out = sc.kind === 'out';
     switch (c.tileType) {
       case 'stall': return out ? { icon: '🛒', label: $t('Belanja') } : null;
-      case 'counter': return sc.kind === 'mart' ? { icon: '🛒', label: $t('Belanja') } : null;
+      case 'counter': return sc.kind === 'mart' ? { icon: '🛒', label: $t('Belanja') } : sc.house && sc.house.kind === 'mall' ? { icon: '🛍️', label: $t('Mall') } : null; // the Genesis Mall's counter
       case 'water': return out ? { icon: '🎣', label: $t('Mancing') } : null;
       case 'tree': return out ? { icon: '🪓', label: $t('Tebang') } : null;
       case 'rock': return out ? { icon: '⛏️', label: $t('Tambang') } : null;
@@ -233,7 +233,10 @@
       case 'fridge': return out ? null : { icon: '🧃', label: $t('Minum') };
       case 'plant': return out ? null : { icon: '💧', label: $t('Siram') };
       case 'chair': return out ? null : { icon: '🪑', label: $t('Duduk') };
-      case 'dice_table': case 'card_table': case 'slot': return sc.kind === 'casino' ? { icon: '🎲', label: $t('Main') } : null;
+      case 'dice_table': case 'card_table': case 'slot': return sc.kind === 'casino' || sc.kind === 'kasino' ? { icon: '🎲', label: $t('Main') } : null;
+      case 'roulette': return sc.kind === 'kasino' ? { icon: '🎲', label: $t('Main') } : null; // the Luck Table in the Genesis Casino
+      case 'lb_wall': return sc.house && sc.house.kind === 'papan' ? { icon: '🏆', label: $t('Papan Juara') } : null;
+      case 'news_board': return sc.house && sc.house.kind === 'papan' ? { icon: '📰', label: $t('Berita') } : null;
     }
     return null;
   }

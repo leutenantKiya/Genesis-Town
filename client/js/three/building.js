@@ -7,7 +7,10 @@
  * below the painted roof band. Side and back walls, the gabled roof and the gables are generated from the same style
  * colours. By kind: a bell tower (church), a flag (hall, townhall), a cloth awning (warung, restoran), a chimney
  * (house styles that have one), four sails that turn on the front gable (kincir, the windmill), a pile of logs by the
- * east wall (penggergajian, the sawmill), stacked crates by the door (gudang, the storehouse). Windows glow at night
+ * east wall (penggergajian, the sawmill), stacked crates by the door (gudang, the storehouse). Village version 3 adds:
+ * burgundy banners and gold finials (mall), two roof turrets with gold cresting and a string of bulbs along the eave that
+ * pulses (casino), a bell cupola (papan, the news hall), a hoist frame and an ore pile (tambangpub, the public mine),
+ * and a gold pennant on every public building that is not a Homeland one. Windows glow at night
  * (glow(0..1)); a building with moving parts turns them in tick(t).
  *
  * Returns a THREE.Group with userData: { building: b, box (THREE.Box3, world space), mats (every material, for the
@@ -19,6 +22,8 @@
   if (!GT3) return;
   var THREE = GT3.THREE, TILE = GT3.TILE, PX = GT3.PX, R = GT3.R, OL = '#2a2430';
 
+  var HOMEK = { townhall: 1, kolam: 1, tambang: 1, restoran: 1, rumah: 1, rumahsakit: 1, penggergajian: 1, kincir: 1, gudang: 1 };
+
   function styleOf(b) {
     var pub = S.PUBLIC_STYLE && S.PUBLIC_STYLE[b.kind];
     if (pub) return { st: pub, pub: true };
@@ -27,12 +32,16 @@
   }
 
   /** Side and back walls: siding lines and the stone foot of the 2D wall; tiles sideways every 12 px. */
-  function wallCanvas(hPx, st) {
+  function wallCanvas(hPx, st, stone) {
     var c = GT3.canvas(TILE, hPx), g = c.getContext('2d');
     R(g, 0, 0, TILE, hPx, st.wall);
     R(g, 0, 0, TILE, 2, st.wallD); // the eave's shadow
     for (var y = 4; y < hPx - 3; y += 4) R(g, 0, y, TILE, 1, st.wallD);
     R(g, 0, hPx - 3, TILE, 3, '#a8a098'); R(g, 0, hPx - 3, TILE, 1, '#c4bcb4'); R(g, 0, hPx - 1, TILE, 1, '#807870');
+    if (stone) { // the fieldstone base course of the medieval public buildings, as on the facade
+      R(g, 0, hPx - 7, TILE, 7, '#9a948a'); R(g, 0, hPx - 7, TILE, 1, '#c4bcb0'); R(g, 0, hPx - 4, TILE, 1, '#76706a'); R(g, 0, hPx - 1, TILE, 1, '#6e685e');
+      R(g, 3, hPx - 6, 1, 2, '#6e685e'); R(g, 8, hPx - 6, 1, 2, '#6e685e'); R(g, 0, hPx - 3, 1, 2, '#6e685e'); R(g, 6, hPx - 3, 1, 2, '#6e685e');
+    }
     return c;
   }
   /** One roof slope: shingle rows as in the 2D roof (light ridge row, a dark row every third, short highlights). */
@@ -88,7 +97,7 @@
     var front = new THREE.Mesh(GT3.quad([x0, 0, z1], [x1, 0, z1], [x1, Hw, z1], [x0, Hw, z1]), frontMat);
 
     /* --- side and back walls */
-    var wtex = GT3.tex(wallCanvas(wallPx, st), true);
+    var wtex = GT3.tex(wallCanvas(wallPx, st, pub && !HOMEK[kind]), true);
     var walls = new THREE.Mesh(GT3.merge([
       { geo: GT3.quad([x1, 0, z0], [x0, 0, z0], [x0, Hw, z0], [x1, Hw, z0], [0, 0, W, 1]) },
       { geo: GT3.quad([x1, 0, z1], [x1, 0, z0], [x1, Hw, z0], [x1, Hw, z1], [0, 0, D, 1]) },
@@ -114,7 +123,7 @@
       box(xb - xa, 1.2 * PX, 1 * PX, (xa + xb) / 2, eave - 0.3 * PX, z1 + o - 0.5 * PX, st.roofD),
       box(xb - xa, 1.2 * PX, 1 * PX, (xa + xb) / 2, eave - 0.3 * PX, z0 - o + 0.5 * PX, st.roofD)
     ];
-    var extras = [];
+    var extras = [], lightsMat = null;
     if (!pub && st.chimney) {
       var chx = x1 - 9 * PX, chz = zc - half * 0.45;
       trim.push(box(4 * PX, 9 * PX, 4 * PX, chx, ridge - k * (half * 0.45) + 2.5 * PX, chz, '#b0604a'));
@@ -172,6 +181,56 @@
       trim.push({ geo: new THREE.BoxGeometry(cs, cs, cs), matrix: GT3.xform(x0 + cs * 1.8, cs / 2, z1 + cs * 0.6, 1, 1, 1, 0.2), color: crate });
       trim.push({ geo: new THREE.BoxGeometry(cs * 0.85, cs * 0.85, cs * 0.85), matrix: GT3.xform(x0 + cs * 1.2, cs * 1.42, z1 + cs * 0.65, 1, 1, 1, -0.3), color: crate });
     }
+    if (pub && !HOMEK[kind]) {
+      // a gold pennant at the west end of the ridge
+      var qx = x0 + 2 * PX;
+      trim.push(box(1 * PX, 9 * PX, 1 * PX, qx, ridge + 4.5 * PX, zc, '#4a4a52'));
+      trim.push(box(5 * PX, 3 * PX, 0.6 * PX, qx + 3 * PX, ridge + 7.5 * PX, zc, '#f0d068'));
+      trim.push(box(3 * PX, 1.2 * PX, 0.6 * PX, qx + 2 * PX, ridge + 5.4 * PX, zc, '#d8a838'));
+    }
+    if (kind === 'mall') {
+      // a burgundy banner with a gold stripe hanging each side of the sign, gold finials on the ridge ends
+      [18, W * TILE - 22].forEach(function (bx) {
+        var bxw = (bx + 2) * PX;
+        trim.push(box(3.4 * PX, 11 * PX, 0.9 * PX, bxw, Hw - 6.5 * PX, z1 + 0.6 * PX, '#a83050'));
+        trim.push(box(3.4 * PX, 1.2 * PX, 1.0 * PX, bxw, Hw - 2.6 * PX, z1 + 0.65 * PX, '#e8c050'));
+        trim.push(box(1.6 * PX, 1.6 * PX, 1.0 * PX, bxw, Hw - 5.2 * PX, z1 + 0.65 * PX, '#e8c050'));
+        trim.push(box(4.2 * PX, 0.8 * PX, 1.2 * PX, bxw, Hw - 0.9 * PX, z1 + 0.7 * PX, '#5a3a22'));
+      });
+      trim.push(box(2.2 * PX, 2.2 * PX, 2.2 * PX, xa, ridge + 0.6 * PX, zc, '#e8c050'));
+      trim.push(box(2.2 * PX, 2.2 * PX, 2.2 * PX, xb, ridge + 0.6 * PX, zc, '#e8c050'));
+    }
+    if (kind === 'casino') {
+      // two round turrets on the ridge ends with cone roofs and gold flags, and a string of bulbs along the front eave
+      [x0 + 6 * PX, x1 - 6 * PX].forEach(function (tx2, i) {
+        trim.push({ geo: new THREE.CylinderGeometry(3.4 * PX, 3.6 * PX, 9 * PX, 10), matrix: GT3.xform(tx2, ridge + 3.5 * PX, zc), color: function (n) { return n.x + n.z > 0 ? '#5a4c72' : '#3e3250'; } });
+        trim.push({ geo: new THREE.ConeGeometry(4.6 * PX, 6 * PX, 10), matrix: GT3.xform(tx2, ridge + 11 * PX, zc), color: function (n) { return n.x + n.z > 0 ? st.roofL : st.roof; } });
+        trim.push(box(0.8 * PX, 5 * PX, 0.8 * PX, tx2, ridge + 16 * PX, zc, '#e8c050'));
+        trim.push(box(3.6 * PX, 2 * PX, 0.5 * PX, tx2 + 2.2 * PX * (i ? -1 : 1), ridge + 17 * PX, zc, '#d83c3c'));
+      });
+      var bulbs = [];
+      for (var bxl = x0 + 2 * PX, bi = 0; bxl < x1 - PX; bxl += 4 * PX, bi++) bulbs.push(box(1.8 * PX, 1.8 * PX, 1.8 * PX, bxl, eave - 2.4 * PX, z1 + o + 0.6 * PX, '#ffffff'));
+      lightsMat = M({ color: 0xffe070, emissive: 0xffb830, emissiveIntensity: 0.7 });
+      extras.push(new THREE.Mesh(GT3.merge(bulbs), lightsMat));
+    }
+    if (kind === 'papan') {
+      // a bell cupola on the ridge: four posts, a small roof, a bell, so the news can be rung out
+      var bcx = x1 - 8 * PX;
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (d) { trim.push(box(1 * PX, 7 * PX, 1 * PX, bcx + d[0] * 2.6 * PX, ridge + 3.5 * PX, zc + d[1] * 2.6 * PX, '#5a3a22')); });
+      trim.push({ geo: new THREE.ConeGeometry(4.6 * PX, 3.4 * PX, 4), matrix: GT3.xform(bcx, ridge + 8.7 * PX, zc, 1, 1, 1, Math.PI / 4), color: function (n) { return n.x + n.z > 0 ? st.roofL : st.roofD; } });
+      trim.push({ geo: new THREE.ConeGeometry(1.8 * PX, 3.4 * PX, 8), matrix: GT3.xform(bcx, ridge + 4.5 * PX, zc, 1, 1, 1, 0, Math.PI), color: '#d8b030' });
+    }
+    if (kind === 'tambangpub') {
+      // a hoist frame on the roof (two legs, a beam, a pulley wheel) and a pile of ore beside the door
+      var hx = x1 - 6 * PX;
+      trim.push(box(1.2 * PX, 10 * PX, 1.2 * PX, hx - 3 * PX, ridge + 4.2 * PX, zc, '#6a4020'));
+      trim.push(box(1.2 * PX, 10 * PX, 1.2 * PX, hx + 3 * PX, ridge + 4.2 * PX, zc, '#6a4020'));
+      trim.push(box(8 * PX, 1.2 * PX, 1.2 * PX, hx, ridge + 9.4 * PX, zc, '#5a3a22'));
+      trim.push({ geo: new THREE.CylinderGeometry(2 * PX, 2 * PX, 1.2 * PX, 10), matrix: GT3.xform(hx, ridge + 7 * PX, zc, 1, 1, 1, 0, Math.PI / 2), color: '#8a8698' });
+      [[2.2, 0, '#7a7a86', 3.4], [4.6, 0.5, '#58c8e8', 2.6], [3.4, 2.6, '#e8c050', 2.4], [6.2, 1.4, '#7a7a86', 2.8]].forEach(function (r) {
+        trim.push({ geo: new THREE.BoxGeometry(r[3] * PX, r[3] * 0.8 * PX, r[3] * PX), matrix: GT3.xform(x1 - r[0] * PX, r[3] * 0.4 * PX, z1 + (1.6 + r[1]) * PX, 1, 1, 1, r[0]), color: r[2] });
+      });
+    }
     var trimMesh = new THREE.Mesh(GT3.merge(trim), M({ vertexColors: true }));
 
     [front, walls, roof, trimMesh].concat(extras).forEach(function (m) { m.castShadow = true; m.receiveShadow = true; group.add(m); });
@@ -181,8 +240,8 @@
       box: new THREE.Box3(new THREE.Vector3(b.x + x0, 0, b.y + z0), new THREE.Vector3(b.x + x1, ridge, b.y + z1)),
       door: { x: b.dx + 0.5, z: b.dy + 1 },
       height: ridge,
-      glow: function (v) { frontMat.emissiveIntensity = v; },
-      tick: rotor ? function (t) { rotor.rotation.z = -t * 0.8; } : null
+      glow: function (v) { frontMat.emissiveIntensity = v; if (lightsMat) lightsMat.emissiveIntensity = 0.45 + 1.1 * v; },
+      tick: rotor || lightsMat ? function (t) { if (rotor) rotor.rotation.z = -t * 0.8; if (lightsMat) lightsMat.color.setHex(Math.floor(t * 2) % 2 ? 0xffe070 : 0xff9a8a); } : null
     };
     return group;
   };

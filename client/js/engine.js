@@ -37,6 +37,8 @@ var DIRS = {up:[0,-1], down:[0,1], left:[-1,0], right:[1,0]};
 var OPP = {up:'down', down:'up', left:'right', right:'left'};
 var DIRLIST = ['up','down','left','right'];
 var SOLID = new Set(['void','fountain','stage','carousel','lily','tree','fence','sign','mailbox','rock','water','wall','bed','table','tv','plant','counter','fridge','bookshelf','shelf','chair','card_table','slot','chest','dice_table','lamp','bush','barrel','crate','stall']);
+// furniture of the room interiors added with the Kingshot-style buildings (art registered by regRoomTiles below)
+['ore_rock','lb_wall','news_board','roulette','rack','pew','sack','crate_i','barrel_i','tank','display','log','stove'].forEach(function(t){ SOLID.add(t); });
 var ANIMATED = {water:1, flower:1};
 var MOVE_T = 0.15, NPC_T = 0.26, NPC_FAST = 0.18, TURN_T = 0.09, CPS = 48;
 var REDUCE = false;
@@ -337,7 +339,7 @@ function buildWorldCache(m){
   }
   m.buildings.forEach(function(b){
     if (b.kind === 'mart') Sp.drawMart(g, b.x*T, b.y*T);
-    else if (b.kind === 'casino'){ if (Sp.drawCasino) Sp.drawCasino(g, b.x*T, b.y*T); else Sp.drawHouse(g, b.x*T, b.y*T, 2, false); }
+    else if (b.kind === 'casino' && !m.layout){ if (Sp.drawCasino) Sp.drawCasino(g, b.x*T, b.y*T); else Sp.drawHouse(g, b.x*T, b.y*T, 2, false); }
     else if (PUBLIC_KINDS[b.kind] && Sp.drawPublic) Sp.drawPublic(g, b.kind, b.x*T, b.y*T, b.w, b.h);
     else Sp.drawHouse(g, b.x*T, b.y*T, b.style, !b.invited);
   });
@@ -395,7 +397,11 @@ function buildCache(m){
   var c = document.createElement('canvas');
   c.width = m.w * T; c.height = m.h * T;
   var g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-  for (var y = 0; y < m.h; y++) for (var x = 0; x < m.w; x++) drawTileSafe(g, m.tiles[y*m.w + x], x*T, y*T, 0);
+  for (var y = 0; y < m.h; y++) for (var x = 0; x < m.w; x++){
+    var tl = m.tiles[y*m.w + x];
+    if (m.floorKind && FLOORLESS[tl]) drawTileSafe(g, m.floorKind, x*T, y*T, 0); // room furniture without its own floor
+    drawTileSafe(g, tl, x*T, y*T, 0);
+  }
   m.buildings.forEach(function(b){
     if (b.kind === 'mart') SPRITES.drawMart(g, b.x*T, b.y*T);
     else if (b.kind === 'casino'){
@@ -653,7 +659,7 @@ function tryWorld(seed, att){
 }
 
 var HOME_NAMES = { townhall:$t('Balai Kota'), kolam:$t('Kolam Ikan'), tambang:$t('Tambang'), restoran:$t('Restoran'), rumah:$t('Rumah Pekerja'), rumahsakit:$t('Rumah Sakit'), penggergajian:$t('Penggergajian'), kincir:$t('Kincir Angin'), gudang:$t('Gudang') };
-var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1, townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1, penggergajian:1, kincir:1, gudang:1 };
+var PUBLIC_KINDS = { hall:1, church:1, clinic:1, post:1, broker:1, warung:1, townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1, penggergajian:1, kincir:1, gudang:1, mall:1, casino:1, papan:1, tambangpub:1 };
 var HOME_KINDS = { townhall:1, kolam:1, tambang:1, restoran:1, rumah:1, rumahsakit:1, penggergajian:1, kincir:1, gudang:1 };
 function layoutChunk(L, x, y){ return homeLayout && window.GTHomeland ? GTHomeland.chunkOf(L, x, y) : GTVillage.chunkOf(L, x, y); }
 function fromLayout(L){
@@ -870,6 +876,216 @@ function genPublicInterior(b){
   buildCache(m);
   return m;
 }
+/* ROOMS-BEGIN
+   Rooms of the other buildings (mall, casino, news hall, public mine, church, clinic, post office and the Homeland
+   buildings). One spec per kind: size, floor and a fill() that puts the furniture; the door is bottom centre. All of
+   them keep a free aisle from the door mat to every piece you can use. Scene key = 'kind:id' (see houseScene). */
+var ROOM_TITLE = { hall:$t('Balai Desa'), church:$t('Gereja'), clinic:$t('Klinik'), post:$t('Kantor Pos'), broker:$t('Kantor Makelar'), warung:$t('Warung'),
+  townhall:$t('Balai Kota'), kolam:$t('Kolam Ikan'), tambang:$t('Tambang'), restoran:$t('Restoran'), rumah:$t('Rumah Pekerja'), rumahsakit:$t('Rumah Sakit'),
+  penggergajian:$t('Penggergajian'), kincir:$t('Kincir Angin'), gudang:$t('Gudang'), mall:$t('Mall Genesis'), casino:$t('Kasino Genesis'),
+  papan:$t('Balai Berita'), tambangpub:$t('Tambang Umum') };
+// tiles with no floor of their own: the room's floor is drawn under them (buildCache)
+var FLOORLESS = {ore_rock:1, lb_wall:1, news_board:1, roulette:1, rack:1, pew:1, sack:1, crate_i:1, barrel_i:1, tank:1, display:1, log:1, stove:1};
+var ROOMS = {
+  mall: { w:14, h:10, floor:'floor_tile', fill: function(c){
+    var x;
+    for (x = 2; x <= 4; x++) c.put(x, 1, 'shelf', $t('Rak penuh barang dagangan dari seluruh negeri.'));
+    for (x = 9; x <= 11; x++) c.put(x, 1, 'shelf', $t('Rak penuh barang dagangan dari seluruh negeri.'));
+    c.put(6, 1, 'display', $t('Etalase kaca: topi, jubah, dan hiasan paling baru.')); c.put(7, 1, 'display', $t('Etalase kaca: topi, jubah, dan hiasan paling baru.'));
+    for (x = 5; x <= 8; x++) c.put(x, 3, 'counter', $t('Meja kasir Mall. Bicara di sini untuk berbelanja.'));
+    [[2,5],[3,5],[2,6],[3,6],[10,5],[11,5],[10,6],[11,6]].forEach(function(p){ c.put(p[0], p[1], 'rack', $t('Gantungan penuh baju dan jubah cantik.')); });
+    c.put(5, 6, 'display', $t('Etalase: peliharaan lucu dan hiasan rumah.')); c.put(8, 6, 'display', $t('Etalase: peliharaan lucu dan hiasan rumah.'));
+    c.put(1, 8, 'plant'); c.put(12, 8, 'plant'); c.put(1, 1, 'plant'); c.put(12, 1, 'plant');
+    c.rect(6, 4, 7, 8, 'rug');
+  }},
+  casino: { w:12, h:10, floor:'floor_dark', fill: function(c){
+    c.rect(5, 2, 6, 8, 'carpet_red');
+    [1,2,3,4,7,8,9,10].forEach(function(sx){ c.put(sx, 1, 'slot', $t('Mesin slot berkedip. Hadiahnya tiket, bukan koin.')); });
+    c.put(5, 1, 'roulette', $t('Meja Untung: putar roda, tukar barang dengan barang.')); c.put(6, 1, 'roulette', $t('Meja Untung: putar roda, tukar barang dengan barang.'));
+    [[2,4],[3,4],[8,4],[9,4]].forEach(function(p){ c.put(p[0], p[1], 'card_table', $t('Meja kartu. Hanya untuk senang-senang.')); });
+    [[2,6],[3,6],[8,6],[9,6]].forEach(function(p){ c.put(p[0], p[1], 'dice_table', $t('Meja dadu. Hanya untuk senang-senang.')); });
+    c.put(1, 8, 'plant', $t('Tanaman plastik. Tetap terlihat mewah.')); c.put(10, 8, 'plant', $t('Tanaman plastik. Tetap terlihat mewah.'));
+    c.put(1, 3, 'chair'); c.put(10, 3, 'chair');
+  }},
+  papan: { w:12, h:8, floor:'floor_wood', fill: function(c){
+    var x;
+    for (x = 3; x <= 8; x++) c.put(x, 1, 'lb_wall', $t('Papan Juara: pedagang terbaik hari ini dan sepanjang masa.'));
+    [1,2,9,10].forEach(function(nx){ c.put(nx, 1, 'news_board', $t('Papan berita: kabar terbaru dari seluruh desa.')); });
+    c.put(5, 4, 'table', $t('Meja redaksi. Penuh catatan dan tinta.')); c.put(6, 4, 'table', $t('Meja redaksi. Penuh catatan dan tinta.'));
+    c.put(4, 4, 'chair'); c.put(7, 4, 'chair');
+    c.put(1, 4, 'bookshelf', $t('Arsip berita lama, diikat rapi.')); c.put(10, 4, 'bookshelf', $t('Arsip berita lama, diikat rapi.'));
+    c.put(1, 6, 'plant'); c.put(10, 6, 'plant');
+    c.rect(5, 2, 6, 3, 'rug');
+  }},
+  tambangpub: { w:12, h:9, floor:'floor_dark', fill: function(c){
+    var x;
+    for (x = 1; x <= 10; x++) c.put(x, 1, 'ore_rock', $t('Dinding terowongan penuh bijih berkilau. Tambang sungguhan ada di luar.'));
+    [[1,2],[1,3],[10,2],[10,3],[1,5],[10,5]].forEach(function(p){ c.put(p[0], p[1], 'ore_rock', $t('Dinding terowongan penuh bijih berkilau. Tambang sungguhan ada di luar.')); });
+    c.put(3, 6, 'crate_i', $t('Peti perkakas penambang.')); c.put(4, 6, 'crate_i', $t('Peti perkakas penambang.')); c.put(8, 6, 'barrel_i', $t('Tong air untuk para penambang.'));
+    c.put(5, 3, 'table', $t('Meja peta tambang. Garis-garis bijih ditandai kapur.')); c.put(6, 3, 'table', $t('Meja peta tambang. Garis-garis bijih ditandai kapur.'));
+    c.put(7, 3, 'chair'); c.put(8, 4, 'sack', $t('Karung bijih mentah.'));
+  }},
+  church: { w:12, h:10, floor:'floor_wood', fill: function(c){
+    var x, y;
+    c.rect(5, 2, 6, 8, 'rug');
+    c.put(5, 1, 'table', $t('Meja di depan, dengan lilin dan bunga segar.')); c.put(6, 1, 'table', $t('Meja di depan, dengan lilin dan bunga segar.'));
+    c.put(2, 1, 'bookshelf', $t('Buku nyanyian dan doa.')); c.put(9, 1, 'bookshelf', $t('Buku nyanyian dan doa.'));
+    for (y = 3; y <= 7; y += 2){ for (x = 2; x <= 4; x++) c.put(x, y, 'pew', $t('Bangku gereja dari kayu jati.')); for (x = 7; x <= 9; x++) c.put(x, y, 'pew', $t('Bangku gereja dari kayu jati.')); }
+    c.put(1, 1, 'plant'); c.put(10, 1, 'plant'); c.put(1, 8, 'plant'); c.put(10, 8, 'plant');
+  }},
+  clinic: { w:12, h:9, floor:'floor_tile', fill: function(c){
+    var x;
+    [2,4,8,10].forEach(function(bx){ c.put(bx, 1, 'bed', $t('Ranjang periksa yang bersih.')); });
+    c.put(6, 1, 'shelf', $t('Rak obat dan perban.'));
+    for (x = 4; x <= 7; x++) c.put(x, 4, 'counter', $t('Meja perawat. Antrean pasien selalu rapi.'));
+    c.put(1, 4, 'display', $t('Lemari kaca berisi botol obat.')); c.put(10, 4, 'fridge', $t('Lemari pendingin khusus obat.'));
+    c.put(1, 7, 'plant'); c.put(10, 7, 'plant');
+  }},
+  post: { w:12, h:9, floor:'floor_tile', fill: function(c){
+    var x;
+    for (x = 3; x <= 8; x++) c.put(x, 3, 'counter', $t('Loket pos. Surat dan paket dilayani di sini.'));
+    [1,2,9,10].forEach(function(sx){ c.put(sx, 1, 'sack', $t('Karung surat menunggu diantar.')); });
+    [4,5,7,8].forEach(function(sx){ c.put(sx, 1, 'shelf', $t('Rak paket.')); });
+    c.put(1, 6, 'crate_i', $t('Peti paket siap kirim.')); c.put(10, 6, 'crate_i', $t('Peti paket siap kirim.')); c.put(10, 5, 'sack', $t('Karung surat menunggu diantar.'));
+    c.put(1, 3, 'plant');
+  }},
+  townhall: { w:12, h:9, floor:'floor_wood', fill: function(c){
+    c.rect(5, 3, 6, 7, 'rug');
+    c.put(5, 2, 'table', $t('Meja kerja walikota, rapi dan penuh stempel.')); c.put(6, 2, 'table', $t('Meja kerja walikota, rapi dan penuh stempel.'));
+    c.put(4, 2, 'chair'); c.put(7, 2, 'chair');
+    [2,3,4,5,6,7,8,9].forEach(function(bx){ c.put(bx, 1, 'bookshelf', $t('Peraturan dan peta kota.')); });
+    c.put(1, 1, 'plant'); c.put(10, 1, 'plant'); c.put(1, 7, 'plant'); c.put(10, 7, 'plant');
+    c.put(2, 5, 'table', $t('Meja rapat warga.')); c.put(3, 5, 'chair'); c.put(9, 5, 'table', $t('Meja rapat warga.')); c.put(8, 5, 'chair');
+  }},
+  kolam: { w:10, h:8, floor:'floor_wood', fill: function(c){
+    [2,3,6,7].forEach(function(tx){ c.put(tx, 1, 'tank', $t('Bak ikan segar. Airnya jernih.')); });
+    c.put(1, 1, 'barrel_i', $t('Tong garam untuk ikan asin.')); c.put(8, 1, 'barrel_i', $t('Tong garam untuk ikan asin.'));
+    c.put(4, 4, 'table', $t('Meja potong ikan.')); c.put(5, 4, 'table', $t('Meja potong ikan.'));
+    c.put(1, 4, 'rack', $t('Gantungan jaring dan pancing.')); c.put(8, 5, 'crate_i', $t('Peti es untuk ikan.')); c.put(8, 6, 'crate_i', $t('Peti es untuk ikan.'));
+  }},
+  tambang: { w:10, h:8, floor:'floor_dark', fill: function(c){
+    var x;
+    for (x = 1; x <= 8; x++) c.put(x, 1, 'ore_rock', $t('Dinding tambang penuh bijih.'));
+    c.put(1, 2, 'ore_rock', $t('Dinding tambang penuh bijih.')); c.put(8, 2, 'ore_rock', $t('Dinding tambang penuh bijih.'));
+    c.put(2, 5, 'crate_i', $t('Peti perkakas penambang.')); c.put(3, 5, 'crate_i', $t('Peti perkakas penambang.')); c.put(7, 5, 'barrel_i', $t('Tong air.'));
+    c.put(5, 3, 'table', $t('Meja peta tambang.')); c.put(6, 3, 'sack', $t('Karung bijih mentah.'));
+  }},
+  restoran: { w:12, h:9, floor:'floor_wood', fill: function(c){
+    var x;
+    c.put(1, 1, 'stove', $t('Kompor besar. Selalu ada sup yang mendidih.')); c.put(2, 1, 'stove', $t('Kompor besar. Selalu ada sup yang mendidih.'));
+    c.put(3, 1, 'fridge', $t('Lemari pendingin penuh bahan masakan.')); c.put(4, 1, 'shelf', $t('Rak bumbu dan piring.'));
+    for (x = 6; x <= 9; x++) c.put(x, 2, 'counter', $t('Meja pesanan. Makanan hangat siap saji.'));
+    c.put(3, 5, 'table', $t('Meja makan. Wangi sup memenuhi ruangan.')); c.put(2, 5, 'chair'); c.put(4, 5, 'chair');
+    c.put(8, 5, 'table', $t('Meja makan. Wangi sup memenuhi ruangan.')); c.put(7, 5, 'chair'); c.put(9, 5, 'chair');
+    c.put(1, 7, 'plant'); c.put(10, 7, 'plant');
+  }},
+  rumah: { w:10, h:8, floor:'floor_wood', fill: function(c){
+    [1,3,5,7].forEach(function(bx){ c.put(bx, 1, 'bed', $t('Kasur sederhana untuk pekerja yang lelah.')); });
+    c.put(8, 1, 'plant'); c.put(8, 3, 'fridge', $t('Isinya bekal untuk besok.'));
+    c.put(5, 4, 'table', $t('Meja makan pekerja.')); c.put(4, 4, 'chair'); c.put(6, 4, 'chair');
+    c.put(1, 5, 'chest', $t('Peti barang pribadi pekerja.')); c.put(1, 6, 'plant');
+  }},
+  rumahsakit: { w:14, h:9, floor:'floor_tile', fill: function(c){
+    var x;
+    [2,4,6,8,10,12].forEach(function(bx){ c.put(bx, 1, 'bed', $t('Ranjang rawat inap yang bersih.')); });
+    for (x = 5; x <= 8; x++) c.put(x, 4, 'counter', $t('Meja perawat. Pekerja yang pingsan dirawat di sini.'));
+    c.put(1, 3, 'fridge', $t('Lemari pendingin khusus obat.')); c.put(12, 3, 'shelf', $t('Rak obat dan perban.'));
+    c.put(1, 7, 'plant'); c.put(12, 7, 'plant'); c.put(11, 5, 'display', $t('Lemari kaca berisi botol obat.'));
+  }},
+  penggergajian: { w:12, h:9, floor:'floor_wood', fill: function(c){
+    var x;
+    for (x = 1; x <= 3; x++) c.put(x, 1, 'log', $t('Tumpukan kayu gelondongan.'));
+    for (x = 1; x <= 2; x++) c.put(x, 2, 'log', $t('Tumpukan kayu gelondongan.'));
+    c.put(9, 1, 'crate_i', $t('Peti papan kayu siap kirim.')); c.put(10, 1, 'crate_i', $t('Peti papan kayu siap kirim.')); c.put(10, 2, 'crate_i', $t('Peti papan kayu siap kirim.'));
+    c.put(5, 4, 'table', $t('Meja gergaji. Serbuk kayu di mana-mana.')); c.put(6, 4, 'table', $t('Meja gergaji. Serbuk kayu di mana-mana.'));
+    c.put(10, 5, 'barrel_i', $t('Tong minyak untuk mata gergaji.')); c.put(1, 6, 'log', $t('Tumpukan kayu gelondongan.')); c.put(1, 7, 'log', $t('Tumpukan kayu gelondongan.'));
+  }},
+  kincir: { w:8, h:8, floor:'floor_wood', fill: function(c){
+    [1,2,6].forEach(function(sx){ c.put(sx, 1, 'sack', $t('Karung tepung hasil gilingan.')); });
+    c.put(1, 2, 'sack', $t('Karung tepung hasil gilingan.')); c.put(6, 2, 'sack', $t('Karung tepung hasil gilingan.'));
+    c.put(3, 3, 'table', $t('Batu giling besar yang terus berputar.')); c.put(4, 3, 'table', $t('Batu giling besar yang terus berputar.'));
+    c.put(6, 5, 'barrel_i', $t('Tong gandum.')); c.put(1, 5, 'crate_i', $t('Peti gandum.'));
+  }},
+  gudang: { w:12, h:9, floor:'floor_wood', fill: function(c){
+    [1,2,4,5,7,8,10].forEach(function(cx){ c.put(cx, 1, 'crate_i', $t('Peti-peti tersusun rapi sampai ke langit-langit.')); });
+    [1,2,10].forEach(function(cx){ c.put(cx, 2, 'barrel_i', $t('Tong penuh bahan simpanan.')); });
+    c.put(1, 4, 'crate_i', $t('Peti-peti tersusun rapi sampai ke langit-langit.')); c.put(2, 4, 'crate_i', $t('Peti-peti tersusun rapi sampai ke langit-langit.'));
+    c.put(9, 4, 'sack', $t('Karung gandum.')); c.put(10, 4, 'sack', $t('Karung gandum.')); c.put(10, 5, 'sack', $t('Karung gandum.'));
+    c.put(1, 6, 'barrel_i', $t('Tong penuh bahan simpanan.')); c.put(10, 7, 'barrel_i', $t('Tong penuh bahan simpanan.'));
+    c.put(5, 4, 'table', $t('Meja catatan stok.')); c.put(6, 4, 'table', $t('Meja catatan stok.')); c.put(5, 5, 'chair');
+  }}
+};
+function genRoom(b){
+  var sp = ROOMS[b.kind], w = sp.w, hh = sp.h, dx = w >> 1;
+  var m = newMap(w, hh, sp.floor, 'interior');
+  m.floorKind = sp.floor;
+  function I(x,y){ return y*w + x; }
+  var x, y;
+  for (x = 0; x < w; x++){ m.tiles[I(x,0)] = 'wall'; m.tiles[I(x,hh-1)] = 'wall'; }
+  for (y = 0; y < hh; y++){ m.tiles[I(0,y)] = 'wall'; m.tiles[I(w-1,y)] = 'wall'; }
+  m.mat = {x:dx, y:hh-1}; m.tiles[I(dx,hh-1)] = 'doormat'; m.exit.add(I(dx,hh-1)); m.entry = {x:dx, y:hh-2};
+  m.board = null;
+  var c = {
+    put: function(px, py, t, txt){ if (px < 1 || py < 1 || px > w-2 || py > hh-2) return; m.tiles[I(px,py)] = t; if (txt) m.info.set(I(px,py), txt); },
+    rect: function(x0, y0, x1, y1, t){ for (var yy = y0; yy <= y1; yy++) for (var xx = x0; xx <= x1; xx++) c.put(xx, yy, t); }
+  };
+  sp.fill(c);
+  finalize(m);
+  m.npcs = [];
+  buildCache(m);
+  return m;
+}
+// Pixel art of the room furniture, registered into the sprite tile table (the 2.5D room reads the same table)
+function regRoomTiles(){
+  var S = window.SPRITES;
+  if (!S || !S._T || S._T.ore_rock) return;
+  var K = '#2a2430';
+  var A = {
+    ore_rock: { pal: { k:K, r:'#7a7486', R:'#5c566a', b:'#58a8e8', g:'#e8c040', h:'#a49eb4' }, rows: [
+      '............', '....kkkk....', '..kkhhrrkk..', '.khhrrbrrrk.', '.khrbbrrgrk.', 'krrrrrrggrrk',
+      'krbrrrrrrrRk', 'krrrrrrbbrRk', '.krrgrrrbRk.', '.kRrrrrrRRk.', '..kRRRRRRk..', '...kkkkkk...'] },
+    lb_wall: { pal: { k:K, W:'#8a5a30', d:'#2c3a44', w:'#e8e2d0', y:'#f0c840', s:'#b0b8c0' }, rows: [
+      'kkkkkkkkkkkk', 'kWWWWWWWWWWk', 'kWddddddddWk', 'kWdydwwwwdWk', 'kWddddddddWk', 'kWdsdwwwddWk',
+      'kWddddddddWk', 'kWdydwwwwdWk', 'kWddddddddWk', 'kWWWWWWWWWWk', '.kkkkkkkkkk.', '............'] },
+    news_board: { pal: { k:K, W:'#8a5a30', c:'#c89a58', w:'#f4f0e0', y:'#f0d048', r:'#d86060', g:'#58a860', p:'#4a4a58' }, rows: [
+      '.kkkkkkkkkk.', 'kWWWWWWWWWWk', 'kWccccccccWk', 'kWcwwcyyccWk', 'kWcwpcyyccWk', 'kWccccccrrWk',
+      'kWcgggcrrcWk', 'kWcgpgcccwWk', 'kWccccwwpcWk', 'kWWWWWWWWWWk', '.kk......kk.', '............'] },
+    roulette: { pal: { k:K, W:'#8a5a30', G:'#2c8a4c', r:'#d83838', b:'#2a2a38', y:'#f0d048', w:'#f4f0e0' }, rows: [
+      '............', '.kkkkkkkkkk.', 'kWWWWWWWWWWk', 'kWGGkkkkGGWk', 'kWGkrbrbrkWk', 'kWkbrwywbrkk',
+      'kWkrbywwrbkk', 'kWGkbrbrbkWk', 'kWGGkkkkGGWk', 'kWWWWWWWWWWk', '.kkkkkkkkkk.', '............'] },
+    rack: { pal: { k:K, s:'#b0b0c0', r:'#d84848', b:'#4878d8', g:'#58b858', y:'#f0d048', p:'#c070c0' }, rows: [
+      '............', '.kkkkkkkkkk.', '.kssssssssk.', '.krrbbggyyk.', '.krrbbggyyk.', '.krrbbggyyk.',
+      '.kprbbgpyyk.', '.kpr.bgp.yk.', '..kp..bp..k.', '..k...b...k.', '..kkkkkkkkk.', '............'] },
+    pew: { pal: { k:K, W:'#8a5a30', w:'#b07840', l:'#cf9658' }, rows: [
+      '............', '............', 'kkkkkkkkkkkk', 'kWWWWWWWWWWk', 'kllllllllllk', 'kwwwwwwwwwwk',
+      'kkkkkkkkkkkk', '.kwwwwwwwwk.', '.kWWWWWWWWk.', '.kkkkkkkkkk.', '.kk......kk.', '............'] },
+    sack: { pal: { k:K, s:'#d8c08a', S:'#b8a068', L:'#8a6a38', t:'#a07838' }, rows: [
+      '............', '....kkkk....', '...ktttk....', '....kssk....', '...kSSSSk...', '..kSssssSk..',
+      '.kSsssssssk.', '.kSssLLsssk.', '.kSssLLsssk.', '.kSSsssssSk.', '..kkSSSSkk..', '....kkkk....'] },
+    crate_i: { pal: { k:K, w:'#c08848', W:'#8a5a30', l:'#dca868' }, rows: [
+      '............', '.kkkkkkkkkk.', '.kllllllllk.', '.kWwwwwwwWk.', '.kwWwwwwWwk.', '.kwwWwwWwwk.',
+      '.kwwwWWwwwk.', '.kwwWwwWwwk.', '.kwWwwwwWwk.', '.kWwwwwwwWk.', '.kkkkkkkkkk.', '............'] },
+    barrel_i: { pal: { k:K, w:'#a8683a', W:'#7a4a28', i:'#5a5a68', l:'#c88850' }, rows: [
+      '............', '...kkkkkk...', '..kllllllk..', '.kwwlwwwwwk.', '.kiiiiiiiik.', '.kwwwlwwwwk.',
+      '.kwwwwwwwwk.', '.kiiiiiiiik.', '.kWwwwwwwWk.', '..kWWWWWWk..', '...kkkkkk...', '............'] },
+    tank: { pal: { k:K, g:'#9ad8e8', G:'#5ab0cc', w:'#d8f4f8', o:'#f08838', W:'#8a5a30' }, rows: [
+      '............', '.kkkkkkkkkk.', '.kWWWWWWWWk.', '.kgwggggggk.', '.kgggggoggk.', '.kggGggggok.',
+      '.kgggggGggk.', '.kgogggggwk.', '.kGGGGGGGGk.', '.kWWWWWWWWk.', '.kkkkkkkkkk.', '............'] },
+    display: { pal: { k:K, s:'#b0b8c8', g:'#bfe4f0', w:'#f4fcff', y:'#f0d048', r:'#d84848', b:'#4878d8', W:'#8a5a30' }, rows: [
+      '............', '.kkkkkkkkkk.', '.kwggggggsk.', '.kgggggggsk.', '.kgyggrggbk.', '.kgyyggrrbk.',
+      '.kgggggggsk.', '.kssssssssk.', '.kWWWWWWWWk.', '.kWWWWWWWWk.', '.kkkkkkkkkk.', '............'] },
+    log: { pal: { k:K, b:'#7a4a28', B:'#5a3418', c:'#d8a868', C:'#b8844c', r:'#8a5a30' }, rows: [
+      '............', '............', '.kkkkkkkkkk.', 'kccCbbbbBBBk', 'kcCCbbbbBBBk', 'kccCbbrbBBBk',
+      '.kkkkkkkkkk.', 'kccCbbbbBBBk', 'kcCCbbbbBBBk', 'kccCbbrbBBBk', '.kkkkkkkkkk.', '............'] },
+    stove: { pal: { k:K, s:'#8a8c9c', S:'#6a6c7c', f:'#f08838', y:'#f8d848', d:'#2a2a34', l:'#b0b2c0' }, rows: [
+      '............', '.kkkkkkkkkk.', '.kllllllllk.', '.kdSdddSddk.', '.kdSdddSddk.', '.ksssssssSk.',
+      '.kskkkkkksk.', '.kkfyyfkkSk.', '.kkyffykkSk.', '.kksssssssk.', '.kkkkkkkkkk.', '............'] }
+  };
+  Object.keys(A).forEach(function(t){ S._T[t] = A[t]; if (S._tileTypes && S._tileTypes.indexOf(t) < 0) S._tileTypes.push(t); });
+}
+regRoomTiles();
+/* ROOMS-END */
+
 function genMartInterior(b, martIdx){
   var w = 11, hh = 9;
   var m = newMap(w, hh, 'floor_tile', 'interior');
@@ -1009,11 +1225,14 @@ function houseScene(b){
   var sc = interiors.get(key);
   if (!sc){
     var m, kind = b.kind;
+    var villageCasino = kind === 'casino' && !!world.layout; // the village casino is a new building with its own room; the old play-coin casino stays legacy
     if (kind === 'mart') m = genMartInterior(b, world.marts.indexOf(b));
-    else if (kind === 'casino') m = genCasinoInterior(b);
+    else if (kind === 'casino' && !villageCasino) m = genCasinoInterior(b);
+    else if (ROOMS[kind]) m = genRoom(b);
     else if (PUBLIC_KINDS[kind]) m = genPublicInterior(b);
     else m = genHouseInterior(b);
-    sc = { kind:kind, map:m, npcs:m.npcs, house:b, key:key, name:null };
+    // scene.kind 'kasino' (not 'casino') keeps the legacy play-coin casino code (casino.js, dealer, "Meja belum dibuka") off the new room
+    sc = { kind:villageCasino ? 'kasino' : kind, map:m, npcs:m.npcs, house:b, key:key, name:null };
     interiors.set(key, sc);
   }
   return sc;
@@ -1032,6 +1251,12 @@ function resolveScene(ref){
     if (mm && world){
       var bb = world.buildings.filter(function(b){ return b.kind === mm[1] && (mm[1] === 'house' ? String(b.id) === mm[2] : (mm[1] === 'casino' || String(world.marts.indexOf(b)) === mm[2])); })[0];
       if (bb) return houseScene(bb);
+    }
+    // any other room key is 'kind:id' (kind of a public building, id its lot or kind): the scene of that building
+    var pk = /^([a-z]+):(.+)$/.exec(ref);
+    if (pk && world && PUBLIC_KINDS[pk[1]]){
+      var pb = world.buildings.filter(function(b){ return b.kind === pk[1] && String(b.id != null ? b.id : (b.bx + '_' + b.by)) === pk[2]; })[0];
+      if (pb) return houseScene(pb);
     }
     return null;
   }
@@ -2238,7 +2463,8 @@ function locText(){
   if (scene.kind === 'out') return areaName(P.x, P.y);
   if (scene.house && scene.house.name) return scene.house.name;
   if (scene.kind === 'mart') return $t('Mart Genesis');
-  if (scene.kind === 'casino') return $t('Kasino Genesis');
+  if (scene.kind === 'casino' || scene.kind === 'kasino') return $t('Kasino Genesis');
+  if (scene.house.kind !== 'house' && ROOM_TITLE[scene.house.kind]) return ROOM_TITLE[scene.house.kind];
   return scene.house.own ? $t('Rumah Kamu') : $t('Rumah {0}', [scene.house.owner]);
 }
 function pad2(n){ return (n < 10 ? '0' : '') + n; }
@@ -2589,6 +2815,8 @@ var GT = {
   addNpc: addNpc, removeNpc: removeNpc, moveNpc: moveNpc, npcTeleport: npcTeleport, npcHide: npcHide, findNpc: findNpc, npcScene: npcSceneOf,
   engageNpc: function(npc){ if (npc) engage(npc); },
   getScene: resolveScene,
+  // walk into a building from a mod (e.g. a Homeland menu): the same door transition as walking through its door
+  enterRoom: function(b){ if (b && b.kind && ROOMS[b.kind] || (b && PUBLIC_KINDS[b.kind])) doorTransition(function(){ enterBuilding(b); }); },
   doorFront: function(b){ return b ? {x:b.dx, y:b.dy + 1} : null; },
   getAffinity: getAffinity, setAffinity: setAffinity, addAffinity: addAffinity,
   addReputation: addRep,

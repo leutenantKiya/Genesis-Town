@@ -168,6 +168,26 @@
     var coin = st.bag.coin.settled + st.bag.coin.today;
     var delta = coin - GT.state.coins;
     if (delta !== 0) GT.addCoins(delta);
+    // Savings: the player's own testnet account balance, read only and shown in coin (1000 coin per NEAR). Never spent.
+    walletRead();
+    if (wallet.coin != null) {
+      var sv = $('span', 'val gt-savings', $t('Tabungan: {0} koin', [wallet.coin.toLocaleString()]));
+      sv.title = $t('Hanya tampilan, tidak terpakai untuk belanja di game.');
+      hudCell.appendChild(sv);
+    }
+  }
+  var wallet = { coin: null, at: 0, busy: false };
+  function walletRead() {
+    var L = window.NearLib, now = Date.now();
+    if (wallet.busy || now - wallet.at < 60000 || S.mode !== 'testnet' || !S.account || !L || !S.cfg || !S.cfg.rpcUrl) return;
+    wallet.busy = true; wallet.at = now;
+    new L.JsonRpcProvider({ url: S.cfg.rpcUrl }).query({ request_type: 'view_account', finality: 'final', account_id: S.account })
+      .then(function (a) {
+        var c = Number(BigInt(String(a.amount)) / 1000000000000000000000n); // yocto / 1e21 = NEAR x 1000
+        var changed = c !== wallet.coin; wallet.coin = c;
+        if (changed) renderHud();
+      }, function () { /* no answer: keep the last value */ })
+      .then(function () { wallet.busy = false; });
   }
 
   /* ------------------------------------------------------------ session key + login */
@@ -531,6 +551,7 @@
     if (S.st && S.st.plots && S.st.plots.some(function (p) { return p && p.state && p.state !== 'empty' && p.state !== 'tilled'; })) d.plant = 1;
     ['home', 'build', 'th', 'plant', 'craft'].forEach(function (k) { if (d[k] && !goalsDone()[k]) { var dd = goalsDone(); dd[k] = 1; lsSet(goalKey(), JSON.stringify(dd)); } });
     var next = GOALS.filter(function (g) { return !d[g.id]; })[0];
+    var ms = S.st && S.st.missions, claimable = ms && ms.claimable && ms.claimable.length ? missionOf(ms.claimable[0]) : null;
     if (!goalsSince) goalsSince = Date.now() + 8000;
     if (lastGoal && next !== lastGoal && !lastGoal.rescue && S.account && Date.now() > goalsSince) GT.toast('🎯 ' + $t('Misi selesai! Lanjut ke misi berikutnya.'));
     lastGoal = next || null;
@@ -538,21 +559,113 @@
     // Every shop closed: nobody can sell, so say what the easiest board still needs (beats the first-steps guide).
     var rescue = closedHint();
     if (rescue && lsGet('gt.chain.rescueHidden') !== String(S.st && S.st.time.day)) { next = rescue; hidden = false; }
+    else if (claimable) { next = missionCard(claimable, true); hidden = false; } // a finished mission waits for its reward first
+    else if (ms && (!next || hidden) && ms.current) { // the first steps are done (or put away): the server's missions go on
+      var cur = missionOf(ms.current);
+      if (cur && lsGet('gt.chain.msHidden') !== cur.id) { next = missionCard(cur, false); hidden = false; } else if (!next || hidden) next = null;
+    }
     goalBox.style.display = !next || hidden || S.mode === 'offline' ? 'none' : ''; // the missions follow the player into the Homeland too
     if (!next) return;
     goalBox.textContent = '';
     var head = $('div', 'gt-goals-head');
-    head.appendChild($('b', null, next.rescue ? next.icon + ' ' + next.title : next.icon + ' ' + next.title + ' · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
+    head.appendChild($('b', null, next.rescue || next.mission ? next.icon + ' ' + next.title : next.icon + ' ' + next.title + ' · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
     goalBox.title = next.text;
     var x = $('button', 'gt-goals-x', $t('Tutup')); x.type = 'button'; x.setAttribute('aria-label', next.rescue ? $t('Sembunyikan untuk hari ini') : $t('Sembunyikan langkah pertama'));
     x.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (next.rescue) lsSet('gt.chain.rescueHidden', String(S.st && S.st.time.day)); else lsSet('gt.chain.goalsHidden', '1');
+      if (next.rescue) lsSet('gt.chain.rescueHidden', String(S.st && S.st.time.day)); else if (next.mission) lsSet('gt.chain.msHidden', next.mission.id); else lsSet('gt.chain.goalsHidden', '1');
       renderGoals();
     });
     head.appendChild(x);
     goalBox.appendChild(head);
     goalBox.appendChild($('p', null, next.hint || next.text));
+    if (next.mission) {
+      var mm = next.mission;
+      var pr = $('div', 'gt-mission-bar'); pr.appendChild($('i')); pr.firstChild.style.width = Math.round(100 * Math.min(mm.have, mm.need) / Math.max(1, mm.need)) + '%'; goalBox.appendChild(pr);
+      var row = $('div', 'gt-mission-acts');
+      if (mm.done && !mm.claimed) row.appendChild(button($t('Ambil hadiah: {0}', [rewardText(mm.reward)]), function () { claimMission(mm.id); }, 'primary'));
+      else row.appendChild($('span', 'chain-dim', mm.have + '/' + mm.need + ' · ' + $t('Hadiah: {0}', [rewardText(mm.reward)])));
+      row.appendChild(button($t('Semua misi'), function () { open('missions'); }));
+      goalBox.appendChild(row);
+    }
+  }
+  /* ---- missions from the server (state.missions): counted there, claimed once ---- */
+  function missionOf(id) { var l = S.st && S.st.missions && S.st.missions.list; if (!l) return null; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; }
+  function rewardText(r) {
+    var parts = [];
+    Object.keys(r || {}).forEach(function (t) { parts.push(r[t] + ' ' + (t === 'coin' ? $t('koin') : item(t))); });
+    return parts.join(' + ') || '-';
+  }
+  function missionCard(m, claim) {
+    return { id: 'mission:' + m.id, mission: m, icon: claim ? '🎁' : '🎯', title: claim ? $t('Misi selesai: {0}', [m.name]) : m.name, hint: m.hint, text: m.hint };
+  }
+  function claimMission(id) {
+    return act({ action: 'mission', op: 'claim', id: id }).then(function () { renderGoals(); if (S.modal && S.modal.kind === 'missions') redraw(); }, noop);
+  }
+  function missionsBody() {
+    var wrap = $('div', 'gt-missions'), ms = S.st && S.st.missions;
+    wrap.appendChild($('p', null, $t('Misi kecil untuk belajar bermain. Selesaikan, lalu ambil hadiahnya sekali.')));
+    if (!ms || !ms.list) { wrap.appendChild($('p', 'chain-dim', $t('Memuat…'))); return wrap; }
+    ms.list.forEach(function (m) {
+      var row = $('div', 'gt-mission' + (m.claimed ? ' claimed' : m.done ? ' done' : ''));
+      var txt = $('div', 'grow');
+      txt.appendChild($('b', null, (m.claimed ? '✓ ' : m.done ? '🎁 ' : '') + m.name));
+      txt.appendChild($('div', 'chain-dim', m.hint));
+      var pr = $('div', 'gt-mission-bar'); pr.appendChild($('i')); pr.firstChild.style.width = Math.round(100 * Math.min(m.have, m.need) / Math.max(1, m.need)) + '%'; txt.appendChild(pr);
+      txt.appendChild($('div', 'chain-dim', m.have + '/' + m.need + ' · ' + $t('Hadiah: {0}', [rewardText(m.reward)])));
+      row.appendChild(txt);
+      if (m.claimed) row.appendChild($('span', 'chain-dim', $t('Sudah diambil')));
+      else { var b = button(m.done ? $t('Ambil hadiah') : $t('Belum selesai'), function () { claimMission(m.id); }, m.done ? 'primary' : ''); b.disabled = !m.done; row.appendChild(b); }
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  /* ---- Alat: the four tools wear out; repair one (cheap) or make a new one from materials ---- */
+  var TOOL_ORDER = ['hoe', 'pickaxe', 'axe', 'rod'];
+  var TOOL_ICON = { hoe: 'hoe', pickaxe: 'pickaxe', axe: 'axe', rod: 'rod' };
+  function toolName(k) { return { hoe: $t('Cangkul'), pickaxe: $t('Beliung'), axe: $t('Kapak'), rod: $t('Pancing') }[k] || k; }
+  // the same costs as economy/config.json `tools` (the server charges them; /api/config sends them when it can)
+  var TOOL_COST = { pickaxe: { make: { wood: 2, ore: 2 }, repair: { wood: 1, coin: 5 }, alt: { tool: 1 } }, axe: { make: { wood: 3, ore: 1 }, repair: { wood: 1, coin: 3 } }, rod: { make: { wood: 3 }, repair: { wood: 1 } }, hoe: { make: { wood: 2, ore: 1 }, repair: { wood: 1 } } };
+  function toolCost(k) {
+    var d = S.cfg && S.cfg.econ && S.cfg.econ.tools && S.cfg.econ.tools[k], f = TOOL_COST[k] || {};
+    return d ? { make: d.make, repair: d.repair, alt: d.makeAlt } : f;
+  }
+  function costText(c) { return Object.keys(c || {}).map(function (t) { return c[t] + ' ' + (t === 'coin' ? $t('koin') : item(t)); }).join(' + '); }
+  function canPay(c) { return Object.keys(c || {}).every(function (t) { return have(t) >= c[t]; }); }
+  var toolNagAt = 0;
+  var TILE_TOOL = { tree: 'axe', rock: 'pickaxe', water: 'rod' };
+  // true (and a hint, plus the Tools window now and then) when the tool this tile needs is broken
+  function toolBroken(tt) {
+    var k = TILE_TOOL[tt], t = k && S.st && S.st.tools && S.st.tools[k];
+    if (!t || !t.broken) return false;
+    GT.toast($t('{0} rusak. Perbaiki atau buat baru.', [toolName(k)]));
+    if (Date.now() - toolNagAt > 15000) { toolNagAt = Date.now(); open('tools'); }
+    return true;
+  }
+  function toolsBody() {
+    var wrap = $('div', 'gt-tools');
+    wrap.appendChild($('p', null, $t('Setiap alat aus saat dipakai. Perbaiki alat (murah), atau buat yang baru dari bahan.')));
+    if (!S.st || !S.st.tools) { wrap.appendChild($('p', 'chain-dim', $t('Memuat…'))); return wrap; }
+    TOOL_ORDER.forEach(function (k) {
+      var t = S.st.tools[k]; if (!t) return;
+      var cost = toolCost(k), row = $('div', 'gt-tool' + (t.broken ? ' broken' : ''));
+      if (window.GT_ITEMS) row.appendChild(GT_ITEMS.icon(TOOL_ICON[k], 40));
+      var txt = $('div', 'grow');
+      txt.appendChild($('b', null, toolName(k) + ' · ' + t.uses + '/' + t.max + (t.broken ? ' · ' + $t('rusak') : '')));
+      var pct = Math.max(0, Math.min(1, t.uses / Math.max(1, t.max))), bar = $('div', 'gt-dur'); bar.appendChild($('i'));
+      bar.firstChild.style.width = Math.round(pct * 100) + '%'; bar.firstChild.style.background = 'hsl(' + Math.round(pct * 120) + ',72%,46%)'; txt.appendChild(bar);
+      txt.appendChild($('div', 'chain-dim', $t('Perbaiki: {0}', [costText(cost.repair)]) + ' · ' + $t('Buat baru: {0}', [costText(cost.make)]) + (cost.alt ? ' ' + $t('(atau {0})', [costText(cost.alt)]) : '')));
+      row.appendChild(txt);
+      var acts = $('div', 'gt-tool-acts');
+      var rb = button($t('Perbaiki'), function () { act({ action: 'repair', tool: k }).then(refreshModal, noop); }, t.uses < t.max && !t.broken ? '' : t.broken ? 'primary' : '');
+      rb.disabled = t.uses >= t.max || !canPay(cost.repair);
+      var nb = button($t('Buat baru'), function () { act({ action: 'maketool', tool: k }).then(refreshModal, noop); });
+      nb.disabled = !(canPay(cost.make) || (cost.alt && canPay(cost.alt)));
+      acts.appendChild(rb); acts.appendChild(nb); row.appendChild(acts);
+      wrap.appendChild(row);
+    });
+    return wrap;
   }
 
   // When every shop is closed: the board that needs the fewest goods, and what is still missing on it.
@@ -788,7 +901,9 @@
     if (a === 'cook') return 'cook';
     if (a === 'eat') return 'eat';
     if (a === 'sell' || a === 'ship' || a === 'stock') return 'sell';
-    if (a === 'mall' || a === 'hire' || a === 'dress') return 'buy';
+    if (a === 'mall' || a === 'hire' || a === 'dress' || a === 'casino' || a === 'ride') return 'buy'; // coin spent (the carousel's own music starts with the ride)
+    if (a === 'repair' || a === 'maketool') return 'craft';
+    if (a === 'mission') return 'quest_done';
     if (a === 'build' || a === 'assist') return 'build';
     if (a === 'collect') return 'coin';
     if (a === 'fight') return 'hit';
@@ -1246,7 +1361,11 @@
     var coin = S.st.bag.coin || { settled: 0, today: 0 };
     var head = $('div', 'gt-shop-head');
     head.appendChild($('span', null, $t('Koin {0}{1}', [coin.settled + coin.today, coin.today ? $t(' ({0}{1} hari ini)', [coin.today > 0 ? '+' : '', coin.today]) : ''])));
-    head.appendChild($('span', 'chain-dim', $t('Beliung {0}/{1} pemakaian', [S.st.tool.uses, S.st.tool.durability])));
+    if (S.st.tools) {
+      var wornOut = TOOL_ORDER.filter(function (k) { return S.st.tools[k] && S.st.tools[k].broken; }).length;
+      var tb = button(wornOut ? $t('Alat · {0} rusak', [wornOut]) : $t('Alat'), function () { open('tools'); }, wornOut ? 'primary' : '');
+      head.appendChild(tb);
+    } else head.appendChild($('span', 'chain-dim', $t('Beliung {0}/{1} pemakaian', [S.st.tool.uses, S.st.tool.durability])));
     wrap.appendChild(head);
     var slots = window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.st.bag).filter(function (t) { return t !== 'coin'; });
     var inHand = window.GT_ITEMS && GT_ITEMS.held();
@@ -1264,7 +1383,9 @@
     wrap.appendChild(bagDetail(sel));
     wrap.appendChild($('p', 'chain-dim', $t('{0}Barang "hari ini" tersimpan permanen pukul 06:00{1}', [document.documentElement.classList.contains('gt-phone') ? $t('Ketuk barang untuk melihat, lalu Pegang. ') : $t('Klik untuk melihat, klik kanan untuk memegang. '), chainUI() ? $t(' (di NEAR).') : '.'])));
     if (S.account) wrap.appendChild($('p', 'chain-dim', $t('Akun: {0}', [S.account])));
-    wrap.appendChild(button($t('Semua riwayat'), function () { open('history'); }));
+    var more = $t('Semua riwayat');
+    wrap.appendChild(button(more, function () { open('history'); }));
+    if (S.st.missions) wrap.appendChild(button($t('Misi'), function () { open('missions'); }));
     return wrap;
   }
   var USE = {
@@ -1588,12 +1709,12 @@
     return wrap;
   }
 
-  var BODIES = { bag: bagBody, history: historyBody, craft: craftBody, ship: shipBody, market: marketBody, project: projectBody };
+  var BODIES = { bag: bagBody, history: historyBody, craft: craftBody, ship: shipBody, market: marketBody, project: projectBody, tools: toolsBody, missions: missionsBody };
   function open(kind, arg) {
     if (S.mode !== 'offline' && !S.account && kind !== 'shop') { login(); return; }
     if (S.modal && S.modal.h && S.modal.h.isOpen()) S.modal.h.close('switch'); // one window at a time (Tas → Riwayat)
     if (kind === 'project') markGoal('board');
-    var title = kind === 'bag' ? $t('Tas') : kind === 'market' ? $t('Pasar Pemain') : kind === 'project' ? $t('Papan Proyek Desa') : kind === 'history' ? (arg ? $t('Riwayat · {0}', [item(arg)]) : $t('Riwayat')) : kind === 'craft' ? $t('Meja Kerja') : kind === 'ship' ? $t('Kotak Kirim') : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
+    var title = kind === 'bag' ? $t('Tas') : kind === 'market' ? $t('Pasar Pemain') : kind === 'project' ? $t('Papan Proyek Desa') : kind === 'history' ? (arg ? $t('Riwayat · {0}', [item(arg)]) : $t('Riwayat')) : kind === 'craft' ? $t('Meja Kerja') : kind === 'ship' ? $t('Kotak Kirim') : kind === 'tools' ? $t('Alat') : kind === 'missions' ? $t('Misi') : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
     var body = kind === 'shop' ? shopBody(arg) : BODIES[kind](arg);
     var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; if (kind === 'market') S.marketSeller = null; } });
     S.modal = { kind: kind, arg: arg, h: h };
@@ -1635,6 +1756,7 @@
     if (S.busy) return true;
     var tx = ctx.tile.x, ty = ctx.tile.y, tt = ctx.tileType;
     function gather() {
+      if (toolBroken(tt)) return Promise.resolve();
       S.busy = true;
       // the axe swing starts right away, the server answer follows (only when there is energy to swing)
       var ecost = (S.cfg && S.cfg.econ.gather && S.cfg.econ.gather.energyCost) || 0;
@@ -1651,6 +1773,7 @@
     // Fishing is a small skill game (js/mods/fishing.js); the catch is the same gather action.
     if (tt === 'water' && window.GT_FISH && S.mode !== 'offline') {
       if (!S.account) { GT.toast($t('Masuk dulu (tombol Masuk) untuk memancing.')); return true; }
+      if (toolBroken('water')) return true;
       var cost = (S.cfg.econ.gather && S.cfg.econ.gather.energyCost) || 0;
       if (S.st && S.st.energy < cost) { GT.toast($t('Energimu habis. Makan dulu atau tunggu besok.')); return true; }
       var em = S.emptyWater && S.emptyWater[tx + ',' + ty];
@@ -1724,6 +1847,6 @@
     return true;
   }
 
-  window.GT_CHAIN = { weather: weatherKind, approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, _signedCall: signedCall };
+  window.GT_CHAIN = { weather: weatherKind, approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, toolBroken: toolBroken, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame, onKey: onKey });
 })();

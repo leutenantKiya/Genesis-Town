@@ -77,7 +77,7 @@
       }
       o.sx = sx; o.sy = sy; o.rt = now; o.x = q.x; o.y = q.y; o.age = ((q.age || 0) + rtt / 2) / 1000;
       o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; if (q.fish && !q.npc && (!o.fish || o.fish.phase !== q.fish.phase)) { var fp = q.fish.phase; var fs = fp === 'cast' ? 'cast' : fp === 'bite' ? 'bite' : fp === 'reel' ? 'reel' : ''; if (fs) sfx(fs, { vol: 0.6, x: q.x, y: q.y }); } // another player's rod
-      o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.seen = now;
+      o.worn = q.worn || null; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.seen = now;
     });
     Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
   }
@@ -162,9 +162,13 @@
       if (o.npc || !here(o)) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
       var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
       var moving = o.spd > 0.4, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
-      var look = o.look != null ? o.look : pal(o.nick || a);
-      // px/py/pal/dir/step/id: the 2.5D view (mods/view3d.js) draws the same player as a 3D card
-      ents.push({ py: py, px: px, pal: look, dir: o.dir, step: step, id: 'player:' + a, fish: fishOf(o, now), draw: function () { GT.drawChar(ctx, px - camX, py - camY, look, o.dir, step); } });
+      var look = o.look != null ? o.look : pal(o.nick || a), W = window.GT_WORN, worn = o.worn;
+      // px/py/pal/dir/step/id: the 2.5D view (mods/view3d.js) draws the same player as a 3D card; what they wear rides in the high bits of pal
+      ents.push({ py: py, px: px, pal: W && worn ? W.pal(look, worn) : look, dir: o.dir, step: step, id: 'player:' + a, fish: fishOf(o, now), draw: function () {
+        if (W && worn) W.back(ctx, px - camX, py - camY, worn, o.dir, step);
+        GT.drawChar(ctx, px - camX, py - camY, look, o.dir, step);
+        if (W && worn) W.front(ctx, px - camX, py - camY, worn, o.dir, step);
+      } });
     });
   }
   // Name tags and bubbles are collected first, then placed so none sits on another: tags that share a row within a
@@ -182,6 +186,19 @@
   // that sit apart on screen still count as touching
   function overlapX(a, b) { return Math.abs(a.x - b.x) < (a.w * a.sc + b.w * b.sc) / 2 + 1; }
   function overlaps(a, b) { return overlapX(a, b) && Math.abs(a.y - b.y) < 9 * Math.max(a.sc, b.sc); }
+  // what I wear now (the server's state, fresh after every buy or wear)
+  function ownWorn() { var c = C(), st = c && c.state && c.state.st, w = st && st.cosmetics && st.cosmetics.worn; return w && Object.keys(w).length ? w : null; }
+  // an emote you bought: now and then a small glyph floats up over the head for two seconds (every player has their own rhythm)
+  function emoteAt(ctx, worn, x, y, now, seed, sc) {
+    var g = worn && window.GT_WORN ? GT_WORN.emote(worn) : null;
+    if (!g) return;
+    var h = 0, s = String(seed); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    var t = ((now / 1000) + (Math.abs(h) % 9)) % 9;
+    if (t > 2.4) return;
+    ctx.save(); ctx.globalAlpha = t < 0.3 ? t / 0.3 : t > 1.9 ? Math.max(0, (2.4 - t) / 0.5) : 1;
+    ctx.font = Math.round(11 * sc) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(g, Math.round(x), Math.round(y - t * 4 * sc)); ctx.restore();
+  }
   function onDraw(ctx, camX, camY, T) {
     var TH = tone();
     if (!TH || !GT.scene) return;
@@ -197,7 +214,7 @@
       var small = o.guest || !!guestId, sz = small ? 5 : 7; // a guest's own tag is small and dim; a guest sees everyone's tags small
       ctx.font = sz + 'px "Pixelify Sans", sans-serif';
       var text = o.guest ? $t('Tamu') : o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
-      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag) });
+      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag), worn: o.worn || null });
     });
     tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
     tags.forEach(function (t) {
@@ -209,13 +226,18 @@
         else t.y -= 9 * t.sc;
       }
       placed.push(t);
-      TH.label(ctx, t.text, t.x, t.y, { tone: t.tone, size: t.size });
+      var lw = TH.label(ctx, t.text, t.x, t.y, { tone: t.tone, size: t.size });
+      var nc = t.worn && window.GT_WORN ? GT_WORN.nameColor(t.worn) : null; // a bought name colour: a coloured line under the tag
+      if (nc && lw) { var kk = t.sc || 1; ctx.fillStyle = nc; ctx.fillRect(Math.round(t.x - lw * kk / 2), Math.round(t.y), Math.round(lw * kk), Math.max(1, Math.round(1.5 * kk))); }
+      emoteAt(ctx, t.worn, t.x, t.y - 11 * (t.sc || 1), now, t.k, t.sc || 1);
       var bt = fitBubble(ctx, t.k, now);
       if (bt) bubs.push({ x: t.x, y: t.y - 10, text: bt, tag: t });
     });
     if (me && !guestId) {
       var p = GT.player, mt = fitBubble(ctx, key(me, meTag), now), ma = GT.at(p.x, p.y);
       if (mt) bubs.push({ x: GT.snap(ma.x + T / 2), y: GT.snap(ma.y - 4), text: mt, mine: true });
+      var mw = ownWorn();
+      if (mw) emoteAt(ctx, mw, GT.snap(ma.x + T / 2), GT.snap(ma.y - 12), now, 'me', TH.scale || 1);
     }
     bubs.sort(function (p, q) { return (p.mine ? 1 : 0) - (q.mine ? 1 : 0) || q.y - p.y; }); // my own bubble is drawn last, on top
     var bp = placed.slice(); // bubbles also keep clear of every name tag

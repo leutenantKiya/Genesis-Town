@@ -300,6 +300,7 @@ export function createApp(deps: AppDeps) {
     return true;
   }
 
+  let newsCache: { at: number; body: unknown } | null = null;
   const boardCache = new Map<string, { at: number; body: unknown }>(); // Papan Juara: one heavy query per period and caller per 30 s
   /** Public-area economy: POST /api/trade/{offer,accept,cancel}, GET /api/trade, GET|POST /api/consign, POST /api/consign/withdraw, GET /api/leaderboard. */
   async function tradeApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
@@ -370,7 +371,7 @@ export function createApp(deps: AppDeps) {
           devTools: devAllowed(req),
           dialogue: dialogue.provider,
           world: game.map?.view() ?? null,
-          econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time, coop: game.econ.coop, gamble: game.econ.gamble ?? null },
+          econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time, coop: game.econ.coop, gamble: game.econ.gamble ?? null, mall: game.econ.mall ?? null, tools: game.econ.tools ?? null, fun: game.econ.fun ?? null },
           monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, homelandRoaming: game.econ.monsters.homeland?.roaming ?? game.econ.monsters.roaming, reach: game.econ.monsters.reach, publicMonsters: !game.econ.homeland.publicTradeOnly } : null,
         });
       }
@@ -499,9 +500,9 @@ export function createApp(deps: AppDeps) {
         const ok = game.positions ? game.positions.lastOf(acct) : null;
         if (ok) { b.x = ok.x; b.y = ok.y; }
         if (onTile) social.report(acct, w, b);
-        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
+        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), worn: game.extras.worn(s.account), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
-        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w) });
+        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w) });
       }
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);
@@ -521,7 +522,7 @@ export function createApp(deps: AppDeps) {
         const b = parseJson(raw) as { name?: unknown; look?: unknown };
         if (b.look !== undefined) social.setLook(acct, b.look); // validated first: a bad look changes nothing
         if (b.name !== undefined) social.setNick(acct, b.name);
-        return send(res, 200, { name: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct) });
+        return send(res, 200, { name: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct) });
       }
       if (req.method === 'GET' && p === '/api/state') {
         const acct = accountOf(req, url);
@@ -547,6 +548,11 @@ export function createApp(deps: AppDeps) {
         await game.prepare(acct, ab); // owner changes on chain show up here, before the act checks who owns what
         const out = game.act(acct, ab) as { world?: string; arrive?: { x: number; y: number } } & Record<string, unknown>;
         return send(res, 200, out);
+      }
+      if (req.method === 'GET' && p === '/api/news') {
+        const nowMs = Date.now();
+        if (!newsCache || nowMs - newsCache.at > 20_000) newsCache = { at: nowMs, body: { news: game.extras.news() } }; // public, one query per 20 s
+        return send(res, 200, newsCache.body);
       }
       if (req.method === 'GET' && p === '/api/market') {
         return send(res, 200, { merchants: game.merchants() });

@@ -18,15 +18,16 @@ import { Trade } from './trade.ts';
 import { Parties } from './party.ts';
 import { Consign } from './consign.ts';
 import { leaderboard } from './leaderboard.ts';
+import { Extras } from './extras.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall', 'repair', 'maketool', 'ride', 'casino', 'mission'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', repair: 'visit', maketool: 'visit', ride: 'visit', casino: 'visit', mission: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -46,6 +47,8 @@ export class Game {
   trade: Trade;
   party: Parties;
   consign: Consign;
+  /** Tools with durability, paid entertainment, Mall cosmetics, missions and news (extras.ts). */
+  extras: Extras;
   now: () => number;
   store: Store;
   chain: Chain;
@@ -65,13 +68,18 @@ export class Game {
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
-    this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, clock: this.clock, party: { same: (a, b) => this.party.same(a, b), mates: (a) => this.party.mates(a) }, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
+    this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, clock: this.clock, built: (a, k, t) => this.extras?.logBuilt(a, k, t), party: { same: (a, b) => this.party.same(a, b), mates: (a) => this.party.mates(a) }, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
     const hist = (a: string, summary: string, tokens: string[], ref: string | null = null) => { store.addHistory(a, 'trade', summary, 'offchain', null, ref, tokens.filter((t) => t in this.econ.items)); };
     this.trade = new Trade({
       econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, now: this.now, history: hist, assertActive: (a) => this.assertActive(a), party: { same: (a, b) => this.party.same(a, b) },
       names: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) },
       where: (a) => (this.positions ? { world: this.positions.worldOf(a), pos: this.positions.last.get(a) ?? null } : null),
     });
+    this.extras = new Extras({
+      econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, town: o.town, now: this.now, map: () => this.map,
+      nameOf: (a) => store.nameOf(a), board: (p) => this.leaderboard(p, null), merchantName: (acct) => this.econ.merchants[acct.split('.')[0]]?.name ?? acct.split('.')[0],
+    });
+    this.world.tools = this.extras;
     this.party = new Parties({
       econ: this.econ, gs: this.gs, now: this.now, assertActive: (a) => this.assertActive(a),
       names: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) },
@@ -154,10 +162,11 @@ export class Game {
   /** The luck table: stake 1..maxBet of one good; win the same amount again (through the daily gain cap) or lose the
    *  stake, which is burned. The odds sit under one half, so the table takes goods out of the economy, never adds coin. */
   private betsToday = new Map<string, { day: number; n: number }>();
-  private gamble(account: string, wid: string, pos: Pos, token: string, qty: number): { toast: string; tags: string[]; win: boolean; token: string; qty: number } {
+  private gamble(account: string, wid: string, pos: Pos, token: string, qty: number, inCasino = false): { toast: string; tags: string[]; win: boolean; token: string; qty: number } {
     const g = this.econ.gamble;
     if (!g || !this.map || wid !== 'public') throw new HttpError(409, 'The luck table is at the market.');
-    if (!this.map.nearLandmark(pos, 'gamble', 2)) throw new HttpError(409, 'Come to the luck table at the market.');
+    if (inCasino) { if (!this.extras.hasCasino()) throw new HttpError(409, 'There is no casino here.'); this.extras.needPass(account); } // inside the casino: the paid pass is the ticket
+    else if (!this.map.nearLandmark(pos, 'gamble', 2)) throw new HttpError(409, 'Come to the luck table at the market.');
     if (!g.goods.includes(token)) throw new HttpError(400, 'That cannot be staked.');
     if (!Number.isInteger(qty) || qty < 1 || qty > g.maxBet) throw new HttpError(400, `Stake 1 to ${g.maxBet}.`);
     const day = this.clock.time().settleDay, seen = this.betsToday.get(account);
@@ -250,7 +259,7 @@ export class Game {
 
   stop() { if (this.timer) clearInterval(this.timer); }
 
-  onNewPlayer(account: string) { this.world.starter(account, this.town); this.homelands.ensure(account); }
+  onNewPlayer(account: string) { this.world.starter(account, this.town); this.extras.ensureTools(account); this.homelands.ensure(account); }
 
   /** Off-chain action from the player. Every one is logged in Riwayat as "waiting for settlement". */
   /** An account whose settlement debit the chain could not cover is frozen until the operator lifts it. */
@@ -345,17 +354,32 @@ export class Game {
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
       case 'boat': res = this.boat(account, wid, pos ?? { x: -9, y: -9 }); break;
       case 'mall': {
-        // the Mall in the market sells gear for your own workers, wherever they are (the same purchase as at the Town Hall)
+        // op 'wear' changes what you wear, anywhere; buying (op 'buy' {id}) and worker gear (bot + cosmetic) happen at the Mall in the market
+        if (s('op') === 'wear') { res = this.extras.wearItem(account, body.slot, body.id ?? null); break; }
         if (!this.map || wid !== 'public' || !this.map.nearLandmark(pos ?? { x: -9, y: -9 }, 'mall', 2)) throw new HttpError(409, 'Come to the Mall at the market.');
-        res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay);
+        if (s('op') === 'buy') res = this.extras.buy(account, body.id);
+        else if (s('op') === '') res = this.homelands.dress(account, body.bot, body.cosmetic, this.clock.time().settleDay);
+        else throw new HttpError(400, 'Unknown Mall action.');
         break;
       }
-      case 'gamble': res = this.gamble(account, wid, pos ?? { x: -9, y: -9 }, s('token'), n('qty')); break;
+      case 'repair': res = this.extras.repair(account, body.tool); break;
+      case 'maketool': res = this.extras.make(account, body.tool); break;
+      case 'ride': res = this.extras.ride(account, wid, pos); break;
+      case 'casino': res = this.extras.casino(account, s('op') || 'enter', wid, pos); break;
+      case 'mission': {
+        if (s('op') !== 'claim') throw new HttpError(400, 'Unknown mission action.');
+        res = this.extras.claimMission(account, body.id);
+        break;
+      }
+      case 'gamble': res = this.gamble(account, wid, pos ?? { x: -9, y: -9 }, s('token'), n('qty'), s('at') === 'casino'); break;
       case 'hoe': {
         if (!w.row) throw new HttpError(409, 'Use the hoe in a Homeland farm.');
         const hx = n('x', -1), hy = n('y', -1);
         if (!pos || Math.abs(pos.x - hx) + Math.abs(pos.y - hy) > 1) throw new HttpError(409, 'Stand next to that ground.');
+        this.extras.need(account, 'hoe');
         res = this.homelands.hoe(w.row.account, hx, hy);
+        res.toast += this.extras.wear(account, 'hoe');
+        this.extras.bump(account, 'farm:till');
         break;
       }
       case 'build': res = this.homelands.start(w.row!.account, s('kind') as 'th' | 'chunk' | 'light' | 'build' | 'furniture' | 'upgrade', s('target'), this.clock.time().settleDay, account); break;
@@ -384,6 +408,7 @@ export class Game {
       }
       default: if (Number.isInteger(n('qty')) && n('qty') > 0) this.world.checkGain(account, s('token'), n('qty')); res = this.market.buy(account, s('merchant'), s('token'), n('qty')); break;
     }
+    this.countMissions(account, a, body, res);
     if (a !== 'farm') {
       const tags = new Set<string>(Object.keys((res as { gained?: Record<string, number> }).gained ?? {}));
       if (body.token) tags.add(String(body.token));
@@ -399,6 +424,15 @@ export class Game {
       this.store.addHistory(account, a, res.toast, 'offchain', null, null, [...tags].filter((t) => t in this.econ.items));
     }
     return { ...res, state: this.state(account) };
+  }
+
+  /** Mission counters (extras.ts): what the player just did, once it has succeeded. */
+  private countMissions(account: string, a: string, body: Record<string, unknown>, res: { gained?: Record<string, number> }) {
+    const x = this.extras;
+    if (a === 'gather') for (const [t, q] of Object.entries(res.gained ?? {})) x.bump(account, `gather:${t}`, q);
+    else if (a === 'craft') x.bump(account, `craft:${String(body.recipe ?? '')}`);
+    else if (a === 'sell') x.bump(account, 'sell');
+    else if (a === 'farm' && body.op === 'till') x.bump(account, 'farm:till');
   }
 
   /** Farm plots in a Homeland: one per Town Hall level, up to 6. */
@@ -429,6 +463,11 @@ export class Game {
       time: { ...t, fraction: this.clock.hourFraction(), msPerHour: this.econ.time.realMsPerGameHour, settledThrough: this.settlement.settledThrough() },
       energy: Math.floor(p.energy), energyMax: this.econ.gather.energyMax,
       tool: { uses: p.tool_uses, durability: this.econ.items.tool.durability ?? 20 },
+      tools: this.extras.toolsView(account),
+      cosmetics: this.extras.cosmeticsView(account),
+      missions: this.extras.missionsView(account),
+      casinoPass: this.extras.passUntil(account),
+      fun: this.econ.fun,
       bag,
       worldId: hrow ? wid : 'public',
       here,

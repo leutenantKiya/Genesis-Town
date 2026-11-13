@@ -84,9 +84,11 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
         if (m && tryAct(a, { action: 'buy', merchant: m, token: 'bread', qty: 1 })) tryAct(a, { action: 'eat', token: 'bread' });
       }
     }
-    // tools for miners and woodcutters
-    if (p.role === 'miner' && bal(a, 'tool') < 1) {
-      if (!tryAct(a, { action: 'craft', recipe: 'tool' })) { const m = cheapestBuy('tool'); if (m) tryAct(a, { action: 'buy', merchant: m, token: 'tool', qty: 1 }); }
+    // a worn-out tool is repaired (wood and a little coin); with nothing to repair it with, the bot buys wood first
+    const kind = { miner: 'pickaxe', woodcutter: 'axe', fisher: 'rod', farmer: 'hoe', cook: 'rod' }[p.role];
+    if (game.extras.toolsView(a)[kind].uses <= 0 && !tryAct(a, { action: 'repair', tool: kind })) {
+      const m = cheapestBuy('wood');
+      if (m && tryAct(a, { action: 'buy', merchant: m, token: 'wood', qty: 1 })) tryAct(a, { action: 'repair', tool: kind });
     }
     // work
     if (p.role === 'farmer') {

@@ -5,6 +5,9 @@ import type { PricingConfig, Personality } from '../../../economy/pricing.ts';
 import type { TimeConfig } from '../../../economy/time.ts';
 
 export interface ItemDef { name: string; kind: 'currency' | 'raw' | 'crafted'; base: number; needsTool?: boolean; energy?: number; durability?: number }
+export interface ToolDef { name: string; use: string; durability: number; make: Cost; makeAlt?: Cost; repair: Cost }
+export interface MissionDef { id: string; name: string; hint: string; counter: string; need: number; reward: Cost }
+export interface MallItem { id: string; name: string; slot: string; price: number; color: string; color2: string; shape: string }
 export interface Recipe { inputs: Record<string, number>; output: string; fee: number; energy?: number }
 export interface MerchantDef {
   name: string; shop: string; personality: string;
@@ -69,6 +72,12 @@ export interface Econ {
   party: { max: number; inviteSecs: number; maxPendingInvites: number };
   coop: { partyRoleDefault: 'none' | 'visitor' | 'helper' | 'builder'; guestGatherPerHostDay: number; guestLeavesCharges: number; guestPlotsPerHost: number; assistEnergy: number; assistSecs: number; assistMaxShare: number };
   consign: { merchant: string; feeBps: number; maxPerItem: number; sellPerGameHour: number };
+  /** Off-chain equipment with durability (no tokens): the starter kit gives every player one of each. */
+  tools: Record<string, ToolDef>;
+  /** Entertainment is paid in coin: the carousel ride, and the casino entry that gives a timed pass. */
+  fun: { ride: number; rideSecs: number; casino: number; casinoPassMinutes: number };
+  missions: MissionDef[];
+  mall: { slots: string[]; items: MallItem[] };
 }
 
 export function loadEcon(): Econ {

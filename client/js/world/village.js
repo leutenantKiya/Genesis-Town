@@ -36,6 +36,12 @@
     "Kantor Makelar": "Broker's Office",
     "Kantor Pos": "Post Office",
     "Warung Kopi": "Coffee Shop",
+    "Mall Genesis": "Genesis Mall",
+    "Kasino Genesis": "Genesis Casino",
+    "Balai Berita": "News Hall",
+    "Tambang Umum": "Public Mine",
+    "Hutan Umum. Kayu untuk semua orang; bawa Kapak.": "Public Forest. Wood for everyone; bring an Axe.",
+    "Tambang Umum. Bijih untuk semua orang; bawa Beliung.": "Public Mine. Ore for everyone; bring a Pickaxe.",
     "Lapak pemain. Pasang daganganmu lewat Pasar.": "Player stall. List your goods through the Market.",
     "Air mancur Pasar Genesis. Airnya jernih dan dingin.": "Genesis Market fountain. The water is clear and cold.",
     "Pasar Genesis. Pedagang berjualan di sini setiap hari.": "Genesis Market. Merchants sell here every day.",
@@ -54,7 +60,8 @@
   };
   var $t = root.$t || function (k, v) { var s = EN_TEXT[k] || k; return v ? s.replace(/\{(\d+)\}/g, function (m, i) { return v[i]; }) : s; };
 
-  var CH = 32, NC = 3, W = CH * NC, H = CH * NC, VERSION = 2;
+  var CH = 32, NC = 3, W = CH * NC, H = CH * NC, VERSION = 3;
+  var HOUSE_LOOKS = 12; // house looks in sprites.js (HOUSE_STYLES); the generator picks among all of them
 
   /* ---------------------------------------------------------------- PRNG and noise (deterministic everywhere) */
   function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -107,6 +114,7 @@
   /* ---------------------------------------------------------------- generator */
   function tryGen(seed, att, unlocked) {
     var R = makeR((seed + att * 7919) >>> 0), ns = (seed ^ 0x51f15e) >>> 0;
+    var LR = R; // the random stream that lot and area scoring draws from (swapped for the version 3 additions, see below)
     var tiles = new Array(W * H).fill('grass');
     var res = new Uint8Array(W * H); // 1 = reserved (roads, buildings, plaza, farm)
     var info = {}; // tile index -> text
@@ -196,7 +204,7 @@
         if (!fits(x0, y0, w, h, chunks)) continue;
         var dx = x0 + (w >> 1), dy = y0 + h - 1, s = stubLen(dx, dy);
         if (s < 1) continue;
-        out.push({ x: x0, y: y0, dx: dx, dy: dy, stub: s, score: scoreFn(x0 + w / 2, y0 + h / 2) - s * 0.6 + R.f() * 2 });
+        out.push({ x: x0, y: y0, dx: dx, dy: dy, stub: s, score: scoreFn(x0 + w / 2, y0 + h / 2) - s * 0.6 + LR.f() * 2 });
       }
       out.sort(function (a, b) { return b.score - a.score; });
       return out;
@@ -285,7 +293,7 @@
           if (!free(xx, yy) || chunks.indexOf(chunkAtR(xx, yy).id) < 0) good = false;
         }
         if (!good) continue;
-        var sc = scoreFn(x0 + w / 2, y0 + h / 2) + R.f();
+        var sc = scoreFn(x0 + w / 2, y0 + h / 2) + LR.f();
         if (!best || sc > best.sc) best = { x0: x0, y0: y0, x1: x0 + w - 1, y1: y0 + h - 1, sc: sc };
       }
       if (best) for (var y2 = best.y0; y2 <= best.y1; y2++) for (var x2 = best.x0; x2 <= best.x1; x2++) res[I(x2, y2)] = 1;
@@ -335,6 +343,43 @@
       info[I(tx, ty)] = $t('Meja teras Warung Kopi. Duduk santai sambil ngopi.');
       terrace.push({ x: tx, y: ty }); benches.push({ x: tx, y: ty + 1 });
     });
+
+    /* --- version 3: more public buildings (Mall, Casino, News Hall, Public Mine) and two grinding grounds for new players
+       (a dense public forest, a public mine field). They draw from their own random stream and are placed after everything
+       above, so no earlier building, lane or area moves. */
+    LR = makeR(((seed ^ 0x3a11b) + att * 104729) >>> 0);
+    var wide = core.concat(['ladang', 'hutan']);
+    function placePub(kind, name, w, h, scoreFn) { return place(kind, name, w, h, core, scoreFn) || place(kind, name, w, h, wide, scoreFn); }
+    var midx = Math.round((own.dx + px) / 2);
+    if (!placePub('mall', $t('Mall Genesis'), 5, 4, near(px, plaza.y0 - 3, 8))) return null;
+    if (!placePub('casino', $t('Kasino Genesis'), 4, 4, near(px + 7, ry + 5, 9))) return null;
+    if (!placePub('papan', $t('Balai Berita'), 4, 3, near(px - 7, py - 2, 9))) return null;
+    var tpub = placePub('tambangpub', $t('Tambang Umum'), 3, 3, near(midx, ry + 9, 5));
+    if (!tpub) return null;
+    var grind = { forest: null, mine: null };
+    // the public mine field: sand round the Tambang Umum, rocks left and right of straight lanes (every rock has a lane beside it)
+    (function () {
+      var x0 = tpub.x - 5, x1 = tpub.x + tpub.w + 4, y0 = tpub.y - 2, y1 = tpub.y + tpub.h + 3, x, y;
+      for (y = y0; y <= y1; y++) for (x = x0; x <= x1; x++) {
+        if (!free(x, y) || wide.indexOf(chunkAtR(x, y).id) < 0) continue;
+        tiles[I(x, y)] = 'sand'; // sand is not SOFT: the nature pass leaves it alone
+        var frontOfDoor = y > tpub.dy && Math.abs(x - tpub.dx) <= 1;
+        if (x % 3 !== 0 && y % 4 !== 0 && !frontOfDoor && hash3(x, y, ns + 41) < 0.86) tiles[I(x, y)] = 'rock';
+      }
+      grind.mine = { x0: x0, y0: y0, x1: x1, y1: y1, door: { x: tpub.dx, y: tpub.dy } };
+      var sx = tpub.dx + 2, sy = tpub.dy + 1;
+      if (inb(sx, sy) && tiles[I(sx, sy)] !== 'rock' && !res[I(sx, sy)]) { tiles[I(sx, sy)] = 'sign'; res[I(sx, sy)] = 1; info[I(sx, sy)] = $t('Tambang Umum. Bijih untuk semua orang; bawa Beliung.'); }
+    })();
+    // the public forest: 9 x 8, tree rows between walking lanes (every third column, the middle row, the bottom row), a lane out to the road
+    var forest = area(9, 8, wide, function (x, y) { return -(Math.abs(x - px) + Math.abs(y - py)); });
+    if (!forest) return null;
+    for (y = forest.y0; y <= forest.y1; y++) for (x = forest.x0; x <= forest.x1; x++) {
+      var fl = (x - forest.x0) % 3 === 0 || y === forest.y0 + 3 || y === forest.y1, fr = hash3(x, y, ns + 43);
+      tiles[I(x, y)] = fl ? (fr < 0.1 ? 'flower' : 'grass') : (fr < 0.9 ? 'tree' : fr < 0.95 ? 'bush' : 'tallgrass');
+    }
+    linkToRoad(forest.x0, forest.y1 + 1);
+    grind.forest = { x0: forest.x0, y0: forest.y0, x1: forest.x1, y1: forest.y1, entry: { x: forest.x0, y: forest.y1 } };
+    if (free(forest.x0 + 1, forest.y1 + 1)) { tiles[I(forest.x0 + 1, forest.y1 + 1)] = 'sign'; res[I(forest.x0 + 1, forest.y1 + 1)] = 1; info[I(forest.x0 + 1, forest.y1 + 1)] = $t('Hutan Umum. Kayu untuk semua orang; bawa Kapak.'); }
 
     /* --- nature */
     var mine = null;
@@ -437,6 +482,13 @@
       if (ok(x - 1, y) || ok(x + 1, y) || ok(x, y - 1) || ok(x, y + 1)) spots[t]++;
     }
     if (spots.water < 12 || spots.rock < 8 || spots.tree < 30) return null;
+    // the grinding grounds must be reachable and really hold rocks / trees you can stand next to
+    if (!ok(grind.forest.entry.x, grind.forest.entry.y) || !ok(grind.mine.door.x, grind.mine.door.y + 1)) return null;
+    var gp = { tree: 0, rock: 0 };
+    for (y = grind.forest.y0; y <= grind.forest.y1; y++) for (x = grind.forest.x0; x <= grind.forest.x1; x++) if (tiles[I(x, y)] === 'tree' && (ok(x - 1, y) || ok(x + 1, y) || ok(x, y - 1) || ok(x, y + 1))) gp.tree++;
+    for (y = grind.mine.y0; y <= grind.mine.y1; y++) for (x = grind.mine.x0; x <= grind.mine.x1; x++) if (tiles[I(x, y)] === 'rock' && (ok(x - 1, y) || ok(x + 1, y) || ok(x, y - 1) || ok(x, y + 1))) gp.rock++;
+    if (gp.tree < 25 || gp.rock < 15) return null;
+    grind.trees = gp.tree; grind.rocks = gp.rock;
 
     signs.forEach(function (s) {
       var lc = CHUNKS.filter(function (c) { return c.id === s.chunk; })[0], pj = lc.project && PROJECTS[lc.project];
@@ -444,12 +496,13 @@
     });
 
     var houseN = 0;
-    buildings.forEach(function (b, k) { b.id = k; b.open = isOpen(b.dx, b.dy); if (b.kind === 'house') b.houseNo = houseN++; });
+    // every house gets one of all the looks, by a hash of its lot (no random stream used: the layout above stays as it was)
+    buildings.forEach(function (b, k) { b.id = k; b.open = isOpen(b.dx, b.dy); if (b.kind === 'house') { b.houseNo = houseN++; b.style = Math.floor(hash3(b.x, b.y, ns + 77) * HOUSE_LOOKS); } });
     return {
       version: VERSION, seed: seed, attempt: att, w: W, h: H, chunk: CH, riverX1: rx1,
       tiles: tiles, info: info, buildings: buildings, market: market,
       farm: { plots: farm.plots, gate: farm.gate, x0: farm.x0, y0: farm.y0, x1: farm.x1, y1: farm.y1 },
-      plaza: plaza, mine: mine, spawn: spawn,
+      plaza: plaza, mine: mine, spawn: spawn, grind: grind,
       fun: { fountain: fountain, stage: stage, carousel: carousel, pond: pond, benches: benches, terrace: terrace }, river: { y: bridgeY, x0: river[bridgeY].x0, x1: river[bridgeY].x1 },
       chunks: CHUNKS.map(function (c) { return { id: c.id, name: c.name, cx: c.cx, cy: c.cy, biome: c.biome, open: c.open || unlocked.indexOf(c.id) >= 0, project: c.project || null }; }),
       projects: PROJECTS, spots: spots
@@ -625,7 +678,9 @@
   function landmarks(L) {
     var s = L.market.stalls, y = s[0].y;
     // the luck table (Meja Untung) two tiles west of the first stall
-    return { consign: { x: s[1].x + 1, y: y }, board: { x: s[s.length - 1].x + 1, y: y }, gamble: { x: s[0].x - 2, y: y }, mall: { x: s[s.length - 1].x + 3, y: y } };
+    // version 3: the Mall is a building, its door is the shop counter (stand on the tile in front of the door)
+    var mb = L.buildings.filter(function (b) { return b.kind === 'mall'; })[0];
+    return { consign: { x: s[1].x + 1, y: y }, board: { x: s[s.length - 1].x + 1, y: y }, gamble: { x: s[0].x - 2, y: y }, mall: mb ? { x: mb.dx, y: mb.dy } : { x: s[s.length - 1].x + 3, y: y } };
   }
 
   var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf, ferryOf: ferryOf };
