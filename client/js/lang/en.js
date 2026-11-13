@@ -810,6 +810,8 @@
     "Kurangi animasi": "Reduce animations",
     "Musik konser (malam, di panggung alun-alun)": "Concert music (at night, on the square's stage)",
     "Efek suara": "Sound effects",
+    "Musik latar": "Background music",
+    "Volume musik": "Music volume",
     "Volume efek suara": "Sound effect volume",
     "Tombol": "Keys",
     "Klik sebuah kotak lalu tekan tombol baru. Esc membatalkan. Tombol yang sudah dipakai aksi lain akan dipindahkan.": "Click a box then press the new key. Esc cancels. A key already used by another action will be moved.",

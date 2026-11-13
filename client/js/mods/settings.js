@@ -450,6 +450,17 @@
       mu.appendChild(mc); mu.appendChild($('span', null, $t('Musik konser (malam, di panggung alun-alun)')));
       wrap.appendChild(mu);
     }
+    if (window.GT_MUSIC) { // background and carousel music (mods/music.js)
+      var bl = $('label', 'dchk'), bc = $('input'); bc.type = 'checkbox'; bc.checked = GT_MUSIC.on();
+      bc.addEventListener('change', function () { GT_MUSIC.setOn(bc.checked); });
+      bl.appendChild(bc); bl.appendChild($('span', null, $t('Musik latar')));
+      wrap.appendChild(bl);
+      var ml = $('label', 'dchk'), mr = $('input'); mr.type = 'range'; mr.min = '0'; mr.max = '100'; mr.value = String(Math.round(GT_MUSIC.vol() * 100));
+      mr.setAttribute('aria-label', $t('Volume musik'));
+      mr.addEventListener('input', function () { GT_MUSIC.setVol(mr.value / 100); });
+      ml.appendChild($('span', null, $t('Volume musik'))); ml.appendChild(mr);
+      wrap.appendChild(ml);
+    }
     if (window.GT_SFX) { // sound effects (mods/sfx.js)
       var sl = $('label', 'dchk'), sc = $('input'); sc.type = 'checkbox'; sc.checked = GT_SFX.on();
       sc.addEventListener('change', function () { GT_SFX.setOn(sc.checked); GT_SFX.play('ui_click'); });

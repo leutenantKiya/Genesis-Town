@@ -1,23 +1,26 @@
 /*
  * sfx.js - the shared sound effects. Every sound is made here with the Web Audio API (oscillators and filtered noise,
  * no audio files, no network): short, soft, cozy pixel-game blips. Other mods call them through
- *   window.GT_SFX = { play(name, {vol, pitch, x, y}), on(), setOn(bool), vol(), setVol(0..1), names }
+ *   window.GT_SFX = { play(name, {vol, pitch, x, y}), on(), setOn(bool), vol(), setVol(0..1), names, unlocked(), ctx() }
  * Always call as `window.GT_SFX && GT_SFX.play('coin')`; unknown names are ignored and play() never throws.
  * x,y (tile coords) make the volume fade with the distance from GT.player (silent beyond 14 tiles).
  * Settings: localStorage 'gt.sfx' ('on'/'off', default on) and 'gt.sfxVol' (0..1, default 0.6).
  * The AudioContext is created on the first play after a key press, click or touch (browsers need that).
+ * Loudness: master = vol^2 * 2.2 into a limiter (compressor), each sound has a loudness factor in LV.
+ * Also here: footsteps (a mod that watches the player's tile) and weather ambience (rain drops, snow wind).
  */
 (function () {
   'use strict';
   var ac = null, master = null, unlocked = false, noiseBuf = null, voices = 0, last = {};
-  var MAXV = 12, FAR = 14;
+  var MAXV = 12, FAR = 14, MAKEUP = 2.2;
 
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } }
   function on() { return lsGet('gt.sfx') !== 'off'; }
   function setOn(v) { lsSet('gt.sfx', v ? 'on' : 'off'); }
   function vol() { var v = parseFloat(lsGet('gt.sfxVol')); return isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.6; }
-  function setVol(v) { v = Math.max(0, Math.min(1, +v || 0)); lsSet('gt.sfxVol', String(v)); if (master) master.gain.value = v; }
+  function setVol(v) { v = Math.max(0, Math.min(1, +v || 0)); lsSet('gt.sfxVol', String(v)); if (master) master.gain.value = curve(v); }
+  function curve(v) { return v * v * MAKEUP; }
 
   function unlock() {
     unlocked = true;
@@ -29,7 +32,11 @@
     if (!ac) {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
-      ac = new AC(); master = ac.createGain(); master.gain.value = vol(); master.connect(ac.destination);
+      ac = new AC(); master = ac.createGain(); master.gain.value = curve(vol());
+      // a limiter after master so the louder sounds never clip
+      var lim = ac.createDynamicsCompressor();
+      lim.threshold.value = -10; lim.knee.value = 4; lim.ratio.value = 12; lim.attack.value = 0.002; lim.release.value = 0.12;
+      master.connect(lim); lim.connect(ac.destination);
     }
     if (ac.state === 'suspended') { try { ac.resume(); } catch (e) { /* ignore */ } }
     return ac;
@@ -99,8 +106,17 @@
     lose: function (t, o) { seq('triangle', [[392, 0, 0.15], [330, 0.15, 0.15], [262, 0.3, 0.3]], t, 0.13, o); },
     ride: function (t, o) { seq('triangle', [[523, 0, 0.1], [659, 0.08, 0.1], [523, 0.16, 0.1], [784, 0.24, 0.2]], t, 0.1, o); },
     quest_done: function (t, o) { seq('triangle', [[523, 0, 0.1], [523, 0.12, 0.08], [659, 0.2, 0.1], [784, 0.3, 0.1], [1047, 0.4, 0.3]], t, 0.13, o); },
-    step: function (t, o) { noise('lowpass', 700, 300, t, 0.05, 0.1, o); }
+    step: function (t, o) {
+      var sf = o.surf || 'grass';
+      if (sf === 'wood') { tone('triangle', 190, 110, t, 0.07, 0.14, o); noise('bandpass', 900, 400, t, 0.04, 0.12, o, 1.2); }
+      else if (sf === 'hard') { noise('highpass', 2500, 4000, t, 0.03, 0.14, o); tone('square', 1300, 900, t, 0.025, 0.03, o); }
+      else { noise('lowpass', 1500, 500, t, 0.07, 0.22, o); noise('bandpass', 2200, 1200, t + 0.015, 0.03, 0.06, o); }
+    }
   };
+  // loudness factor per sound (default 2); the small blips were the quietest so they get the most
+  var LV = { ui_click: 3.4, ui_open: 2.6, ui_close: 2.6, notify: 2.6, chat: 2.8, error: 2.6, coin: 2.8, pickup: 3, bite: 2.6, reel: 3.2,
+    cast: 1.7, water: 1.6, plant: 1.7, dig: 1.4, chop: 1.5, mine: 1.7, hit: 1.5, hurt: 2.2, monster_die: 2.2, win: 2.8, levelup: 2.6,
+    swing: 1.7, splash: 1.5, cook: 1.8, eat: 1.6, harvest: 1.8, step: 1 };
   var DUR = { levelup: 0.7, upgrade: 0.8, quest_done: 0.8, portal: 0.6, win: 0.6, catch: 0.6 };
 
   function play(name, opts) {
@@ -121,9 +137,92 @@
       if (!ctx()) return;
       last[name] = now;
       use(DUR[name] || 0.4);
-      fn(ac.currentTime + 0.005, { pitch: opts.pitch || 1, vol: Math.min(1, v / Math.max(vol(), 0.01)) });
+      fn(ac.currentTime + 0.005, { pitch: opts.pitch || 1, surf: opts.surf, vol: Math.min(1, v / Math.max(vol(), 0.01)) * (LV[name] || 2) });
     } catch (e) { /* sounds must never break the game */ }
   }
 
-  window.GT_SFX = { play: play, on: on, setOn: setOn, vol: vol, setVol: setVol, names: Object.keys(S) };
+  window.GT_SFX = { play: play, on: on, setOn: setOn, vol: vol, setVol: setVol, names: Object.keys(S),
+    unlocked: function () { return unlocked; }, ctx: function () { return ac; } };
+
+  /* ---- footsteps: one soft step each time the player lands on a new tile ---- */
+  var st = { x: null, y: null, scene: null, foot: 0 };
+  function stepFrame() {
+    try {
+      var GT = window.GT, p = GT && GT.player, sc = GT && GT.scene;
+      if (!p || !sc) return;
+      if (st.scene !== sc || st.x == null) { st.scene = sc; st.x = p.x; st.y = p.y; return; }
+      if (p.x === st.x && p.y === st.y) return;
+      st.x = p.x; st.y = p.y;
+      if (window.GT_RIDE && window.GT_RIDE.on) return;
+      var surf = 'grass';
+      if (sc.kind !== 'out') surf = 'wood';
+      else {
+        var m = sc.map, tt = m && m.tiles && m.tiles[p.y * m.w + p.x];
+        if (tt === 'sand' || tt === 'path') surf = 'hard';
+      }
+      st.foot ^= 1;
+      play('step', { surf: surf, pitch: st.foot ? 1.08 : 0.92, vol: 1 });
+    } catch (e) { /* never break a frame */ }
+  }
+  try { if (window.GT && GT.register) GT.register({ id: 'sfx_steps', onFrame: stepFrame }); } catch (e) { /* no engine */ }
+
+  /* ---- weather ambience: rain bed + drips on 'hujan', soft wind on 'salju'. Checked every 500 ms. ---- */
+  var amb = null, ambKind = null, ambBuf = null;
+  function loopBuf() {
+    if (!ambBuf) { ambBuf = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate); var d = ambBuf.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    return ambBuf;
+  }
+  function startAmb(kind) {
+    var a = { kind: kind, nodes: [] }, src = ac.createBufferSource(), g = ac.createGain(), lp = ac.createBiquadFilter();
+    src.buffer = loopBuf(); src.loop = true;
+    g.gain.value = 0.0001; g.connect(master);
+    if (kind === 'hujan') {
+      var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 0.4;
+      lp.type = 'lowpass'; lp.frequency.value = 6000;
+      src.connect(bp); bp.connect(lp); lp.connect(g);
+    } else {
+      lp.type = 'lowpass'; lp.frequency.value = 500; lp.Q.value = 1.2;
+      src.connect(lp); lp.connect(g);
+      // slow gusts: an oscillator wobbles the filter
+      var lfo = ac.createOscillator(), lg = ac.createGain();
+      lfo.frequency.value = 0.18; lg.gain.value = 180; lfo.connect(lg); lg.connect(lp.frequency); lfo.start(); a.nodes.push(lfo);
+    }
+    src.start(0, Math.random() * 2); a.nodes.push(src);
+    a.g = g; a.lp = lp;
+    return a;
+  }
+  function stopAmb(a, fade) {
+    if (!a) return;
+    try { a.g.gain.setTargetAtTime(0.0001, ac.currentTime, fade / 3); } catch (e) { /* ignore */ }
+    setTimeout(function () { a.nodes.forEach(function (n) { try { n.stop(); } catch (e) { /* ignore */ } }); try { a.g.disconnect(); } catch (e) { /* ignore */ } }, fade * 1000 + 100);
+  }
+  function ambTick() {
+    try {
+      var want = null, wk = null;
+      if (unlocked && !document.hidden && on() && vol() > 0.01) {
+        try { wk = window.GT_CHAIN && window.GT_CHAIN.weather && window.GT_CHAIN.weather(); } catch (e) { wk = null; }
+        if (wk === 'hujan' || wk === 'salju') want = wk;
+      }
+      if (want !== ambKind) {
+        if (amb) { stopAmb(amb, document.hidden ? 0.05 : 1.2); amb = null; }
+        ambKind = want;
+        if (want && ctx()) amb = startAmb(want);
+        else ambKind = null;
+      }
+      if (!amb) return;
+      var indoors = window.GT && GT.scene && GT.scene.kind !== 'out', now = ac.currentTime;
+      if (amb.kind === 'hujan') {
+        amb.g.gain.setTargetAtTime(indoors ? 0.22 : 0.45, now, 0.7);
+        amb.lp.frequency.setTargetAtTime(indoors ? 900 : 6000, now, 0.4);
+        // a few soft drips in the next half second
+        var n = Math.floor(Math.random() * (indoors ? 2 : 4));
+        for (var i = 0; i < n; i++) {
+          var o = { pitch: 0.8 + Math.random() * 0.8, vol: indoors ? 0.6 : 1 };
+          tone('sine', 2400, 1500, now + Math.random() * 0.5, 0.05, 0.11, o);
+        }
+      } else amb.g.gain.setTargetAtTime(indoors ? 0.12 : 0.3, now, 0.7);
+    } catch (e) { /* ambience must never break the game */ }
+  }
+  setInterval(ambTick, 500);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) ambTick(); });
 })();

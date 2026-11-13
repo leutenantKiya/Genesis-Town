@@ -205,7 +205,11 @@
 >   `mods/sfx.js`, `GT_SFX.play(name, {vol, pitch, x, y})`): gathering, farming, crafting, cooking, eating, selling and
 >   building (one table in chain.js `act`), fishing phases (also other players' fishing, quieter with distance), swings
 >   and brawls, doors, furniture, the carousel, the ferry, chat, party and trade invites, the Luck Table, hotbar and
->   windows; Settings has 'Sound effects' on/off and a volume slider (localStorage `gt.sfx`, `gt.sfxVol`).
+>   windows; Settings has 'Sound effects' on/off and a volume slider (localStorage `gt.sfx`, `gt.sfxVol`). Round 2: a
+>   limiter makes them clearly loud at 100%, footsteps per tile (wood indoors), rain (muffled indoors) and snow wind from
+>   `GT_CHAIN.weather()`; background music from the first tap (`mods/music.js`, `GT_MUSIC`: generative, brighter by day,
+>   softer at night, ducks for the night concert) and a fairground waltz while riding the carousel (`GT_MUSIC.ride`);
+>   Settings 'Background music' on/off and volume (`gt.music`, `gt.musicVol`).
 > - **Playtest fixes, round 3** (2026-11-13, [plan](docs/superpowers/plans/2026-11-13-playtest-round-3.md)): new players
 >   start with 5 Wheat, and the hotbar shows the Hoe, the Pickaxe and a Fishing Rod (a free tool like the Hoe) first;
 >   clicking to walk no longer fights W A S D (mouse.js holds its own direction, `GT.walkDir`, and any player direction
