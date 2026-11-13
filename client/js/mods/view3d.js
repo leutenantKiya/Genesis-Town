@@ -27,7 +27,7 @@
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
   var mctx = null, mtex = null, mDue = false, mAny = false; // the unlit marks sheet (onDrawMarks: the hoe's squares)
   var actors = new Map(), gctx = null, gtex = null, gAt = 0, last = 0, sw = 0, sh = 0, VW = 1, VH = 1;
-  var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null, yawWant = 0, zoom = 1;
+  var pt = { x: 0, y: 0 }, tmp = null, ray = null, ndc = null, plane = null, hit = null, yawWant = 0, zoom = 1, fit = 1;
   var ui = null, drag = null, took = 0, shownWorld = '', snapNext = true, last0 = 0;
 
   function saved() { try { var v = localStorage.getItem(LS); return v === '2d' || v === '3d' ? v : null; } catch (e) { return null; } }
@@ -96,8 +96,8 @@
     ui.home = worldBtn('🏡', $t('Homeland'), function () { goWorld('home'); });
     t1.appendChild(ui.desa); t1.appendChild(ui.home);
     var t2 = el('div', 'gt3d-tray'); t2.setAttribute('role', 'group'); t2.setAttribute('aria-label', $t('Kamera'));
-    t2.appendChild(button('+', $t('Perbesar'), function () { zoom = rig.zoom(zoom * 1.2); }));
-    t2.appendChild(button('-', $t('Perkecil'), function () { zoom = rig.zoom(zoom / 1.2); }));
+    t2.appendChild(button('+', $t('Perbesar'), function () { setZoom(zoom * 1.2); }));
+    t2.appendChild(button('-', $t('Perkecil'), function () { setZoom(zoom / 1.2); }));
     t2.appendChild(button('↺', $t('Putar kamera ke kiri'), function () { turn(1); })); // Q
     t2.appendChild(button('↻', $t('Putar kamera ke kanan'), function () { turn(-1); })); // E
     ui.bar.appendChild(t1); ui.bar.appendChild(t2);
@@ -132,7 +132,7 @@
     c2.addEventListener('wheel', function (e) {
       if (!GT.view3dOn()) return;
       e.preventDefault(); e.stopPropagation();
-      zoom = rig.zoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+      setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
     }, { passive: false });
   }
   function syncUi() {
@@ -187,8 +187,13 @@
     if (w === sw && h === sh) return;
     sw = w; sh = h;
     renderer.setSize(w, h);
-    camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix(); rig.zoom(zoom);
+    camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+    // a phone's view is short (above all held sideways): come closer, so a tile is about as big as on a tall phone
+    fit = document.documentElement.classList.contains('gt-phone') ? Math.max(1, Math.min(2, 600 / Math.max(1, h))) : 1;
+    setZoom(zoom);
   }
+  // zoom is the player's choice (buttons, wheel, keys); fit is the screen's; the camera gets both
+  function setZoom(k) { zoom = Math.max(0.45, Math.min(2.4, k)); rig.zoom(zoom * fit); return zoom; }
   // the camera's turn now (eased) and where it is going (yawWant): 0 looks north
   function yawNow() { return Math.atan2(camera.position.x - rig.target.x, camera.position.z - rig.target.z); }
   function dirOf(x, z) { return Math.abs(x) > Math.abs(z) + 1e-6 ? (x > 0 ? 'right' : 'left') : (z > 0 ? 'down' : 'up'); }
@@ -597,7 +602,7 @@
       if (!GT.view3dOn || !GT.view3dOn()) return false;
       var c = e.code, k = c === 'KeyQ' ? 1 : c === 'KeyE' ? -1 : 0, z = c === 'Equal' || c === 'NumpadAdd' ? 1.2 : c === 'Minus' || c === 'NumpadSubtract' ? 1 / 1.2 : 0;
       if (!k && !z) return false;
-      if (e.type === 'keydown' && !e.repeat && !GT.isUiOpen()) { if (k) turn(k); else zoom = rig.zoom(zoom * z); }
+      if (e.type === 'keydown' && !e.repeat && !GT.isUiOpen()) { if (k) turn(k); else setZoom(zoom * z); }
       return true;
     }
   };

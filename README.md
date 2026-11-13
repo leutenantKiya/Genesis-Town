@@ -1,6 +1,14 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Phones either way up** (2026-11-13): a phone held sideways no longer shows an empty frame with the old D-pad; it
+>   gets its own layout: the game takes the whole height under a one-line status bar, Tas, Pasar, Peta, Chat and Menu
+>   stand in a rail at the right edge, and the joystick and action button sit low in the corners beside the item bar
+>   (`html.gt-land`, `css/phone.css`; `engine.js` fills the view edge to edge). Turning the phone (fullscreen too)
+>   switches at once; a phone in fullscreen keeps its thumb controls. The 2.5D camera comes closer on a short screen,
+>   windows open as a centred panel, the character screen fits sideways, tips over the item bar wrap instead of running
+>   off the screen and say "ketuk" on a phone, the joystick steps aside while typing a chat line, the town map covers
+>   the 2.5D buttons, the last tab reads "Menu", and the Tas no longer opens on an empty "hoe · 0" card.
 > - **Other players walk in step** (2026-11-13): a friend in the public village or your Homeland used to show up about
 >   a second late and in stop-and-go steps. Now each client reports about 4 times a second while someone is near (and at
 >   once when it starts, stops or turns), sends where it is between tiles and how fast it walks, and the others draw it

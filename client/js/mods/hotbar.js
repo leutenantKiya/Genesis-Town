@@ -124,14 +124,14 @@
     });
     if (label && on) {
       var hid = SLOTS[held], hn = nameOf(hid, names), hit = b[hid] || { settled: 0, today: 0 };
-      var how = document.documentElement.classList.contains('gt-phone') ? $t('ketuk lagi') : $t('klik kanan / R');
+      var touch = document.documentElement.classList.contains('gt-phone'), how = touch ? $t('ketuk lagi') : $t('klik kanan / R');
       var htl = toolOf(hid);
       label.classList.toggle('broken', !!(htl && htl.broken));
       label.textContent = htl && htl.broken ? $t('{0} rusak ({1}/{2}) · klik lagi untuk memperbaiki atau membuat baru', [hn, htl.uses, htl.max])
         : hid === 'pickaxe' ? $t('Di tangan: {0} ({1}/{2}) · pukul batu di tambang, otomatis saat menambang', [hn, htl ? htl.uses : 0, htl ? htl.max : 0])
         : hid === 'axe' ? $t('Di tangan: {0} ({1}/{2}) · hadap pohon, tekan F untuk menebang', [hn, htl ? htl.uses : 0, htl ? htl.max : 0])
-        : hid === 'hoe' ? $t('Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul', [hn])
-        : hid === 'rod' ? $t('Di tangan: {0} · hadap air, tekan F untuk memancing', [hn]) : $t('Di tangan: {0} ({1}) · {2}: {3}', [hn, hit.settled + hit.today, how, useVerb(hid)]);
+        : hid === 'hoe' ? (touch ? $t('Di tangan: {0} · ketuk kotak hijau di dalam pagar kebun untuk mencangkul', [hn]) : $t('Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul', [hn]))
+        : hid === 'rod' ? (touch ? $t('Di tangan: {0} · hadap air, ketuk tombol aksi untuk memancing', [hn]) : $t('Di tangan: {0} · hadap air, tekan F untuk memancing', [hn])) : $t('Di tangan: {0} ({1}) · {2}: {3}', [hn, hit.settled + hit.today, how, useVerb(hid)]);
     }
     if (pop && selected >= 0) fillPop();
   }

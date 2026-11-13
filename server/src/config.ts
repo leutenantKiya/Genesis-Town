@@ -26,7 +26,7 @@ export interface Config {
   googleClientId: string | null; // Sign in with Google (GIS) OAuth client id; public, but kept in env with the rest
   // origins: the page addresses NEAR Auth's login accepts as callback (the shared testnet client only lists the ones
   // NEAR registered); elsewhere the client hides NEAR Auth instead of opening a popup that fails
-  fastAuth: { domain: string; clientId: string; contractId: string; mpcContractId: string; mpcDomainId: number; origins: string[] };
+  fastAuth: { domain: string; clientId: string; contractId: string; signingAudience: string; mpcContractId: string; mpcDomainId: number; origins: string[] };
   explorerTxUrl: string; // prefix, hash is appended
   relay: { perMinute: number; perDay: number; maxGasTera: number; maxBlocksAhead: number };
   settleChunk: number;
@@ -82,7 +82,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     fastAuth: {
       domain: env.FASTAUTH_DOMAIN || 'login.testnet.fast-auth.com',
       clientId: env.FASTAUTH_CLIENT_ID || 'np8paqIpMWmNbzT4xAvOOapZBjsOpptl',
-      contractId: 'fast-auth.testnet',
+      // our own NEAR Auth deployment (docs/fastauth-fork-plan.md) sets these; unset = NEAR's shared testnet deployment
+      contractId: env.FASTAUTH_CONTRACT_ID?.trim() || 'fast-auth.testnet',
+      signingAudience: env.FASTAUTH_SIGNING_AUDIENCE?.trim() || 'auth0.jwt.fast-auth.testnet',
       mpcContractId: 'v1.signer-prod.testnet',
       mpcDomainId: 1,
       origins: (env.NEAR_AUTH_ORIGINS ?? 'http://localhost:3000').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean),

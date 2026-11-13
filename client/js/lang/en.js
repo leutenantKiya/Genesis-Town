@@ -3,6 +3,9 @@
 (function () {
   if (!window.GT_I18N) return;
   window.GT_I18N.add({
+    "Di tangan: {0} · ketuk kotak hijau di dalam pagar kebun untuk mencangkul": "In hand: {0} · tap a green square inside the farm fence to hoe it",
+    "Di tangan: {0} · hadap air, ketuk tombol aksi untuk memancing": "In hand: {0} · face the water and tap the action button to fish",
+    "Akunmu dibuat dengan NEAR Auth versi lama, jadi perangkat ini belum bisa disetujui di sini. Kamu tetap bisa bermain; untuk Pasar, hadiah, saham, dan proyek kota, pakai perangkat tempat akunmu dibuat.": "Your account was made with an older NEAR Auth, so this device can't be approved here. You can still play; for the market, gifts, shares and town projects, use the device where your account was made.",
     "Melati": "Jasmine",
     "Kenanga": "Ylang",
     "Flamboyan": "Flame Tree",
