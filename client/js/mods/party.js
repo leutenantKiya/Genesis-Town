@@ -27,6 +27,7 @@
     var changed = JSON.stringify(nv) !== JSON.stringify(view);
     view = nv;
     if (panel && panel.isOpen() && changed) renderPanel();
+    if (changed) refreshEmbeds();
     watchLeader();
     maybePopInvite();
   }
@@ -94,12 +95,11 @@
   function answer(path, body, toast) { return post(path, body).then(function (r) { set(r); if (toast) GT.toast(toast); }, fail); }
 
   /* ---------------------------------------------------------------- panel (G) */
-  function renderPanel() {
-    // never rebuild the form while the player is typing in it (the presence poll calls this)
-    var ae = document.activeElement;
-    if (panel && panel.el && ae && ae.tagName === 'INPUT' && panel.el.contains(ae)) { dirty = true; return; }
-    dirty = false;
-    var body = $('div'), p = view.party;
+  // The panel's content, shared by the G window and the Settings window (embed below).
+  // o.done: called before the player is taken somewhere else (Ikut, Dagang), so a window can close first;
+  // o.inline: the leave button goes in the body (the G window keeps it in its footer).
+  function partyBody(o) {
+    var body = $('div'), p = view.party, done = (o && o.done) || function () {};
     if (!p) {
       body.appendChild($('p', 'chain-dim', $t('Kamu belum punya party. Ajak pemain lain lewat nama#tag atau lewat kartu namanya (klik pemainnya).')));
     } else {
@@ -111,12 +111,12 @@
         row.appendChild(tx);
         if (m.account !== me() && m.online && m.world && m.world !== ((GT.worldId && GT.worldId()) || 'public') && canGo(m.world)) {
           var jn = $('button', 'mbtn primary', $t('Ikut')); jn.type = 'button';
-          jn.addEventListener('click', function () { if (panel && panel.isOpen()) panel.close(); follow(m.world); });
+          jn.addEventListener('click', function () { done(); follow(m.world); });
           row.appendChild(jn);
         }
         if (m.account !== me() && m.online && m.world && m.world === ((GT.worldId && GT.worldId()) || 'public') && window.GT_TRADE) {
           var tb = $('button', 'mbtn', $t('Dagang')); tb.type = 'button';
-          tb.addEventListener('click', function () { if (panel && panel.isOpen()) panel.close(); GT_TRADE.start(m.account); });
+          tb.addEventListener('click', function () { done(); GT_TRADE.start(m.account); });
           row.appendChild(tb);
         }
         if (isLeader() && m.account !== me()) {
@@ -153,10 +153,43 @@
       });
       body.appendChild(ic);
     }
-    var actions = [];
-    if (p) actions.push({ label: $t('Keluar dari party'), onClick: function () { answer('/party/leave', {}, $t('Kamu keluar dari party.')); } });
+    var leave = p ? { label: $t('Keluar dari party'), onClick: function () { answer('/party/leave', {}, $t('Kamu keluar dari party.')); } } : null;
+    if (leave && o && o.inline) {
+      var lb = $('button', 'mbtn', leave.label); lb.type = 'button'; lb.addEventListener('click', leave.onClick);
+      var lr = $('div', 'dbtns'); lr.appendChild(lb); body.appendChild(lr);
+    }
+    return { body: body, leave: leave };
+  }
+  function renderPanel() {
+    // never rebuild the form while the player is typing in it (the presence poll calls this)
+    var ae = document.activeElement;
+    if (panel && panel.el && ae && ae.tagName === 'INPUT' && panel.el.contains(ae)) { dirty = true; return; }
+    dirty = false;
+    var v = partyBody({ done: function () { if (panel && panel.isOpen()) panel.close(); } }), actions = [];
+    if (v.leave) actions.push(v.leave);
     actions.push({ label: $t('Tutup'), close: true });
-    panel.setBody(body); panel.setActions(actions);
+    panel.setBody(v.body); panel.setActions(actions);
+  }
+  // The same party UI inside another window (the Settings window's Party box): fills `host`, redraws on every presence
+  // update (not while the player types in it) and stops by itself once the host leaves the page. done(): called before
+  // Ikut / Dagang take the player away.
+  var embeds = [];
+  function embed(host, done) {
+    var e = { host: host };
+    e.paint = function () {
+      var ae = document.activeElement;
+      if (ae && ae.tagName === 'INPUT' && host.contains(ae)) return; // never rebuild under the player's typing
+      host.textContent = '';
+      if (!signedIn()) { host.appendChild($('p', 'chain-dim', $t('Masuk dulu.'))); return; }
+      host.appendChild(partyBody({ done: done, inline: true }).body);
+    };
+    embeds.push(e);
+    e.paint();
+    if (signedIn()) C.api('/party').then(set, function () {});
+  }
+  function refreshEmbeds() {
+    embeds = embeds.filter(function (e) { return e.host.isConnected; });
+    embeds.forEach(function (e) { e.paint(); });
   }
   function openPanel() {
     if (!signedIn()) { GT.toast($t('Masuk dulu.')); return; }
@@ -201,7 +234,7 @@
         return { label: $t('Ajak party'), onClick: function (h) { h.close('ok'); invite(o.nick + '#' + o.tag); return true; } };
       });
     }
-    window.GT_PARTY = { invite: invite, open: openPanel, view: function () { return view; }, isMate: isMate };
+    window.GT_PARTY = { invite: invite, open: openPanel, embed: embed, view: function () { return view; }, isMate: isMate };
   }
   GT.register({ id: 'party', init: init, onKey: onKey, onMinimap: onMinimap });
 })();

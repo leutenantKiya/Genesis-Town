@@ -1769,6 +1769,10 @@
     "Nama pemain": "Player name",
     "Jumlah koin": "Amount of coin",
     "Catatan (boleh kosong)": "Note (optional)",
+    "Kustomisasi": "Customize",
+    "Tampilan & suara": "Display & sound",
+    "Pengaturan disimpan.": "Settings saved.",
+    "Ke Genesis Mall": "Go to the Genesis Mall",
     "Catatan": "Note",
     "Maks {0} koin per kirim, {1} per hari (terkirim hari ini: {2}).": "At most {0} coin per grant, {1} per day (sent today: {2}).",
     "{0} koin dikirim ke {1}": "{0} coin sent to {1}"

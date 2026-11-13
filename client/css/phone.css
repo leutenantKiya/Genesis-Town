@@ -217,3 +217,15 @@ html.gt-land .gt-cs-grid{grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
 html.gt-land .gt-cs-sw{padding:2px}
 html.gt-land .gt-cs-name,html.gt-land .gt-cs-tag{font-size:calc(17px*var(--ts))}
 html.gt-land .gt-cs-go{min-height:44px;padding:6px;font-size:calc(18px*var(--ts))}
+
+/* the Settings window (mods/settings.js): columns stack on a phone held upright (everything reachable by scrolling the window), a phone on its side keeps the name and preview as a slim column */
+html.gt-phone:not(.gt-land) .gt-set,html.gt-phone:not(.gt-land) .gt-set-pair{grid-template-columns:minmax(0,1fr)}
+html.gt-phone:not(.gt-land) .gt-set-scroll{max-height:none;overflow:visible;padding-right:0}
+html.gt-phone:not(.gt-land) .gt-set-left .gt-cs-stage{min-height:200px}
+html.gt-land #mroot .mbox.gt-set-box{width:min(820px,100%)}
+html.gt-land .gt-set{grid-template-columns:minmax(140px,190px) minmax(0,1fr);gap:8px}
+html.gt-land .gt-set-pair{grid-template-columns:minmax(0,1fr)}
+html.gt-land .gt-set-scroll{max-height:none;overflow:visible;padding-right:0}
+html.gt-land .gt-set-left .gt-cs-stage{min-height:0}
+html.gt-land .gt-set .gt-cs-prev{width:96px!important;height:120px!important}
+html.gt-phone .gt-set-save{min-height:52px}

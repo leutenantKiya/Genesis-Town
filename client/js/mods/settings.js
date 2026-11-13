@@ -384,7 +384,105 @@
   var modal = null;
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
+  // The window is one panel (like the character screen): left the name and a preview of you in your Mall outfit, right
+  // "Kustomisasi" (the wardrobe), below it "Party" and "Tampilan & suara" (every setting) side by side, and Simpan.
+  // Settings apply the moment they are changed; Simpan saves a new name, then confirms and closes.
+  var NAME_RE = /^[A-Za-z0-9 _-]{3,16}$/;
+  var dispHost = null, partyHost = null, idleT = 0, draftName = null, nameMsg = null;
+
+  function signedIn() { var c = window.GT_CHAIN, s = c && c.state; return !!(s && s.account && s.mode !== 'offline' && s.mode !== 'loading'); }
+  function openMall() { if (modal) modal.close('mall'); if (window.GT_MALL) setTimeout(function () { GT_MALL.open(); }, 0); }
+
   function body() {
+    clearInterval(idleT);
+    var CS = window.GT_CHARSCREEN, mine = CS && CS._mine ? CS._mine() : { name: null, tag: '', look: 0 };
+    var wrap = $('div', 'gt-set');
+
+    // left: name + fixed tag, and the big stage with you in what you wear
+    var left = $('div', 'gt-set-left gt-set-card');
+    var nameRow = $('div', 'gt-cs-namerow');
+    var input = $('input', 'gt-cs-name'); input.type = 'text'; input.maxLength = 16; input.autocomplete = 'off'; input.spellcheck = false;
+    input.placeholder = $t('Namamu'); input.setAttribute('aria-label', $t('Nama'));
+    input.value = draftName != null ? draftName : (mine.name || '');
+    input.disabled = !signedIn();
+    input.addEventListener('input', function () { draftName = input.value; if (nameMsg) nameMsg.textContent = ''; });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveAll(); } });
+    var tag = $('span', 'gt-cs-tag', mine.tag ? '#' + mine.tag : ''); tag.title = $t('Tag tetapmu: membedakanmu dari pemain bernama sama');
+    nameRow.appendChild(input); nameRow.appendChild(tag);
+    nameMsg = $('p', 'gt-cs-msg'); nameMsg.setAttribute('role', 'status');
+    var stage = $('div', 'gt-cs-stage');
+    if (CS && CS.stage) {
+      var cv = CS.stage(); cv.className = 'gt-cs-prev gt-set-prev'; cv.style.width = '180px'; cv.style.height = '216px'; cv.setAttribute('aria-hidden', 'true');
+      stage.appendChild(cv);
+      var dirs = ['down', 'left', 'down', 'right'], tick = 0;
+      CS.paintStage(cv, null, 'down', 0);
+      idleT = setInterval(function () {
+        if (!cv.isConnected) { clearInterval(idleT); return; }
+        tick++; CS.paintStage(cv, null, dirs[Math.floor(tick / 4) % dirs.length], tick % 2 ? 1 : 0);
+      }, 300);
+      stage.addEventListener('click', function () { tick += 4; }); // a tap makes the character look around
+    }
+    left.appendChild(nameRow); left.appendChild(nameMsg); left.appendChild(stage);
+    wrap.appendChild(left);
+
+    // right
+    var right = $('div', 'gt-set-right');
+    var cust = $('div', 'gt-set-card');
+    cust.appendChild($('h3', 'gt-set-h', $t('Kustomisasi')));
+    cust.appendChild($('p', 'gt-cs-note', $t('Tampilan tubuh dipilih sekali saat karakter dibuat. Ganti gayamu dengan pakaian dari Genesis Mall.')));
+    var ward = $('div', 'gt-cs-wardrobe');
+    function wardPaint() {
+      if (!CS || !CS.wardrobe) return;
+      CS.wardrobe(ward, function () { wardPaint(); if (CS.paintStage) { var c0 = stage.firstChild; if (c0) CS.paintStage(c0, null, 'down', 0); } }, { noHead: true, mall: window.GT_MALL ? openMall : null });
+      if (!ward.firstChild) ward.appendChild($('p', 'gt-cs-note', $t('Masuk dulu.')));
+    }
+    wardPaint();
+    cust.appendChild(ward);
+    right.appendChild(cust);
+
+    var pair = $('div', 'gt-set-pair');
+    var pc = $('div', 'gt-set-card'); pc.appendChild($('h3', 'gt-set-h', $t('Party')));
+    partyHost = $('div', 'gt-set-scroll gt-set-party'); pc.appendChild(partyHost);
+    if (window.GT_PARTY && GT_PARTY.embed) GT_PARTY.embed(partyHost, function () { if (modal && modal.isOpen()) modal.close('go'); });
+    else partyHost.appendChild($('p', 'chain-dim', $t('Masuk dulu.')));
+    var dc = $('div', 'gt-set-card'); dc.appendChild($('h3', 'gt-set-h', $t('Tampilan & suara')));
+    dispHost = $('div', 'gt-set-scroll'); dispHost.appendChild(displayBody()); dc.appendChild(dispHost);
+    pair.appendChild(pc); pair.appendChild(dc);
+    right.appendChild(pair);
+
+    var sv = $('button', 'mbtn primary gt-set-save', $t('Simpan')); sv.type = 'button';
+    sv.addEventListener('click', saveAll);
+    right.appendChild(sv);
+    wrap.appendChild(right);
+    return wrap;
+  }
+
+  // Simpan: a changed name goes to the server (a taken name is shown under the name field); everything else is already
+  // saved the moment it was changed, so this then confirms and closes.
+  var saving = false;
+  function saveAll() {
+    if (saving) return;
+    var CS = window.GT_CHARSCREEN, mine = CS && CS._mine ? CS._mine() : {};
+    var inp = modal && modal.box && modal.box.querySelector('.gt-cs-name');
+    var v = inp ? String(inp.value || '').trim().replace(/ {2,}/g, ' ') : '';
+    function done(msg) { save(); if (modal && modal.isOpen()) modal.close('save'); GT.toast(msg || $t('Pengaturan disimpan.')); }
+    if (!inp || inp.disabled || !v || v === (mine.name || '')) { done(); return; }
+    if (!NAME_RE.test(v)) { if (nameMsg) nameMsg.textContent = $t('Nama 3-16 karakter: huruf, angka, spasi, _ atau -.'); inp.focus(); return; }
+    saving = true;
+    window.GT_CHAIN.api('/name', { method: 'POST', body: { name: v } }).then(function (r) {
+      saving = false;
+      if (CS && CS.setName) CS.setName(r); else if (GT.setPlayerName && r.named) GT.setPlayerName(r.name);
+      draftName = null;
+      done($t('Namamu sekarang {0}#{1}.', [r.name, r.tag]));
+    }, function (e) {
+      saving = false;
+      if (nameMsg) nameMsg.textContent = (e && e.message) || $t('Gagal menyimpan.');
+      if (inp && inp.isConnected) inp.focus();
+    });
+  }
+
+  // every display, sound and key setting (the right-hand box of the window)
+  function displayBody() {
     var wrap = $('div', 'gt-settings');
     // language first: shown in both languages so it can always be found (switching reloads the page)
     wrap.appendChild($('h3', null, 'Language / Bahasa'));
@@ -527,11 +625,21 @@
     }
     redraw();
   }
-  function redraw() { if (modal && modal.isOpen()) modal.setBody(body()); }
+  // a setting changed its own controls (a key capture, the fullscreen button): rebuild only the settings box and keep its scroll;
+  // full = everything (a language switch)
+  function redraw(full) {
+    if (!modal || !modal.isOpen()) return;
+    if (full === true || !dispHost || !dispHost.isConnected) { modal.setTitle($t('Pengaturan')); modal.setBody(body()); return; }
+    var top = dispHost.scrollTop;
+    dispHost.textContent = ''; dispHost.appendChild(displayBody()); dispHost.scrollTop = top;
+  }
 
   function openSettings() {
     if (modal && modal.isOpen()) return;
-    modal = GT.modal({ title: $t('Pengaturan'), wide: true, body: body(), onClose: function () { capturing = null; } });
+    draftName = null;
+    modal = GT.modal({ title: $t('Pengaturan'), wide: true, body: body(), onClose: function () { capturing = null; draftName = null; clearInterval(idleT); } });
+    modal.box.classList.add('gt-set-box');
+    var xb = modal.box.querySelector('.mx'); if (xb) xb.setAttribute('data-autofocus', ''); // not the name field: a phone would raise its keyboard
   }
 
   rebuild();
@@ -540,7 +648,7 @@
   applyLayout();
 
   // a language switch: rebuild this window and the key hint line in the new language
-  if (window.GT_I18N) GT_I18N.onChange(function () { redraw(); rebuild(); });
+  if (window.GT_I18N) GT_I18N.onChange(function () { redraw(true); rebuild(); });
 
   /* ------------------------------------------------------------ the top bar (full window)
      The banner and the HUD float over the game as one bar. It shows for a moment at the start, then slides up; the

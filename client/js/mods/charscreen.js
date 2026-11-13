@@ -181,13 +181,20 @@
   }
 
   /* ---------------------------------------------------------------- wearing what you own (bought in the Mall) */
-  function paintWardrobe(host, changed) {
+  // o.noHead: skip the "Pakaianmu" heading (the caller has its own); o.mall: a function that opens the Mall,
+  // offered as a button when nothing is owned yet (the Settings window uses both)
+  function paintWardrobe(host, changed, o) {
+    o = o || {};
     var c = C(), W = window.GT_WORN, st = c && c.state.st, k = st && st.cosmetics;
     host.textContent = '';
     if (!W || !k) return;
     var owned = k.owned || [], worn = k.worn || {};
-    host.appendChild(el('h3', 'gt-cs-h2', $t('Pakaianmu')));
-    if (!owned.length) { host.appendChild(el('p', 'gt-cs-note', $t('Belum ada. Topi, baju, jubah dan hewan peliharaan dijual di Genesis Mall.'))); return; }
+    if (!o.noHead) host.appendChild(el('h3', 'gt-cs-h2', $t('Pakaianmu')));
+    if (!owned.length) {
+      host.appendChild(el('p', 'gt-cs-note', $t('Belum ada. Topi, baju, jubah dan hewan peliharaan dijual di Genesis Mall.')));
+      if (o.mall) { var mb = el('button', 'gt-cs-wb', $t('Ke Genesis Mall')); mb.type = 'button'; mb.addEventListener('click', o.mall); host.appendChild(mb); }
+      return;
+    }
     var busy = false;
     W.slots.forEach(function (slot) {
       var mine = owned.map(W.item).filter(function (it) { return it && it.slot === slot; });
@@ -303,6 +310,12 @@
     for (var i = 0; i < ents.length; i++) if (ents[i].me) ents[i].pal = worn ? W.pal(mine.look | 0, worn) : mine.look | 0; // the worn pieces ride in the high bits (sprites.js wornCombo)
   }
 
-  window.GT_CHARSCREEN = { open: function (force) { return open(force === true); }, setMine: setMine, _mine: function () { return mine; } };
+  // the Settings window (settings.js) shows the same preview and wardrobe: stage() makes the 20x24 canvas, paintStage draws
+  // the player wearing what they bought (look defaults to the player's own), wardrobe fills a host with wear / take off rows
+  window.GT_CHARSCREEN = {
+    open: function (force) { return open(force === true); }, setMine: setMine, _mine: function () { return mine; },
+    stage: stageCanvas, paintStage: function (cv, look, dir, step) { paintStage(cv, look == null ? mine.look | 0 : look, dir, step); },
+    wardrobe: paintWardrobe, setName: function (r) { if (r && r.named) { mine = { name: r.name, tag: r.tag, look: r.look | 0, named: true }; if (GT.setPlayerName) GT.setPlayerName(r.name); } }
+  };
   GT.register({ id: 'charscreen', init: wrapCharDraw, onFrame: onFrame, onKey: onKey, onEntities: onEntities });
 })();
