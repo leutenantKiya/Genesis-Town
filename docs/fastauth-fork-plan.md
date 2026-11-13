@@ -16,7 +16,7 @@
   Pemain lama tetap main seperti biasa; perangkat kedua mereka hanya bisa disetujui di localhost lewat NEAR Auth
   bersama.
 - **Butuh darimu:**
-  - sekitar 20 NEAR testnet;
+  - sekitar 10 NEAR testnet;
   - pengaturan di dashboard Auth0 (nilainya kuberikan persis);
   - izin untuk meng-clone dan membangun repo fast-auth.
 - **Batas waktu:** kalau sampai 13 Nov jam 23:00 WIB belum jalan, kita hentikan dan kembali ke pengaturan lama
@@ -25,7 +25,7 @@
 ## STATUS
 
 - [ ] F0 (OWNER): testnet NEAR, Auth0 tenant domain, OK to clone and build the fork
-- [ ] F1: clone at a pinned commit, build the three contracts, run their tests, measure storage
+- [x] F1: clone at a pinned commit, build the three contracts, run their tests, measure storage (tests blocked: see F1 result)
 - [ ] F2 (OWNER, with exact values from F1): Auth0 tenant: APIs, Action, consent forms, connections, app URLs
 - [ ] F3: deploy and configure the three contracts on testnet; verify with view calls
 - [ ] F4: game reads the fork's settings from env; shared client stays the default; tests
@@ -50,7 +50,7 @@
 
 ## F0 (OWNER)
 
-- **Funds:** about 20 NEAR testnet on `genesistown.testnet`, from a faucet: ~15.5 for the three accounts per the
+- **Funds:** about 10 NEAR testnet on `genesistown.testnet` (measured in F1), from a faucet: ~15.5 for the three accounts per the
   deploy script, ~1.02 for the guard deposit, gas, margin. F1 replaces the 15.5 with the measured storage cost.
   Separately, the game contract's storage top-up (see `docs/bots-login-plan.md` step 0).
 - **Domain:** the Auth0 tenant domain, e.g. `genesis-town.us.auth0.com`. Shown in Auth0 → Settings.
@@ -69,6 +69,28 @@ git clone https://github.com/Peersyst/fast-auth ~/Documents/fast-auth-fork && cd
   amounts.
 - Read `contracts/fa/src/lib.rs` `sign`: deposit, gas, what it returns. Compare with `server/src/newdevice.ts`, which
   must accept the fork's result the same way.
+
+### F1 result (2026-11-13)
+
+- Cloned to `~/Documents/fast-auth-fork` at `31f8082`.
+- **Built** with `cargo near build non-reproducible-wasm` (cargo-near 0.22.0; Rust 1.86.0 from the fork's
+  `rust-toolchain.toml`):
+
+  | wasm | size | storage cost |
+  | --- | --- | --- |
+  | `fa.wasm` | 229,409 bytes | ≈ 2.3 NEAR |
+  | `jwt_guard_router.wasm` | 152,194 bytes | ≈ 1.5 NEAR |
+  | `auth0_guard.wasm` | 195,229 bytes | ≈ 2.0 NEAR |
+
+  With the 1.02 NEAR guard deposit, state and gas, **~10 NEAR testnet is enough** (not the script's 15.5).
+- **Tests not run.** Their dev-dependencies need `pkg-config` and the OpenSSL headers, which this machine lacks
+  (`openssl-sys` build script fails). Installing them is the owner's call (`sudo apt install pkg-config
+  libssl-dev`). The upstream repo runs these tests in its own CI.
+- `fa.sign(guard_id, verify_payload, sign_payload, algorithm)` matches what `chain.ts` `fastAuthSign` sends
+  (300 Tgas, 1 yocto).
+- **Action deps** from the fork's `pnpm-lock.yaml`: `@near-js/transactions` 2.2.3, `borsh` 2.0.0.
+- **Consent forms:** ready-made JSON to import (`packages/auth0/src/forms/{delegate_action,transaction,nep413}/*_form.json`,
+  Auth0 Forms → Import from JSON).
 
 ## F2 (OWNER): Auth0 tenant "genesis-town"
 
