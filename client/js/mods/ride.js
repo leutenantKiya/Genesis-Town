@@ -56,7 +56,7 @@
   }
   // the price comes from the server's state (fun.ride); the coin is taken by act ride, so a failed answer means no ride
   function ask() {
-    var C = window.GT_CHAIN, st = C && C.state && C.state.st, price = st && st.fun && st.fun.ride != null ? st.fun.ride : 10, secs = st && st.fun && st.fun.rideSecs ? st.fun.rideSecs : 90;
+    var C = window.GT_CHAIN, st = C && C.state && C.state.st, price = st && st.fun && st.fun.ride != null ? st.fun.ride : 1, secs = st && st.fun && st.fun.rideSecs ? st.fun.rideSecs : 90;
     if (!C || !C.state.account) { GT.toast($t('Masuk dulu.')); return; }
     if (asking) return;
     asking = true;

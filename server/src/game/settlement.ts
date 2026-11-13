@@ -54,6 +54,9 @@ export function netEntries(rows: LedgerRow[]): DeltaEntry[] {
 export class Settlement {
   d: SettleDeps;
   busy = false;
+  /** Accounts whose refresh was asked for while a settlement ran: read after it, so a chain balance that already holds
+   *  the day's deltas is never stored before the books add those same deltas (a double credit). */
+  private refreshLater = new Set<string>();
   /** Per-day retry backoff after a failed settlement (memory only): next attempt time and current delay. */
   retry = new Map<number, { until: number; delay: number }>();
   /** Set when the contract has already closed a later day than this database has reached: the database is an older copy
@@ -122,6 +125,10 @@ export class Settlement {
     } finally {
       this.busy = false;
       this.onSettled?.();
+      if (this.refreshLater.size) {
+        const later = [...this.refreshLater]; this.refreshLater.clear();
+        try { await this.refresh(later); } catch (e) { console.error('refresh after settlement:', (e as Error).message); }
+      }
     }
     return done;
   }
@@ -329,7 +336,7 @@ export class Settlement {
         gs.setMeta(key, 'paid');
         gs.db.exec('COMMIT');
       } else if (/already paid/.test(r.error ?? '')) {
-        await this.refresh([account]); // a crash lost the local debit; the chain has it
+        await this.readChain([account]); // a crash lost the local debit; the chain has it (inside the settlement: read now)
         gs.setMeta(key, 'paid');
       } else {
         const tries = Number(gs.meta(`${key}.tries`) ?? 0) + 1;
@@ -372,6 +379,11 @@ export class Settlement {
 
   /** Re-reads settled balances from chain for the given accounts. */
   async refresh(accounts: string[]) {
+    if (this.busy) { accounts.forEach((a) => this.refreshLater.add(a)); return; } // read once the settlement has finished
+    await this.readChain(accounts);
+  }
+
+  private async readChain(accounts: string[]) {
     const tokens = Object.keys(this.d.econ.items);
     for (const a of accounts) {
       const b = await this.d.chain.balances(a, tokens);

@@ -102,7 +102,9 @@
         hp.push({ geo: new THREE.BoxGeometry(0.12, 0.26, 0.14), matrix: GT3.xform(0, 0.98, 0.26, 1, 1, 1, 0, -0.5), color: hc[k] }); // neck and head
         hp.push({ geo: new THREE.BoxGeometry(0.17, 0.05, 0.2), matrix: GT3.xform(0, 0.93, -0.02), color: '#e8503c' });  // saddle
         [[-0.05, 0.16], [0.05, -0.16]].forEach(function (q) { hp.push({ geo: new THREE.BoxGeometry(0.05, 0.24, 0.05), matrix: GT3.xform(q[0], 0.6, q[1]), color: '#3a2418' }); });
-        var h = new THREE.Mesh(GT3.merge(hp), solid); h.position.set(hx, 0, hz); h.rotation.y = Math.PI - ha; // nose first: the ride turns by +y, so a horse at angle ha moves along (sin ha, -cos ha), and its head (+z) points that way h.castShadow = true; spin.add(h); horses.push({ m: h, ph: k * 1.3 });
+        var h = new THREE.Mesh(GT3.merge(hp), solid); h.position.set(hx, 0, hz); h.rotation.y = Math.PI - ha;
+        // nose first: the ride turns by +y, so a horse at angle ha moves along (sin ha, -cos ha), and its head (+z) points that way
+        h.castShadow = true; spin.add(h); horses.push({ m: h, ph: k * 1.3 });
       }
       var cbp = [];
       for (k = 0; k < 16; k++) { var ba = k / 16 * Math.PI * 2; cbp.push({ geo: new THREE.BoxGeometry(0.09, 0.09, 0.09), matrix: GT3.xform(Math.cos(ba) * 1.66, 2.3, Math.sin(ba) * 1.66), color: '#ffffff' }); }

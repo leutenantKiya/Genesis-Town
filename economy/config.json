@@ -31,6 +31,7 @@
     "energyMax": 100,
     "energyRegenPerHour": 2
   },
+  "grass": { "token": "wheat", "tiles": ["grass", "tallgrass"], "chance": 0.2, "energyCost": 1, "dailyMax": 6, "cooldownSecs": 3 },
   "farm": {
     "plots": 15,
     "seed": "wheat",
@@ -127,7 +128,7 @@
     "rod": { "name": "Fishing Rod", "use": "water", "durability": 40, "make": { "wood": 3 }, "repair": { "wood": 1 } },
     "hoe": { "name": "Hoe", "use": "farm", "durability": 80, "make": { "wood": 2, "ore": 1 }, "repair": { "wood": 1 } }
   },
-  "fun": { "ride": 10, "rideSecs": 90, "casino": 15, "casinoPassMinutes": 30 },
+  "fun": { "ride": 1, "rideSecs": 90, "casino": 15, "casinoPassMinutes": 30 },
   "missions": [
     { "id": "wood5", "name": "Chop 5 wood", "hint": "Stand next to a tree and use your Axe.", "counter": "gather:wood", "need": 5, "reward": { "wood": 2 } },
     { "id": "ore3", "name": "Mine 3 ore", "hint": "Hit a rock in the public mine with your Pickaxe.", "counter": "gather:ore", "need": 3, "reward": { "coin": 5 } },

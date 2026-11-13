@@ -1706,7 +1706,7 @@
       (S.popular || []).forEach(function (p, i) {
         var row = $('div', 'mrow');
         row.appendChild($('span', 'num', (i + 1) + '.'));
-        row.appendChild($('span', 'grow', (p.account === S.account ? $t('Kamu') : shortAcc(p.account)) + ' · ' + p.title));
+        row.appendChild($('span', 'grow', (p.account === S.account ? $t('Kamu') : p.nick ? p.nick + (p.tag ? '#' + p.tag : '') : shortAcc(p.account)) + ' · ' + p.title));
         row.appendChild($('span', 'num', $t('{0} poin · {1} penjualan', [p.points, p.sales])));
         wrap.appendChild(row);
       });

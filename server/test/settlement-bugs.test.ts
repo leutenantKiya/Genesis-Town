@@ -239,3 +239,17 @@ test('a database level with the chain settles as before', async () => {
   assert.ok(chain.settleCalls.length > 0);
   assert.equal(chain.lastSettled, game.settlement.settledThrough());
 });
+
+test('a refresh asked for while a settlement runs is read only after it, so the day is not counted twice', async () => {
+  const P = 'p1.players.gt.test';
+  const { chain, store, game } = await world([P]);
+  const coin = () => store.db.prepare("SELECT amount FROM settled WHERE account = ? AND token = 'coin'").get(P) as { amount: number } | undefined;
+  const before = coin()?.amount ?? 0;
+  chain.add(P, 'coin', 7n); // a move on chain (e.g. a top-up) that the books learn through refresh
+  game.settlement.busy = true;
+  await game.settlement.refresh([P]);
+  assert.equal(coin()?.amount ?? 0, before, 'not read during the settlement');
+  game.settlement.busy = false;
+  await game.settlement.settleDue(); // nothing due; its finally runs the deferred read
+  assert.equal(coin()?.amount, before + 7, 'read once the settlement finished');
+});
