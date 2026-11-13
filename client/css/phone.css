@@ -60,6 +60,8 @@ html.gt-phone .joy.down{background:color-mix(in srgb,var(--hud) 60%,transparent)
 html.gt-phone .joy.down i{background:var(--accent-hi)}
 html.gt-phone.gt-has-hotbar .joy{bottom:92px}
 html.gt-fishing .joy,html.gt-fighting .joy,html.gt-titlecard .joy{display:none!important}
+/* the town map (M) and the dialogue box cover the picture: the controls step aside */
+#map.on ~ .joy,#map.on ~ .actbtn,#dlg.on ~ .joy{display:none!important}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){html.gt-phone .joy{background:color-mix(in srgb,var(--hud) 70%,transparent)}}
 
 /* the 2.5D view's buttons on a phone: one slim column at the top right (icons only, names stay for screen readers),

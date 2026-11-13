@@ -192,7 +192,9 @@
 >   so sun shading, night and rain never dim them; merchant name tags sit right above their heads; island waterfalls pour far
 >   below the island and fade, with a new streaked water texture; F (or the action button) gets you on the carousel
 >   again (it read a `GT.world.fun` the engine never had; now `GT.world.layout.fun`). On phones the 2.5D view's buttons
->   are one slim icon column at the top right and the mission card and Homeland chip keep clear of them.
+>   are one slim icon column at the top right and the mission card and Homeland chip keep clear of them; the joystick
+>   and action button sit inside the game picture, above the item bar; a guest no longer gets a "Sign in first" toast that
+>   never goes away (the portal check ran every frame).
 >
 > - **Work buildings** (2026-11-12, after Kingshot's resource buildings): every Homeland has a **Penggergajian** (sawmill,
 >   wood) on a forest island, a **Kincir Angin** (windmill, wheat) with sails that turn in the 2.5D view, and a **Gudang**

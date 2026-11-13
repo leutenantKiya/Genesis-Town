@@ -74,6 +74,7 @@
   function secsLine(s) { s = Math.round(s || 0); return s >= 60 ? $t('{0} mnt{1}', [Math.floor(s / 60), s % 60 ? $t(' {0} dtk', [s % 60]) : '']) : $t('{0} dtk', [s]); }
   function clock(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); }
   function endMs(j) { var v = j.ends_at; if (typeof v === 'string') return Date.parse(v); return v < 1e11 ? v * 1000 : v; }
+  function signedIn() { return !!(C && S() && S().mode !== 'offline' && S().account); } // the same check, silent
   function loggedIn() {
     if (!C || !S() || S().mode === 'offline') { GT.toast($t('Homeland butuh server game.')); return false; }
     if (!S().account) { GT.toast($t('Masuk dulu (tombol Masuk).')); return false; }
@@ -175,7 +176,8 @@
     root.style.setProperty('--dz', Math.min(1, k).toFixed(3));
   }
   function portalTick(dt) {
-    var on = !travelling && !portalBusy && loggedIn() && !GT.isUiOpen() && inPortal();
+    // signedIn, not loggedIn: this runs every frame, and loggedIn's toast would stay up for good for a guest
+    var on = !travelling && !portalBusy && signedIn() && !GT.isUiOpen() && inPortal();
     portalT = on ? portalT + dt : Math.max(0, portalT - dt * 3);
     dizzy(portalT / PORTAL_WAIT);
     if (on && portalT >= PORTAL_WAIT) {
