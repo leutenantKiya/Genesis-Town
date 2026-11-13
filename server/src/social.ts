@@ -170,7 +170,9 @@ export class Social {
       if (now - s.t > maxAge) { this.seen.delete(s.account); continue; }
       if (s.account === account || s.world !== world) continue;
       // outdoors you see the others outdoors; inside a building, the others in the same room
-      if (myRoom ? !(s.scene === 'in' && s.room === myRoom) : s.scene !== 'out') continue;
+      // a room counts only with the same door: x, y indoors are the server-checked spot by the building's door, so a
+      // client naming a room it is not at sees nobody in it
+      if (myRoom ? !(s.scene === 'in' && s.room === myRoom && me && Math.abs(s.x - me.x) + Math.abs(s.y - me.y) <= 2) : s.scene !== 'out') continue;
       if (!this.access(s.account, world)) continue; // an uninvited guest vanishes from the Homeland at once
       const mate = mates.has(s.account); // party mates skip the radius: you can always find them
       if (!myRoom && !mate && me && (Math.abs(s.x - me.x) > radius || Math.abs(s.y - me.y) > radius)) continue;

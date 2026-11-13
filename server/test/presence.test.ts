@@ -185,9 +185,11 @@ test('players inside the same building see each other there, and not the ones ou
     await r.post(P1, '/api/presence', { ...out, scene: 'in', room: 'house:3', rx: 4, ry: 5 });
     await r.post(P3, '/api/presence', { ...out, scene: 'out' });
     const p2in = (await r.post(P2, '/api/presence', { ...out, scene: 'in', room: 'house:3', rx: 2, ry: 2 })).json.players.filter((p: any) => !p.npc);
-    assert.deepEqual(p2in.map((p: any) => [p.account, p.room, p.fx, p.fy]), [[P1, 'house:3', 4, 5]], 'only the one in the same room, at the room position');
+    assert.deepEqual(p2in.map((p: any) => [p.account, p.room, p.x, p.y, p.fx, p.fy]), [[P1, 'house:3', 4, 5, 4, 5]], 'only the one in the same room, at the room position');
     const other = (await r.post(P2, '/api/presence', { ...out, scene: 'in', room: 'house:7', rx: 2, ry: 2 })).json.players;
     assert.equal(other.length, 0, 'another room: nobody, no merchants');
+    const far = (await r.post(P2, '/api/presence', { ...out, x: r.sp.x + 6, scene: 'in', room: 'house:3', rx: 2, ry: 2 })).json.players;
+    assert.equal(far.length, 0, 'naming the room from another door shows nobody');
     const outside = (await r.post(P2, '/api/presence', { ...out, scene: 'out' })).json.players.filter((p: any) => !p.npc).map((p: any) => p.account);
     assert.deepEqual(outside, [P3], 'outdoors: only the ones outdoors');
   } finally { r.close(); }

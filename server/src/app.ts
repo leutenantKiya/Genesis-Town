@@ -495,7 +495,7 @@ export function createApp(deps: AppDeps) {
           } catch { onTile = false; }
         }
         if (onTile) social.report(acct, w, b);
-        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
+        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
         return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w) });
       }
