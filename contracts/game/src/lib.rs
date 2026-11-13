@@ -10,6 +10,7 @@
 //! - `shops.rs`: merchant shops: bankruptcy, restoration boards (on-chain pledges), shares and dividends
 //! - `market.rs`: the player market (escrowed listings, 5% fee burned)
 //! - `projects.rs`: town projects that open new map areas (pledged goods are burned when built) 
+//! - `coin_sale.rs`: buy coin with NEAR (settings under their own storage key, no state migration)
 //! - `islands.rs`: Private Islands (`IS-<id>-<version>` tokens bought with a server voucher, Save World) and the v4 -> v5 `migrate`
 //!
 //! Design: docs/onchain-offchain.md, docs/economy.md, docs/threat-model.md.
@@ -17,6 +18,7 @@ use near_sdk::json_types::U128;
 use near_sdk::store::{LookupMap, LookupSet};
 use near_sdk::{AccountId, BorshStorageKey, PanicOnDefault, env, near, require};
 
+mod coin_sale;
 mod events;
 mod game;
 mod islands;
@@ -27,6 +29,7 @@ mod settle;
 mod shops;
 mod storage;
 
+pub use coin_sale::CoinSale;
 pub use islands::{Island, IslandSpec, IslandView};
 pub use market::ListingView;
 pub use projects::ProjectView;

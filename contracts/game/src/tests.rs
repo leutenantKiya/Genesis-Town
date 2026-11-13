@@ -807,3 +807,258 @@ fn migrate_from_v4_keeps_state() {
     assert_eq!(c.broker_id, makelar());
     assert_eq!(c.voucher_pk.len(), 32);
 }
+
+/* ------------------------------------------------------------ coin sale (buy_coin) */
+
+const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
+fn dev() -> AccountId { acc("dev.testnet") }
+
+fn sale_setup(enabled: bool) -> Contract {
+    let mut c = setup();
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 1000, 1000, U128(2000), enabled);
+    c
+}
+
+fn buy_with(c: &mut Contract, who: AccountId, deposit: u128) -> U128 {
+    ctx(who, deposit);
+    c.buy_coin(None)
+}
+
+/// (receiver, amount) of every Transfer action created by the last call.
+fn transfers() -> Vec<(AccountId, u128)> {
+    near_sdk::test_utils::get_created_receipts()
+        .into_iter()
+        .flat_map(|r| {
+            let to = r.receiver_id.clone();
+            r.actions.into_iter().filter_map(move |a| match a {
+                near_sdk::mock::MockAction::Transfer { deposit, .. } => Some((to.clone(), deposit.as_yoctonear())),
+                _ => None,
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn one_near_buys_a_thousand_coin_and_splits_ten_percent_to_the_dev() {
+    let mut c = sale_setup(true);
+    let supply = c.mt_supply("coin".into()).unwrap().0;
+    assert_eq!(buy_with(&mut c, alice(), NEAR).0, 1000);
+    assert_eq!(bal(&c, town(), "coin"), 4000);
+    assert_eq!(bal(&c, alice(), "coin"), 1000);
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, supply, "coin moved, never minted");
+    let t = transfers();
+    assert_eq!(t.len(), 2, "dev + town, no refund: {t:?}");
+    assert!(t.contains(&(dev(), NEAR / 10)));
+    assert!(t.contains(&(town(), NEAR - NEAR / 10)));
+    let logs = get_logs();
+    assert!(logs.iter().any(|l| l.contains(r#""event":"mt_transfer""#) && l.contains(r#""memo":"buy_coin""#) && l.contains(r#""old_owner_id":"town.testnet""#) && l.contains(r#""new_owner_id":"alice.testnet""#)));
+}
+
+#[test]
+fn a_quarter_near_buys_250_coin() {
+    let mut c = sale_setup(true);
+    assert_eq!(buy_with(&mut c, alice(), NEAR / 4).0, 250);
+    assert_eq!(bal(&c, town(), "coin"), 4750);
+    assert_eq!(bal(&c, alice(), "coin"), 250);
+    let t = transfers();
+    assert!(t.contains(&(dev(), NEAR / 40)));
+    assert!(t.contains(&(town(), NEAR / 4 - NEAR / 40)));
+}
+
+#[test]
+fn dust_is_refunded_to_the_buyer() {
+    let mut c = sale_setup(true);
+    let deposit = NEAR + NEAR / 2000; // 1.0005 NEAR
+    assert_eq!(buy_with(&mut c, alice(), deposit).0, 1000);
+    let t = transfers();
+    assert_eq!(t.len(), 3);
+    assert!(t.contains(&(alice(), NEAR / 2000)), "refund 0.0005 NEAR: {t:?}");
+    assert!(t.contains(&(dev(), NEAR / 10)));
+    assert!(t.contains(&(town(), NEAR * 9 / 10)));
+    let paid: u128 = t.iter().map(|(_, a)| a).sum();
+    assert_eq!(paid, deposit, "every attached yocto is accounted for");
+}
+
+#[test]
+fn dev_share_follows_dev_bps() {
+    let mut c = sale_setup(true);
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 1000, 2500, U128(2000), true);
+    buy_with(&mut c, alice(), NEAR);
+    let t = transfers();
+    assert!(t.contains(&(dev(), NEAR / 4)));
+    assert!(t.contains(&(town(), NEAR * 3 / 4)));
+    // 0% to the dev: only the town is paid.
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 1000, 0, U128(2000), true);
+    buy_with(&mut c, alice(), NEAR);
+    assert_eq!(transfers(), vec![(town(), NEAR)]);
+}
+
+#[test]
+#[should_panic(expected = "deposit too small")]
+fn below_one_coin_is_refused() {
+    let mut c = sale_setup(true);
+    buy_with(&mut c, alice(), NEAR / 1000 - 1);
+}
+
+#[test]
+fn exactly_one_coin_is_allowed() {
+    let mut c = sale_setup(true);
+    assert_eq!(buy_with(&mut c, alice(), NEAR / 1000).0, 1);
+}
+
+#[test]
+#[should_panic(expected = "too much coin in one call")]
+fn above_the_max_per_call_is_refused() {
+    let mut c = sale_setup(true);
+    buy_with(&mut c, alice(), 2 * NEAR + NEAR / 1000);
+}
+
+#[test]
+fn the_max_per_call_itself_is_allowed() {
+    let mut c = sale_setup(true);
+    assert_eq!(buy_with(&mut c, alice(), 2 * NEAR).0, 2000);
+}
+
+#[test]
+#[should_panic(expected = "coin sale is not enabled")]
+fn disabled_sale_refuses() {
+    let mut c = sale_setup(false);
+    buy_with(&mut c, alice(), NEAR);
+}
+
+#[test]
+#[should_panic(expected = "coin sale is not configured")]
+fn unconfigured_sale_refuses() {
+    let mut c = setup();
+    assert!(c.coin_sale().is_none());
+    buy_with(&mut c, alice(), NEAR);
+}
+
+#[test]
+#[should_panic(expected = "carol.testnet is not registered")]
+fn unregistered_buyer_refused() {
+    let mut c = sale_setup(true);
+    buy_with(&mut c, acc("carol.testnet"), NEAR);
+}
+
+#[test]
+#[should_panic(expected = "contract is paused")]
+fn paused_contract_refuses() {
+    let mut c = sale_setup(true);
+    ctx(owner(), 0);
+    c.set_paused(true);
+    buy_with(&mut c, alice(), NEAR);
+}
+
+#[test]
+fn a_short_town_refuses_and_nothing_moves() {
+    let mut c = sale_setup(true);
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 1000, 1000, U128(10_000), true);
+    // Drain the town down to 500 coin through settlement (burns reduce supply, fine).
+    settle(&mut c, 1, 0, vec![d(town(), "coin", -4500)]);
+    assert_eq!(bal(&c, town(), "coin"), 500);
+    let supply = c.mt_supply("coin".into()).unwrap().0;
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        buy_with(&mut c, alice(), NEAR);
+    }));
+    let err = res.expect_err("must panic");
+    let msg = err.downcast_ref::<String>().cloned().or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
+    assert!(msg.contains("town treasury is short of coin"), "{msg}");
+    assert_eq!(bal(&c, town(), "coin"), 500);
+    assert_eq!(bal(&c, alice(), "coin"), 0);
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, supply);
+    // 0.5 NEAR (500 coin) still works: exactly what the town holds.
+    assert_eq!(buy_with(&mut c, alice(), NEAR / 2).0, 500);
+    assert_eq!(bal(&c, town(), "coin"), 0);
+}
+
+#[test]
+fn bought_coin_can_be_spent_in_the_next_settlement() {
+    let mut c = sale_setup(true);
+    buy_with(&mut c, alice(), NEAR);
+    // Alice spends 700 coin at Budi's shop; her balance covers it and the faucet sees no new money.
+    settle(&mut c, 1, 0, vec![d(alice(), "coin", -700), d(budi(), "coin", 700)]);
+    assert_eq!(bal(&c, alice(), "coin"), 300);
+    assert_eq!(bal(&c, budi(), "coin"), 1300);
+    assert_eq!(c.faucet_status(1, 1).minted_today.0, 0);
+}
+
+#[test]
+fn only_the_owner_sets_the_coin_sale_and_the_view_shows_it() {
+    let mut c = setup();
+    assert!(c.coin_sale().is_none());
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 1000, 1000, U128(2000), true);
+    let s = c.coin_sale().unwrap();
+    assert_eq!((s.dev_id, s.coin_per_near, s.dev_bps, s.max_coin_per_call.0, s.enabled), (dev(), 1000, 1000, 2000, true));
+    let json = near_sdk::serde_json::to_string(&c.coin_sale()).unwrap();
+    assert_eq!(json, r#"{"dev_id":"dev.testnet","coin_per_near":1000,"dev_bps":1000,"max_coin_per_call":"2000","enabled":true}"#);
+}
+
+#[test]
+#[should_panic(expected = "only the owner")]
+fn set_coin_sale_is_owner_only() {
+    let mut c = setup();
+    ctx(alice(), 0);
+    c.set_coin_sale(alice(), 1000, 1000, U128(2000), true);
+}
+
+#[test]
+#[should_panic(expected = "dev_bps is at most 10000")]
+fn dev_bps_cannot_exceed_100_percent() {
+    let mut c = setup();
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 1000, 10_001, U128(2000), true);
+}
+
+#[test]
+#[should_panic(expected = "divide 10^24")]
+fn coin_per_near_must_divide_a_near() {
+    let mut c = setup();
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 3, 1000, U128(2000), true);
+}
+
+#[test]
+fn a_payer_can_top_up_another_registered_player() {
+    let mut c = sale_setup(true);
+    ctx(alice(), NEAR + NEAR / 2000);
+    assert_eq!(c.buy_coin(Some(bob())).0, 1000);
+    assert_eq!(bal(&c, alice(), "coin"), 0, "the payer gets no coin");
+    assert_eq!(bal(&c, bob(), "coin"), 1000);
+    assert_eq!(bal(&c, town(), "coin"), 4000);
+    let t = transfers();
+    assert!(t.contains(&(alice(), NEAR / 2000)), "dust goes back to the payer: {t:?}");
+    assert!(t.contains(&(dev(), NEAR / 10)));
+    assert!(t.contains(&(town(), NEAR * 9 / 10)));
+    let logs = get_logs();
+    assert!(logs.iter().any(|l| l.contains(r#""new_owner_id":"bob.testnet""#) && l.contains(r#""memo":"buy_coin by alice.testnet""#)));
+}
+
+#[test]
+fn explicit_self_receiver_is_the_same_as_none() {
+    let mut c = sale_setup(true);
+    ctx(alice(), NEAR);
+    assert_eq!(c.buy_coin(Some(alice())).0, 1000);
+    assert_eq!(bal(&c, alice(), "coin"), 1000);
+}
+
+#[test]
+#[should_panic(expected = "carol.testnet is not registered")]
+fn unregistered_receiver_refused() {
+    let mut c = sale_setup(true);
+    ctx(alice(), NEAR);
+    c.buy_coin(Some(acc("carol.testnet")));
+}
+
+#[test]
+fn unregistered_payer_may_pay_for_a_registered_receiver() {
+    let mut c = sale_setup(true);
+    ctx(acc("carol.testnet"), NEAR);
+    assert_eq!(c.buy_coin(Some(bob())).0, 1000);
+    assert_eq!(bal(&c, bob(), "coin"), 1000);
+}

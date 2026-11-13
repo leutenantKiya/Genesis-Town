@@ -29,6 +29,9 @@ cargo-near.
 | `set_voucher_key(public_key)`, `set_broker(broker_id)` | owner | voucher signer (ed25519) and the broker account (gets registered) |
 | `migrate(broker_id, voucher_key, new_tokens)` | the contract itself (deploy with init call) | v4 → v5 upgrade: keeps all state, adds islands, the broker, the voucher key and any new registry tokens (Emas, Permata). `scripts/make-init.mjs` writes `migrate-v5-testnet.json` with the arguments |
 | `set_settler`, `set_paused`, `set_limits` | owner | admin |
+| `buy_coin(receiver_id?)` | any payer, **attach NEAR** | buys coin for `receiver_id` (default: the caller; must be registered; the payer need not be). `coin = floor(deposit x coin_per_near / 1 NEAR)` (1 NEAR = 1000 coin), 1..=`max_coin_per_call`; moved out of the town treasury (never minted, panics if the town is short); the unused dust is refunded to the payer; the spent NEAR is split `dev_bps`/10000 to the developer and the rest to the town account. Emits `mt_transfer` (town -> receiver, memo `buy_coin`, or `buy_coin by <payer>`). Returns the coin |
+| `set_coin_sale(dev_id, coin_per_near, dev_bps, max_coin_per_call, enabled)` | owner | coin sale settings, stored under their own storage key (`coin_sale`), so no state migration is needed to add it. `coin_per_near` must divide 10^24, `dev_bps` <= 10000 |
+| `coin_sale` | view | the settings, or `null` when never set |
 | `get_config`, `is_registered`, `get_day_root`, `is_chunk_applied`, `faucet_status`, `get_shop`, `list_shops`, `get_holding`, `get_listing`, `list_listings(limit)`, `market_fee_bps`, `get_project`, `list_projects`, `get_island(island_id)` | view | |
 
 Events follow NEP-245 / NEP-297 (`EVENT_JSON:` with `standard: "nep245"`, `version: "1.0.0"`). Settlement chunks and
