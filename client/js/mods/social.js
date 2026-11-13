@@ -909,7 +909,7 @@ function openPanel(tab) {
   if (GT.isUiOpen()) return null;
   if (tab) curTab = tab;
   panel = GT.modal({
-    title: 'Sosial', wide: true, backdropClose: false,
+    title: 'Sosial', wide: true, sticky: true,
     actions: [{ label: 'Tutup', primary: true }],
     onClose: function () { panel = null; },
     onKey: function (e) {
@@ -1098,7 +1098,7 @@ function openComposer(kind, rec, preset) {
   }
   wrap.appendChild(err);
   var hnd = GT.modal({
-    title: kind === 'gift' ? 'Beri hadiah' : 'Ajak tukar', body: wrap,
+    title: kind === 'gift' ? 'Beri hadiah' : 'Ajak tukar', sticky: true, body: wrap,
     actions: [
       { label: 'Kirim', primary: true, id: 'send', onClick: function (m) {
         if (!bundleKeys(give).length) { err.textContent = 'Pilih barang atau koin yang diberikan.'; return false; }
@@ -1129,7 +1129,7 @@ function openProfileOf(id) {
     wrap.appendChild(h('p', null, 'Akrab: ' + new Array(hearts + 1).join('♥') + new Array(6 - hearts).join('♡')));
     wrap.appendChild(h('p', 'mnote', 'Pemain simulasi (offline).'));
   } else wrap.appendChild(h('p', 'mnote', p.online ? 'Sedang online.' : 'Tidak online.'));
-  return GT.modal({ title: 'Profil pemain', body: wrap, backdropClose: true, actions: [
+  return GT.modal({ title: 'Profil pemain', body: wrap, actions: [
     { label: 'Beri', onClick: function (m) { m.close(); openComposer('gift', p); } },
     { label: 'Tukar', onClick: function (m) { m.close(); openComposer('trade', p); } },
     { label: 'Tutup', primary: true }

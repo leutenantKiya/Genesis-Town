@@ -205,7 +205,7 @@
     body.appendChild($('p', null, $t('Akunmu ({0}) belum punya kunci game di perangkat ini.', [r.accountId.split('.')[0]])));
     body.appendChild($('p', null, $t('Setujui satu kali di jendela NEAR Auth, lalu kunci baru ditambahkan ke akunmu di testnet. Kunci ini hanya bisa memanggil kontrak game, tidak bisa memindahkan NEAR. Gas dibayar game.')));
     return new Promise(function (resolve, reject) {
-      GT.modal({ title: $t('Perangkat baru'), body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui di NEAR Auth'), primary: true, onClick: function (h) {
+      GT.modal({ title: $t('Perangkat baru'), sticky: true, body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui di NEAR Auth'), primary: true, onClick: function (h) {
         var prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl }), da;
         GT.toast($t('Membuka NEAR Auth…'));
         Promise.all([prov.viewAccessKey({ accountId: r.accountId, publicKey: L.PublicKey.from(r.ownerPublicKey) }), prov.viewBlock({ finality: 'final' })])
@@ -291,7 +291,7 @@
     }
     body.appendChild($('p', null, $t('Untuk memakai Pasar, hadiah, saham, atau proyek kota, setujui perangkat ini satu kali dengan NEAR Auth. Bermain biasa tidak perlu persetujuan.')));
     return new Promise(function (resolve, reject) {
-      GT.modal({ title: $t('Setujui perangkat ini'), body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui dengan NEAR Auth'), primary: true, onClick: function (h) {
+      GT.modal({ title: $t('Setujui perangkat ini'), sticky: true, body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui dengan NEAR Auth'), primary: true, onClick: function (h) {
         var provider = nearProvider();
         GT.toast($t('Membuka NEAR Auth…'));
         provider.login(undefined, true)
@@ -415,7 +415,7 @@
     var body = $('div');
     body.appendChild($('p', null, $t('Server ini memakai rantai tiruan (mock) dengan login pengembang. Ketik nama pemain:')));
     body.appendChild(input);
-    GT.modal({ title: $t('Masuk (dev, mock)'), body: body, actions: [{ label: $t('Masuk'), primary: true, onClick: function (h) {
+    GT.modal({ title: $t('Masuk (dev, mock)'), sticky: true, body: body, actions: [{ label: $t('Masuk'), primary: true, onClick: function (h) {
       var v = String(input.value || '').trim().toLowerCase();
       if (!/^[a-z0-9_-]{1,32}$/.test(v)) { GT.toast($t('Nama: huruf kecil, angka, - atau _')); return false; }
       h.close('ok'); S.busy = true;
@@ -550,14 +550,12 @@
     ['home', 'build', 'th', 'plant', 'craft'].forEach(function (k) { if (d[k] && !goalsDone()[k]) { var dd = goalsDone(); dd[k] = 1; lsSet(goalKey(), JSON.stringify(dd)); } });
     var next = GOALS.filter(function (g) { return !d[g.id]; })[0];
     var ms = S.st && S.st.missions, claimable = ms && ms.claimable && ms.claimable.length ? missionOf(ms.claimable[0]) : null;
+    syncMissionBtn(ms, claimable);
     if (!goalsSince) goalsSince = Date.now() + 8000;
-    if (lastGoal && next !== lastGoal && !lastGoal.rescue && S.account && Date.now() > goalsSince) GT.toast('🎯 ' + $t('Misi selesai! Lanjut ke misi berikutnya.'));
+    if (lastGoal && next !== lastGoal && S.account && Date.now() > goalsSince) GT.toast('🎯 ' + $t('Misi selesai! Lanjut ke misi berikutnya.'));
     lastGoal = next || null;
     var hidden = lsGet('gt.chain.goalsHidden') === '1';
-    // Every shop closed: nobody can sell, so say what the easiest board still needs (beats the first-steps guide).
-    var rescue = closedHint();
-    if (rescue && lsGet('gt.chain.rescueHidden') !== String(S.st && S.st.time.day)) { next = rescue; hidden = false; }
-    else if (claimable) { next = missionCard(claimable, true); hidden = false; } // a finished mission waits for its reward first
+    if (claimable) { next = missionCard(claimable, true); hidden = false; } // a finished mission waits for its reward first
     else if (ms && (!next || hidden) && ms.current) { // the first steps are done (or put away): the server's missions go on
       var cur = missionOf(ms.current);
       if (cur && lsGet('gt.chain.msHidden') !== cur.id) { next = missionCard(cur, false); hidden = false; } else if (!next || hidden) next = null;
@@ -566,12 +564,12 @@
     if (!next) return;
     goalBox.textContent = '';
     var head = $('div', 'gt-goals-head');
-    head.appendChild($('b', null, next.rescue || next.mission ? next.icon + ' ' + next.title : next.icon + ' ' + next.title + ' · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
+    head.appendChild($('b', null, next.mission ? next.icon + ' ' + next.title : next.icon + ' ' + next.title + ' · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
     goalBox.title = next.text;
-    var x = $('button', 'gt-goals-x', $t('Tutup')); x.type = 'button'; x.setAttribute('aria-label', next.rescue ? $t('Sembunyikan untuk hari ini') : $t('Sembunyikan langkah pertama'));
+    var x = $('button', 'gt-goals-x', $t('Tutup')); x.type = 'button'; x.setAttribute('aria-label', $t('Sembunyikan langkah pertama'));
     x.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (next.rescue) lsSet('gt.chain.rescueHidden', String(S.st && S.st.time.day)); else if (next.mission) lsSet('gt.chain.msHidden', next.mission.id); else lsSet('gt.chain.goalsHidden', '1');
+      if (next.mission) lsSet('gt.chain.msHidden', next.mission.id); else lsSet('gt.chain.goalsHidden', '1');
       renderGoals();
     });
     head.appendChild(x);
@@ -588,6 +586,31 @@
     }
   }
   /* ---- missions from the server (state.missions): counted there, claimed once ---- */
+  // The Mission button at the top right: always one tap to the list; a "!" when a reward waits or the current mission is
+  // new to this player (opening the list marks it seen)
+  var missionBtn = null, missionBadge = null;
+  function msSeenKey() { return 'gt.chain.msSeen.' + (S.account || 'guest'); }
+  function topRight() {
+    var tr = document.getElementById('gt-tr'), screen = document.getElementById('screen');
+    if (!tr && screen) { tr = $('div', 'gt-tr'); tr.id = 'gt-tr'; screen.appendChild(tr); }
+    return tr;
+  }
+  function syncMissionBtn(ms, claimable) {
+    var tr = topRight();
+    if (!tr) return;
+    if (!missionBtn) {
+      missionBtn = $('button', 'gt-trbtn'); missionBtn.type = 'button';
+      missionBtn.appendChild($('span', null, '🎯 ' + $t('Misi'))); missionBadge = $('i', 'gt-trbadge', '!'); missionBadge.hidden = true; missionBtn.appendChild(missionBadge);
+      missionBtn.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) open('missions'); });
+      tr.insertBefore(missionBtn, tr.firstChild);
+    }
+    var show = !!(S.account && ms && ms.list && S.mode !== 'offline' && S.mode !== 'loading');
+    missionBtn.hidden = !show;
+    if (!show) return;
+    var fresh = !!claimable || !!(ms.current && lsGet(msSeenKey()) !== ms.current);
+    missionBadge.hidden = !fresh;
+    missionBtn.setAttribute('aria-label', fresh ? $t('Misi, ada yang baru') : $t('Misi'));
+  }
   function missionOf(id) { var l = S.st && S.st.missions && S.st.missions.list; if (!l) return null; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; }
   function rewardText(r) {
     var parts = [];
@@ -664,25 +687,6 @@
       wrap.appendChild(row);
     });
     return wrap;
-  }
-
-  // When every shop is closed: the board that needs the fewest goods, and what is still missing on it.
-  function closedHint() {
-    if (!S.account || !S.shops || !S.shops.length || S.shops.some(function (x) { return x.open; })) return null;
-    var best = null;
-    S.shops.forEach(function (sh) {
-      var miss = [], total = 0;
-      (sh.need || []).forEach(function (n) {
-        if (n.token_id === 'coin') return;
-        var got = 0; (sh.pledged || []).forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
-        var m = Math.max(0, +n.amount - got);
-        if (m > 0) { miss.push(m + ' ' + item(n.token_id)); total += m; }
-      });
-      if (!best || total < best.total) best = { name: ((S.cfg && S.cfg.econ && S.cfg.econ.merchants && S.cfg.econ.merchants[sh.id]) || {}).name || String(sh.name || sh.id).split(' ').pop(), miss: miss, total: total };
-    });
-    if (!best) return null;
-    var what = best.miss.length ? $t('masih kurang {0}', [best.miss.join(', ')]) : $t('tinggal kurang koin');
-    return { rescue: true, icon: '🏪', title: $t('Toko {0} tutup', [best.name]), hint: $t('{0} · sumbang lewat {1} di pasar.', [what, best.name]), text: $t('Bantu buka lagi toko {0}: {1}. Kumpulkan barangnya, lalu bicara dengan {2} di pasar dan pilih Sumbang. Penyumbang dapat saham toko.', [best.name, what, best.name]) };
   }
 
   /* ---- Night monsters (the server decides; this draws them and runs the fight window) ---- */
@@ -1451,7 +1455,7 @@
     body.appendChild($('p', null, $t('Kirim 1 {0} ke pemain lain.{1}', [item(token), chainUI() ? $t(' Langsung on-chain, tanpa dompet, tanpa gas.') : $t(' Langsung sampai.')])));
     var input = $('input'); input.type = 'text'; input.placeholder = $t('akun penerima (…players…testnet)'); input.maxLength = 64;
     body.appendChild(input);
-    GT.modal({ title: $t('Kirim {0}', [item(token)]), body: body, actions: [{ label: $t('Kirim'), primary: true, onClick: function (h) {
+    GT.modal({ title: $t('Kirim {0}', [item(token)]), sticky: true, body: body, actions: [{ label: $t('Kirim'), primary: true, onClick: function (h) {
       var to = String(input.value || '').trim().toLowerCase();
       if (!/^[a-z0-9._-]{2,64}$/.test(to)) { GT.toast($t('Nama akun tidak valid')); return false; }
       h.close('ok'); GT.toast($t('Mengirim…'));
@@ -1636,7 +1640,7 @@
     }
     qty.addEventListener('input', upd); price.addEventListener('input', upd); upd();
     body.appendChild(l1); body.appendChild(l2); body.appendChild(side); body.appendChild(net); body.appendChild(warn);
-    GT.modal({ title: $t('Jual {0}', [item(token)]), body: body, actions: [{ label: $t('Pasang'), primary: true, onClick: function (h) {
+    GT.modal({ title: $t('Jual {0}', [item(token)]), sticky: true, body: body, actions: [{ label: $t('Pasang'), primary: true, onClick: function (h) {
       var q = Math.floor(+qty.value), pr = Math.floor(+price.value);
       var anon = !!(side.querySelector('input:checked') || {}).value && side.querySelector('input:checked').value === 'gelap';
       if (!(q >= 1 && q <= Math.min(50, max))) { GT.toast($t('Jumlah 1–{0}', [Math.min(50, max)])); return false; }
@@ -1744,6 +1748,7 @@
     if (S.mode !== 'offline' && !S.account && kind !== 'shop') { login(); return; }
     if (S.modal && S.modal.h && S.modal.h.isOpen()) S.modal.h.close('switch'); // one window at a time (Tas → Riwayat)
     if (kind === 'project') markGoal('board');
+    if (kind === 'missions') { var cm = S.st && S.st.missions && S.st.missions.current; if (cm) { lsSet(msSeenKey(), cm); renderGoals(); } }
     var title = kind === 'bag' ? $t('Tas') : kind === 'market' ? $t('Pasar Pemain') : kind === 'project' ? $t('Papan Proyek Desa') : kind === 'history' ? (arg ? $t('Riwayat · {0}', [item(arg)]) : $t('Riwayat')) : kind === 'craft' ? $t('Meja Kerja') : kind === 'ship' ? $t('Kotak Kirim') : kind === 'tools' ? $t('Alat') : kind === 'missions' ? $t('Misi') : (MERCHANTS.filter(function (m) { return m.id === arg; })[0] || {}).tag;
     var body = kind === 'shop' ? shopBody(arg) : BODIES[kind](arg);
     var h = GT.modal({ title: title, wide: kind === 'history' || kind === 'shop' || kind === 'market' || kind === 'project', body: body, onClose: function () { S.modal = null; if (kind === 'market') S.marketSeller = null; } });

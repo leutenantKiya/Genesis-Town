@@ -209,7 +209,7 @@
     shown[i.from + '|' + i.expires_at] = 1;
     sfx('notify');
     invitePop = GT.modal({
-      title: $t('Ajakan party'), body: $t('{0}#{1} mengajakmu ke party', [i.name, i.tag]), actions: [
+      title: $t('Ajakan party'), sticky: true, body: $t('{0}#{1} mengajakmu ke party', [i.name, i.tag]), actions: [
         { label: $t('Terima'), primary: true, onClick: function (h) { sfx('ui_click'); answer('/party/accept', { from: i.from }, $t('Kamu masuk party.')); h.close('ok'); } },
         { label: $t('Tolak'), onClick: function (h) { sfx('ui_click'); answer('/party/decline', { from: i.from }); h.close('no'); } },
         { label: $t('Nanti'), close: true }

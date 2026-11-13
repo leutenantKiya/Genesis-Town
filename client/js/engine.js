@@ -16,10 +16,10 @@
  *                         in 2.5D they sit on an unlit sheet, so night, rain and the sun's shading never dim them. Return true when it drew.
  *                         mod.onPlayerDir(dir): the player pressed a direction (keys, joystick, D-pad), not a mod's GT.walkDir.
  *  GT.modal(opts)         {title, body:Element|string(plain text, \n = new paragraph), actions:[{label,primary,id,disabled,onClick(handle,ev),close}],
- *                          wide, closable:false (no X/Esc), backdropClose:true, onClose(reason), onKey(e)->bool (called for keydown while on top)}
+ *                          wide, closable:false (no X/Esc), sticky:true (a click on the dark backdrop does not close it), onClose(reason), onKey(e)->bool (called for keydown while on top)}
  *                         Clicking an action runs onClick and does NOT close the modal unless the action has no onClick, has close:true,
  *                         or onClick returns true.  handle = {close(reason), el, box, body, setBody(x), setTitle(t), setActions(list), btn(id), isOpen()}.
- *                         Esc / X close with reason 'esc' / 'x'.  Tapping outside never closes (unless backdropClose).  close() is idempotent.
+ *                         Esc / X close with reason 'esc' / 'x'.  A click on the dark backdrop closes it (reason 'backdrop') unless sticky:true or closable:false.  close() is idempotent.
  *  GT.menu(title, opts)   modal list; picking an option closes the menu FIRST, then calls onPick (so it can open another modal). Digits 1-9 pick. An option is {label, onPick, disabled?, icon?} (icon: an emoji shown before the words).
  *  Extra helpers          GT.addHudButton({id,label,key,onClick,secondary}), GT.hotkey(key,fn), GT.addNpc(sceneRef,def), GT.removeNpc(npc),
  *                         GT.moveNpc(npc,sceneRef,x,y), GT.npcHide(npc,bool), GT.npcTeleport(npc,x,y,dir), GT.findNpc(key), GT.getScene(ref),
@@ -1535,8 +1535,8 @@ function modal(o){
   setContent(body, o.body);
   box.appendChild(head); box.appendChild(body); box.appendChild(foot);
   over.appendChild(box);
-  // taps on the dimmed backdrop never close a modal by accident (unless explicitly allowed)
-  over.addEventListener('pointerdown', function(e){ if (e.target === over && o.backdropClose) h.close('backdrop'); });
+  // a click on the dimmed backdrop closes the modal, except sticky ones (payments, confirmations, trade, typed words)
+  over.addEventListener('pointerdown', function(e){ if (e.target === over && !o.sticky && o.closable !== false) h.close('backdrop'); });
   h.el = over; h.box = box; h.body = body; h.foot = foot; h.title = title;
   h.isOpen = function(){ return !h.closed; };
   h.setBody = function(c){ setContent(body, c); };
@@ -1663,7 +1663,7 @@ function itemName(id){ return (ITEMS[id] && ITEMS[id].name) || id; }
 /* ---------- Tas (inventory) / Profil / Peran / Toko / konfirmasi ---------- */
 function openBag(){
   if (modals.length || tr) return null;
-  var h = modal({ title:$t('Tas'), backdropClose:true, actions:[{label:$t('Tutup'), primary:true}] });
+  var h = modal({ title:$t('Tas'), actions:[{label:$t('Tutup'), primary:true}] });
   function render(){
     var wrap = el('div');
     var money = el('div', 'mmoney', $t('Koin: {0}', [state.coins])); wrap.appendChild(money);
@@ -1722,7 +1722,7 @@ function openProfile(){
   wrap.appendChild(el('p', null, $t('Reputasi: {0}', [state.reputation])));
   wrap.appendChild(el('p', null, $t('Klan: {0}', [state.clan ? '[' + state.clan.tag + '] ' + state.clan.name : '-'])));
   wrap.appendChild(el('p', null, $t('Koin: {0}', [state.coins])));
-  var h = modal({ title:$t('Profil'), body:wrap, backdropClose:false, actions:[
+  var h = modal({ title:$t('Profil'), body:wrap, sticky:true, actions:[
     {label:$t('Batal')},
     {label:$t('Simpan'), primary:true, onClick:function(m){
       var nm = (inp.value || '').trim().slice(0, 16) || $t('Kamu');
@@ -1763,7 +1763,7 @@ function shopItems(){
 }
 function openShop(keeper){
   if (modals.length) return null;
-  var h = modal({ title:$t('Mart Genesis'), backdropClose:false, actions:[{label:$t('Selesai'), primary:true}] });
+  var h = modal({ title:$t('Mart Genesis'), sticky:true, actions:[{label:$t('Selesai'), primary:true}] });
   function render(){
     var wrap = el('div');
     wrap.appendChild(el('div', 'mmoney', $t('Koin: {0}', [state.coins])));
@@ -1799,7 +1799,7 @@ function openShop(keeper){
 function confirmRegen(){
   if (QA){ doRegen(); return; }
   if (modals.length || tr) return;
-  modal({ title:$t('Generasi ulang?'), body:$t('Kota baru akan dibuat dengan seed baru. Koin dan isi tasmu tetap dibawa.'), actions:[
+  modal({ title:$t('Generasi ulang?'), sticky:true, body:$t('Kota baru akan dibuat dengan seed baru. Koin dan isi tasmu tetap dibawa.'), actions:[
     {label:$t('Batal')},
     {label:$t('Ya, buat baru'), primary:true, onClick:function(m){ m.close('ok'); doRegen(); }}
   ]});
@@ -1904,7 +1904,7 @@ function openDev(){
   refresh();
   devSections.forEach(function(rec){ renderDevSection(wrap, rec); });
   var timer = setInterval(function(){ if (devModal && devModal.isOpen()) refresh(); }, 400);
-  var h = modal({ title:$t('Panel Developer'), body:wrap, backdropClose:false, actions:[{label:$t('Tutup'), primary:true}], onClose:function(){ clearInterval(timer); if (devModal === h) devModal = null; } });
+  var h = modal({ title:$t('Panel Developer'), body:wrap, sticky:true, actions:[{label:$t('Tutup'), primary:true}], onClose:function(){ clearInterval(timer); if (devModal === h) devModal = null; } });
   h._wrap = wrap; devModal = h;
   return h;
 }

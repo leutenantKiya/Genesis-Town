@@ -855,7 +855,7 @@ function askPlayer(npc, thing, signal){
     var open = function(){
       if (done) return;
       var p = document.createElement('p'); p.textContent = $t('{0} meminta {1} darimu. Beri?', [npc.name, thing]);
-      h = GT.modal({ title:$t('Permintaan'), body:p, closable:true, actions:[
+      h = GT.modal({ title:$t('Permintaan'), sticky:true, body:p, closable:true, actions:[
         { id:'ya', label:$t('Beri'), primary:true, onClick:function(){ fin(true); return true; } },
         { id:'tidak', label:$t('Tolak'), onClick:function(){ fin(false); return true; } }
       ], onClose:function(){ fin(false); } });

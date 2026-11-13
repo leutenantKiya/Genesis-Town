@@ -205,7 +205,7 @@
     winKey = key;
     var mineId = s.id;
     win = GT.modal({
-      title: $t('Dagang dengan {0}', [otherName(s)]), body: body, wide: true, actions: [],
+      title: $t('Dagang dengan {0}', [otherName(s)]), sticky: true, body: body, wide: true, actions: [],
       onClose: function (reason) {
         if (reason === 'end') return;           // closed by us after the outcome
         if (setT) { clearTimeout(setT); setT = null; }
@@ -266,7 +266,7 @@
     sfx('notify');
     GT.toast($t('{0} mengajak dagang!', [i.other.name]));
     invPop = GT.modal({
-      title: $t('Ajakan dagang'), body: $t('{0} mengajak dagang', [otherName(i)]), actions: [
+      title: $t('Ajakan dagang'), sticky: true, body: $t('{0} mengajak dagang', [otherName(i)]), actions: [
         { label: $t('Buka'), primary: true, onClick: function (h) {
           tpost('/trade/join', { id: i.id }).then(function (r) { refreshState(r); h.close('ok'); take(r.session); }, function (e) { fail(e); h.close('err'); });
         } },

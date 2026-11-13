@@ -64,7 +64,7 @@
     var body = document.createElement('div');
     var p1 = document.createElement('p'); p1.textContent = $t('Naik kuda putar selama {0} detik? Tarifnya {1} koin.', [secs, price]); body.appendChild(p1);
     if (coins != null) { var p2 = document.createElement('p'); p2.className = 'chain-dim'; p2.textContent = $t('Koinmu: {0}', [coins]); body.appendChild(p2); }
-    GT.modal({ title: '🎠 ' + $t('Kuda Putar'), body: body, onClose: function () { asking = false; }, actions: [
+    GT.modal({ title: '🎠 ' + $t('Kuda Putar'), sticky: true, body: body, onClose: function () { asking = false; }, actions: [
       { label: $t('Naik · {0} koin', [price]), primary: true, disabled: coins != null && coins < price, onClick: function (h) {
         h.close('ok');
         C.act({ action: 'ride' }).then(function (r) { if (r && r.ride && !R.on) start(r.ride.secs); }, function () { /* the server said no (no coin, too far): its message is the toast */ });

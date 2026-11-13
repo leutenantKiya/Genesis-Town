@@ -304,7 +304,7 @@
     F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
     PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' };
     ui = {};
-    panel = GT.modal({ title: $t('Admin'), wide: true, body: build(), onClose: function () { clearInterval(timer); }, actions: [{ label: $t('Muat ulang'), onClick: function () { load(); return false; } }, { label: $t('Tutup'), close: true }] });
+    panel = GT.modal({ title: $t('Admin'), wide: true, sticky: true, body: build(), onClose: function () { clearInterval(timer); }, actions: [{ label: $t('Muat ulang'), onClick: function () { load(); return false; } }, { label: $t('Tutup'), close: true }] });
     renderAll(); load();
     clearInterval(timer);
     timer = setInterval(function () { if (panel && panel.isOpen()) load(); else clearInterval(timer); }, 5000);

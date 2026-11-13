@@ -27,7 +27,7 @@
 .hl-where.guest{color:var(--gold)}
 /* the owner's Town Hall in tabs: icon over a word on phones, side by side on wider screens; a dot when Build has
    something that can start now */
-.hl-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.hl-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 10px}
 .hl-tab{position:relative;display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:6px 8px;cursor:pointer;
   font:600 calc(14px*var(--ts)) var(--font);color:var(--paper-ink);background:var(--paper-2,rgba(0,0,0,.06));
   border:var(--line) solid transparent;border-radius:var(--r-ctl)}

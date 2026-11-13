@@ -261,8 +261,7 @@
   var HALL_TABS = [
     { id: 'town', icon: '🏛️', word: function () { return $t('Kota'); } },
     { id: 'build', icon: '🔨', word: function () { return $t('Bangun'); } },
-    { id: 'work', icon: '👷', word: function () { return $t('Pekerja'); } },
-    { id: 'guest', icon: '👥', word: function () { return $t('Tamu'); } }
+    { id: 'work', icon: '👷', word: function () { return $t('Pekerja'); } }
   ];
   var hallTab = 'town';
   try { var savedTab = sessionStorage.getItem('gt.hall.tab'); if (savedTab && HALL_TABS.some(function (t) { return t.id === savedTab; })) hallTab = savedTab; } catch (e) { /* storage blocked */ }
@@ -377,8 +376,8 @@
     if (!H) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     var owner = inOwnHome();
     if (!owner) return guestHall(wrap);
-    // four tabs (icon + word): the town at a glance, things to build, workers and gear, guests
-    var pane = { town: $('div', 'hl-pane'), build: $('div', 'hl-pane'), work: $('div', 'hl-pane'), guest: $('div', 'hl-pane') };
+    // three tabs (icon + word): the town (stats, builder, guests and roles), things to build, workers and gear
+    var pane = { town: $('div', 'hl-pane'), build: $('div', 'hl-pane'), work: $('div', 'hl-pane') };
     var stats = $('div', 'hl-stats');
     function stat(k, v) { var s = $('div', 'hl-stat'); s.appendChild($('span', 'hl-k', k)); s.appendChild($('b', 'hl-n', v)); stats.appendChild(s); }
     stat($t('Balai Kota'), $t('level {0}', [H.th]));
@@ -510,7 +509,7 @@
           input.value = names.join(', '); GT.toast($t('Undangan tersimpan ({0} tamu).', [names.length])); return load(true);
         }, function (e) { GT.toast($t('Gagal: {0}', [e.message])); });
     }));
-    pane.guest.appendChild(iv);
+    pane.town.appendChild(iv);
 
     // roles: what the party and each invited guest may do here
     var rl = cell('🔑 ' + $t('Peran tamu'));
@@ -520,7 +519,7 @@
       var row = $('div', 'hl-acts'); row.appendChild($('span', 'hl-k', g.name + (g.tag ? '#' + g.tag : '')));
       row.appendChild(roleSelect(g.role || 'visitor', false, function (v) { setRole(g.account, v); })); rl.appendChild(row);
     });
-    pane.guest.appendChild(rl);
+    pane.town.appendChild(rl);
     // the tab row; a dot on Build when something there can start now
     var tabs = $('div', 'hl-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', $t('Balai Kota'));
     var ready = { build: canTh || okLight || okChunk };

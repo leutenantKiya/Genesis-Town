@@ -96,7 +96,7 @@
     body.appendChild(el('p', null, $t('Tiket masuk Genesis Casino: {0} koin, berlaku {1} menit. Di dalam kamu bisa main Meja Untung, slot, kartu dan dadu dengan chip.', [f.casino, f.casinoPassMinutes])));
     body.appendChild(el('p', 'chain-dim', $t('Chip dibeli dengan koin. Chip yang kamu beli bisa ditukar kembali jadi koin (ada biaya kecil), tapi chip hasil menang tidak bisa ditukar.')));
     body.appendChild(el('p', 'chain-dim', $t('Koinmu: {0}', [coins()])));
-    GT.modal({ title: '🎰 ' + $t('Genesis Casino'), body: body, actions: [
+    GT.modal({ title: '🎰 ' + $t('Genesis Casino'), sticky: true, body: body, actions: [
       { label: $t('Beli tiket · {0} koin', [f.casino]), primary: true, disabled: coins() < f.casino, onClick: function (h) {
         h.close('ok');
         c.act({ action: 'casino', op: 'enter' }).then(function () { if (passUntil()) table(game); }, function () { /* the server's message is the toast */ });
@@ -109,7 +109,7 @@
   /* ---------------------------------------------------------------- the table window */
   function table(game, free) {
     if (win && win.h.isOpen()) win.h.close('again');
-    var d = load(), body = el('div', 'gt-casino'), h = GT.modal({ title: free ? '🎲 ' + $t('Meja Untung') : '🎰 ' + $t('Genesis Casino'), wide: true, body: body, onClose: function () { win = null; clearInterval(spinT); clearTimeout(spinT); }, actions: [{ label: $t('Tutup'), close: true }] });
+    var d = load(), body = el('div', 'gt-casino'), h = GT.modal({ sticky: true, title: free ? '🎲 ' + $t('Meja Untung') : '🎰 ' + $t('Genesis Casino'), wide: true, body: body, onClose: function () { win = null; clearInterval(spinT); clearTimeout(spinT); }, actions: [{ label: $t('Tutup'), close: true }] });
     win = { h: h };
     var spinT = 0, busy = false, note = '', slotSyms = null, shown = null; // shown: the balances to display while an animation runs (the server has already paid)
     var bet = BETS[1];

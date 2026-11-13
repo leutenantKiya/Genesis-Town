@@ -636,7 +636,7 @@
   function openSettings() {
     if (modal && modal.isOpen()) return;
     draftName = null;
-    modal = GT.modal({ title: $t('Pengaturan'), wide: true, body: body(), onClose: function () { capturing = null; draftName = null; clearInterval(idleT); } });
+    modal = GT.modal({ title: $t('Pengaturan'), sticky: true, wide: true, body: body(), onClose: function () { capturing = null; draftName = null; clearInterval(idleT); } });
     modal.box.classList.add('gt-set-box');
     var xb = modal.box.querySelector('.mx'); if (xb) xb.setAttribute('data-autofocus', ''); // not the name field: a phone would raise its keyboard
   }

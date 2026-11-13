@@ -484,7 +484,56 @@
     }, function () { if (h.isOpen()) lvl.textContent = ''; });
   }
 
+  /* ---------------------------------------------------------------- who is here (Tab held, or the phone button) */
+  // Connection strength per player: 4 bars from the age of their last presence report (the server's `age` plus half our
+  // round trip); ours from the measured round trip itself. good = 3-4 bars, fair = 2, weak = 0-1.
+  var listEl = null, listBtn = null, listOn = false, listT = 0;
+  function barsFromAge(sec) { return sec <= 1.5 ? 4 : sec <= 3 ? 3 : sec <= 6 ? 2 : sec <= 12 ? 1 : 0; }
+  function barsFromRtt(ms) { return ms <= 150 ? 4 : ms <= 350 ? 3 : ms <= 700 ? 2 : 1; }
+  function qualityWord(b) { return b >= 3 ? $t('bagus') : b === 2 ? $t('sedang') : $t('lemah'); }
+  function signal(b) {
+    var s = el('span', 'gt-sig ' + (b >= 3 ? 'good' : b === 2 ? 'fair' : 'weak')); s.title = qualityWord(b); s.setAttribute('role', 'img'); s.setAttribute('aria-label', $t('Sinyal {0}', [qualityWord(b)]));
+    for (var i = 1; i <= 4; i++) { var bar = el('i'); if (i <= b) bar.className = 'on'; bar.style.height = (3 + i * 3) + 'px'; s.appendChild(bar); }
+    return s;
+  }
+  function renderPlayerList() {
+    if (!listEl) return;
+    var now = performance.now(), rows = [{ nick: me || $t('Kamu'), tag: meTag, bars: barsFromRtt(rtt), self: true }];
+    Object.keys(others).forEach(function (a) {
+      var o = others[a]; if (o.npc) return;
+      rows.push({ nick: o.nick || '?', tag: o.tag, party: o.party, guest: o.guest, bars: barsFromAge((o.age || 0) + (now - o.rt) / 1000) });
+    });
+    rows.sort(function (a, b) { return (b.self ? 1 : 0) - (a.self ? 1 : 0) || (a.nick < b.nick ? -1 : 1); });
+    listEl.textContent = '';
+    listEl.appendChild(el('div', 'gt-plist-h', $t('Pemain di dunia ini · {0}', [rows.length])));
+    rows.forEach(function (r) {
+      var row = el('div', 'gt-plist-row' + (r.self ? ' me' : ''));
+      var nm = el('span', 'gt-plist-n', (r.party ? '🎉 ' : '') + (r.guest ? $t('Tamu') : r.nick + (r.tag ? '#' + r.tag : '')) + (r.self ? ' (' + $t('kamu') + ')' : ''));
+      row.appendChild(nm); row.appendChild(signal(r.bars)); row.appendChild(el('span', 'gt-plist-q', qualityWord(r.bars)));
+      listEl.appendChild(row);
+    });
+  }
+  function showPlayerList(on) {
+    if (on && (!active() || GT.isUiOpen())) on = false;
+    listOn = on;
+    var screen = document.getElementById('screen');
+    if (on && !listEl && screen) { listEl = el('div', 'gt-plist'); listEl.setAttribute('role', 'status'); screen.appendChild(listEl); }
+    if (listEl) listEl.hidden = !on;
+    if (listBtn) listBtn.setAttribute('aria-pressed', String(on));
+    clearInterval(listT); listT = 0;
+    if (on) { renderPlayerList(); listT = setInterval(function () { if (GT.isUiOpen()) showPlayerList(false); else renderPlayerList(); }, 500); }
+  }
+  function buildListBtn() {
+    var tr = document.getElementById('gt-tr'), screen = document.getElementById('screen');
+    if (!tr && screen) { tr = el('div', 'gt-tr'); tr.id = 'gt-tr'; screen.appendChild(tr); }
+    if (!tr || listBtn) return;
+    listBtn = el('button', 'gt-trbtn gt-trbtn-players', '👥'); listBtn.type = 'button'; listBtn.setAttribute('aria-label', $t('Daftar pemain')); listBtn.title = $t('Daftar pemain (Tab)');
+    listBtn.addEventListener('click', function (e) { e.currentTarget.blur(); showPlayerList(!listOn); });
+    tr.appendChild(listBtn);
+  }
+
   function onKey(e) {
+    if (e.code === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) { if (e.type === 'keydown' && !e.repeat && !GT.isUiOpen()) showPlayerList(true); return true; } // held: Tab never moves the browser focus off the game
     if (e.type !== 'keydown' || e.repeat || GT.isUiOpen()) return false;
     if (document.documentElement.classList.contains('gt-fishing') || document.documentElement.classList.contains('gt-fighting')) return false;
     if (e.code === 'KeyC') { openChat(''); return true; }
@@ -503,8 +552,10 @@
       e.stopImmediatePropagation(); e.preventDefault();
       card(o);
     }, true);
+    window.addEventListener('keyup', function (e) { if (e.code === 'Tab' && listOn) showPlayerList(false); });
+    window.addEventListener('blur', function () { if (listOn) showPlayerList(false); });
     // build the box once signed in, so recent lines show even before the first message
-    var wait = setInterval(function () { if (active()) { build(); clearInterval(wait); } }, 1000);
+    var wait = setInterval(function () { if (active()) { build(); buildListBtn(); clearInterval(wait); } }, 1000);
   }
 
   function refresh() { others = {}; curWorld = null; backoff = 0; nextAt = 0; holdUntil = 0; tick(); } // after sailing: forget the old world's players at once

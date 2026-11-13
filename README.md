@@ -1,6 +1,7 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **UI and navigation round** (2026-11-14): the Town Hall has 3 tabs (Town now also holds the guests, invites and roles; Build; Workers); holding **Tab** (or the phone's 👥 button) lists the players in your world with name#tag, a party marker and a 4-bar connection signal (good, fair, weak; from the age of their last presence report, ours from the measured round trip), and Tab no longer moves browser focus; a **Misi** button at the top right opens the missions and shows a "!" when a reward waits or the current mission is new; the shop-closed rescue card (market info such as "still short 6 Wheat") is gone; clicking the dark backdrop closes a window unless it is `sticky: true` (payments, trade, casino, admin, device approval, settings, name and typed confirmations); Esc and the x always close. Needs a browser check.
 > - **Merchants and the Player Market, consignment removed** (2026-11-14): about every 30 s (`npcMarket.everySecs`) the
 >   server reads the open Player Market listings. Each merchant buys a listing of a good it trades when the price is at or
 >   below its fair price (its mid price from `economy/pricing.ts` times its cash factor), within a daily cap, never above 15%
@@ -253,7 +254,7 @@
 >   start with 5 Wheat, and the hotbar shows the Hoe, the Pickaxe and a Fishing Rod (a free tool like the Hoe) first;
 >   clicking to walk no longer fights W A S D (mouse.js holds its own direction, `GT.walkDir`, and any player direction
 >   cancels it, hook `onPlayerDir`); tilled soil uses the field's own soil art, an empty plot shows corner marks, the hoe
->   squares are lighter; the owner's Town Hall is in four tabs with icons (Town, Build, Workers, Guests), Build shows a
+>   squares are lighter; the owner's Town Hall is in three tabs with icons (Town incl. guests, Build, Workers), Build shows a
 >   dot when something can start, and two regions with the same name say their side; the mission card is an icon, a
 >   few words and one hint, and moves under the floating top bar; a closed shop shows one row per missing good with a
 >   progress bar; the carousel ride is a clean, brighter picture with a warm light on the rider (`GT.setCleanView`), and

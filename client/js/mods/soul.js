@@ -954,14 +954,14 @@ function openGiveCoins(k, nm, after){
     } };
   });
   acts.push({ label:$t('Batal') });
-  return GT.modal({ title:$t('Beri koin'), body:body, actions:acts });
+  return GT.modal({ title:$t('Beri koin'), sticky:true, body:body, actions:acts });
 }
 function openPanel(){
   if (GT.isUiOpen()) return null;
   var body = el('div'), list = el('div'), skillBox = el('div');
   body.appendChild(el('p', 'mnote', $t('Beri jiwa ke NPC, lalu hadapi dan tekan E untuk kirim pesan. Daftar: Ibu dan NPC yang pernah kamu ajak bicara.')));
   body.appendChild(list); body.appendChild(skillBox);
-  var h = GT.modal({ title:$t('Jiwa NPC'), body:body, backdropClose:true, actions:[{ label:$t('Tutup'), primary:true }] });
+  var h = GT.modal({ title:$t('Jiwa NPC'), body:body, actions:[{ label:$t('Tutup'), primary:true }] });
   function render(){
     list.textContent = '';
     var keys = candidateKeys();
