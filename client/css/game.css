@@ -117,8 +117,12 @@ html.gt-dizzy canvas{filter:hue-rotate(calc(var(--dz,0)*70deg)) blur(calc(var(--
 @keyframes gt-swirl{to{filter:hue-rotate(30deg)}}
 @media (prefers-reduced-motion: reduce){html.gt-dizzy canvas,html.gt-dizzy::after{animation:none}}
 /* riding the carousel (ride.js): letterbox bars, a vignette and a warm, punchy grade over the game view */
-html.gt-riding canvas{filter:contrast(1.1) saturate(1.3) sepia(.14) brightness(1.04)}
-.gt-ride-bars{position:fixed;inset:0;z-index:30;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(20,8,0,.45) 100%)}
+/* a bright, warm grade and a soft vignette (the owner asked for a brighter ride) */
+html.gt-riding canvas{filter:brightness(1.18) contrast(1.06) saturate(1.25) sepia(.06)}
+.gt-ride-bars{position:fixed;inset:0;z-index:30;pointer-events:none;background:radial-gradient(ellipse at center,transparent 62%,rgba(20,8,0,.22) 100%)}
+/* a clean picture while riding: no mission card, chat, markers, item bar or buttons; all back when you get off */
+html.gt-riding .gt-goals,html.gt-riding .hl-where,html.gt-riding .gt-chat,html.gt-riding #fx,html.gt-riding .gt-hotbar,html.gt-riding .gt-held,
+html.gt-riding #gt-hint,html.gt-riding .gt3d-bar,html.gt-riding .gt3d-hint,html.gt-riding .joy,html.gt-riding .actbtn,html.gt-riding .gt-slotpop{display:none!important}
 .gt-ride-bars i{position:absolute;left:0;right:0;height:11vh;background:#000;animation:gt-bars .6s ease-out both}
 .gt-ride-bars i:first-child{top:0}.gt-ride-bars i:last-child{bottom:0}
 @keyframes gt-bars{from{height:0}}

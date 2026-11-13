@@ -24,6 +24,7 @@
     var p = GT.player;
     R.on = true; R.at = { x: Math.round(p.x), y: Math.round(p.y) };
     document.documentElement.classList.add('gt-riding');
+    if (GT.setCleanView) GT.setCleanView(true); // no tags, bubbles or markers over the ride
     if (!bars) { bars = document.createElement('div'); bars.className = 'gt-ride-bars'; bars.setAttribute('aria-hidden', 'true'); bars.innerHTML = '<i></i><i></i>'; }
     document.body.appendChild(bars);
     // in 2D there is no horse to sit on: the player rides out of sight; the 2.5D view seats them on a horse
@@ -35,6 +36,7 @@
     if (!R.on) return;
     R.on = false; R.at = null;
     document.documentElement.classList.remove('gt-riding');
+    if (GT.setCleanView) GT.setCleanView(false);
     if (bars && bars.parentNode) bars.parentNode.removeChild(bars);
     if (R.hidden && GT.setPlayerHidden) GT.setPlayerHidden(false);
     R.hidden = false;

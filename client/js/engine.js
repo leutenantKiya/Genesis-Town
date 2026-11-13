@@ -2031,6 +2031,7 @@ function charStep(o){
    effects) on this now transparent canvas with camX/camY moved so the player's 2D feet sit on the player's 3D feet.
    The view keeps one world pixel at the player's depth equal to one canvas pixel, so overlays near the player line up. */
 var playerHidden = false; // the character screen's throw draws the player itself until it lands (GT.setPlayerHidden)
+var cleanView = false; // a cinematic moment (the carousel ride): no mod overlays on the picture (GT.setCleanView)
 var view3d = null, ovK = 0; // ovK: while the 3D overlays draw, device px per art px at the player's depth (else 0)
 // indoors too when the view can draw rooms (view3d.rooms): the room stands where its building is, in the same world
 function v3on(){ return !!(view3d && scene && view3d.ready() && (scene.kind === 'out' || (scene.house && view3d.rooms))); }
@@ -2066,7 +2067,7 @@ function render3d(pp){
   camX = pp.px + 6 - feet.x * S / ovK; camY = pp.py + 12 - feet.y * S / ovK;
   ctx.setTransform(ovK, 0, 0, ovK, 0, 0);
   if (window.GT_THEME) GT_THEME.scale = 0.6;
-  try { callMods('onDraw', [ctx, camX, camY, T]); }
+  try { if (!cleanView) callMods('onDraw', [ctx, camX, camY, T]); }
   finally { ovK = 0; if (window.GT_THEME) GT_THEME.scale = 1; ctx.setTransform(S, 0, 0, S, 0, 0); }
   lastDark = currentDark();
   if (tr){
@@ -2138,7 +2139,7 @@ function render(){
   }
   if (scene.kind === 'out') drawNight();
   else lastDark = 0;
-  callMods('onDraw', [ctx, camX, camY, T]);
+  if (!cleanView) callMods('onDraw', [ctx, camX, camY, T]);
   if (tr){
     var a = tr.ph === 0 ? tr.t : 1 - tr.t;
     ctx.fillStyle = 'rgba(0,0,0,' + Math.max(0, Math.min(1, a)).toFixed(3) + ')';
@@ -2616,6 +2617,8 @@ var GT = {
     return { x:(pp.px + 6 - camX) * S, y:(pp.py + 12 - camY) * S, scale:S };
   },
   // an analog walk on screen axes (-1..1 each), e.g. a drag in the 2.5D view; null lets go
+  // true: a clean picture for a cinematic moment, the mods' overlays (tags, bubbles, markers, signs) are not drawn
+  setCleanView: function(on){ cleanView = !!on; },
   setStick: function(x, y){ stick = x == null ? null : {x:+x || 0, y:+y || 0}; },
   // a direction held by an on-screen control (the phone's joystick), like a held arrow key; null lets go
   padDir: function(d){ releaseDir('joy'); if (d === 'up' || d === 'down' || d === 'left' || d === 'right') pressDir(d, 'joy'); },

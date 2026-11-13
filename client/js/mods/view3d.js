@@ -296,14 +296,21 @@
      The player's card sits on the first horse, which turns with the ride (fun.js: spin.rotation.y = t * 0.55, horse 0
      at radius 1.05, bobbing sin(t * 2.2) * 0.14), and the camera drops low and slowly circles the ride, looking at
      the rider: a cinematic shot. Only the picture changes; the player still stands on their tile for the game. */
+  // a warm light that rides with the player, so the ride reads bright at any hour
+  var rideLamp = null;
+  function rideLight(on) {
+    if (!rideLamp) { if (!on) return; rideLamp = new THREE.PointLight(0xffe0b0, 0, 7, 1.2); scene.add(rideLamp); }
+    rideLamp.intensity = on ? 2.2 + 5 * (sky ? sky.night : 0) : 0;
+  }
   var rodeLast = false; // the figure was on the horse last frame: getting off puts it back on its feet once
   function rideShot(now) {
     var R = window.GT_RIDE, L = world && world.layout, car = L && L.fun && L.fun.carousel;
     if (!R || !R.on || !car) {
-      if (rodeLast) { rodeLast = false; var off = actors.get('me'); if (off) { off.actor.pose(0, 0, 1); off.sat = false; } }
+      if (rodeLast) { rodeLast = false; rideLight(false); var off = actors.get('me'); if (off) { off.actor.pose(0, 0, 1); off.sat = false; } }
       return;
     }
     rodeLast = true;
+    rideLight(true);
     var t = now / 1000, th = t * 0.55, cx = car.x + 0.5, cz = car.y + 0.5;
     var hx = cx + Math.cos(th) * 1.05, hz = cz - Math.sin(th) * 1.05, bob = Math.sin(t * 2.2) * 0.14;
     var me = actors.get('me');
@@ -311,6 +318,7 @@
     var ca = th * 0.4 + 0.9, r = 5.4;
     camera.position.set(cx + Math.sin(ca) * r, 1.45, cz + Math.cos(ca) * r);
     camera.lookAt(hx, 0.95 + bob, hz);
+    if (rideLamp) rideLamp.position.set(hx + Math.sin(ca) * 1.4, 2.2, hz + Math.cos(ca) * 1.4); // from the camera's side
   }
 
   /* ---------------------------------------------------------------- dropping into the world (after the character screen)
