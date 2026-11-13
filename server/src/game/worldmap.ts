@@ -179,6 +179,8 @@ export class Positions {
   /** Back to the public island with no remembered position (the next report starts fresh). */
   reset(account: string) { this.worlds.delete(account); this.last.delete(account); }
   /** `world` is the world the client says it is in, `map` that world's map (the caller already checked access to it). */
+  /** The last position this check accepted for the player (what presence shows, never the raw report). */
+  lastOf(account: string): Pos | null { const l = this.last.get(account); return l ? { x: l.x, y: l.y } : null; }
   report(account: string, raw: unknown, now: number, world = 'public', map: GameMap = this.map, home?: { world: string; spawn: Pos }): Pos {
     const r = raw as { x?: unknown; y?: unknown } | null;
     const p = { x: Number(r?.x), y: Number(r?.y) };

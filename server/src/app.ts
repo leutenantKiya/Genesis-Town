@@ -494,6 +494,10 @@ export function createApp(deps: AppDeps) {
             if (f && typeof f === 'object' && m && m.tileAt(Number(f.x), Number(f.y)) !== 'water') b.fish = undefined;
           } catch { onTile = false; }
         }
+        // what the others see is the position the walking check accepted, not the raw report: a client cannot place
+        // itself by another building's door (rooms are matched by door) or anywhere else it has not walked to
+        const ok = game.positions ? game.positions.lastOf(acct) : null;
+        if (ok) { b.x = ok.x; b.y = ok.y; }
         if (onTile) social.report(acct, w, b);
         const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
