@@ -410,6 +410,13 @@
     body.appendChild($('p', 'chain-dim', $t('Paket aktif bila saldomu cukup untuk harga paket ditambah {0} NEAR.', [info.reserveNear])));
     body.appendChild($('p', 'chain-dim', $t('Terpakai hari ini: {0} dari {1} koin.', [(info.used || 0).toLocaleString(), (info.dailyMaxCoin || 0).toLocaleString()])));
     if (TOP.busy) body.appendChild($('p', 'chain-dim', $t('Menunggu pembayaran…')));
+    if (TOP.pending && !TOP.busy) {
+      var pend = $('div', 'topup-confirm');
+      pend.appendChild($('p', null, TOP.pending.receiver ? $t('Siap membayar {0} NEAR untuk {1} koin ke {2}.', [TOP.pending.near, TOP.pending.coin.toLocaleString(), TOP.pending.nick]) : $t('Siap membayar {0} NEAR untuk {1} koin.', [TOP.pending.near, TOP.pending.coin.toLocaleString()])));
+      pend.appendChild(button($t('Setujui pembayaran'), function () { topupConfirm(); }, 'primary'));
+      pend.appendChild(button($t('Batal'), function () { TOP.pending = null; drawTopup(); }));
+      body.appendChild(pend);
+    }
     syncPacks = function () {
       var needOther = TOP.who === 'other' && !TOP.other;
       btns.forEach(function (x) {
@@ -477,17 +484,18 @@
     }
     body.appendChild(sec);
   }
+  // Paying takes two clicks, because a browser lets one click open one popup: the pack click opens the NEAR Auth login
+  // and prepares the payment; then "Setujui pembayaran" opens the signing popup from its own click.
   function topupPay(coin) {
     var info = TOP.info, L = window.NearLib;
     if (!info || !info.open || TOP.busy || !L) return;
     var receiver = TOP.who === 'other' && TOP.other ? TOP.other.account : null;
     if (TOP.who === 'other' && !receiver) return;
-    var provider = nearProvider(), prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl }), ownerKey = L.PublicKey.from(info.ownerPublicKey), da, idToken;
+    var provider = nearProvider(), prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl }), ownerKey = L.PublicKey.from(info.ownerPublicKey), idToken;
     var nick = receiver ? TOP.other.nick + '#' + TOP.other.tag : '';
-    TOP.busy = true; drawTopup();
+    TOP.busy = true; TOP.pending = null; drawTopup();
     GT.toast($t('Membuka NEAR Auth…'));
-    // the popup must open from this click, so it is the first thing that happens
-    provider.login(undefined, true)
+    provider.login(undefined, true) // popup 1: from this click
       .then(function () { return provider.client.getIdTokenClaims(); })
       .then(function (claims) {
         if (!claims || !claims.__raw) throw new Error($t('Login tidak memberi token'));
@@ -496,28 +504,36 @@
           .catch(function () { throw new Error($t('Kunci NEAR Auth-mu tidak ditemukan di akun ini.')); });
       })
       .then(function (x) {
-        da = L.buildDelegateAction({
+        var da = L.buildDelegateAction({
           senderId: S.account, receiverId: S.cfg.gameContractId,
           actions: [L.actions.functionCall('buy_coin', receiver ? { receiver_id: receiver } : {}, L.teraToGas('30'), packYocto(coin, info.rate))],
           nonce: BigInt(x[0].nonce) + 1n, maxBlockHeight: BigInt(x[1].header.height) + 1500n, publicKey: ownerKey
         });
-        return provider.requestDelegateActionSignature({ delegateAction: da });
-      })
-      .then(function () { return provider.getSignatureRequest(); })
+        TOP.pending = { provider: provider, da: da, idToken: idToken, coin: coin, receiver: receiver, nick: nick, near: coin / info.rate };
+        TOP.busy = false;
+      }, function (e) { TOP.busy = false; TOP.pending = null; GT.toast($t('Gagal: {0}', [e && e.message || e])); })
+      .then(function () { drawTopup(); });
+  }
+  function topupConfirm() {
+    var P = TOP.pending, L = window.NearLib;
+    if (!P || TOP.busy || !L) return;
+    TOP.busy = true; drawTopup();
+    P.provider.requestDelegateActionSignature({ delegateAction: P.da }) // popup 2: from this click
+      .then(function () { return P.provider.getSignatureRequest(); })
       .then(function (res) {
         GT.toast($t('Mengirim pembayaran…'));
         var sr = res.signatureRequest;
         return api('/topup/relay', { method: 'POST', body: {
-          idToken: idToken, pack: coin, receiver: receiver || undefined,
-          delegateAction: b64(L.encodeDelegateAction(da).slice(4)), // plain borsh DelegateAction (without the NEP-461 prefix)
+          idToken: P.idToken, pack: P.coin, receiver: P.receiver || undefined,
+          delegateAction: b64(L.encodeDelegateAction(P.da).slice(4)), // plain borsh DelegateAction (without the NEP-461 prefix)
           signatureRequest: { guardId: sr.guardId, verifyPayload: sr.verifyPayload, signPayload: Array.from(sr.signPayload), algorithm: sr.algorithm || 'eddsa' }
         } });
       })
       .then(function (out) {
-        GT.toast(receiver ? $t('Top up berhasil: {0} koin dikirim ke {1}', [out.coin.toLocaleString(), nick]) : $t('Top up berhasil: +{0} koin', [out.coin.toLocaleString()]));
-        TOP.busy = false;
+        GT.toast(P.receiver ? $t('Top up berhasil: {0} koin dikirim ke {1}', [out.coin.toLocaleString(), P.nick]) : $t('Top up berhasil: +{0} koin', [out.coin.toLocaleString()]));
+        TOP.busy = false; TOP.pending = null;
         return refresh(true).then(function () { return api('/topup/info'); }).then(function (i) { TOP.info = i; }, noop);
-      }, function (e) { TOP.busy = false; GT.toast($t('Gagal: {0}', [e && e.message || e])); })
+      }, function (e) { TOP.busy = false; TOP.pending = null; GT.toast($t('Gagal: {0}', [e && e.message || e])); })
       .then(function () { drawTopup(); setTimeout(function () { walletRead(true); }, 1500); });
   }
 

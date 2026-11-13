@@ -3,6 +3,9 @@
 (function () {
   if (!window.GT_I18N) return;
   window.GT_I18N.add({
+    "Siap membayar {0} NEAR untuk {1} koin ke {2}.": "Ready to pay {0} NEAR for {1} coin to {2}.",
+    "Siap membayar {0} NEAR untuk {1} koin.": "Ready to pay {0} NEAR for {1} coin.",
+    "Setujui pembayaran": "Approve payment",
     "Gaya pakaianmu": "Your style",
     "Tampilan tubuh dipilih sekali saat karakter dibuat. Ganti gayamu dengan pakaian dari Genesis Mall.": "Your look is chosen once, when your character is made. Change your style with clothes from the Genesis Mall.",
     "Di tangan: {0} · ketuk kotak hijau di dalam pagar kebun untuk mencangkul": "In hand: {0} · tap a green square inside the farm fence to hoe it",
