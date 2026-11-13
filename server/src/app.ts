@@ -14,6 +14,7 @@ import { langOf, localizeJson, LangMemory, type Lang } from './lang.ts';
 import { TransferStore } from './transfer.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
+import { AdminGrants } from './admingrant.ts';
 import { topupInfo, topupRelay, topupResolve, type TopupDeps } from './topup.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
 import { Social, worldIdOk } from './social.ts';
@@ -132,9 +133,11 @@ export function createApp(deps: AppDeps) {
   game.trade.verify = (a, tokens) => chainCheck.verify(a, tokens, 'trade/swap'); // a live trade's swap re-checks both sides
   const topupLimiter = new RateLimiter(30, 200); // top-up requests per account (each costs the relayer a NEAR Auth sign call and gas)
   const topupResolveLimiter = new RateLimiter(30, 600);
+  const adminGrantLimiter = new RateLimiter(30, 300);
   const topupDeps: TopupDeps = { cfg: deps.cfg, chain: deps.chain, store: deps.store, game, verify: deps.verify, currentBlockHeight: deps.currentBlockHeight, invalidate: (a) => chainCheck.invalidate(a) };
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
+  const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
   social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs, perIp: game.econ.guest.perIp, maxMinutes: game.econ.guest.maxMinutes };
   const guestHelloLimiter = new RateLimiter(game.econ.guest.helloPerMinute, 200); // new guests per IP
   const guestPresenceLimiter = new RateLimiter(240, 100_000); // guest position reports per IP
@@ -483,6 +486,21 @@ export function createApp(deps: AppDeps) {
         }
         throw new HttpError(404, 'no such route');
       }
+      if (p === '/api/admin/grant' || p === '/api/admin/resolve') {
+        // coin from the town treasury to a player, off-chain like the starter kit (admingrant.ts); ADMIN_ACCOUNTS only
+        if (req.method === 'GET' && p === '/api/admin/resolve') {
+          const acct = adminOf(req, url);
+          if (!adminGrantLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+          return send(res, 200, adminGrants.who(url.searchParams.get('name')));
+        }
+        if (req.method === 'POST' && p === '/api/admin/grant') {
+          const raw = await readRaw(req);
+          const acct = adminOf(req, url, raw);
+          if (!adminGrantLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+          return send(res, 200, adminGrants.grant(acct, parseJson(raw)));
+        }
+        throw new HttpError(404, 'no such route');
+      }
       if (p === '/api/admin/frozen' || p === '/api/admin/status' || p === '/api/admin/unfreeze') {
         if (req.method === 'GET' && p !== '/api/admin/unfreeze') {
           adminOf(req, url);
@@ -501,7 +519,8 @@ export function createApp(deps: AppDeps) {
             day: t.day, hour: t.hour, settleDay: t.settleDay, settledThrough: game.settlement.settledThrough(),
             retry: [...game.settlement.retry.entries()].map(([day, r]) => ({ day, inSeconds: Math.max(0, Math.round((r.until - now) / 1000)), delaySeconds: Math.round(r.delay / 1000) })),
             settlements: game.gs.settlements(8),
-            chainCheck: { mode: deps.cfg.chainCheck.mode, ttlMs: deps.cfg.chainCheck.ttlMs, mismatches: chainCheck.mismatches.slice().reverse() }
+            chainCheck: { mode: deps.cfg.chainCheck.mode, ttlMs: deps.cfg.chainCheck.ttlMs, mismatches: chainCheck.mismatches.slice().reverse() },
+            treasury: adminGrants.treasury(), grantLimits: adminGrants.limits(), grants: adminGrants.log.slice().reverse()
           });
         } else if (req.method === 'POST' && p === '/api/admin/unfreeze') {
           const raw = await readRaw(req);
@@ -587,7 +606,7 @@ export function createApp(deps: AppDeps) {
           await game.prepare(acct, { world: w });
           game.reportPosition(acct, { x: Number(qx), y: Number(qy) }, w);
         }
-        return send(res, 200, { ...game.state(acct), name: deps.store.nameOf(acct), ...(isAdmin(acct) ? { admin: true } : {}) });
+        return send(res, 200, { ...game.state(acct), name: deps.store.nameOf(acct), ...(isAdmin(acct) ? { admin: true, treasury: adminGrants.treasury(), grantLimits: { ...adminGrants.limits(), sentToday: adminGrants.sentToday(acct) } } : {}) });
       }
       if (req.method === 'POST' && p === '/api/act') {
         const raw = await readRaw(req);

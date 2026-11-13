@@ -1759,6 +1759,16 @@
     "Sedang tidak terlihat": "Not around right now",
     "Satu party denganmu": "In your party",
     "Sedang dalam party": "In a party",
-    "Cari benih": "Search for seeds"
+    "Cari benih": "Search for seeds",
+    "Kirim koin dari kas kota": "Send coin from the town treasury",
+    "Khusus admin. Koin pindah dari kas kota ke pemain dan tersimpan permanen pukul 06:00. Tidak ada koin baru dicetak.": "Admins only. Coin moves from the town treasury to the player and is saved for good at 06:00. No new coin is minted.",
+    "Kas kota: {0} koin": "Town treasury: {0} coin",
+    "nama atau nama#tag": "name or name#tag",
+    "Nama pemain": "Player name",
+    "Jumlah koin": "Amount of coin",
+    "Catatan (boleh kosong)": "Note (optional)",
+    "Catatan": "Note",
+    "Maks {0} koin per kirim, {1} per hari (terkirim hari ini: {2}).": "At most {0} coin per grant, {1} per day (sent today: {2}).",
+    "{0} koin dikirim ke {1}": "{0} coin sent to {1}"
   });
 })();

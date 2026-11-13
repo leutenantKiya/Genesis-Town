@@ -330,6 +330,9 @@
   // signing path as approveDevice (the MPC signs, the server checks it and the relayer pays the gas). The deposit is the pack's
   // price, taken from the player's own wallet; the coin comes out of the town treasury, for the player or for another player.
   var TOP = { h: null, info: null, who: 'self', other: null, otherErr: '', busy: false, input: '', inputEl: null };
+  // Admins (state.admin, ADMIN_ACCOUNTS) also get "Kirim koin dari kas kota" in this window: coin moves from the town treasury to a
+  // player off-chain, like the starter kit (POST /api/admin/grant). It does not depend on the NEAR purchase being open.
+  var ADM = { input: '', who: null, err: '', amount: '', note: '', busy: false, focus: '' };
   var YOCTO = 1000000000000000000000000n;
   function fmtNear(y) { return (Number(y / 1000000000000000000000n) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 }); }
   function packYocto(coin, rate) { return BigInt(coin) * YOCTO / BigInt(rate); }
@@ -345,6 +348,7 @@
     if (S.mode === 'offline' || !S.account) { GT.toast($t('Masuk dulu untuk top up koin.')); return; }
     if (TOP.h && TOP.h.isOpen()) return;
     TOP.who = 'self'; TOP.other = null; TOP.otherErr = ''; TOP.busy = false; TOP.info = null; TOP.input = ''; TOP.inputEl = null;
+    ADM.input = ''; ADM.who = null; ADM.err = ''; ADM.amount = ''; ADM.note = ''; ADM.busy = false; ADM.focus = '';
     TOP.h = GT.modal({ title: $t('Top up koin'), body: $('p', null, $t('Memuat…')), onClose: function () { TOP.h = null; }, actions: [{ label: $t('Tutup') }] });
     var off = S.cfg && S.cfg.topup && !S.cfg.topup.enabled;
     (off ? Promise.resolve({ open: false }) : api('/topup/info').catch(function () { return { open: false }; })).then(function (info) { TOP.info = info; drawTopup(); });
@@ -355,10 +359,12 @@
     var info = TOP.info, body = $('div', 'topup');
     var hadFocus = TOP.inputEl && document.activeElement === TOP.inputEl;
     TOP.inputEl = null;
+    var ae = document.activeElement; ADM.focus = ae && ae.getAttribute && ae.closest && ae.closest('.topup-admin') ? (ae.getAttribute('data-ag') || '') : '';
     if (!info) { body.appendChild($('p', null, $t('Memuat…'))); h.setBody(body); return; }
     if (!info.open) {
       body.appendChild($('p', 'chain-closed', $t('Top up belum dibuka')));
-      h.setBody(body); return;
+      adminSection(body);
+      h.setBody(body); adminRefocus(h); return;
     }
     var rate = info.rate;
     body.appendChild($('p', null, $t('Koin diambil dari kas kota. Ini pembayaran NEAR yang kamu tandatangani di jendela NEAR Auth. Gas dibayar game.')));
@@ -414,8 +420,62 @@
       });
     };
     syncPacks();
+    adminSection(body);
     h.setBody(body);
+    adminRefocus(h);
     if (hadFocus && TOP.inputEl) { TOP.inputEl.focus(); try { TOP.inputEl.setSelectionRange(TOP.inputEl.value.length, TOP.inputEl.value.length); } catch (e) { /* not selectable */ } }
+  }
+  function adminRefocus(h) {
+    if (!ADM.focus) return;
+    var root = h.el || document, e = root.querySelector ? root.querySelector('.topup-admin [data-ag="' + ADM.focus + '"]') : null;
+    if (e && !e.disabled) { e.focus(); try { e.setSelectionRange(e.value.length, e.value.length); } catch (x) { /* not selectable */ } }
+  }
+  function adminSection(body) {
+    var st = S.st; if (!st || !st.admin) return;
+    var lim = st.grantLimits || {}, sec = $('div', 'topup-admin');
+    sec.appendChild($('div', 'chain-h', $t('Kirim koin dari kas kota')));
+    sec.appendChild($('p', 'chain-dim', $t('Khusus admin. Koin pindah dari kas kota ke pemain dan tersimpan permanen pukul 06:00. Tidak ada koin baru dicetak.')));
+    sec.appendChild($('p', 'topup-treasury', $t('Kas kota: {0} koin', [(st.treasury || 0).toLocaleString()])));
+    var f = $('div', 'chain-field topup-find'), inp = $('input'); inp.type = 'text'; inp.placeholder = $t('nama atau nama#tag'); inp.maxLength = 80; inp.value = ADM.input; inp.disabled = ADM.busy;
+    inp.setAttribute('data-ag', 'who'); inp.setAttribute('aria-label', $t('Nama pemain'));
+    var to = $('p', 'topup-to', ADM.who ? $t('Kirim ke {0}#{1}', [ADM.who.nick, ADM.who.tag]) : ADM.err);
+    if (!ADM.who && ADM.err) to.className += ' chain-closed';
+    var go = button($t('Kirim'), function () { send(); });
+    var amt = $('input'), note = $('input');
+    function sync() { var n = Number(amt.value); go.disabled = !!(ADM.busy || !ADM.who || !(n >= 1) || n !== Math.floor(n) || (lim.maxPerGrant && n > lim.maxPerGrant)); }
+    inp.addEventListener('input', function () { ADM.input = inp.value; ADM.who = null; ADM.err = ''; to.textContent = ''; to.className = 'topup-to'; sync(); });
+    function find() {
+      var v = inp.value.trim(); if (!v || ADM.busy) return;
+      api('/admin/resolve?name=' + encodeURIComponent(v)).then(function (r) { ADM.who = r; ADM.err = ''; drawTopup(); }, function (e) { ADM.who = null; ADM.err = e.status === 404 ? $t('Pemain tidak ditemukan.') : e.message; drawTopup(); });
+    }
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+    f.appendChild(inp); var fb = button($t('Cari'), find); fb.disabled = ADM.busy; f.appendChild(fb);
+    sec.appendChild(f); sec.appendChild(to);
+    var f2 = $('div', 'chain-field');
+    amt.type = 'number'; amt.min = '1'; amt.step = '1'; amt.placeholder = $t('Jumlah koin'); amt.value = ADM.amount; amt.disabled = ADM.busy; amt.setAttribute('data-ag', 'amount'); amt.setAttribute('aria-label', $t('Jumlah koin'));
+    amt.addEventListener('input', function () { ADM.amount = amt.value; sync(); });
+    f2.appendChild(amt); sec.appendChild(f2);
+    var f3 = $('div', 'chain-field');
+    note.type = 'text'; note.maxLength = 120; note.placeholder = $t('Catatan (boleh kosong)'); note.value = ADM.note; note.disabled = ADM.busy; note.setAttribute('data-ag', 'note'); note.setAttribute('aria-label', $t('Catatan'));
+    note.addEventListener('input', function () { ADM.note = note.value; });
+    f3.appendChild(note); sec.appendChild(f3);
+    if (lim.maxPerGrant) sec.appendChild($('p', 'chain-dim', $t('Maks {0} koin per kirim, {1} per hari (terkirim hari ini: {2}).', [lim.maxPerGrant.toLocaleString(), (lim.maxPerDay || 0).toLocaleString(), (lim.sentToday || 0).toLocaleString()])));
+    go.setAttribute('data-ag', 'go');
+    sec.appendChild(go);
+    sync();
+    function send() {
+      var n = Number(amt.value);
+      if (ADM.busy || !ADM.who || !(n >= 1)) return;
+      var nick = ADM.who.nick + '#' + ADM.who.tag;
+      ADM.busy = true; drawTopup();
+      api('/admin/grant', { method: 'POST', body: { to: ADM.who.account, coin: n, note: ADM.note.trim() || undefined } }).then(function (r) {
+        ADM.busy = false; ADM.amount = ''; ADM.note = '';
+        GT.toast($t('{0} koin dikirim ke {1}', [r.coin.toLocaleString(), nick]));
+        return refresh(true).then(noop, noop);
+      }, function (e) { ADM.busy = false; GT.toast($t('Gagal: {0}', [e && e.message || e])); })
+        .then(function () { drawTopup(); });
+    }
+    body.appendChild(sec);
   }
   function topupPay(coin) {
     var info = TOP.info, L = window.NearLib;

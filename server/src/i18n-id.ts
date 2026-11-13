@@ -163,6 +163,8 @@ export const EXACT: Record<string, string> = {
  "You're too tired to run. Passed out until morning.": "Kamu terlalu lelah untuk lari. Pingsan sampai pagi.",
  "Who do you want to trade with?": "Mau dagang dengan siapa?",
  "Player not found.": "Pemain tidak ditemukan.",
+ "Who gets the coin?": "Siapa yang menerima koin?",
+ "coin must be a whole number above 0.": "Jumlah koin harus bilangan bulat di atas 0.",
  " · Your Pickaxe broke!": " · Beliungmu patah!",
  "Out of energy. Eat Bread or Grilled Fish, or rest.": "Energi habis. Makan Roti atau Ikan Bakar, atau istirahat.",
  "Nothing to gather here.": "Tidak ada yang bisa dikumpulkan di sini.",
@@ -237,6 +239,30 @@ export const EXACT: Record<string, string> = {
  "Price steady (capped at 10% per hour).": "Harga tetap (dibatasi 10% per jam)."
 };
 export const PATTERNS: Array<[string, string]> = [
+ [
+  "One grant can be at most {0} coin.",
+  "Satu kiriman paling banyak {0} koin."
+ ],
+ [
+  "You can send at most {0} coin a day ({1} sent today).",
+  "Kamu hanya bisa mengirim {0} koin per hari ({1} sudah terkirim hari ini)."
+ ],
+ [
+  "The town treasury has only {0} coin.",
+  "Kas kota hanya punya {0} koin."
+ ],
+ [
+  "The town treasury sent you {0} coin: {1}",
+  "Kas kota mengirimmu {0} koin: {1}"
+ ],
+ [
+  "The town treasury sent you {0} coin.",
+  "Kas kota mengirimmu {0} koin."
+ ],
+ [
+  "You sent {0} coin from the town treasury to {1}.",
+  "Kamu mengirim {0} koin dari kas kota ke {1}."
+ ],
  [
   "You found a wheat seed! +1 {0}",
   "Kamu menemukan benih gandum! +1 {0}"

@@ -182,6 +182,7 @@
     "maxSendAmount": 10
   },
   "topup": { "rate": 1000, "packs": [100, 500, 1000, 5000], "dailyMaxCoin": 5000, "reserveNear": 0.01 },
+  "adminGrant": { "maxPerGrant": 5000, "maxPerDay": 50000 },
   "projects": [
     { "id": "jembatan-timur", "name": "Bridge to Far Bank Hamlet", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } },
     { "id": "pos-ronda", "name": "Watch Post in the North Forest", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 }, "retired": "Monsters now live in each player's Homeland, so the village forest no longer needs guarding." }

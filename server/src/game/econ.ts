@@ -67,6 +67,8 @@ export interface Econ {
   caps: { dailyGainPerItem: number; dailySends: number; maxSendAmount: number };
   /** Buying coin with NEAR (topup.ts): `rate` coin per 1 NEAR (must equal the contract's coin_per_near), the pack sizes in coin, the most coin one payer may buy per UTC day, and the NEAR the wallet keeps for fees. The coin comes from the town treasury, never newly minted. */
   topup?: { rate: number; packs: number[]; dailyMaxCoin: number; reserveNear: number };
+  /** Admin coin grants from the town treasury (admingrant.ts): the most one grant may send and one admin may send per ledger day. */
+  adminGrant?: { maxPerGrant: number; maxPerDay: number };
   /** Town projects; the contract holds the live state (create_project with these values). */
   projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number>; /** why it was stopped: no new pledges, withdrawals still work */ retired?: string }>;
   monsters: MonsterConfig;
