@@ -96,7 +96,9 @@ html.gt-reduced-motion #cv{transition:none}
 html.gt-has-hotbar #gt-hint{bottom:60px}
 html.gt-phone .gt-slot{width:36px;height:44px}
 html.gt-phone .gt-slot-k{display:none}
-@media (max-width:360px){html.gt-phone .gt-slot{width:32px}html.gt-phone .gt-hotbar{gap:3px;padding:3px}}
+/* nine slots and the bag button across a phone: narrower slots so the row fits 360 to 430 px wide */
+@media (max-width:430px){html.gt-phone .gt-slot{width:32px}html.gt-phone .gt-hotbar{gap:3px;padding:3px}}
+@media (max-width:360px){html.gt-phone .gt-slot{width:29px}html.gt-phone .gt-hotbar{gap:2px;padding:2px}}
 
 .gt-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 /* Pasar Gelap rows: a dark cell, the black market's own tone */

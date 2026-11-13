@@ -3,8 +3,9 @@
  * - Next to you: face it and act on it, as A does (fish, chop, mine, talk, open a stall, farm).
  * - Further away: walk there along a path first, then act if it is something to use.
  * - A building: walk to its door and go in.
- * The walk presses the same arrow keys a player would, one tile at a time, so the engine's own movement,
- * collisions and the server's walking-speed check all apply unchanged.
+ * The walk holds one direction at a time through the engine (GT.walkDir, its own id), so the engine's own movement,
+ * collisions and the server's walking-speed check all apply unchanged. Any direction the player gives (W A S D, the
+ * arrows, the joystick) takes over at once (engine hook onPlayerDir).
  */
 (function () {
   'use strict';
@@ -12,11 +13,11 @@
   if (!GT) return;
 
   var DIR = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-  var KEY = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
   var walk = null; // { path:[{x,y}], held:dir|null, then:fn|null, last:ms, lastPos:'x,y' }
 
-  // a map path is in world directions: gtWorld keeps the 2.5D camera's turn from turning them (engine.js pressDir)
-  function key(type, dir) { var e = new KeyboardEvent(type, { code: KEY[dir], key: KEY[dir], bubbles: true, cancelable: true }); e.gtWorld = true; window.dispatchEvent(e); }
+  // a map path is in world directions: GT.walkDir holds them as world ones, so the 2.5D camera's turn never turns them.
+  // (Fake arrow-key events used to do this, and W A S D, which settings.js re-sends as arrow keys, shared their ids.)
+  function key(type, dir) { if (GT.walkDir) GT.walkDir(type === 'keydown' ? dir : null); }
   function release() { if (walk && walk.held) { key('keyup', walk.held); walk.held = null; } }
   function cancel() { release(); walk = null; }
   function dirOf(from, to) {
@@ -104,17 +105,17 @@
     key('keydown', d);
   }
 
-  // a key the player presses themself takes over from the mouse
-  function onKey(e) { if (walk && e.isTrusted && e.type === 'keydown') cancel(); return false; }
+  // a direction the player gives themself takes over from the mouse (the engine tells every mod)
+  function onPlayerDir() { if (walk) { walk.held = null; walk = null; } }
 
   function init() {
     var cv = document.getElementById('cv');
     if (cv) cv.addEventListener('click', onClick);
-    window.addEventListener('keydown', function (e) { if (walk && e.isTrusted) cancel(); }, true);
   }
 
   // walk next to a tile (or onto it when it is walkable), then run `then`: the 2.5D Desa / Homeland buttons walk to the portal
   window.GT_MOUSE = {
+    face: faceThen, // turn toward an adjacent tile, then run fn (hotbar.js: the rod)
     goNear: function (t, then) {
       var sc = GT.scene, p = GT.player;
       if (!sc || !t) return false;
@@ -123,5 +124,5 @@
       go(a.path, then); return true;
     }
   };
-  GT.register({ id: 'mouse', init: init, onFrame: onFrame, onKey: onKey });
+  GT.register({ id: 'mouse', init: init, onFrame: onFrame, onPlayerDir: onPlayerDir });
 })();

@@ -296,9 +296,14 @@
      The player's card sits on the first horse, which turns with the ride (fun.js: spin.rotation.y = t * 0.55, horse 0
      at radius 1.05, bobbing sin(t * 2.2) * 0.14), and the camera drops low and slowly circles the ride, looking at
      the rider: a cinematic shot. Only the picture changes; the player still stands on their tile for the game. */
+  var rodeLast = false; // the figure was on the horse last frame: getting off puts it back on its feet once
   function rideShot(now) {
     var R = window.GT_RIDE, L = world && world.layout, car = L && L.fun && L.fun.carousel;
-    if (!R || !R.on || !car) return;
+    if (!R || !R.on || !car) {
+      if (rodeLast) { rodeLast = false; var off = actors.get('me'); if (off) { off.actor.pose(0, 0, 1); off.sat = false; } }
+      return;
+    }
+    rodeLast = true;
     var t = now / 1000, th = t * 0.55, cx = car.x + 0.5, cz = car.y + 0.5;
     var hx = cx + Math.cos(th) * 1.05, hz = cz - Math.sin(th) * 1.05, bob = Math.sin(t * 2.2) * 0.14;
     var me = actors.get('me');

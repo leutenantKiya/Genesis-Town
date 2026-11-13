@@ -1,7 +1,8 @@
 /*
  * hotbar.js - item slots along the bottom of the game view, like a crafting game's hotbar.
  * Every item the player can hold has a slot with its icon and count (on chain plus today). Like a crafting game, one
- * slot is in your hand: pick it with a click, 1-7 or the mouse wheel. Right-click in the world, R, or clicking the
+ * slot is in your hand: pick it with a click, 1-9 or the mouse wheel. The three tools come first: the Hoe and the
+ * Fishing Rod every player has (not tokens), then the Pickaxe (a token that wears out). Right-click in the world, R, or clicking the
  * held slot again uses it (food is eaten, Gandum is planted on a tilled plot). Left-click and F act on the world
  * (mouse.js). Right-click on a slot (a long press on phones) opens its menu: send, sell, or the whole bag. E (or I, or the round E button on phones) opens the bag. Reads and acts through window.GT_CHAIN.
  */
@@ -10,9 +11,10 @@
   var GT = window.GT;
   if (!GT) return;
 
-  // the last slot is the hoe (cangkul): a tool every player has, not a token in the bag
-  var SLOTS = ['fish', 'wood', 'ore', 'wheat', 'bread', 'meal', 'tool', 'hoe'];
-  var FREE = { hoe: 1 };
+  // tools first: the hoe (cangkul) and the rod (pancing) are tools every player has, not tokens in the bag
+  var SLOTS = ['hoe', 'tool', 'rod', 'wheat', 'fish', 'wood', 'ore', 'bread', 'meal'];
+  var FREE = { hoe: 1, rod: 1 };
+  var TOOL_NAME = { hoe: function () { return $t('Cangkul'); }, rod: function () { return $t('Pancing'); } };
   var OL = '#2a2430';
   // 8x8 icons in the prototype's style (one character per pixel, '.' is empty)
   var ICONS = {
@@ -24,7 +26,9 @@
     meal:  { k: OL, b: '#c86a30', B: '#8a4020', p: '#f0f0f0', y: '#f8d838', rows: ['........', '.kkkk.k.', 'kbbybkbk', 'kbBbbbbk', 'kbbbbkBk', '.kkkk.k.', 'kppppppk', '.kkkkkk.'] },
     // the pickaxe (Beliung): a steel head curving down to a point at each end, on a wooden handle
     tool:  { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#8a5a30', rows: ['.kkkkkk.', 'kggggGgk', 'kgkkwkGk', 'k..kwk.k', '...kwk..', '...kwk..', '...kwk..', '....k...'] },
-    hoe:   { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#a8703a', rows: ['kkkkk...', 'kgggGk..', '.kkkwk..', '...kwk..', '...kwk..', '...kwk..', '...kwk..', '....k...'] }
+    hoe:   { k: OL, g: '#c8ccd8', G: '#8a90a4', w: '#a8703a', rows: ['kkkkk...', 'kgggGk..', '.kkkwk..', '...kwk..', '...kwk..', '...kwk..', '...kwk..', '....k...'] },
+    // the fishing rod: a slim pole from a cork grip and reel up to the tip, the line hanging to a red float
+    rod:   { k: OL, b: '#a8703a', c: '#e0b878', r: '#8a90a4', l: '#e8f4ff', f: '#e04040', rows: ['......bl', '.....b.l', '....b..l', '...b...f', '..b....k', '.rb.....', 'crr.....', 'cc......'] }
   };
   function icon(id, size) {
     var c = document.createElement('canvas'), d = ICONS[id], px = size / 8;
@@ -41,9 +45,11 @@
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   var bar = null, pop = null, selected = -1, label = null;
   // the item in your hand (like a crafting game's selected slot): right-click or R uses it
-  var held = 4;
-  try { var hv = +localStorage.getItem('gt.hotbar.held'); if (hv >= 0 && hv < SLOTS.length) held = hv; } catch (e) { /* storage blocked */ }
-  function setHeld(i) { held = (i + SLOTS.length) % SLOTS.length; try { localStorage.setItem('gt.hotbar.held', String(held)); } catch (e) { /* storage blocked */ } render(); }
+  // kept by item, not by slot number, so a new slot order never puts something else in your hand
+  var held = 0;
+  try { var hv = SLOTS.indexOf(localStorage.getItem('gt.hotbar.item')); if (hv >= 0) held = hv; } catch (e) { /* storage blocked */ }
+  function setHeld(i) { held = (i + SLOTS.length) % SLOTS.length; try { localStorage.setItem('gt.hotbar.item', SLOTS[held]); } catch (e) { /* storage blocked */ } render(); }
+  function nameOf(id, names) { return TOOL_NAME[id] ? TOOL_NAME[id]() : (names[id] && names[id].name) || id; }
 
   function chain() { return window.GT_CHAIN; }
   function bag() { var c = chain(); return c && c.state.st ? c.state.st.bag : null; }
@@ -88,14 +94,15 @@
       el.classList.toggle('today', it.today !== 0);
       el.classList.toggle('sel', i === held);
       el.classList.toggle('menu', i === selected);
-      var nm = id === 'hoe' ? $t('Cangkul') : (names[id] && names[id].name) || id;
+      var nm = nameOf(id, names);
       el.setAttribute('aria-label', nm + ': ' + n + (it.today ? $t(' ({0}{1} hari ini)', [it.today > 0 ? '+' : '', it.today]) : ''));
       el.title = nm;
     });
     if (label && on) {
-      var hid = SLOTS[held], hn = hid === 'hoe' ? $t('Cangkul') : (names[hid] && names[hid].name) || hid, hit = b[hid] || { settled: 0, today: 0 };
+      var hid = SLOTS[held], hn = nameOf(hid, names), hit = b[hid] || { settled: 0, today: 0 };
       var how = document.documentElement.classList.contains('gt-phone') ? $t('ketuk lagi') : $t('klik kanan / R');
-      label.textContent = FREE[hid] ? $t('Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul', [hn]) : $t('Di tangan: {0} ({1}) · {2}: {3}', [hn, hit.settled + hit.today, how, useVerb(hid)]);
+      label.textContent = hid === 'hoe' ? $t('Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul', [hn])
+        : hid === 'rod' ? $t('Di tangan: {0} · hadap air lalu tekan F (atau klik airnya) untuk memancing', [hn]) : $t('Di tangan: {0} ({1}) · {2}: {3}', [hn, hit.settled + hit.today, how, useVerb(hid)]);
     }
     if (pop && selected >= 0) fillPop();
   }
@@ -109,6 +116,16 @@
     var econ = (c.state.cfg && c.state.cfg.econ && c.state.cfg.econ.items[id]) || {}, it = b[id] || { settled: 0, today: 0 }, n = it.settled + it.today;
     closePop();
     if (id === 'hoe') { if (window.GT_HOME && GT_HOME.hoe) GT_HOME.hoe(tile); return; }
+    if (id === 'rod') {
+      // fish the water you face (or the water you right-clicked next to you), as F does
+      var pr = GT.player, dr = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[pr.dir] || [0, 1];
+      var wt = tile && Math.abs(tile.x - pr.x) + Math.abs(tile.y - pr.y) === 1 ? tile : { x: pr.x + dr[0], y: pr.y + dr[1] };
+      var sc = GT.scene, m = sc && sc.map, tt = m && wt.x >= 0 && wt.y >= 0 && wt.x < m.w && wt.y < m.h ? m.tiles[wt.y * m.w + wt.x] : null;
+      if (!sc || sc.kind !== 'out' || tt !== 'water') return GT.toast($t('Berdiri di tepi air, hadap airnya, lalu pakai Pancing.'));
+      var go = function () { GT.interact('talk'); };
+      if (window.GT_MOUSE && GT_MOUSE.face) GT_MOUSE.face(wt, go); else go(); // turns toward the water first if needed
+      return;
+    }
     if (econ.energy) {
       if (n <= 0) return GT.toast($t('Tidak ada {0} di tas.', [econ.name || id]));
       c.act({ action: 'eat', token: id }).catch(function () {});
@@ -164,7 +181,7 @@
 
   function onKey(e) {
     if (e.type !== 'keydown' || e.repeat || GT.isUiOpen()) return false;
-    var n = /^Digit([1-8])$/.exec(e.code);
+    var n = /^Digit([1-9])$/.exec(e.code);
     if (n && bar && bar.style.display !== 'none') { closePop(); setHeld(+n[1] - 1); return true; }
     if (e.code === 'KeyR' && bar && bar.style.display !== 'none') { useHeld(); return true; }
     if (e.code === 'Escape' && pop) { closePop(); return true; }
@@ -199,6 +216,7 @@
   }
 
   // shared with the shop, bag and market windows (js/mods/chain.js), so every item looks the same everywhere
-  window.GT_ITEMS = { icon: icon, SLOTS: SLOTS, holding: function (id) { return SLOTS[held] === id && !!bar && bar.style.display !== 'none'; }, hold: function (id) { var i = SLOTS.indexOf(id); if (i >= 0) setHeld(i); }, held: function () { return SLOTS[held]; } };
+  // SLOTS for the shop, bag and market grids: tokens only (the free tools are not in the bag)
+  window.GT_ITEMS = { icon: icon, SLOTS: SLOTS.filter(function (id) { return !FREE[id]; }), holding: function (id) { return SLOTS[held] === id && !!bar && bar.style.display !== 'none'; }, hold: function (id) { var i = SLOTS.indexOf(id); if (i >= 0) setHeld(i); }, held: function () { return SLOTS[held]; } };
   GT.register({ id: 'hotbar', init: init, onKey: onKey });
 })();

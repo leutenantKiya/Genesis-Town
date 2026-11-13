@@ -13,6 +13,7 @@ const Q = 'p2.players.test';
 async function world(opts: { rng?: () => number } = {}) {
   const econ = loadEcon();
   econ.homeland.publicTradeOnly = false; // these tests are about village mechanics
+  econ.starter = { ...econ.starter, wheat: 3 }; // the counts below were written for a 3-seed kit; the real kit is checked on its own
   const chain = new MockChain();
   const base = Object.fromEntries(Object.entries(econ.items).map(([t, i]) => [t, i.base]));
   chain.accounts.add(TOWN);
@@ -122,17 +123,18 @@ test('farm: till, plant, water once a day, harvest after 3 watered days', async 
 test('farm: with no Gandum left the village gives a few seeds a day, so farming never dead-ends', async () => {
   const { game, econ, clock } = await world();
   econ.farm.villageSeedsPerDay = 2;
-  for (let i = 0; i < 6; i++) game.act(P, { action: 'farm', op: 'till', plot: i });
-  for (let i = 0; i < 3; i++) game.act(P, { action: 'farm', op: 'plant', plot: i }); // the starter kit's 3 seeds
+  const kit = bal(game, P, 'wheat'); // the starter kit's seeds (economy/config.json starter.wheat)
+  for (let i = 0; i < kit + 3; i++) game.act(P, { action: 'farm', op: 'till', plot: i });
+  for (let i = 0; i < kit; i++) game.act(P, { action: 'farm', op: 'plant', plot: i });
   assert.equal(bal(game, P, 'wheat'), 0);
-  const r = game.act(P, { action: 'farm', op: 'plant', plot: 3 }) as { toast: string };
+  const r = game.act(P, { action: 'farm', op: 'plant', plot: kit }) as { toast: string };
   assert.match(r.toast, /village gives you 1 wheat seed/);
-  game.act(P, { action: 'farm', op: 'plant', plot: 4 });
+  game.act(P, { action: 'farm', op: 'plant', plot: kit + 1 });
   assert.equal(bal(game, P, 'wheat'), 0);
-  assert.throws(() => game.act(P, { action: 'farm', op: 'plant', plot: 5 }), /village seeds are used up/);
+  assert.throws(() => game.act(P, { action: 'farm', op: 'plant', plot: kit + 2 }), /village seeds are used up/);
   clock.advanceHours(24);
-  game.act(P, { action: 'farm', op: 'plant', plot: 5 });
-  assert.equal(game.state(P).plots[5].state, 'planted');
+  game.act(P, { action: 'farm', op: 'plant', plot: kit + 2 });
+  assert.equal(game.state(P).plots[kit + 2].state, 'planted');
 });
 
 test('selling to a merchant moves items and coin, prices react with a reason, daily cap holds', async () => {
@@ -409,4 +411,10 @@ test('when every shop is closed, the village relief fund pledges the coin part o
   const r = await chain.relay({ delegateAction: { actions: [{ functionCall: { methodName: 'restore_contribute', args: Buffer.from(JSON.stringify({ merchant: sari.account_id, contribution: lines })) } }] } }, P);
   assert.ok(r.ok, r.error);
   assert.equal((await chain.listShops()).find((s) => s.account_id === 'sari.gt.test')!.open, true, 'Sari reopened');
+});
+
+test('a new player starts with the starter kit from the config: a Pickaxe and 5 Wheat to plant', () => {
+  const econ = loadEcon();
+  assert.equal(econ.starter.wheat, 5);
+  assert.equal(econ.starter.tool, 1);
 });

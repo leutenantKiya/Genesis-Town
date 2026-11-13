@@ -474,7 +474,7 @@
     { id: 'home', text: $t('Berdiri di portal batu dekat alun-alun dan tunggu sebentar: kamu pindah ke Homeland-mu sendiri.') },
     { id: 'build', text: $t('Di Homeland, buka lahan kosong (klik pintunya) dan bangun Kolam Ikan.') },
     { id: 'th', text: $t('Tekan Tingkatkan di atas dan naikkan Balai Kota ke level 2: bangunan baru terbuka.') },
-    { id: 'plant', text: $t('Cangkul petak kebun, lalu pegang Gandum dan klik kanan petaknya untuk menanam.') },
+    { id: 'plant', text: $t('Kamu mulai dengan 5 Gandum. Cangkul petak kebun dengan Cangkul, lalu pegang Gandum dan klik kanan petaknya untuk menanam.') },
     { id: 'board', text: $t('Masuk ke Balai Desa di samping pasar dan lihat papan proyek di rak belakang.') }
   ];
   var lastGoal = null, goalsSince = 0; // no 'done' toast while the first loads catch up (history arrives late)

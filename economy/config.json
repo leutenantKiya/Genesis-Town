@@ -119,7 +119,7 @@
     "marketPct": 0.05
   },
   "starter": {
-    "coin": 100, "tool": 1, "bread": 3, "wheat": 3
+    "coin": 100, "tool": 1, "bread": 3, "wheat": 5
   },
   "caps": {
     "dailyGainPerItem": 200,

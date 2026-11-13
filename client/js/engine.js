@@ -14,6 +14,7 @@
  *                         mod.onDrawGround(ctx, camX, camY, T): on the ground, under characters, lit like the ground (crops, ripples).
  *                         mod.onDrawMarks(ctx, camX, camY, T): same place, for markers the player must always see (the hoe's squares):
  *                         in 2.5D they sit on an unlit sheet, so night, rain and the sun's shading never dim them. Return true when it drew.
+ *                         mod.onPlayerDir(dir): the player pressed a direction (keys, joystick, D-pad), not a mod's GT.walkDir.
  *  GT.modal(opts)         {title, body:Element|string(plain text, \n = new paragraph), actions:[{label,primary,id,disabled,onClick(handle,ev),close}],
  *                          wide, closable:false (no X/Esc), backdropClose:true, onClose(reason), onKey(e)->bool (called for keydown while on top)}
  *                         Clicking an action runs onClick and does NOT close the modal unless the action has no onClick, has close:true,
@@ -2378,7 +2379,10 @@ function layout(){
 /* ---------- input ---------- */
 var KEYDIR = { ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down', ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right' };
 function pressDir(d, id, world){
-  id = id || d; releaseDir(id);
+  id = id || d;
+  // a direction from the player (keys, joystick, D-pad) takes over from a click-walk at once (mods/mouse.js)
+  if (id !== 'mouse'){ releaseDir('mouse'); callMods('onPlayerDir', [d]); }
+  releaseDir(id);
   held.push({id:id, d:d, world:!!world});
   var wd = world ? d : worldDir(d);
   if (canControl() && !P.moving && !waitRelease && P.dir !== wd){ P.dir = wd; P.turnT = TURN_T; }
@@ -2615,6 +2619,9 @@ var GT = {
   setStick: function(x, y){ stick = x == null ? null : {x:+x || 0, y:+y || 0}; },
   // a direction held by an on-screen control (the phone's joystick), like a held arrow key; null lets go
   padDir: function(d){ releaseDir('joy'); if (d === 'up' || d === 'down' || d === 'left' || d === 'right') pressDir(d, 'joy'); },
+  // a mod walking the player along a map path (mods/mouse.js): one world direction held under its own id, null lets go.
+  // Any direction the player gives cancels it and calls the mods' onPlayerDir(dir).
+  walkDir: function(d){ releaseDir('mouse'); if (d === 'up' || d === 'down' || d === 'left' || d === 'right') pressDir(d, 'mouse', true); },
   // true while the player walks freely (2.5D outdoors), where GT.setStick steers; else held directions step tiles
   freeWalk: function(){ return freeOn(); },
   view3dOn: function(){ return v3on(); }
