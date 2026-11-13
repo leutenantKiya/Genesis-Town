@@ -33,16 +33,30 @@ async function rig() {
     const res = await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json', ...sign(keys.get(a)!, a, 'POST', path, body) }, body });
     return { status: res.status, json: (await res.json()) as any };
   };
-  return { s, game, sp, post, close: () => { server.closeAllConnections(); server.close(); } };
+  const get = async (a: string, path: string) => {
+    const res = await fetch(base + path, { headers: sign(keys.get(a)!, a, 'GET', path, '') });
+    return { status: res.status, json: (await res.json()) as any };
+  };
+  return { s, game, sp, post, get, close: () => { server.closeAllConnections(); server.close(); } };
 }
 const P1 = 'p1.players.test', P2 = 'p2.players.test', P3 = 'p3.players.test';
 
-test('names: one table, 3-16 characters, repeatable (name#tag is unique), frozen accounts refused', async () => {
+test('names: one table, 3-16 characters, unique ignoring case, frozen accounts refused', async () => {
   const r = await rig();
   try {
     assert.equal((await r.post(P1, '/api/name', { name: 'Ayu' })).status, 200);
     assert.equal(r.s.store.nameOf(P1), 'Ayu');
-    assert.equal((await r.post(P2, '/api/name', { name: 'ayu' })).status, 200, 'names may repeat now; the tag tells them apart');
+    const taken = await r.post(P2, '/api/name', { name: 'ayu' });
+    assert.equal(taken.status, 409, 'a name another player has is taken, whatever the case');
+    assert.match(taken.json.error, /already taken/);
+    assert.equal(r.s.store.nameOf(P2), null);
+    // the player's own card: GET /api/player?name= answers with the Town Hall level
+    r.game.homelands.ensure(P1);
+    const card = await r.get(P2, '/api/player?name=ayu');
+    assert.equal(card.status, 200);
+    assert.equal(card.json.name, 'Ayu'); assert.equal(card.json.th, 1); assert.equal(card.json.unique, true);
+    assert.equal((await r.get(P2, '/api/player?name=Nobody')).status, 404);
+    assert.equal((await r.get(P2, '/api/player')).status, 400);
     assert.equal((await r.post(P2, '/api/name', { name: 'a' })).status, 400);
     assert.equal((await r.post(P2, '/api/name', { name: 'a<b>c' })).status, 400);
     assert.equal((await r.post(P2, '/api/name', { name: 'Budi Santoso' })).status, 200);

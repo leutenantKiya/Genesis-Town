@@ -166,6 +166,11 @@ export const EXACT: Record<string, string> = {
  " · Your Pickaxe broke!": " · Beliungmu patah!",
  "Out of energy. Eat Bread or Grilled Fish, or rest.": "Energi habis. Makan Roti atau Ikan Bakar, atau istirahat.",
  "Nothing to gather here.": "Tidak ada yang bisa dikumpulkan di sini.",
+ "Nothing to search here.": "Tidak ada yang bisa dicari di sini.",
+ "Wait a moment before searching again.": "Tunggu sebentar sebelum mencari lagi.",
+ "You search the grass but find no seeds this time.": "Kamu mencari di rumput tapi tidak menemukan benih kali ini.",
+ "Whose profile?": "Profil siapa?",
+ "Slow down, too many requests.": "Pelan-pelan, terlalu banyak permintaan.",
  "That can't be eaten.": "Itu tidak bisa dimakan.",
  "Your energy is already full.": "Energimu sudah penuh.",
  "No such plot.": "Petak tidak ada.",
@@ -232,6 +237,14 @@ export const EXACT: Record<string, string> = {
  "Price steady (capped at 10% per hour).": "Harga tetap (dibatasi 10% per jam)."
 };
 export const PATTERNS: Array<[string, string]> = [
+ [
+  "You found a wheat seed! +1 {0}",
+  "Kamu menemukan benih gandum! +1 {0}"
+ ],
+ [
+  "You found all the seeds the grass has for today ({0}). Come back tomorrow.",
+  "Benih dari rumput hari ini sudah kamu temukan semua ({0}). Kembali lagi besok."
+ ],
  [
   "Top up: bought {0} coin with NEAR",
   "Top up: membeli {0} koin dengan NEAR"

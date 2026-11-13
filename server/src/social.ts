@@ -128,7 +128,8 @@ export class Social {
   setNick(account: string, raw: unknown) {
     const nick = Social.validName(raw);
     if (this.names.nameOf(account) === nick) return nick; // unchanged
-    // names may repeat: the 5-digit tag tells players apart. Only real changes count toward the limit, so a typo does not lock the player out
+    // names are unique ignoring case (the Store refuses a taken one with 409); older duplicates keep their tag. Only real changes count toward the limit, so a typo does not lock the player out
+    if (this.names.accountsByName(nick).some((a) => a !== account)) throw new HttpError(409, 'That name is already taken by another player'); // refused before the limiter: a taken name is not a change
     if (!this.nickLimiter.take(account, this.now())) throw new HttpError(429, 'You changed your name too often. Try again later.');
     this.names.setName(account, nick);
     const s = this.seen.get(account); if (s) { s.nick = nick; s.tag = this.tag(account); }

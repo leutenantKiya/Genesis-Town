@@ -85,7 +85,7 @@ export class Store {
     if (!sk.some((c) => c.name === 'onchain')) this.db.exec('ALTER TABLE session_keys ADD COLUMN onchain INTEGER NOT NULL DEFAULT 1');
   }
 
-  /** names: display name (may repeat; unique together with the 5-digit tag), tag, look (palette 0-7). Older tables had a UNIQUE name column: rebuild without it, keep the rows, tags come lazily. */
+  /** names: display name (unique ignoring case for new names and renames; older rows may still repeat and are told apart by the 5-digit tag), tag, look (palette 0-7). Older tables had a UNIQUE name column: rebuild without it, keep the rows, tags come lazily. */
   private migrateNames() {
     const cols = this.db.prepare('PRAGMA table_info(names)').all() as unknown as Array<{ name: string }>;
     if (!cols.length) {
@@ -109,7 +109,7 @@ export class Store {
     const rows = this.accountsByName(name);
     return rows.length === 1 ? rows[0] : null;
   }
-  /** Every account using this display name (ignoring case); names may repeat, name#tag may not. */
+  /** Every account using this display name (ignoring case): one, except for names made before names became unique. */
   accountsByName(name: string): string[] {
     return (this.db.prepare('SELECT account FROM names WHERE name = ? COLLATE NOCASE').all(name) as Array<{ account: string }>).map((r) => r.account);
   }
@@ -148,8 +148,11 @@ export class Store {
     return !!this.db.prepare('SELECT 1 FROM players WHERE account_id = ?').get(account);
   }
 
-  /** Sets (or changes) the display name. The tag is kept; name+tag must be free (ignoring case): a clash re-rolls the tag, unless one was given explicitly (then 409). */
+  /** Sets (or changes) the display name. A name is unique ignoring case: another player already using it is a 409 (names
+   *  made before this rule may still repeat; they keep working and are told apart by name#tag). The tag is kept; name+tag
+   *  must also be free, a clash re-rolls the tag, unless one was given explicitly (then 409). */
   setName(account: string, name: string, tag?: string) {
+    if (this.accountsByName(name).some((a) => a !== account)) throw new HttpError(409, 'That name is already taken by another player');
     const cur = this.db.prepare('SELECT tag FROM names WHERE account = ?').get(account) as { tag: string | null } | undefined;
     let use = tag ?? cur?.tag ?? null;
     const holder = use ? this.accountByNameTag(name, use) : null;

@@ -1,8 +1,10 @@
 /*
  * Public-area economy (client of server/src/game/trade.ts, consign.ts, leaderboard.ts):
- *  - "Ajak dagang" on a player card, "Dagang" in the party panel and /dagang nama#tag open a live trade window (client of the
+ *  - "Trade" on a player card (mods/players.js), "Dagang" in the party panel and /dagang nama#tag open a live trade window (client of the
  *    /api/trade/open|join|set|ready|close sessions): both put in items and coin, both press Siap, any change clears both, then a 3 s countdown
  *    works in the village and in a Homeland; an invitation pops up with Buka / Tolak
+ *  - when a trade completes, the goods each side gave fly across to the other player (arcing icons, a sparkle where they
+ *    land, a short sound); both windows read the swapped lines from the finished session (`result`) and play it
  *  - Titip Jual stall (Mbok Darmi): leave items with a minimum price, she sells hourly even while you are away
  *  - Papan Juara board: top sellers today / of all time
  * The stall and the board stand at fixed plaza tiles from GTVillage.landmarks (same on the server). Only in the public area.
@@ -82,7 +84,7 @@
   function finish(s, text, refresh) {
     dismissed[s.id + ':' + s.status] = 1;
     sess = null; stopWin('end');
-    if (s.status === 'done') sfx('trade_done'); else sfx('ui_close', { vol: 0.6 });
+    if (s.status === 'done') { sfx('trade_done'); flyStart(s); } else sfx('ui_close', { vol: 0.6 });
     if (text) GT.toast(text);
     if (refresh && C.refresh) C.refresh(true);
   }
@@ -288,6 +290,82 @@
     }, function () { polling = false; });
   }
 
+  /* ---------------------------------------------------------------- the trade animation
+     What I gave flies from me to the other player, what I got flies from them to me: one small icon per kind of item
+     (a gold coin for coin), on an arc, staggered a little, with the amount beside it; where each lands there is a
+     sparkle. Original art, drawn on the overlay canvas: positions are tiles and go through GT.at every frame, so the
+     camera (2D or 2.5D) can move meanwhile. The other player is placed by players.js (GT_PLAYERS.where); when they are
+     not on screen the goods leave and arrive above my head. */
+  var flies = [], sparks = [], iconCache = {}, FLY_MS = 950, STAGGER_MS = 130, SPARK_MS = 520;
+  function flyIcon(token) {
+    if (token === 'coin' || !window.GT_ITEMS) return null;
+    return iconCache[token] || (iconCache[token] = GT_ITEMS.icon(token, 16));
+  }
+  function flyStart(s) {
+    var r = s && s.result; if (!r) return;
+    var t0 = performance.now(), n = 0;
+    function add(lines, dir) {
+      Object.keys(lines || {}).forEach(function (tok) { flies.push({ token: tok, qty: lines[tok], dir: dir, t0: t0 + n * STAGGER_MS, other: s.other && s.other.account, done: false }); n++; });
+      n = 0; // the two directions leave together
+    }
+    add(r.gave, 'out'); add(r.got, 'in');
+    if (flies.length > 24) flies.length = 24;
+  }
+  function spot(o, T) { // the screen point of a player's chest, in drawing units: o = {x, y} in tiles, or null
+    if (!o) return null;
+    var a = GT.at(o.x, o.y); return { x: a.x + T / 2, y: a.y + T / 2 - 2 };
+  }
+  function spark(x, y, now) { sparks.push({ x: x, y: y, t0: now }); }
+  function star(ctx, x, y, r, col) { // a four-point star, pixel-sized
+    ctx.fillStyle = col;
+    ctx.fillRect(Math.round(x - 0.5), Math.round(y - r), 1, Math.round(r * 2) + 1);
+    ctx.fillRect(Math.round(x - r), Math.round(y - 0.5), Math.round(r * 2) + 1, 1);
+  }
+  function drawCoin(ctx, x, y) {
+    ctx.fillStyle = '#7a4a10'; ctx.fillRect(x - 4, y - 3, 8, 6); ctx.fillRect(x - 3, y - 4, 6, 8);
+    ctx.fillStyle = '#f2c230'; ctx.fillRect(x - 3, y - 3, 6, 6); ctx.fillRect(x - 2, y - 4, 4, 8);
+    ctx.fillStyle = '#fff2a8'; ctx.fillRect(x - 2, y - 3, 2, 2);
+    ctx.fillStyle = '#b8801a'; ctx.fillRect(x, y - 1, 1, 3);
+  }
+  function drawFly(ctx, camX, camY, T) {
+    if (!flies.length && !sparks.length) return;
+    var now = performance.now(), p = GT.player, me = spot({ x: p.x, y: p.y }, T);
+    if (!me) return;
+    ctx.save();
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.font = '7px "Pixelify Sans", sans-serif';
+    flies = flies.filter(function (f) {
+      var u = (now - f.t0) / FLY_MS;
+      if (u < 0) return true;
+      var oth = spot(window.GT_PLAYERS && GT_PLAYERS.where ? GT_PLAYERS.where(f.other) : null, T) || { x: me.x + T * 2, y: me.y - T * 2 };
+      var from = f.dir === 'out' ? me : oth, to = f.dir === 'out' ? oth : me;
+      if (u >= 1) {
+        if (!f.done) { f.done = true; spark(to.x, to.y, now); if (f.dir === 'in') sfx('pickup', { vol: 0.6 }); }
+        return false;
+      }
+      var e = u * u * (3 - 2 * u), arc = Math.sin(Math.PI * e) * (T * 1.6);
+      var x = Math.round(from.x + (to.x - from.x) * e), y = Math.round(from.y + (to.y - from.y) * e - arc);
+      ctx.globalAlpha = Math.min(1, u * 6);
+      var ic = flyIcon(f.token);
+      // a little shadow on the way, then the goods
+      ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(Math.round(from.x + (to.x - from.x) * e) - 4, Math.round(from.y + (to.y - from.y) * e) + 4, 8, 2);
+      if (ic) ctx.drawImage(ic, x - 6, y - 6, 12, 12); else drawCoin(ctx, x, y);
+      if (f.qty > 1) { var q = '×' + f.qty; ctx.fillStyle = '#000'; ctx.fillText(q, x + 7, y + 1); ctx.fillStyle = '#fff'; ctx.fillText(q, x + 6, y); }
+      ctx.globalAlpha = 1;
+      return true;
+    });
+    sparks = sparks.filter(function (k) {
+      var u = (now - k.t0) / SPARK_MS;
+      if (u >= 1) return false;
+      var r = 3 + u * 7;
+      ctx.globalAlpha = 1 - u;
+      for (var i = 0; i < 6; i++) { var a = i * Math.PI / 3 + u; star(ctx, k.x + Math.cos(a) * r, k.y + Math.sin(a) * r * 0.8, 1, i % 2 ? '#fff6c0' : '#f2c230'); }
+      star(ctx, k.x, k.y, 2 + (1 - u) * 2, '#fffbe0');
+      ctx.globalAlpha = 1;
+      return true;
+    });
+    ctx.restore();
+  }
+
   /* ---------------------------------------------------------------- Titip Jual */
   function bestBid(t) {
     var s = S(), best = 0;
@@ -468,13 +546,8 @@
 
   function init() {
     C = window.GT_CHAIN || null;
-    if (window.GT_PLAYERS && GT_PLAYERS.addCardAction) {
-      GT_PLAYERS.addCardAction(function (o) {
-        if (!signedIn() || o.npc || !o.tag) return null;
-        return { label: $t('Ajak dagang'), onClick: function (h) { h.close('ok'); startWith(o.nick + '#' + o.tag); return true; } };
-      });
-    }
-    window.GT_TRADE = { start: startWith, consign: consignModal, board: boardModal };
+    // the player card (mods/players.js) has its own Trade button and calls GT_TRADE.start
+    window.GT_TRADE = { start: startWith, consign: consignModal, board: boardModal, fly: flyStart };
   }
-  GT.register({ id: 'trade', init: init, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw });
+  GT.register({ id: 'trade', init: function (g) { init(g); g.register({ id: 'trade-fx', onDraw: drawFly }); }, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw });
 })();

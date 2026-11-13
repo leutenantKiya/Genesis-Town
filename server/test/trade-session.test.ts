@@ -279,3 +279,25 @@ test('history kind=trade lists both sides', async () => {
   assert.equal(w.game.store.history(P, 50, 'fish', 'trade').length, 1);
   assert.equal(w.game.store.history(P, 50, undefined, 'harvest').length, 0);
 });
+
+test('a finished trade tells both sides what moved (the trade animation reads it); other states carry no result', async () => {
+  const w = await pair();
+  const t = w.game.trade;
+  const id = fill(w);
+  assert.equal(t.session(P)!.result, undefined, 'nothing moved yet');
+  t.ready(P, id, { version: 2 }); t.ready(Q, id, { version: 2 });
+  assert.equal(t.session(Q)!.result, undefined, 'locked, countdown running');
+  w.adv(w.econ.trade.countdownMs + 1);
+  t.finishDue();
+  const p = t.session(P)!, q = t.session(Q)!;
+  assert.equal(p.status, 'done'); assert.equal(q.status, 'done');
+  assert.deepEqual(p.result!.gave, { fish: 5 }); assert.deepEqual(p.result!.got, { coin: 40 });
+  assert.deepEqual(q.result!.gave, { coin: 40 }); assert.deepEqual(q.result!.got, { fish: 5 });
+  assert.equal(p.result!.at, q.result!.at, 'one moment for both windows');
+  assert.ok(p.result!.at >= p.swap_at);
+  // a cancelled trade has no result
+  const w2 = await pair();
+  const s2 = w2.game.trade.open(P, { to: 'Budi#' + w2.store.tagOf(Q) });
+  assert.equal(w2.game.trade.close(Q, s2.id).result, undefined);
+  assert.equal(w2.game.trade.session(P)!.result, undefined);
+});

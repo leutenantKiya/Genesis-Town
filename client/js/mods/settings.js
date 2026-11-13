@@ -235,6 +235,7 @@
       case 'water': return out ? { icon: '🎣', label: $t('Mancing') } : null;
       case 'tree': return out ? { icon: '🪓', label: $t('Tebang') } : null;
       case 'rock': return out ? { icon: '⛏️', label: $t('Tambang') } : null;
+      case 'grass': case 'tallgrass': { var gc = window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account && GT_CHAIN.state.cfg && GT_CHAIN.state.cfg.econ && GT_CHAIN.state.cfg.econ.grass; return out && gc && gc.tiles.indexOf(c.tileType) >= 0 ? { icon: '🌾', label: $t('Cari benih') } : null; } // grass: a small chance of a wheat seed (mods/chain.js searchGrass)
       case 'table': return out ? null : (sc.house && sc.house.own ? { icon: '🔨', label: $t('Meja') } : { icon: '🍌', label: $t('Makan') });
       case 'chest': return out ? null : { icon: '📦', label: $t('Buka') };
       case 'bed': return out ? null : { icon: '😴', label: $t('Tidur') };

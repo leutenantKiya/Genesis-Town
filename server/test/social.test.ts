@@ -21,7 +21,7 @@ test('names: a default for unnamed accounts, rules on new names, unique ignoring
   assert.equal(social.nick(A), 'Pemancing');
   assert.equal(store.nameOf(A), 'Pemancing', 'the Store names table is the only place names live');
   assert.equal(social.setNick(B, '  Budi Santoso  '), 'Budi Santoso', 'spaces are allowed, trimmed');
-  assert.equal(social.setNick(C, 'pemancing'), 'pemancing', 'names may repeat; name#tag is unique'); store.setName(C, 'Cici_x');
+  assert.throws(() => social.setNick(C, 'pemancing'), (e: any) => e.status === 409 && /already taken/.test(e.message), 'a name is unique ignoring case'); store.setName(C, 'Cici_x');
   assert.throws(() => social.setNick(C, 'ab'), /3–16/);
   assert.throws(() => social.setNick(C, 'x'.repeat(17)), /3–16/);
   assert.throws(() => social.setNick(C, 'a<b>c'), /3–16/);

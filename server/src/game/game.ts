@@ -22,12 +22,12 @@ import { Extras } from './extras.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall', 'repair', 'maketool', 'ride', 'casino', 'mission'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall', 'repair', 'maketool', 'ride', 'casino', 'mission', 'grass'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', repair: 'visit', maketool: 'visit', ride: 'visit', casino: 'visit', mission: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', grass: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', repair: 'visit', maketool: 'visit', ride: 'visit', casino: 'visit', mission: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -286,7 +286,7 @@ export class Game {
     const home = this.econ.homeland;
     if (a === 'build' && w.row && w.row.account !== account && (s('kind') === 'th' || s('kind') === 'chunk')) throw new HttpError(409, 'Only the owner can upgrade the Town Hall or open new land.');
     if (a === 'build' && w.row && w.row.account !== account && s('kind') === 'light') throw new HttpError(409, 'Only the owner can put up street lights.');
-    if (this.map && wid === 'public' && home.publicTradeOnly && ((a === 'gather' && !home.publicGather) || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
+    if (this.map && wid === 'public' && home.publicTradeOnly && ((a === 'gather' && !home.publicGather) || (a === 'grass' && !home.publicGather) || a === 'farm' || a === 'engage')) throw new HttpError(409, 'The public area is for trading only.');
     if (w.row && a === 'ship') throw new HttpError(409, 'The Shipping Box is only in the public area.');
     if ((a === 'build' || a === 'collect' || a === 'assist' || a === 'hire' || a === 'forage' || a === 'cook' || a === 'stock' || a === 'dress') && !w.row) throw new HttpError(409, 'Build and harvest in your own Homeland.');
     let pos: Pos | null = null;
@@ -294,7 +294,7 @@ export class Game {
       // no `home` here: an action never changes worlds (only `travel` and the presence poll of a reload do)
       pos = this.positions.report(account, body.pos, this.now(), wid, w.map);
       const far = (msg: string) => { throw new HttpError(409, msg); };
-      if (a === 'gather' && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Too far. Stand right next to it.');
+      if ((a === 'gather' || a === 'grass') && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Too far. Stand right next to it.');
       if ((a === 'sell' || a === 'buy') && !w.map.nearStall(pos)) far('Buying and selling happens at the merchants\' stalls in the market.');
       if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Stand next to your garden plot.');
       if (a === 'craft' && !w.map.atWorkbench(pos)) far(w.row ? 'The Workbench is in your Town Hall and in your house.' : 'The Workbench is in your house.');
@@ -328,6 +328,18 @@ export class Game {
           : home.publicTradeOnly ? null : this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
         if (enc) { res = { toast: `${enc.name} blocks your way! Fight or run.` }; break; }
         res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1), w.row ? `${wid}:` : '', w.row && !guest && this.econ.gather.tiles[s('tile')] === 'wood' ? this.homelands.effects(account).woodBonus : 0, minLeft); // Homeland nodes are charged per Homeland
+        break;
+      }
+      case 'grass': {
+        // the tile must be grass on this world's map (the client's word is not enough) and in an open area
+        const gx = n('x', -1), gy = n('y', -1), g = this.econ.grass;
+        if (w.map) {
+          const tt = w.map.tileAt(gx, gy);
+          if (tt === null) throw new HttpError(400, 'bad tile');
+          if (!g || !g.tiles.includes(tt)) throw new HttpError(409, 'Nothing to search here.');
+          w.map.checkGather(tt, gx, gy);
+        }
+        res = this.world.grass(account, gx, gy);
         break;
       }
       case 'fight': res = this.need(this.monsters).fight(account); break;
@@ -409,7 +421,7 @@ export class Game {
       default: if (Number.isInteger(n('qty')) && n('qty') > 0) this.world.checkGain(account, s('token'), n('qty')); res = this.market.buy(account, s('merchant'), s('token'), n('qty')); break;
     }
     this.countMissions(account, a, body, res);
-    if (a !== 'farm') {
+    if (a !== 'farm' && !(a === 'grass' && !Object.keys(res.gained ?? {}).length)) { // an empty search is not worth a Riwayat line
       const tags = new Set<string>(Object.keys((res as { gained?: Record<string, number> }).gained ?? {}));
       if (body.token) tags.add(String(body.token));
       if (a === 'craft') {

@@ -206,6 +206,7 @@
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     var tags = [], bubs = [], placed = [];
+    tagRects = []; drawW = W; drawH = ctx.canvas.height / (ctx.getTransform().d || 1);
     Object.keys(others).forEach(function (a) {
       var o = others[a]; if (!here(o)) return;
       var cx = curX(o, now);
@@ -214,7 +215,7 @@
       var small = o.guest || !!guestId, sz = small ? 5 : 7; // a guest's own tag is small and dim; a guest sees everyone's tags small
       ctx.font = sz + 'px "Pixelify Sans", sans-serif';
       var text = o.guest ? $t('Tamu') : o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
-      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag), worn: o.worn || null });
+      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag), worn: o.worn || null, acct: a });
     });
     tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
     tags.forEach(function (t) {
@@ -227,6 +228,7 @@
       }
       placed.push(t);
       var lw = TH.label(ctx, t.text, t.x, t.y, { tone: t.tone, size: t.size });
+      tagRects.push({ acct: t.acct, x0: t.x - (t.w * t.sc) / 2 - 2, x1: t.x + (t.w * t.sc) / 2 + 2, y0: t.y - 9 * t.sc, y1: t.y + 2 }); // where the tag sits: a click on it opens the player's card
       var nc = t.worn && window.GT_WORN ? GT_WORN.nameColor(t.worn) : null; // a bought name colour: a coloured line under the tag
       if (nc && lw) { var kk = t.sc || 1; ctx.fillStyle = nc; ctx.fillRect(Math.round(t.x - lw * kk / 2), Math.round(t.y), Math.round(lw * kk), Math.max(1, Math.round(1.5 * kk))); }
       emoteAt(ctx, t.worn, t.x, t.y - 11 * (t.sc || 1), now, t.k, t.sc || 1);
@@ -390,13 +392,37 @@
   }
 
   /* ---------------------------------------------------------------- player card */
+  var tagRects = [], drawW = 0, drawH = 0; // the name tags as last drawn, in the canvas's drawing units
   function playerAt(t) {
     var now = performance.now(), hit = null;
     Object.keys(others).forEach(function (a) { var o = others[a]; if (here(o) && Math.round(curX(o, now)) === t.x && Math.round(curY(o, now)) === t.y) hit = o; });
     return hit;
   }
+  // a click on a player's name tag (client coordinates -> the canvas's drawing units, in which the tags were placed)
+  function tagAt(cv, cx, cy) {
+    var r = cv.getBoundingClientRect();
+    if (!r.width || !drawW) return null;
+    var x = (cx - r.left) * (drawW / r.width), y = (cy - r.top) * (drawH / r.height), hit = null;
+    tagRects.forEach(function (q) { if (x >= q.x0 && x <= q.x1 && y >= q.y0 && y <= q.y1 && others[q.acct]) hit = others[q.acct]; });
+    return hit;
+  }
   var presenceFns = []; // other mods listen to each successful presence answer
   var cardActions = []; // other mods add buttons: fn(player) -> {label, onClick(handle)} | null
+  // the player's look drawn small with GT.drawChar (the same figure as in the world)
+  function portrait(o) {
+    var PW = 20, PH = 26, k = 3, c = document.createElement('canvas'); // the figure is 12 x 14 with room for what is worn (8 px above, 4 to each side)
+    c.width = PW * k; c.height = PH * k; c.setAttribute('aria-hidden', 'true');
+    c.style.cssText = 'width:' + PW * k + 'px;height:' + PH * k + 'px;image-rendering:pixelated;display:block;margin:0 auto 4px';
+    try {
+      var tmp = document.createElement('canvas'), tg, g = c.getContext('2d'), W = window.GT_WORN, worn = o.worn, look = o.look != null ? o.look : pal(o.nick || '');
+      tmp.width = PW; tmp.height = PH; tg = tmp.getContext('2d');
+      if (W && worn) W.back(tg, 4, 10, worn, 'down', 0);
+      GT.drawChar(tg, 4, 10, look, 'down', 0);
+      if (W && worn) W.front(tg, 4, 10, worn, 'down', 0);
+      g.imageSmoothingEnabled = false; g.drawImage(tmp, 0, 0, PW * k, PH * k);
+    } catch (e) { /* the card works without the picture */ }
+    return c;
+  }
   function card(o) {
     var body = el('div', 'gt-pcard');
     if (o.npc) {
@@ -404,18 +430,34 @@
       body.appendChild(el('p', 'chain-dim', $t('Pedagang desa. Tanyakan harga lewat obrolan, atau lihat dagangannya.')));
       GT.modal({ title: o.nick + '#' + (o.tag || 'NPC'), body: body, actions: [
         { label: $t('Lihat dagangan'), primary: true, onClick: function (h) { h.close('ok'); var c = C(); if (c && o.merchant) c.open('shop', o.merchant); return true; } },
-        { label: $t('Tanya'), onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + ' '); return true; } }
+        { label: $t('Tanya'), onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + ' '); return true; } },
+        { label: $t('Batal'), close: true }
       ] });
       return;
     }
-    body.appendChild(el('p', 'gt-pcard-title', o.title || $t('Pedagang baru')));
-    if (o.tag) body.appendChild(el('p', 'gt-data', o.nick + '#' + o.tag));
-    body.appendChild(el('p', 'chain-dim', $t('Warga desa yang sedang jalan-jalan.')));
-    var extra = cardActions.map(function (f) { try { return f(o); } catch (e) { return null; } }).filter(Boolean);
-    GT.modal({ title: o.nick + (o.tag ? '#' + o.tag : ''), body: body, actions: [
-      { label: $t('Kirim pesan'), primary: true, onClick: function (h) { h.close('ok'); openChat('/msg ' + o.nick + (o.tag ? '#' + o.tag : '') + ' '); return true; } },
-      { label: $t('Lihat lapaknya'), onClick: function (h) { h.close('ok'); var c = C(); c.state.marketSeller = { account: o.account, nick: o.nick }; c.state.marketTab = 'lapak'; c.open('market'); return true; } }
-    ].concat(extra) });
+    sfx('ui_open', { vol: 0.5 });
+    var tagged = o.nick + (o.tag ? '#' + o.tag : ''), unique = false; // unique: the plain name reaches only this player (the server says; until then name#tag is the safe handle)
+    function handle() { return unique || !o.tag ? o.nick : tagged; }
+    body.appendChild(portrait(o));
+    body.appendChild(el('p', 'gt-pcard-title', o.guest ? $t('Tamu') : (o.title || $t('Pedagang baru'))));
+    var lvl = el('p', 'gt-data', o.guest ? '' : $t('Balai Kota: …')), st = el('p', 'chain-dim', o.guest ? $t('Pengunjung yang belum masuk.') : $t('Warga desa yang sedang jalan-jalan.'));
+    if (o.tag) body.appendChild(el('p', 'gt-data', tagged));
+    body.appendChild(lvl); body.appendChild(st);
+    var acts = [];
+    if (!o.guest) acts.push({ label: $t('Pesan'), primary: true, onClick: function (h) { h.close('ok'); openChat('/msg ' + handle() + ' '); return true; } });
+    if (!o.guest && o.tag && window.GT_TRADE) acts.push({ label: $t('Trade'), onClick: function (h) { h.close('ok'); GT_TRADE.start(tagged); return true; } });
+    if (!o.guest) acts.push({ label: $t('Lihat lapaknya'), onClick: function (h) { h.close('ok'); var c = C(); c.state.marketSeller = { account: o.account, nick: o.nick }; c.state.marketTab = 'lapak'; c.open('market'); return true; } });
+    cardActions.forEach(function (f) { var x = null; try { x = f(o); } catch (e) { x = null; } if (x) acts.push(x); });
+    acts.push({ label: $t('Batal'), close: true });
+    var h = GT.modal({ title: tagged, body: body, actions: acts });
+    if (o.guest || !active()) return;
+    // the profile: Town Hall level, online, party (GET /api/player)
+    C().api('/player?name=' + encodeURIComponent(tagged)).then(function (p) {
+      if (!h.isOpen()) return;
+      unique = p.unique !== false;
+      lvl.textContent = p.th != null ? $t('Balai Kota: level {0}', [p.th]) : $t('Belum punya Homeland');
+      st.textContent = (p.online ? $t('Online sekarang') : $t('Sedang tidak terlihat')) + (p.mate ? ' · ' + $t('Satu party denganmu') : p.inParty ? ' · ' + $t('Sedang dalam party') : '');
+    }, function () { if (h.isOpen()) lvl.textContent = ''; });
   }
 
   function onKey(e) {
@@ -432,7 +474,7 @@
     var cv = document.getElementById('cv');
     if (cv) cv.addEventListener('click', function (e) {
       if (e.button !== 0 || GT.isUiOpen() || !GT.screenToTile || !GT.scene) return;
-      var t = GT.screenToTile(e.clientX, e.clientY), o = t && playerAt(t);
+      var t = GT.screenToTile(e.clientX, e.clientY), o = tagAt(cv, e.clientX, e.clientY) || (t && playerAt(t)); // the name tag, or the player's own tile
       if (!o) return;
       e.stopImmediatePropagation(); e.preventDefault();
       card(o);
@@ -442,6 +484,6 @@
   }
 
   function refresh() { others = {}; curWorld = null; backoff = 0; nextAt = 0; holdUntil = 0; tick(); } // after sailing: forget the old world's players at once
-  window.GT_PLAYERS = { anglers: anglers, onPresence: function (f) { presenceFns.push(f); }, addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
+  window.GT_PLAYERS = { anglers: anglers, where: function (account) { var o = others[account]; if (!o || !here(o)) return null; var n = performance.now(); return { x: curX(o, n), y: curY(o, n) }; }, onPresence: function (f) { presenceFns.push(f); }, addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
   GT.register({ id: 'players', init: function (g) { init(g); g.register({ id: 'players-labels', onDraw: onDraw }); }, onEntities: onEntities, onKey: onKey }); // tags and bubbles register last from init, so they draw over every other mod's signs
 })();

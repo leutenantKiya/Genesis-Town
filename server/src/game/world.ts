@@ -130,6 +130,27 @@ export class World {
     return { toast, gained: amount > 0 ? { [token]: amount } : {} };
   }
 
+  private grassAt = new Map<string, number>();
+  /** Searching a grass tile (the caller has checked the tile and that the player stands next to it): small energy cost, a
+   *  cooldown, a daily cap on finds, a small chance of 1 Wheat per try. The found seed is a normal 'grass' ledger row. */
+  grass(account: string, x: number, y: number): ActionResult {
+    const g = this.econ.grass;
+    if (!g) throw new HttpError(400, 'Nothing to search here.');
+    const now = this.clock.now(), last = this.grassAt.get(account), t = this.clock.time();
+    if (last !== undefined && now - last < g.cooldownSecs * 1000) throw new HttpError(409, 'Wait a moment before searching again.');
+    if (this.gs.sumKind(t.settleDay, account, g.token, 'grass') >= g.dailyMax) throw new HttpError(409, `You found all the seeds the grass has for today (${g.dailyMax}). Come back tomorrow.`);
+    const p = this.state(account);
+    this.spendEnergy(p, g.energyCost); // in memory only: nothing is saved if the gain cap refuses below
+    const found = this.rng() < g.chance;
+    if (found) this.checkGain(account, g.token, 1);
+    this.grassAt.set(account, now);
+    if (this.grassAt.size > 5000) for (const [a, at] of this.grassAt) if (now - at > g.cooldownSecs * 1000) this.grassAt.delete(a);
+    this.gs.savePlayer(p);
+    if (!found) return { toast: 'You search the grass but find no seeds this time.', gained: {} };
+    this.gs.add(t.settleDay, account, g.token, 1, 'grass', `${x},${y}`);
+    return { toast: `You found a wheat seed! +1 ${this.name(g.token)}`, gained: { [g.token]: 1 } };
+  }
+
   craft(account: string, recipeId: string): ActionResult {
     const r = this.econ.recipes[recipeId];
     if (!r) throw new HttpError(400, 'Unknown recipe.');

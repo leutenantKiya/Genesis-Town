@@ -17,6 +17,7 @@ import { addDeviceKey } from './newdevice.ts';
 import { topupInfo, topupRelay, topupResolve, type TopupDeps } from './topup.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
 import { Social, worldIdOk } from './social.ts';
+import { playerProfile } from './profile.ts';
 import type { Game } from './game/game.ts';
 import { homeWorld, parseHome } from './game/homeland.ts';
 import { leafHash, merkleProof, merkleRoot } from './game/merkle.ts';
@@ -186,6 +187,7 @@ export function createApp(deps: AppDeps) {
     return { ...v, party: { ...v.party, members } };
   }
   const chatIpLimiter = new RateLimiter(30, 2000);
+  const profileLimiter = new RateLimiter(30, 3000); // player cards per account
   const worldOf = (v: unknown) => (v == null || v === '' ? 'public' : worldIdOk(v) ? v : (() => { throw new HttpError(400, 'bad world'); })());
   /** The world a presence or chat request is about: it must be one the player may be in AND the one the server has them in. */
   async function checkedWorld(acct: string, v: unknown, at?: { x: number; y: number }) {
@@ -399,7 +401,7 @@ export function createApp(deps: AppDeps) {
           devTools: devAllowed(req),
           dialogue: dialogue.provider,
           world: game.map?.view() ?? null,
-          econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time, coop: game.econ.coop, gamble: game.econ.gamble ?? null, mall: game.econ.mall ?? null, tools: game.econ.tools ?? null, fun: game.econ.fun ?? null },
+          econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time, coop: game.econ.coop, gamble: game.econ.gamble ?? null, mall: game.econ.mall ?? null, tools: game.econ.tools ?? null, fun: game.econ.fun ?? null, grass: game.econ.grass ?? null },
           monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, homelandRoaming: game.econ.monsters.homeland?.roaming ?? game.econ.monsters.roaming, reach: game.econ.monsters.reach, publicMonsters: !game.econ.homeland.publicTradeOnly } : null,
         });
       }
@@ -562,6 +564,12 @@ export function createApp(deps: AppDeps) {
         const w = await checkedWorld(acct, b.world);
         return send(res, 200, { msg: social.say(acct, w, text) });
       }
+      if (req.method === 'GET' && p === '/api/player') {
+        // a player's card: name, look, Town Hall level, online, party (the name tag click)
+        const acct = accountOf(req, url);
+        if (!profileLimiter.take(acct)) throw new HttpError(429, 'Slow down, too many requests.');
+        return send(res, 200, playerProfile({ social, game, title: (a) => titleFor(bazaar.points(a)) }, acct, url.searchParams.get('name')));
+      }
       if (req.method === 'POST' && p === '/api/name') {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
@@ -640,7 +648,7 @@ export function createApp(deps: AppDeps) {
         // Player market: open listings read from the contract (escrowed there), newest first.
         return send(res, 200, await readCache.get('listings', async () => {
           const listings = bazaar.view(await deps.chain.listListings(50));
-          return { listings, feeBps: MARKET_FEE_BPS, contractId: deps.cfg.gameContractId, popular: bazaar.top(10) };
+          return { listings, feeBps: MARKET_FEE_BPS, contractId: deps.cfg.gameContractId, popular: bazaar.top(10).map((r) => ({ ...r, nick: social.nick(r.account), tag: social.tag(r.account) })) };
         }));
       }
       if (req.method === 'GET' && p === '/api/history') {

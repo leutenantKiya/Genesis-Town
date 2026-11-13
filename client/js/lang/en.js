@@ -1546,7 +1546,8 @@
     "selatan": "south",
     "tenggara": "southeast",
     "Koneksi ke server terputus · menyambung ulang…": "Lost the connection to the server · reconnecting…",
-    "Tersambung lagi ke server.": "Connected to the server again.",
+    "Tersambung lagi ke server.": "Connected to the server again."
+,
     "Ambil hadiah: {0}": "Claim reward: {0}",
     "Hadiah: {0}": "Reward: {0}",
     "Semua misi": "All missions",
@@ -1748,6 +1749,16 @@
     "Pilih pemain dulu.": "Choose a player first.",
     "Mengirim pembayaran…": "Sending the payment…",
     "Top up berhasil: {0} koin dikirim ke {1}": "Top up done: {0} coin sent to {1}",
-    "Top up berhasil: +{0} koin": "Top up done: +{0} coin"
+    "Top up berhasil: +{0} koin": "Top up done: +{0} coin",
+    "Trade": "Trade",
+    "Pengunjung yang belum masuk.": "A visitor who has not signed in.",
+    "Balai Kota: …": "Town Hall: …",
+    "Balai Kota: level {0}": "Town Hall: level {0}",
+    "Belum punya Homeland": "No Homeland yet",
+    "Online sekarang": "Online now",
+    "Sedang tidak terlihat": "Not around right now",
+    "Satu party denganmu": "In your party",
+    "Sedang dalam party": "In a party",
+    "Cari benih": "Search for seeds"
   });
 })();

@@ -1048,6 +1048,7 @@
     if (a === 'gather') return tile === 'tree' ? 'chop' : tile === 'rock' ? 'mine' : tile === 'water' ? 'catch' : 'pickup';
     if (a === 'farm') return body.op === 'plant' ? 'plant' : body.op === 'water' ? 'water' : body.op === 'harvest' ? 'harvest' : 'dig';
     if (a === 'hoe') return 'dig';
+    if (a === 'grass') return r && r.gained && Object.keys(r.gained).length ? 'pickup' : 'ui_click'; // a seed found: the pickup chime; an empty search: a soft tap
     if (a === 'craft') return 'craft';
     if (a === 'cook') return 'cook';
     if (a === 'eat') return 'eat';
@@ -1937,6 +1938,23 @@
     return true;
   }
 
+  // Facing grass and pressing the action key: a small chance of a wheat seed (the server checks the tile, the distance, the energy,
+  // the cooldown and the daily cap; economy.grass in /api/config). Holding the hoe leaves grass to the Homeland's hoe squares.
+  // It registers from init (after every mod): a Homeland lot, the portal and the hoe squares on grass keep their own interaction.
+  var grassAt = 0;
+  function searchGrass(ctx) {
+    var g = S.cfg && S.cfg.econ && S.cfg.econ.grass;
+    if (!g || ctx.scene.kind !== 'out' || g.tiles.indexOf(ctx.tileType) < 0 || S.mode === 'offline' || !S.account) return false;
+    if (window.GT_ITEMS && GT_ITEMS.holding && GT_ITEMS.holding('hoe')) return false;
+    if (S.busy) return true;
+    var now = Date.now();
+    if (now - grassAt < g.cooldownSecs * 1000) return true; // the server has the same cooldown; do not ask before it is over
+    if (S.st && S.st.energy < g.energyCost) { GT.toast($t('Energimu habis. Makan dulu atau tunggu besok.')); return true; }
+    grassAt = now; S.busy = true;
+    act({ action: 'grass', x: ctx.tile.x, y: ctx.tile.y }).then(noop, noop).then(function () { S.busy = false; });
+    return true;
+  }
+
   function onWorld() {
     S.npcs = {}; villagers = []; S.plots = [];
     if (worldNow() === 'public') { placeMerchants(); spawnVillagers(); } // Homelands have no merchants or townsfolk
@@ -1945,6 +1963,7 @@
   }
 
   function init() {
+    GT.register({ id: 'chain-grass', onInteract: function (ctx) { return ctx.mode === 'talk' && !ctx.npc && !ctx.door && searchGrass(ctx); } });
     accBtn = GT.addHudButton({ id: 'chainbtn', label: $t('Masuk'), key: 'N', secondary: false, onClick: function () { open('bag'); } });
     GT.hotkey('H', function () { open('history'); });
     GT.addHudButton({ id: 'pasarbtn', label: $t('Pasar'), key: 'K', onClick: function () { if (S.mode === 'offline') GT.toast($t('Pasar Pemain butuh server game.')); else open('market'); } });
