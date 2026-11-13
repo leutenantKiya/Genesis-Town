@@ -11,6 +11,7 @@
 //! - `market.rs`: the player market (escrowed listings, 5% fee burned)
 //! - `projects.rs`: town projects that open new map areas (pledged goods are burned when built) 
 //! - `coin_sale.rs`: buy coin with NEAR (settings under their own storage key, no state migration)
+//! - `treasury.rs`: owner top-up of the town treasury (max 10^15 coin), kept out of the faucet's money supply
 //! - `islands.rs`: Private Islands (`IS-<id>-<version>` tokens bought with a server voucher, Save World) and the v4 -> v5 `migrate`
 //!
 //! Design: docs/onchain-offchain.md, docs/economy.md, docs/threat-model.md.
@@ -28,6 +29,7 @@ mod projects;
 mod settle;
 mod shops;
 mod storage;
+mod treasury;
 
 pub use coin_sale::CoinSale;
 pub use islands::{Island, IslandSpec, IslandView};

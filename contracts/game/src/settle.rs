@@ -6,7 +6,8 @@
 //! - each (day, chunk) is applied once, and a day's ledger root never changes once stored;
 //! - a player account's net gain per item and per day is capped (`daily_gain_cap`, `daily_coin_gain_cap`);
 //! - new `coin` (a chunk's net positive coin) is limited by the faucet W_day = W0 * k * (1 - M / Mcap), M being the
-//!   coin supply when the day's first chunk arrives (docs/economy.md section 3);
+//!   coin supply when the day's first chunk arrives, not counting owner-minted coin still unspent in the town
+//!   treasury (`faucet_supply`, treasury.rs) (docs/economy.md section 3);
 //! - negative deltas need the settled balance to cover them.
 use crate::{COIN, Contract, ContractExt, events};
 use near_sdk::json_types::U128;
@@ -81,7 +82,7 @@ impl Contract {
         // Coin faucet: the day's running NET coin (all chunks, signed) is new money. A transfer split across chunks
         // (player +X in one, merchant -X in another) nets to zero. The server sends negative-net chunks first.
         let net_coin: i128 = parsed.iter().filter(|(_, t, _)| t == COIN).map(|(_, _, d)| *d).sum();
-        let (start_supply, _) = self.day_faucet.get(&day).copied().unwrap_or((self.supply_of(COIN), 0));
+        let (start_supply, _) = self.day_faucet.get(&day).copied().unwrap_or((self.faucet_supply(), 0));
         let running = self.day_net.get(&day).copied().unwrap_or(0).saturating_add(net_coin);
         if net_coin > 0 {
             let allowed = self.faucet_allowed(start_supply, active_players);
@@ -129,7 +130,7 @@ impl Contract {
     }
 
     pub fn faucet_status(&self, day: u64, active_players: u32) -> FaucetView {
-        let (start, minted) = self.day_faucet.get(&day).copied().unwrap_or((self.supply_of(COIN), 0));
+        let (start, minted) = self.day_faucet.get(&day).copied().unwrap_or((self.faucet_supply(), 0));
         FaucetView { allowed_today: U128(self.faucet_allowed(start, active_players)), minted_today: U128(minted), coin_supply: U128(self.supply_of(COIN)) }
     }
 }

@@ -150,7 +150,12 @@ export class TestnetChain implements Chain {
   isRegistered(accountId: string) { return this.view<boolean>('is_registered', { account_id: accountId }); }
   listShops() { return this.view<ShopInfo[]>('list_shops', {}); }
   holding(merchant: string, holder: string) { return this.view<HoldingInfo>('get_holding', { merchant, holder }); }
-  async coinSupply() { return (await this.view<string | null>('mt_supply', { token_id: 'coin' })) ?? '0'; }
+  async coinSupply() {
+    // the supply the contract's faucet counts (owner-minted treasury coin left out); older contracts lack the view
+    try { return (await this.view<string>('coin_faucet_supply', {})) ?? '0'; }
+    catch (e) { if (!/MethodNotFound|not found|does not exist/i.test(String((e as Error)?.message ?? e))) throw e; }
+    return (await this.view<string | null>('mt_supply', { token_id: 'coin' })) ?? '0';
+  }
   listListings(limit = 50) { return this.view<ListingInfo[]>('list_listings', { limit }); }
   getListing(id: number) { return this.view<ListingInfo | null>('get_listing', { listing_id: id }); }
   listProjects() { return this.view<ProjectInfo[]>('list_projects', {}); }

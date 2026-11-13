@@ -1062,3 +1062,209 @@ fn unregistered_payer_may_pay_for_a_registered_receiver() {
     assert_eq!(c.buy_coin(Some(bob())).0, 1000);
     assert_eq!(bal(&c, bob(), "coin"), 1000);
 }
+
+/* ------------------------------------------------------------ owner top-up of the treasury (mint_treasury) */
+
+const MAX_TREASURY: u128 = 1_000_000_000_000_000;
+
+fn mint_t(c: &mut Contract, who: AccountId, amount: u128) -> U128 {
+    ctx(who, 0);
+    c.mint_treasury(U128(amount), None)
+}
+
+#[test]
+fn owner_mints_into_the_treasury_and_every_supply_counter_follows() {
+    let mut c = setup();
+    let supply = c.mt_supply("coin".into()).unwrap().0;
+    assert_eq!(mint_t(&mut c, owner(), 700).0, 5700);
+    assert_eq!(bal(&c, town(), "coin"), 5700);
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, supply + 700);
+    assert_eq!(c.mt_batch_supply(vec!["coin".into()])[0].unwrap().0, supply + 700);
+    assert_eq!(c.faucet_status(1, 1).coin_supply.0, supply + 700);
+    let logs = get_logs();
+    assert!(logs.iter().any(|l| l.contains(r#""event":"mt_mint""#) && l.contains(r#""owner_id":"town.testnet""#) && l.contains(r#""amounts":["700"]"#) && l.contains(r#""memo":"treasury""#)), "{logs:?}");
+}
+
+#[test]
+fn the_owner_memo_is_appended_to_the_event() {
+    let mut c = setup();
+    ctx(owner(), 0);
+    c.mint_treasury(U128(5), Some("stock for launch".into()));
+    assert!(get_logs().iter().any(|l| l.contains(r#""memo":"treasury: stock for launch""#)));
+}
+
+#[test]
+#[should_panic(expected = "only the owner")]
+fn only_the_owner_mints_the_treasury() {
+    let mut c = setup();
+    mint_t(&mut c, alice(), 10);
+}
+
+#[test]
+#[should_panic(expected = "only the owner")]
+fn the_settler_cannot_mint_the_treasury() {
+    let mut c = setup();
+    mint_t(&mut c, settler(), 10);
+}
+
+#[test]
+#[should_panic(expected = "contract is paused")]
+fn paused_contract_refuses_to_mint_the_treasury() {
+    let mut c = setup();
+    ctx(owner(), 0);
+    c.set_paused(true);
+    c.mint_treasury(U128(10), None);
+}
+
+#[test]
+#[should_panic(expected = "amount must be positive")]
+fn minting_zero_is_refused() {
+    let mut c = setup();
+    mint_t(&mut c, owner(), 0);
+}
+
+#[test]
+fn the_treasury_can_be_filled_to_exactly_the_maximum() {
+    let mut c = setup();
+    assert_eq!(mint_t(&mut c, owner(), MAX_TREASURY - 5000).0, MAX_TREASURY);
+    assert_eq!(bal(&c, town(), "coin"), MAX_TREASURY);
+    let s = c.treasury_status();
+    assert_eq!((s.balance.0, s.max.0, s.room.0), (MAX_TREASURY, MAX_TREASURY, 0));
+    let json = near_sdk::serde_json::to_string(&s).unwrap();
+    assert!(json.contains(r#""balance":"1000000000000000""#) && json.contains(r#""max":"1000000000000000""#), "{json}");
+}
+
+#[test]
+#[should_panic(expected = "it holds 1000000000000000, room left 0")]
+fn one_coin_more_than_the_maximum_is_refused() {
+    let mut c = setup();
+    mint_t(&mut c, owner(), MAX_TREASURY - 5000);
+    mint_t(&mut c, owner(), 1);
+}
+
+#[test]
+#[should_panic(expected = "room left 999999999995000")]
+fn the_refusal_names_the_balance_and_the_room() {
+    let mut c = setup();
+    mint_t(&mut c, owner(), MAX_TREASURY - 4999);
+}
+
+#[test]
+#[should_panic(expected = "treasury balance would exceed")]
+fn a_huge_amount_cannot_overflow_the_check() {
+    let mut c = setup();
+    mint_t(&mut c, owner(), u128::MAX);
+}
+
+#[test]
+fn spent_room_can_be_refilled_up_to_the_maximum_again() {
+    let mut c = sale_setup(true);
+    mint_t(&mut c, owner(), MAX_TREASURY - 5000);
+    buy_with(&mut c, alice(), NEAR); // town hands out 1000
+    assert_eq!(c.treasury_status().room.0, 1000);
+    assert_eq!(mint_t(&mut c, owner(), 1000).0, MAX_TREASURY);
+}
+
+/// Runs two settlement days (optionally after a full-treasury mint) and returns what the faucet allowed and minted. Contracts share the mocked storage in unit tests, so the
+/// with- and without-mint runs are separate tests that must produce the same numbers.
+const FAUCET_RUN_EXPECTED: [u128; 6] = [931, 931, 900, 931, 50, 888];
+
+fn faucet_run(mint_first: bool) -> [u128; 6] {
+    let mut c = setup();
+    if mint_first {
+        mint_t(&mut c, owner(), MAX_TREASURY - 5000);
+        assert_eq!(c.faucet_status(1, 1).coin_supply.0, MAX_TREASURY + 600, "the real counter shows the true total");
+    }
+    let (a1, a100) = (c.faucet_status(1, 1).allowed_today.0, c.faucet_status(1, 100).allowed_today.0);
+    settle(&mut c, 1, 0, vec![d(budi(), "coin", 900)]);
+    let (m1, a1_after) = (c.faucet_status(1, 1).minted_today.0, c.faucet_status(1, 1).allowed_today.0);
+    settle(&mut c, 2, 0, vec![d(budi(), "coin", 50)]);
+    [a1, a100, m1, a1_after, c.faucet_status(2, 1).minted_today.0, c.faucet_status(2, 1).allowed_today.0]
+}
+
+#[test]
+fn a_full_treasury_does_not_raise_the_daily_faucet() {
+    // day 1: 1200 * (25000 - 5600) / 25000 = 931 (k = 1); day 2 (supply 6500, nothing from the mint): 888
+    assert_eq!(faucet_run(true), FAUCET_RUN_EXPECTED, "same allowance with the 10^15 mint, settle_day still works");
+}
+
+#[test]
+fn the_faucet_numbers_without_a_mint_are_the_same_baseline() {
+    assert_eq!(faucet_run(false), FAUCET_RUN_EXPECTED);
+}
+
+#[test]
+#[should_panic(expected = "coin faucet exceeded")]
+fn settle_day_after_a_full_treasury_still_refuses_beyond_the_old_allowance() {
+    let mut c = setup();
+    mint_t(&mut c, owner(), MAX_TREASURY - 5000);
+    settle(&mut c, 1, 0, vec![d(budi(), "coin", 900)]);
+    settle(&mut c, 1, 1, vec![d(budi(), "coin", 32)]); // 932 > 931
+}
+
+#[test]
+fn settle_day_works_with_the_town_spending_and_receiving_after_a_full_treasury() {
+    let mut c = setup();
+    mint_t(&mut c, owner(), MAX_TREASURY - 5000);
+    // starter kit from the treasury to alice, then coin back: no new money, no panic, no overflow
+    settle(&mut c, 1, 0, vec![d(town(), "coin", -100), d(alice(), "coin", 100)]);
+    assert_eq!(bal(&c, town(), "coin"), MAX_TREASURY - 100);
+    assert_eq!(c.faucet_status(1, 1).minted_today.0, 0);
+    settle(&mut c, 2, 0, vec![d(alice(), "coin", -40), d(town(), "coin", 40)]);
+    assert_eq!(bal(&c, town(), "coin"), MAX_TREASURY - 60);
+}
+
+#[test]
+fn coin_the_town_hands_out_beyond_its_old_balance_counts_toward_the_money_cap_again() {
+    let mut c = sale_setup(true);
+    mint_t(&mut c, owner(), 100_000);
+    assert_eq!(c.faucet_status(1, 1).allowed_today.0, 931);
+    // the town sells 2000 coin: it still holds more than the owner-minted 100000, so the faucet view is unchanged
+    ctx(alice(), NEAR * 2);
+    c.buy_coin(None);
+    assert_eq!(c.faucet_status(1, 1).allowed_today.0, 931);
+    // now 100000 more go out: town holds 3000, so the owner-minted coin is circulating and counts again
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 1000, 1000, U128(200_000), true);
+    ctx(bob(), NEAR * 100);
+    c.buy_coin(None);
+    assert_eq!(bal(&c, town(), "coin"), 3000);
+    // faucet supply = 105600 - 3000 = 102600 >= Mcap 25000: the cap bites
+    assert_eq!(c.faucet_status(1, 1).allowed_today.0, 0);
+}
+
+#[test]
+fn buy_coin_works_from_a_full_treasury() {
+    let mut c = sale_setup(true);
+    mint_t(&mut c, owner(), MAX_TREASURY - 5000);
+    let supply = c.mt_supply("coin".into()).unwrap().0;
+    assert_eq!(buy_with(&mut c, alice(), NEAR).0, 1000);
+    assert_eq!(bal(&c, town(), "coin"), MAX_TREASURY - 1000);
+    assert_eq!(bal(&c, alice(), "coin"), 1000);
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, supply, "buy_coin moves coin, never mints");
+    // a huge purchase also works (3 * 10^14 coin = 3 * 10^11 NEAR attached)
+    ctx(owner(), 0);
+    c.set_coin_sale(dev(), 1000, 1000, U128(MAX_TREASURY), true);
+    ctx(bob(), 300_000_000_000 * NEAR);
+    assert_eq!(c.buy_coin(None).0, 300_000_000_000_000);
+    assert_eq!(bal(&c, town(), "coin"), MAX_TREASURY - 1000 - 300_000_000_000_000);
+}
+
+#[test]
+fn views_do_not_overflow_with_a_full_treasury() {
+    let mut c = setup();
+    mint_t(&mut c, owner(), MAX_TREASURY - 5000);
+    assert_eq!(c.mt_balance_of(town(), "coin".into()).0, MAX_TREASURY);
+    let _ = c.get_config();
+    let _ = c.faucet_status(7, 1000);
+}
+
+#[test]
+fn the_faucet_supply_view_leaves_out_the_owner_minted_treasury() {
+    let mut c = setup();
+    let supply = c.mt_supply("coin".into()).unwrap().0;
+    assert_eq!(c.coin_faucet_supply().0, supply);
+    mint_t(&mut c, owner(), 900_000);
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, supply + 900_000, "the true supply grows");
+    assert_eq!(c.coin_faucet_supply().0, supply, "the faucet supply the server reads does not");
+}
