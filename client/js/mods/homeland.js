@@ -83,10 +83,13 @@
   function layoutOf() { return GT.world && GT.world.layout; }
   function lotById(id) { var L = layoutOf(), r = null; if (L && L.lots) L.lots.forEach(function (l) { if (l.id === id) r = l; }); return r; }
   function builtOf(lot) { var r = null, v = V(); if (v) v.built.forEach(function (b) { if (b.lot === lot) r = b; }); return r; }
+  // a region's name; when two regions share it (two Beaches), the side tells them apart
+  var SIDE = { nw: 'barat laut', n: 'utara', ne: 'timur laut', w: 'barat', e: 'timur', sw: 'barat daya', s: 'selatan', se: 'tenggara' };
   function chunkName(id) {
-    var r = id, L = layoutOf();
+    var r = id, L = layoutOf(), same = 0;
     if (L && L.chunks) L.chunks.forEach(function (c) { if (c.id === id) r = c.name; });
-    return r;
+    if (L && L.chunks) L.chunks.forEach(function (c) { if (c.name === r) same++; });
+    return same > 1 && SIDE[id] ? $t('{0} ({1})', [r, $t(SIDE[id])]) : r;
   }
 
   /* ------------------------------------------------------------ data */
@@ -239,12 +242,29 @@
     win.h = GT.modal({ title: title, wide: true, body: bodyFor(win), onClose: function () { win = null; lastClose = Date.now(); } });
     load(true);
   }
+  // the owner's Town Hall window in tabs; the chosen tab survives the once-a-second redraw and reopening the window
+  var HALL_TABS = [
+    { id: 'town', icon: '🏛️', word: function () { return $t('Kota'); } },
+    { id: 'build', icon: '🔨', word: function () { return $t('Bangun'); } },
+    { id: 'work', icon: '👷', word: function () { return $t('Pekerja'); } },
+    { id: 'guest', icon: '👥', word: function () { return $t('Tamu'); } }
+  ];
+  var hallTab = 'town';
+  try { var savedTab = sessionStorage.getItem('gt.hall.tab'); if (savedTab && HALL_TABS.some(function (t) { return t.id === savedTab; })) hallTab = savedTab; } catch (e) { /* storage blocked */ }
+  function pickTab(id, focus) {
+    hallTab = id; try { sessionStorage.setItem('gt.hall.tab', id); } catch (e) { /* storage blocked */ }
+    if (win && win.h && win.h.isOpen()) win.h.setBody(bodyFor(win));
+    if (focus) { var b = document.getElementById('hl-tab-' + id); if (b) b.focus(); }
+  }
+  var JOB_IC = { builder: '🔨', petani: '🌾', nelayan: '🎣', penebang: '🪓', hunter: '🏹', chef: '🍳' };
   function bodyFor(w) { return w.kind === 'hall' ? hallBody() : lotBody(w.arg); }
   function redrawWin() {
     if (!win || !win.h || !win.h.isOpen()) return;
     var ae = document.activeElement; // do not wipe a name being typed into the invite field, or a role list open for a pick
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT') && win.h.el && win.h.el.contains(ae)) return;
+    var tabId = ae && ae.classList && ae.classList.contains('hl-tab') ? ae.id : null; // keep a keyboard user on their tab
     win.h.setBody(bodyFor(win));
+    if (tabId) { var t = document.getElementById(tabId); if (t) t.focus(); }
   }
   function busyJob() { var v = V(); return v && v.builders && v.builders.busy >= v.builders.total; }
 
@@ -335,13 +355,15 @@
     if (!H) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     var owner = inOwnHome();
     if (!owner) return guestHall(wrap);
+    // four tabs (icon + word): the town at a glance, things to build, workers and gear, guests
+    var pane = { town: $('div', 'hl-pane'), build: $('div', 'hl-pane'), work: $('div', 'hl-pane'), guest: $('div', 'hl-pane') };
     var stats = $('div', 'hl-stats');
     function stat(k, v) { var s = $('div', 'hl-stat'); s.appendChild($('span', 'hl-k', k)); s.appendChild($('b', 'hl-n', v)); stats.appendChild(s); }
     stat($t('Balai Kota'), $t('level {0}', [H.th]));
     stat($t('Wilayah terbuka'), $t('{0} dari 9', [H.open.length + 1]));
-    wrap.appendChild(stats);
+    pane.town.appendChild(stats);
 
-    var bs = cell($t('Pembangun'), $t('{0} dari {1} sibuk', [H.builders.busy, H.builders.total]));
+    var bs = cell('👷 ' + $t('Pembangun'), $t('{0} dari {1} sibuk', [H.builders.busy, H.builders.total]));
     if (H.jobs.length) H.jobs.forEach(function (j) {
       var r = $('div', 'hl-row'); r.appendChild($('span', 'hl-grow', jobWhat(j))); r.appendChild($('span', 'hl-k', 'sisa')); r.appendChild($('b', 'hl-n hl-time', clock(endMs(j) - Date.now()))); bs.appendChild(r);
     });
@@ -357,36 +379,37 @@
       bs.appendChild(r);
     });
     if (H.workers && H.workers.some(function (w) { return w.fatigue >= 40; })) bs.appendChild($('p', 'chain-dim', $t('Tukang yang lelah bekerja lebih lambat. Restoran memberi mereka makan dari lemarinya.')));
-    wrap.appendChild(bs);
+    pane.town.appendChild(bs);
 
     if (H.forage) {
       var fs = H.forage.stored || {}, tot = 0;
       var parts = Object.keys(fs).map(function (t) { tot += fs[t]; return fs[t] + ' ' + itemName(t); });
-      var fb = cell($t('Pemburu membawa: {0} (maks {1})', [parts.join(', '), H.forage.capacity]));
+      var fb = cell('🏹 ' + $t('Pemburu membawa: {0} (maks {1})', [parts.join(', '), H.forage.capacity]));
       fb.appendChild($('p', 'chain-dim', $t('Mencari ikan dan kayu sendiri. Musim dingin hasilnya dua kali lipat.')));
       acts(fb).appendChild(btn($t('Ambil'), function () { run({ action: 'forage' }); }, '', tot <= 0 || isBusy()));
-      wrap.appendChild(fb);
+      pane.town.appendChild(fb);
     }
 
     var busy = busyJob(), why = busy ? $t('Pembangun sedang bekerja.') : null;
     var th = H.next && H.next.th;
-    if (!th) wrap.appendChild(stepBlock($t('Naikkan Balai Kota'), $t('Sudah di level tertinggi.'), null, false, null, null));
+    var canTh = false;
+    if (!th) pane.build.appendChild(stepBlock('⬆️ ' + $t('Naikkan Balai Kota'), $t('Sudah di level tertinggi.'), null, false, null, null));
     else {
-      var short = shortOf(th.cost), can = !busy && !short.length;
-      wrap.appendChild(stepBlock($t('Naikkan ke level {0}', [th.level]), unlocksAt(th.level), th, can, why, $t('Naikkan ke level {0}', [th.level]), function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
+      var short = shortOf(th.cost), can = !busy && !short.length; canTh = can;
+      pane.build.appendChild(stepBlock('⬆️ ' + $t('Naikkan ke level {0}', [th.level]), unlocksAt(th.level), th, can, why, $t('Naikkan ke level {0}', [th.level]), function () { run({ action: 'build', kind: 'th', target: 'th' }); }, true));
     }
 
     // Lighting project: street lamps on the centre island, then on every open island (lit at night)
-    var lt = H.next && H.next.light, lb = cell($t('Lampu jalan'), H.light ? $t('level {0}', [H.light]) : null);
+    var lt = H.next && H.next.light, okLight = false, lb = cell('💡 ' + $t('Lampu jalan'), H.light ? $t('level {0}', [H.light]) : null);
     if (!lt) lb.appendChild($('p', 'chain-dim', $t('Semua pulaumu yang terbuka sudah diterangi.')));
     else {
       lb.appendChild($('p', 'chain-dim', lt.covers === 'open' ? $t('Pasang lampu di setiap pulau yang sudah terbuka. Pulau yang dibuka nanti ikut terang.') : $t('Pasang lampu di sepanjang jalan pulau tengah. Menyala sendiri saat malam.')));
       lb.appendChild(costRow(lt.cost, lt.secs));
       if (H.th < lt.th) lb.appendChild($('p', 'hl-why', $t('Terkunci: perlu Balai Kota level {0}.', [lt.th])));
-      var okLight = !busy && H.th >= lt.th && !shortOf(lt.cost).length;
+      okLight = !busy && H.th >= lt.th && !shortOf(lt.cost).length;
       acts(lb).appendChild(btn(H.light ? $t('Tambah lampu') : $t('Pasang lampu'), function () { run({ action: 'build', kind: 'light', target: 'light' }); }, '', !okLight || isBusy()));
     }
-    wrap.appendChild(lb);
+    pane.build.appendChild(lb);
 
     // neighbouring locked chunks
     var ch = H.next && H.next.chunk, mine = { c: 1 };
@@ -396,25 +419,25 @@
       if (mine[id]) return;
       if (NEIGH[id].some(function (n) { return mine[n]; })) adj.push(id);
     });
-    var ob = cell($t('Buka wilayah'), ch ? 'ke-' + ch.n : null);
+    var okChunk = false, ob = cell('🗺️ ' + $t('Buka wilayah'), ch ? $t('wilayah ke-{0}', [ch.n]) : null);
     if (!ch) ob.appendChild($('p', 'chain-dim', adj.length ? $t('Semua wilayah yang bisa dibuka sudah terbuka.') : $t('Semua wilayah sudah terbuka.')));
     else {
       ob.appendChild(costRow(ch.cost, ch.secs));
       if (H.th < ch.th) ob.appendChild($('p', 'hl-why', $t('Terkunci: perlu Balai Kota level {0}.', [ch.th])));
-      var okChunk = !busy && H.th >= ch.th && !shortOf(ch.cost).length, ca = acts(ob);
+      okChunk = !busy && H.th >= ch.th && !shortOf(ch.cost).length && adj.length > 0; var ca = acts(ob);
       adj.forEach(function (id) { ca.appendChild(btn($t('Buka {0}', [chunkName(id)]), function () { run({ action: 'build', kind: 'chunk', target: id }); }, '', !okChunk || isBusy())); });
     }
-    wrap.appendChild(ob);
+    pane.build.appendChild(ob);
 
     // Pekerja: worker bots
     var bd = H.beds || { total: 0, used: 0 }, full = bd.used >= bd.total;
-    var pk = cell($t('Pekerja'), $t('Kasur {0} dari {1}', [bd.used, bd.total]));
+    var pk = cell('👷 ' + $t('Pekerja'), '🛏️ ' + $t('Kasur {0} dari {1}', [bd.used, bd.total]));
     pk.appendChild($('p', 'chain-dim', $t('Bayar sekali, bekerja selamanya. Tukang menambah pembangun; Pemburu mencari ikan dan kayu; Koki mempercepat Restoran memberi makan Tukang; Petani mempercepat tanaman; Nelayan mempercepat Kolam Ikan; Penebang menambah kayu per pohon.')));
     pk.appendChild($('p', full ? 'hl-warn' : 'chain-dim', $t('Kasur terpakai {0} dari {1}{2}', [bd.used, bd.total, full ? $t('. Bangun Rumah Pekerja atau tambah kasur.') : '.'])));
     var hireMap = H.hire || {};
     Object.keys(hireMap).forEach(function (job) {
       var d = hireMap[job], row = $('div', 'hl-row hl-hire'), tx = $('div', 'hl-grow');
-      var nm = $('div', 'hl-name'); nm.appendChild(document.createTextNode(d.name + ' '));
+      var nm = $('div', 'hl-name'); nm.appendChild(document.createTextNode((JOB_IC[job] ? JOB_IC[job] + ' ' : '') + d.name + ' '));
       if (d.rarity === 'rare') nm.appendChild($('span', 'hl-rare', $t('Langka')));
       tx.appendChild(nm);
       tx.appendChild($('div', 'hl-n hl-sm', d.have + '/' + d.max + ' · ' + d.price + ' ' + itemName('coin')));
@@ -423,13 +446,13 @@
       row.appendChild(btn($t('Pekerjakan {0} ({1})', [d.name, d.price]), function () { run({ action: 'hire', job: job }); }, '', !d.can || isBusy()));
       pk.appendChild(row);
     });
-    wrap.appendChild(pk);
+    pane.work.appendChild(pk);
 
     // cosmetics: a hat for the Tukang or a bot; better output, or less fatigue for a Tukang
     var cat = H.cosmetics || {}, crew = [{ id: 0, name: $t('Tukang Balai Kota'), cosmetic: (H.workers && H.workers[0] && H.workers[0].cosmetic) || null }];
     (H.bots || []).forEach(function (b) { crew.push({ id: b.id, name: b.name + ' ' + b.id, cosmetic: b.cosmetic || null }); });
     if (Object.keys(cat).length) {
-      var pc = cell($t('Perlengkapan'));
+      var pc = cell('🎩 ' + $t('Perlengkapan'));
       pc.appendChild($('p', 'chain-dim', $t('Topi dan syal: Tukang jadi kurang lelah, pekerja lain lebih rajin. Pakai yang baru menggantikan yang lama, tanpa uang kembali.')));
       crew.forEach(function (c) {
         var cr = $('div', 'hl-crew'), who = $('div', 'hl-name');
@@ -443,11 +466,11 @@
         });
         pc.appendChild(cr);
       });
-      wrap.appendChild(pc);
+      pane.work.appendChild(pc);
     }
 
     // invites
-    var iv = cell($t('Undang teman'));
+    var iv = cell('✉️ ' + $t('Undang teman'));
     iv.appendChild($('p', 'chain-dim', $t('Hanya kamu dan tamu undangan yang boleh datang lewat portal. Tulis nama pemain (seperti di permainan), pisahkan dengan koma. Tamu melihat duniamu di menu portal.')));
     var input = $('input'); input.type = 'text'; input.maxLength = 400; input.placeholder = $t('Ayu, Budi'); var known = {};
     input.setAttribute('aria-label', $t('Nama tamu'));
@@ -464,17 +487,39 @@
           input.value = names.join(', '); GT.toast($t('Undangan tersimpan ({0} tamu).', [names.length])); return load(true);
         }, function (e) { GT.toast($t('Gagal: {0}', [e.message])); });
     }));
-    wrap.appendChild(iv);
+    pane.guest.appendChild(iv);
 
     // roles: what the party and each invited guest may do here
-    var rl = cell($t('Peran tamu'));
+    var rl = cell('🔑 ' + $t('Peran tamu'));
     rl.appendChild($('p', 'chain-dim', $t('Pengunjung hanya jalan, mengobrol, makan, dan berdagang. Pembantu juga menebang, menambang, memancing, dan melawan monster. Tukang juga boleh membangun.')));
     var pr = $('div', 'hl-acts'); pr.appendChild($('span', 'hl-k', $t('Party'))); pr.appendChild(roleSelect(H.party_role || 'visitor', true, function (v) { setRole('party', v); })); rl.appendChild(pr);
     (H.guests || []).forEach(function (g) {
       var row = $('div', 'hl-acts'); row.appendChild($('span', 'hl-k', g.name + (g.tag ? '#' + g.tag : '')));
       row.appendChild(roleSelect(g.role || 'visitor', false, function (v) { setRole(g.account, v); })); rl.appendChild(row);
     });
-    wrap.appendChild(rl);
+    pane.guest.appendChild(rl);
+    // the tab row; a dot on Build when something there can start now
+    var tabs = $('div', 'hl-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', $t('Balai Kota'));
+    var ready = { build: canTh || okLight || okChunk };
+    HALL_TABS.forEach(function (t, i) {
+      var b = $('button', 'hl-tab' + (hallTab === t.id ? ' on' : '')); b.type = 'button'; b.id = 'hl-tab-' + t.id;
+      b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(hallTab === t.id)); b.setAttribute('aria-controls', 'hl-pane-' + t.id);
+      b.tabIndex = hallTab === t.id ? 0 : -1;
+      var ic = $('span', 'hl-tab-ic', t.icon); ic.setAttribute('aria-hidden', 'true'); b.appendChild(ic); b.appendChild($('span', 'hl-tab-w', t.word()));
+      if (ready[t.id]) { var dot = $('span', 'hl-tab-dot'); dot.title = $t('bisa dimulai'); b.appendChild(dot); }
+      b.addEventListener('click', function () { pickTab(t.id, false); });
+      b.addEventListener('keydown', function (e) {
+        var k = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!k) return;
+        e.preventDefault(); e.stopPropagation();
+        pickTab(HALL_TABS[(i + k + HALL_TABS.length) % HALL_TABS.length].id, true);
+      });
+      tabs.appendChild(b);
+    });
+    wrap.appendChild(tabs);
+    var show = pane[hallTab] || pane.town;
+    show.id = 'hl-pane-' + hallTab; show.setAttribute('role', 'tabpanel'); show.setAttribute('aria-labelledby', 'hl-tab-' + hallTab);
+    wrap.appendChild(show);
     return wrap;
   }
 

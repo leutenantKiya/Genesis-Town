@@ -1526,6 +1526,17 @@
     "🔨 2 Gandum di Meja Kerja": "🔨 2 Wheat at the Workbench",
     "🔨 Ikan + Kayu di Meja Kerja": "🔨 Fish + Wood at the Workbench",
     "🔨 2 Bijih + Kayu di Meja Kerja": "🔨 2 Ore + Wood at the Workbench",
-    "🪙 jual ke pedagang": "🪙 sell to a merchant"
+    "🪙 jual ke pedagang": "🪙 sell to a merchant",
+    "wilayah ke-{0}": "region {0}",
+    "bisa dimulai": "ready to start",
+    "{0} ({1})": "{0} ({1})",
+    "barat laut": "northwest",
+    "utara": "north",
+    "timur laut": "northeast",
+    "barat": "west",
+    "timur": "east",
+    "barat daya": "southwest",
+    "selatan": "south",
+    "tenggara": "southeast"
   });
 })();
