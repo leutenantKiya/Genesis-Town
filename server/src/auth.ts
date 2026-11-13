@@ -92,7 +92,9 @@ export async function ensureRegistered(deps: { chain: Chain; store: Store }, acc
   return txHashes;
 }
 
-export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsChainApproval?: boolean; ownerPublicKey?: string }
+/** `legacyOwner`: the account's owner key comes from another NEAR Auth deployment than the one this server uses now (e.g.
+ *  NEAR's shared one before we ran our own), so this server's NEAR Auth cannot approve a new device for it. */
+export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsChainApproval?: boolean; ownerPublicKey?: string; legacyOwner?: boolean }
 
 export async function register(
   deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; verifyGoogle?: TokenVerifier; onNewPlayer?: (accountId: string) => void },
@@ -119,6 +121,7 @@ export async function register(
     deps.store.setActiveKey(existing.account_id, body.sessionPublicKey);
     await ensureRegistered(deps, existing.account_id);
     if (deps.store.sessionKeyOnchain(body.sessionPublicKey)) return { accountId: existing.account_id, created: false, txHashes: [] };
+    if (await deps.chain.derivedOwnerKey(sub) !== existing.owner_pk) return { accountId: existing.account_id, created: false, txHashes: [], needsChainApproval: true, legacyOwner: true };
     return { accountId: existing.account_id, created: false, txHashes: [], needsChainApproval: true, ownerPublicKey: existing.owner_pk };
   }
   // A session key belongs to exactly one account. A second login in the same browser must bring a fresh key.
@@ -164,6 +167,8 @@ async function adopt(
   deps.store.setActiveKey(accountId, sessionPk);
   if (!hasKey) {
     deps.store.addSessionKey(sessionPk, accountId, false);
+    // the account may have been made under another NEAR Auth deployment: then its owner key is not this one
+    if ((await deps.chain.accountHasKey(accountId, ownerPk)) !== true) return { accountId, created: false, txHashes, needsChainApproval: true, legacyOwner: true };
     return { accountId, created: false, txHashes, needsChainApproval: true, ownerPublicKey: ownerPk };
   }
   deps.store.addSessionKey(sessionPk, accountId);

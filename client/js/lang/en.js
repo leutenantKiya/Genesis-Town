@@ -266,6 +266,7 @@
     "Masuk pakai Google atau email. Tanpa dompet, tanpa biaya, langsung di browser.": "Sign in with Google or email. No wallet, no fees, right in the browser.",
     "Login belum aktif di alamat ini: NEAR Auth hanya menerima alamat yang sudah didaftarkan, dan login Google belum dipasang di server ini. Kamu tetap bisa melihat-lihat desa sebagai tamu.": "Sign-in is not available at this address yet: NEAR Auth only accepts addresses it has registered, and Google sign-in is not set up on this server. You can still look around the village as a guest.",
     "Oke": "OK",
+    "Akunmu dibuat dengan NEAR Auth versi lama, jadi perangkat ini belum bisa disetujui di sini. Kamu tetap bisa bermain; untuk Pasar, hadiah, saham, dan proyek kota, pakai perangkat tempat akunmu dibuat.": "Your account was made with an older NEAR Auth, so this device can't be approved here. You can still play; for the market, gifts, shares and town projects, use the device where your account was made.",
     "Perangkat ini perlu disetujui dengan NEAR Auth dulu.": "This device needs to be approved with NEAR Auth first.",
     "Masuk pakai Google. Tanpa dompet, tanpa biaya, langsung di browser.": "Sign in with Google. No wallet, no fees, right in the browser.",
     "Semi": "Spring",

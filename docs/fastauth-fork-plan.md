@@ -28,7 +28,7 @@
 - [x] F1: clone at a pinned commit, build the three contracts, run their tests, measure storage (tests blocked: see F1 result)
 - [x] F2 (OWNER, with exact values from F1): Auth0 tenant: APIs, Action, consent forms, connections, app URLs
 - [x] F3: deploy and configure the three contracts on testnet; verify with view calls
-- [ ] F4: game reads the fork's settings from env; shared client stays the default; tests
+- [x] F4: game reads the fork's settings from env; shared client stays the default; tests
 - [ ] F5: end-to-end on localhost testnet (Railway paused): new account, second device approval, on-chain action
 - [ ] F6: Railway env + redeploy; repeat F5 on the deployed domain; README and docs
 
