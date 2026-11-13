@@ -1,5 +1,6 @@
 // SQLite store (Node's built-in node:sqlite). Holds players, the Riwayat history, relay idempotency and mint batches.
 import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { HttpError } from './auth.ts';
@@ -116,18 +117,21 @@ export class Store {
     return (this.db.prepare('SELECT account FROM names WHERE name = ? COLLATE NOCASE AND tag = ?').get(name, tag) as { account: string } | undefined)?.account ?? null;
   }
 
-  /** The account's 5-digit tag (10000-99999); a random free one is assigned on first call and then never changes. */
+  /** The account's 5-digit tag (10000-99999), assigned on first call and then never changed. It comes from the account
+   *  name, so a database that lost the row (a restart that came back from an older copy) gives the player the same tag. */
   tagOf(account: string): string {
     const row = this.db.prepare('SELECT name, tag FROM names WHERE account = ?').get(account) as { name: string | null; tag: string | null } | undefined;
     if (row?.tag) return row.tag;
-    const tag = this.freeTag(row?.name ?? null);
+    const tag = this.freeTag(row?.name ?? null, account);
     this.db.prepare('INSERT INTO names (account, tag) VALUES (?, ?) ON CONFLICT(account) DO UPDATE SET tag = excluded.tag').run(account, tag);
     return tag;
   }
-  private freeTag(name: string | null): string {
+  // the account's own tags in a fixed order: the first unless another player already has that name+tag
+  private freeTag(name: string | null, account: string): string {
     for (let i = 0; i < 200; i++) {
-      const tag = String(10000 + Math.floor(Math.random() * 90000));
-      if (!name || !this.accountByNameTag(name, tag)) return tag;
+      const tag = String(10000 + createHash('sha256').update(`gt-tag:${account}:${i}`).digest().readUInt32BE(0) % 90000);
+      const holder = name ? this.accountByNameTag(name, tag) : null;
+      if (!holder || holder === account) return tag;
     }
     throw new HttpError(503, 'No free tag, try another name');
   }
@@ -153,7 +157,7 @@ export class Store {
       if (tag) throw new HttpError(409, 'That name is already taken by another player');
       use = null;
     }
-    if (!use) use = this.freeTag(name);
+    if (!use) use = this.freeTag(name, account);
     this.db.prepare('INSERT INTO names (account, name, tag) VALUES (?, ?, ?) ON CONFLICT(account) DO UPDATE SET name = excluded.name, tag = excluded.tag').run(account, name, use);
   }
 

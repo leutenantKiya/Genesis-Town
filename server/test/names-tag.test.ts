@@ -57,3 +57,20 @@ test('old names table is migrated: names kept, tags given lazily', () => {
   assert.match(store.tagOf('pa'), /^\d{5}$/);
   store.setName('pb', 'lama');
 });
+
+test('a database that lost the names row gives the player the same tag again', () => {
+  const a = mk(), b = mk(); // b: the same accounts on a fresh database (a restart from an older copy)
+  a.social.setNick(A, 'Ayu');
+  b.social.setNick(A, 'Ayu');
+  assert.equal(b.store.tagOf(A), a.store.tagOf(A));
+  assert.equal(b.store.tagOf(B), a.store.tagOf(B), 'also without a name');
+  assert.notEqual(a.store.tagOf(A), a.store.tagOf(B));
+});
+
+test('a name+tag clash moves to the next tag of the same account, the same way every time', () => {
+  const tagOn = (first: string) => { const { store } = mk(); store.setName(B, 'Ayu', first); store.setName(A, 'Ayu'); return store.tagOf(A); };
+  const own = mk().store.tagOf(A);
+  const moved = tagOn(own);
+  assert.notEqual(moved, own);
+  assert.equal(tagOn(own), moved);
+});
