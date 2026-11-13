@@ -100,9 +100,9 @@
     });
     if (label && on) {
       var hid = SLOTS[held], hn = nameOf(hid, names), hit = b[hid] || { settled: 0, today: 0 };
-      var how = document.documentElement.classList.contains('gt-phone') ? $t('ketuk lagi') : $t('klik kanan / R');
-      label.textContent = hid === 'hoe' ? $t('Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul', [hn])
-        : hid === 'rod' ? $t('Di tangan: {0} · hadap air, tekan F untuk memancing', [hn]) : $t('Di tangan: {0} ({1}) · {2}: {3}', [hn, hit.settled + hit.today, how, useVerb(hid)]);
+      var touch = document.documentElement.classList.contains('gt-phone'), how = touch ? $t('ketuk lagi') : $t('klik kanan / R');
+      label.textContent = hid === 'hoe' ? (touch ? $t('Di tangan: {0} · ketuk kotak hijau di dalam pagar kebun untuk mencangkul', [hn]) : $t('Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul', [hn]))
+        : hid === 'rod' ? (touch ? $t('Di tangan: {0} · hadap air, ketuk tombol aksi untuk memancing', [hn]) : $t('Di tangan: {0} · hadap air, tekan F untuk memancing', [hn])) : $t('Di tangan: {0} ({1}) · {2}: {3}', [hn, hit.settled + hit.today, how, useVerb(hid)]);
     }
     if (pop && selected >= 0) fillPop();
   }

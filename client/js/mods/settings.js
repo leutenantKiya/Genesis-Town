@@ -117,26 +117,33 @@
   }
 
   /* ------------------------------------------------------------ layout + fullscreen */
-  function wantsFull() {
-    if (fsElement()) return true;
-    if (st.layout === 'full') return true;
-    if (st.layout === 'boxed') return false;
-    return window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 900;
+  // Phone layout (css/phone.css), held either way up: a phone or a portrait tablet, or any short landscape screen
+  // played by touch. Portrait: the game between a status bar and a bottom bar. Landscape (html.gt-land): the game takes
+  // the whole height beside a rail of the same five places, under a one-line status bar. Both walk with the joystick
+  // and act with one round button; neither has the D-pad. It wins over the full window, a phone in fullscreen included
+  // (the full window has no thumb controls), unless the player chose a layout in Settings.
+  function phoneLike() {
+    var w = window.innerWidth, h = window.innerHeight, touch = window.matchMedia('(pointer: coarse)').matches;
+    if (h >= w) return w <= 900;
+    return h <= 560 && (touch || w <= 1000);
   }
-  // Phone (portrait, narrow): the game view fills the screen between a one-line status bar and the thumb zone
-  // (no D-pad and no A/E: a joystick or a tap on the map walks, one contextual action button, and a bottom bar with the places players go).
-  // css/phone.css lays it out.
   function wantsPhone() {
-    if (wantsFull() || st.layout === 'boxed') return false;
-    return window.innerWidth <= 900 && window.innerHeight > window.innerWidth; // phones and portrait tablets
+    if (st.layout === 'boxed' || st.layout === 'full') return false;
+    return phoneLike();
+  }
+  function wantsFull() {
+    if (st.layout === 'boxed') return false;
+    if (st.layout === 'full' || fsElement()) return !wantsPhone();
+    return window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 900 && !wantsPhone();
   }
   function applyText() { document.documentElement.style.setProperty('--ts', String(st.textSize || 1)); }
   function applyLayout() {
-    var on = wantsFull(), phone = !on && wantsPhone();
+    var phone = wantsPhone(), on = !phone && wantsFull(), land = phone && window.innerWidth > window.innerHeight;
     var root = document.documentElement;
-    var changed = root.classList.contains('gt-full') !== on || root.classList.contains('gt-phone') !== phone;
+    var changed = root.classList.contains('gt-full') !== on || root.classList.contains('gt-phone') !== phone || root.classList.contains('gt-land') !== land;
     root.classList.toggle('gt-full', on);
     root.classList.toggle('gt-phone', phone);
+    root.classList.toggle('gt-land', land);
     if (phone) buildTabbar();
     if (changed) window.dispatchEvent(new Event('resize'));
     var rm = st.reducedMotion == null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : st.reducedMotion;
@@ -161,7 +168,9 @@
   function onFsChange() { applyLayout(); redraw(); setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 60); }
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
-  window.addEventListener('resize', function () { if (!fsElement()) applyLayout(); });
+  // turning the phone (in fullscreen too) swaps portrait and landscape at once
+  window.addEventListener('resize', applyLayout);
+  window.addEventListener('orientationchange', function () { setTimeout(function () { applyLayout(); window.dispatchEvent(new Event('resize')); }, 120); });
 
   /* ------------------------------------------------------------ phone bottom bar */
   // Each tab presses the existing HUD button, so the bar adds no game logic of its own.
@@ -190,8 +199,9 @@
      ['tab-market', $t('Pasar'), function () { press('pasarbtn'); }],
      ['tab-map', $t('Peta'), function () { press('mapbtn'); }],
      ['tab-chat', $t('Chat'), function () { if (window.GT_PLAYERS) GT_PLAYERS.openChat(''); }],
-     ['tab-more', $t('Pengaturan'), moreSheet]].forEach(function (t) {
+     ['tab-more', $t('Menu'), moreSheet, $t('Pengaturan')]].forEach(function (t) {
       var b = $('button', 'gt-tab', t[1]); b.type = 'button'; b.id = t[0];
+      if (t[3]) b.setAttribute('aria-label', t[3]); // a short word on the tab, the full name for screen readers
       b.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) t[2](); });
       tabbar.appendChild(b);
     });

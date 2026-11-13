@@ -2329,8 +2329,26 @@ function layoutFull(){
 // Phone (html.gt-phone, css/phone.css): the canvas fills the space #fit gets between the status bar and the controls.
 // At least 11 columns at the largest whole-pixel scale; as many rows as the height allows (9 to 32, so tall phones
 // such as a Pro Max or a Pixel get no empty bands).
+// Landscape (html.gt-land): the view fills #fit edge to edge like the full window, at the scale that shows about ten
+// rows (big enough to tap), and never fewer than 15 columns.
 function layoutPhone(){
   var W = elFit.clientWidth || window.innerWidth, H = elFit.clientHeight || 300;
+  if (document.documentElement.classList.contains('gt-land')){
+    var ls = Math.max(1, Math.min(6, Math.floor(H / (10 * T))));
+    while (ls > 1 && W / (ls * T) < 15) ls--;
+    S = ls; VW = Math.max(11 * T, Math.ceil(W / ls)); VH = Math.max(7 * T, Math.ceil(H / ls));
+    elCv.width = VW * ls; elCv.height = VH * ls;
+    elCv.style.width = (VW * ls) + 'px'; elCv.style.height = (VH * ls) + 'px';
+    elScreen.style.width = Math.min(W, VW * ls) + 'px'; elScreen.style.height = Math.min(H, VH * ls) + 'px';
+    elScreen.style.setProperty('--fs', [10, 8, 10, 12, 14, 16, 18][Math.min(ls, 6)] + 'px');
+    elScreen.classList.toggle('short', VH * ls < 340);
+    try { var lr = elScreen.getBoundingClientRect(); document.documentElement.style.setProperty('--toastTop', Math.max(8, Math.round(lr.top + 8)) + 'px'); } catch(e){}
+    ctx = elCv.getContext('2d');
+    ctx.setTransform(ls, 0, 0, ls, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    fxBub.forEach(function(r){ r.w = 0; }); fxTag.forEach(function(r){ r.w = 0; });
+    return;
+  }
   var s = Math.max(1, Math.min(6, Math.floor(W / (11 * T))));
   if (s > 2 && Math.floor(W / (T * s)) < 13) s--; // prefer a wider view over bigger pixels
   var cols = Math.max(11, Math.min(40, Math.floor(W / (T * s))));

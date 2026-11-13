@@ -120,6 +120,8 @@
     "Di tangan: {0} · hadap air, tekan F untuk memancing": "In hand: {0} · face water, press F to fish",
     "Berdiri di tepi air, hadap airnya, lalu pakai Pancing.": "Stand at the water's edge, face the water, then use the Fishing Rod.",
     "Di tangan: {0} · klik kotak hijau di dalam pagar kebun untuk mencangkul": "In hand: {0} · click a green square inside the farm fence to hoe it",
+    "Di tangan: {0} · ketuk kotak hijau di dalam pagar kebun untuk mencangkul": "In hand: {0} · tap a green square inside the farm fence to hoe it",
+    "Di tangan: {0} · hadap air, ketuk tombol aksi untuk memancing": "In hand: {0} · face the water and tap the action button to fish",
     "Cangkul dipakai di kebun Homeland.": "The hoe is used in a Homeland farm.",
     "Berdiri di sebelah kotak hijau di dalam pagar kebun, lalu klik kotaknya.": "Stand next to a green square inside the farm fence, then click it.",
     "Masuk dulu untuk naik perahu.": "Sign in first to take the boat.",

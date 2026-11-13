@@ -1250,7 +1250,8 @@
     wrap.appendChild(head);
     var slots = window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.st.bag).filter(function (t) { return t !== 'coin'; });
     var inHand = window.GT_ITEMS && GT_ITEMS.held();
-    var sel = S.bagSel && slots.indexOf(S.bagSel) >= 0 ? S.bagSel : inHand || slots[0];
+    // the hoe and the rod are in the hand but not in the bag: then the first item is shown, not an empty "hoe · 0"
+    var sel = S.bagSel && slots.indexOf(S.bagSel) >= 0 ? S.bagSel : inHand && slots.indexOf(inHand) >= 0 ? inHand : slots[0];
     var grid = $('div', 'gt-grid');
     slots.forEach(function (t) {
       var b = S.st.bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today;

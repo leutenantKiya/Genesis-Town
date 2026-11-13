@@ -140,3 +140,80 @@ html.gt-phone .btn,html.gt-phone .mbtn{min-height:44px}
 #tab-bag::before{content:"🎒"}#tab-market::before{content:"🏪"}#tab-map::before{content:"🗺️"}#tab-chat::before{content:"💬"}#tab-more::before{content:"⚙️"}
 .gt-tab::before{display:block;font-size:20px;line-height:1.1;margin-bottom:2px}
 #acts > #btnSosial::before{content:"💬";margin-right:6px;font-size:1.05em;line-height:1}#acts > #setbtn::before{content:"🎛️";margin-right:6px;font-size:1.05em;line-height:1}
+
+/* ------------------------------------------------------------------ phone held sideways (html.gt-land)
+   The game takes the whole height; a one-line status bar runs over its top and the five places stand in a rail at the
+   right edge, under the right thumb. The joystick (left thumb) and the action button sit low in the corners, level with
+   the item bar between them. Notches and the home bar keep their space (safe-area insets). Windows open as a panel in
+   the middle instead of a bottom sheet, which would cover the whole short screen. */
+html.gt-land .shell{display:grid!important;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr);
+  align-items:stretch;column-gap:0;padding:0 0 0 env(safe-area-inset-left,0px)} /* stretch: game.css's old landscape rule centres */
+html.gt-land .gt-top{grid-column:1;grid-row:1;min-width:0}
+html.gt-land .bezel{grid-column:1;grid-row:2}
+html.gt-land .gt-tabbar{grid-column:2;grid-row:1 / span 2}
+html.gt-land .gt-top-tab,html.gt-land .gt-top-hidebtn,html.gt-land .chain-banner{display:none!important}
+
+/* status bar: one row, place first (it may be cut short), then coins, clock, energy */
+html.gt-land .hud{grid-template-columns:minmax(0,1fr) auto auto auto;column-gap:6px;padding:4px 8px 4px 12px;font-size:calc(13px*var(--ts));border-bottom-width:3px}
+html.gt-land .hud .chain-hud{grid-column:auto;grid-row:auto}
+html.gt-land .hud .cell{min-height:28px;padding:2px 8px}
+html.gt-land .chain-energy{width:48px}
+
+/* the rail: the five places one above the other, icon over a short word */
+html.gt-land .gt-tabbar{display:flex;flex-direction:column;justify-content:center;gap:2px;width:calc(68px + env(safe-area-inset-right,0px));
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) 0;border-width:0 0 0 1px}
+html.gt-land .gt-tab{flex:1 1 0;min-height:0;max-height:68px;padding:0 2px;font-size:calc(11px*var(--ts))}
+html.gt-land .gt-tab::before{font-size:20px}
+
+/* thumbs: low in the two corners, beside the item bar instead of above it */
+html.gt-land .joy,html.gt-land.gt-has-hotbar .joy{left:12px;bottom:12px;width:100px;height:100px}
+html.gt-land .joy i{width:44px;height:44px;margin:-22px 0 0 -22px}
+html.gt-land .actbtn:not([hidden]),html.gt-land.gt-has-hotbar .actbtn:not([hidden]){right:12px;bottom:12px;width:64px;height:64px}
+html.gt-land .actbtn .ico{font-size:24px}
+html.gt-land .gt-slot{width:34px;height:40px}
+html.gt-land .gt-hotbar{gap:3px;padding:3px;bottom:6px}
+html.gt-land.gt-has-hotbar #gt-hint{bottom:56px}
+
+/* the 2.5D buttons: one row at the top right; the mission card keeps clear of it */
+html.gt-land .gt3d-bar{flex-direction:row;align-items:flex-start;gap:6px}
+html.gt-land .gt3d-tray{flex-direction:row;gap:4px;padding:4px}
+html.gt-land .gt3d-tray button{width:36px;height:36px;min-width:36px;font-size:16px}
+html.gt-land.gt-3d .gt-goals{max-width:min(300px,calc(100% - 300px))}
+
+/* windows: a panel in the middle, as tall as the screen allows */
+html.gt-land #mroot .mover{align-items:center;padding:8px calc(8px + env(safe-area-inset-right,0px)) 8px calc(8px + env(safe-area-inset-left,0px))}
+html.gt-land #mroot .mbox{width:min(640px,100%);max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);border-radius:var(--r-win);border-bottom-width:var(--line);padding-bottom:0}
+
+/* very short (a small phone on its side): smaller thumbs and rail words */
+@media (max-height:340px){
+  html.gt-land .joy,html.gt-land.gt-has-hotbar .joy{width:88px;height:88px;left:8px;bottom:8px}
+  html.gt-land .actbtn:not([hidden]),html.gt-land.gt-has-hotbar .actbtn:not([hidden]){width:56px;height:56px;right:8px;bottom:8px}
+  html.gt-land .gt-slot{width:30px;height:36px}
+  html.gt-land .gt-tab{font-size:calc(10px*var(--ts))}
+  html.gt-land .gt-tab::before{font-size:17px}
+  html.gt-land .gt-held,html.gt-land #gt-hint{font-size:calc(11px*var(--ts))}
+}
+@media (max-width:600px){html.gt-land .gt-slot{width:27px;height:34px}}
+
+/* the tip over the item bar wraps on a narrow screen instead of running off both edges */
+html.gt-phone #gt-hint,html.gt-phone .gt-held{white-space:normal;width:max-content;max-width:calc(100% - 24px);text-align:center}
+html.gt-land #gt-hint,html.gt-land .gt-held{max-width:calc(100% - 260px)}
+html.gt-land .gt-held{bottom:54px}
+/* portrait: the thumbs stand a little higher, clear of a tip that wraps to two lines over the item bar */
+html.gt-phone:not(.gt-land).gt-has-hotbar .joy{bottom:104px}
+html.gt-phone:not(.gt-land).gt-has-hotbar .actbtn:not([hidden]){bottom:100px}
+/* a narrow phone on its side: slimmer slots, so the item bar fits between the joystick and the action button */
+@media (max-width:720px){html.gt-land .gt-slot{width:30px}html.gt-land .gt-hotbar{gap:2px;padding:2px}}
+/* typing a chat line: the joystick, the action button and the tip step aside so the box and its lines stay clear */
+html.gt-phone.gt-chatting .joy,html.gt-phone.gt-chatting .actbtn,html.gt-phone.gt-chatting #gt-hint{display:none!important}
+
+/* the character screen held sideways: both cards side by side and within the height, the looks in one row of eight */
+html.gt-land .gt-cs:not(.gt-cs-throw){padding:8px calc(12px + env(safe-area-inset-right,0px)) 8px calc(12px + env(safe-area-inset-left,0px))}
+html.gt-land .gt-cs-card{flex-wrap:nowrap;gap:10px}
+html.gt-land .gt-cs-left,html.gt-land .gt-cs-right{flex:1 1 0;min-width:0;padding:10px;gap:8px;border-top-width:6px}
+html.gt-land .gt-cs-stage{min-height:0}
+html.gt-land .gt-cs-prev{width:96px;height:120px}
+html.gt-land .gt-cs-grid{grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+html.gt-land .gt-cs-sw{padding:2px}
+html.gt-land .gt-cs-name,html.gt-land .gt-cs-tag{font-size:calc(17px*var(--ts))}
+html.gt-land .gt-cs-go{min-height:44px;padding:6px;font-size:calc(18px*var(--ts))}

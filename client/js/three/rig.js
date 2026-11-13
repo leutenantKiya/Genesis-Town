@@ -35,7 +35,7 @@
         place();
       },
       snap: function () { target.copy(want); yaw = yawWant; place(); },
-      zoom: function (k) { zoom = Math.max(0.45, Math.min(2.4, k)); place(); return zoom; },
+      zoom: function (k) { zoom = Math.max(0.45, Math.min(4, k)); place(); return zoom; }, // 4: the game's phone fit times the player's own zoom (view3d.js)
       getZoom: function () { return zoom; },
       distance: function (d) { dist = d; place(); },
       pitch: pitch,
