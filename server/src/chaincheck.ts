@@ -119,7 +119,7 @@ export class ChainCheck {
 export function spendTokens(econ: Econ, action: string, body: Record<string, unknown>): string[] {
   const token = typeof body.token === 'string' && Object.hasOwn(econ.items, body.token) ? [body.token] : [];
   switch (action) {
-    case 'sell': case 'ship': case 'eat': case 'gamble': case 'stock': return token;
+    case 'sell': case 'ship': case 'eat': case 'stock': return token;
     case 'buy': return ['coin'];
     case 'craft': {
       const r = typeof body.recipe === 'string' && Object.hasOwn(econ.recipes, body.recipe) ? econ.recipes[body.recipe] : null;

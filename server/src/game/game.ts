@@ -159,29 +159,6 @@ export class Game {
     return { toast: target.row ? (target.row.account === account ? 'Arrived at your Homeland.' : 'Arrived at your friend\'s Homeland.') : 'Arrived in the public area.', world: to, arrive };
   }
 
-  /** The luck table: stake 1..maxBet of one good; win the same amount again (through the daily gain cap) or lose the
-   *  stake, which is burned. The odds sit under one half, so the table takes goods out of the economy, never adds coin. */
-  private betsToday = new Map<string, { day: number; n: number }>();
-  private gamble(account: string, wid: string, pos: Pos, token: string, qty: number, inCasino = false): { toast: string; tags: string[]; win: boolean; token: string; qty: number } {
-    const g = this.econ.gamble;
-    if (!g || !this.map || wid !== 'public') throw new HttpError(409, 'The luck table is at the market.');
-    if (inCasino) { if (!this.extras.hasCasino()) throw new HttpError(409, 'There is no casino here.'); this.extras.nearCasino(wid, pos, 3); this.extras.needPass(account); } // inside the casino: be at the casino, and the paid pass is the ticket
-    else if (!this.map.nearLandmark(pos, 'gamble', 2)) throw new HttpError(409, 'Come to the luck table at the market.');
-    if (!g.goods.includes(token)) throw new HttpError(400, 'That cannot be staked.');
-    if (!Number.isInteger(qty) || qty < 1 || qty > g.maxBet) throw new HttpError(400, `Stake 1 to ${g.maxBet}.`);
-    const day = this.clock.time().settleDay, seen = this.betsToday.get(account);
-    const used = seen && seen.day === day ? seen.n : 0;
-    if (used >= g.dailyBets) throw new HttpError(409, 'No more bets today. Come back tomorrow.');
-    const have = this.gs.balance(account, token);
-    if (have < qty) throw new HttpError(409, `Not enough ${this.econ.items[token]?.name ?? token} (have ${have}).`);
-    const win = this.rng() < g.winChance;
-    if (win) this.world.checkGain(account, token, qty); // a full daily cap refuses the bet before anything moves
-    this.betsToday.set(account, { day, n: used + 1 });
-    this.gs.add(day, account, token, win ? qty : -qty, 'gamble', 'public:luck');
-    const nm = this.econ.items[token]?.name ?? token;
-    return { toast: win ? `You win! +${qty} ${nm}.` : `You lose ${qty} ${nm}.`, tags: [token], win, token, qty };
-  }
-
   /** The ferry to the island in the village's bottom-right corner: from beside one boat to the other shore. */
   private boat(account: string, wid: string, pos: Pos): { toast: string; world: string; arrive: Pos } {
     if (!this.map || !this.positions || wid !== 'public') throw new HttpError(409, 'The boat is in the public village.');
@@ -383,7 +360,7 @@ export class Game {
         res = this.extras.claimMission(account, body.id);
         break;
       }
-      case 'gamble': res = this.gamble(account, wid, pos ?? { x: -9, y: -9 }, s('token'), n('qty'), s('at') === 'casino'); break;
+      case 'gamble': throw new HttpError(409, 'The Luck Table now plays for chips only.'); // goods and coin can no longer be staked; the chip games live in the browser (client casino.js)
       case 'hoe': {
         if (!w.row) throw new HttpError(409, 'Use the hoe in a Homeland farm.');
         const hx = n('x', -1), hy = n('y', -1);

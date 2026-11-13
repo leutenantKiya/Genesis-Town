@@ -460,86 +460,64 @@
     return false;
   }
 
-  /* ---------------------------------------------------------------- Meja Untung: stake goods on a dice roll */
+  /* ---------------------------------------------------------------- Meja Untung: the free chip game (casino.js), no goods, no coin */
   function luckModal() {
     if (!signedIn()) { GT.toast($t('Masuk dulu.')); return; }
-    var st = C.state, g = st.cfg && st.cfg.econ && st.cfg.econ.gamble, bag = (st.st && st.st.bag) || {};
-    if (!g) { GT.toast($t('Meja Untung belum buka.')); return; }
-    var pick = g.goods.filter(function (t) { var b = bag[t]; return b && b.settled + b.today > 0; })[0] || g.goods[0], qty = 1, busy = false;
-    var body = document.createElement('div'); body.className = 'gt-luck';
-    var h = GT.modal({ title: '🎲 ' + $t('Meja Untung'), body: body });
-    function paint(result) {
-      body.textContent = '';
-      var p = document.createElement('p');
-      p.textContent = $t('Taruh barang, lempar dadu. Menang: dapat sejumlah taruhanmu lagi. Kalah: taruhannya hilang. Peluang menang {0}%, maksimal {1} per taruhan, {2} taruhan sehari. Tidak pernah memakai koin.', [Math.round(g.winChance * 100), g.maxBet, g.dailyBets]);
-      body.appendChild(p);
-      var goods = document.createElement('div'); goods.className = 'gt-luck-row';
-      g.goods.forEach(function (t) {
-        var b = bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today, x = document.createElement('button');
-        x.type = 'button'; x.className = 'mbtn' + (t === pick ? ' primary' : ''); x.disabled = n <= 0;
-        if (window.GT_ITEMS) x.appendChild(GT_ITEMS.icon(t, 16));
-        x.appendChild(document.createTextNode(' ' + ((st.cfg.econ.items[t] && st.cfg.econ.items[t].name) || t) + ' · ' + n));
-        x.addEventListener('click', function () { pick = t; paint(); });
-        goods.appendChild(x);
-      });
-      body.appendChild(goods);
-      var qrow = document.createElement('div'); qrow.className = 'gt-luck-row';
-      for (var q = 1; q <= g.maxBet; q++) (function (q) {
-        var x = document.createElement('button'); x.type = 'button'; x.className = 'mbtn' + (q === qty ? ' primary' : ''); x.textContent = 'x' + q;
-        x.addEventListener('click', function () { qty = q; paint(); }); qrow.appendChild(x);
-      })(q);
-      body.appendChild(qrow);
-      var dice = document.createElement('div'); dice.className = 'gt-luck-dice' + (result ? (result.win ? ' win' : ' lose') : '');
-      dice.textContent = result ? (result.win ? '🎉 ' + $t('Menang! +{0}', [result.qty]) : '💨 ' + $t('Kalah −{0}', [result.qty])) : '🎲 🎲';
-      body.appendChild(dice);
-      var roll = document.createElement('button'); roll.type = 'button'; roll.className = 'mbtn primary'; roll.textContent = '🎲 ' + $t('Lempar dadu');
-      roll.disabled = busy;
-      roll.addEventListener('click', function () {
-        if (busy) return; busy = true; dice.className = 'gt-luck-dice rolling'; dice.textContent = '🎲 🎲';
-        C.act({ action: 'gamble', token: pick, qty: qty, world: 'public' }, true).then(function (r) {
-          bag = (C.state.st && C.state.st.bag) || bag; busy = false; if (h.isOpen()) paint(r || null);
-        }, function () { busy = false; if (h.isOpen()) paint(); });
-      });
-      body.appendChild(roll);
-    }
-    paint();
+    if (window.GT_CASINO && GT_CASINO.openFree) GT_CASINO.openFree(); else GT.toast($t('Meja Untung belum buka.'));
   }
   function onFrame(dt) {
     pollT -= dt;
     if (pollT <= 0) { pollT = (sess || ui) ? 1 : 3; poll(); }
   }
-  function label(ctx, txt, x, y) { GT_THEME.label(ctx, txt, x, y + 4, { tone: 'paper', size: 6, bold: true }); }
+  // A name sign over a landmark, its bottom edge at `bottom`. The merchants' own name tags sit above their heads one row up, so a 2D sign
+  // is kept inside the free columns between the merchant stalls (never over a neighbouring merchant); the 2.5D signs are smaller.
+  function sign(ctx, txt, cx, bottom, lo, hi) {
+    if (window.GT_THEME && GT_THEME.scale === 1 && lo != null) { // 2D: measure the sign (same font as GT_THEME.label) and clamp it
+      ctx.save(); ctx.font = '600 6px "Pixelify Sans", sans-serif'; var w = Math.ceil(ctx.measureText(txt).width) + 4; ctx.restore();
+      if (hi - lo >= w) cx = Math.max(lo + w / 2, Math.min(hi - w / 2, cx));
+    }
+    GT_THEME.label(ctx, txt, cx, bottom, { tone: 'paper', size: 6, bold: true });
+  }
+  // the free columns (screen px, 2D) round tile column tx in the stall row: between the stalls on each side
+  function freeCols(tx, T, camX) {
+    var st = (GT.world && GT.world.layout && GT.world.layout.market && GT.world.layout.market.stalls) || [], lo = -1e9, hi = 1e9;
+    st.forEach(function (s) { if (s.x < tx) lo = Math.max(lo, s.x + 1); else if (s.x > tx) hi = Math.min(hi, s.x); });
+    return [lo * T - camX, hi * T - camX];
+  }
+  var UP3 = 15; // 2.5D: the signs' bottom edge, art px above the tile's ground point (the props stand about 1.5 tall)
   function onDraw(ctx, camX, camY, T) {
     var m = marks(); if (!m) return;
     ctx.save();
-    if (GT.view3dOn && GT.view3dOn()) { // 2.5D: the stall and board stand in the 3D world; here only small name signs
-      var c = GT.at(m.consign.x, m.consign.y), b = GT.at(m.board.x, m.board.y);
-      label(ctx, $t('Titip Jual'), c.x + T / 2, c.y + T + 5); label(ctx, $t('Papan Juara'), b.x + T / 2, b.y + T + 5);
-      if (m.gamble) { var gm = GT.at(m.gamble.x, m.gamble.y); label(ctx, '🎲 ' + $t('Meja Untung'), gm.x + T / 2, gm.y + T + 5); }
+    var v3 = GT.view3dOn && GT.view3dOn();
+    if (v3) { // 2.5D: the stall, the board and the table stand in the 3D world (three/props.js, same tiles); here only their name signs, above them
+      [['consign', $t('Titip Jual')], ['board', $t('Papan Juara')], ['gamble', '🎲 ' + $t('Meja Untung')]].forEach(function (k) {
+        var q = m[k[0]]; if (!q) return;
+        var a = GT.at(q.x, q.y); sign(ctx, k[1], a.x + T / 2, a.y + T - UP3);
+      });
       ctx.restore(); return;
     }
     // Titip Jual: striped awning over a counter, a crate of goods on it
-    var x = m.consign.x * T - camX, y = m.consign.y * T - camY;
+    var x = m.consign.x * T - camX, y = m.consign.y * T - camY, f = freeCols(m.consign.x, T, camX);
     ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 1, y + 5, T - 2, T - 5);
     ctx.fillStyle = '#b8864a'; ctx.fillRect(x + 1, y + 5, T - 2, 2);
     for (var i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#f6ead0' : '#c8503c'; ctx.fillRect(x + 1 + i * 3, y + 1, 3, 4); }
     ctx.fillStyle = '#e8c070'; ctx.fillRect(x + 4, y + 7, 4, 3);
-    label(ctx, $t('Titip Jual'), x + T / 2, y + T + 5); // below the stall: the merchants' name tags sit on the row above
+    sign(ctx, $t('Titip Jual'), x + T / 2, y, f[0], f[1]); // over the stall: the merchants' name tags sit above their own heads, one row up
     // Papan Juara: a board on two posts with a gold star
-    x = m.board.x * T - camX; y = m.board.y * T - camY;
+    x = m.board.x * T - camX; y = m.board.y * T - camY; f = freeCols(m.board.x, T, camX);
     ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 2, y + 6, 1, T - 6); ctx.fillRect(x + T - 3, y + 6, 1, T - 6);
     ctx.fillStyle = '#3a2a40'; ctx.fillRect(x, y + 1, T, 7);
     ctx.fillStyle = '#f6ead0'; ctx.fillRect(x + 1, y + 2, T - 2, 5);
     ctx.fillStyle = '#e8b030'; ctx.fillRect(x + 5, y + 3, 2, 3); ctx.fillRect(x + 4, y + 4, 4, 1);
-    label(ctx, $t('Papan Juara'), x + T / 2, y + T + 5);
+    sign(ctx, $t('Papan Juara'), x + T / 2, y, f[0], f[1]);
     if (m.gamble) { // Meja Untung: a green felt table with two dice
-      x = m.gamble.x * T - camX; y = m.gamble.y * T - camY;
+      x = m.gamble.x * T - camX; y = m.gamble.y * T - camY; f = freeCols(m.gamble.x, T, camX);
       ctx.fillStyle = '#5a3a1e'; ctx.fillRect(x + 2, y + 8, 1, T - 8); ctx.fillRect(x + T - 3, y + 8, 1, T - 8);
       ctx.fillStyle = '#2a2430'; ctx.fillRect(x, y + 3, T, 6);
       ctx.fillStyle = '#2f8a4a'; ctx.fillRect(x + 1, y + 4, T - 2, 4);
       ctx.fillStyle = '#f8f4ec'; ctx.fillRect(x + 3, y + 4, 2, 2); ctx.fillRect(x + 7, y + 5, 2, 2);
       ctx.fillStyle = '#c83c3c'; ctx.fillRect(x + 3, y + 4, 1, 1); ctx.fillRect(x + 8, y + 6, 1, 1);
-      label(ctx, '🎲 ' + $t('Meja Untung'), x + T / 2, y + T + 5);
+      sign(ctx, '🎲 ' + $t('Meja Untung'), x + T / 2, y + 2, f[0], f[1]);
     }
     ctx.restore();
   }

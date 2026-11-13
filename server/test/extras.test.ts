@@ -35,7 +35,7 @@ test('the carousel costs coin, short of coin it is refused, and it must be ridde
   fails(() => s.act(P, { action: 'ride' }, far), 409, 'Come to the carousel in the square.');
 });
 
-test('the casino entry charges once for a timed pass; the luck table inside the casino needs the pass', async () => {
+test('the casino entry charges once for a timed pass', async () => {
   const s = await setup();
   const f = s.econ.fun, cb = s.g.map!.layout.buildings.find((b) => b.kind === 'casino')!, pos = { x: cb.dx, y: cb.dy + 1 }; // the village has a Casino building: enter at its door
   s.at(P, pos);
@@ -57,16 +57,6 @@ test('the casino entry charges once for a timed pass; the luck table inside the 
   s.at(Q, pos);
   fails(() => s.act(Q, { action: 'casino', op: 'enter' }, pos), 409, /Not enough coins/);
   assert.equal(s.g.state(Q).casinoPass, 0);
-  // the luck table at the market needs no pass; played "in the casino" it needs a casino and a pass
-  s.g.gs.add(1, Q, 'fish', 5, 'test');
-  fails(() => s.act(Q, { action: 'gamble', token: 'fish', qty: 1, at: 'casino' }, pos), 409, /no casino here|casino pass/);
-  // a running pass does not let you play the casino's table from across the village
-  s.g.gs.add(1, P, 'fish', 5, 'test');
-  s.at(P, s.mall);
-  fails(() => s.act(P, { action: 'gamble', token: 'fish', qty: 1, at: 'casino' }, s.mall), 409, /casino door/);
-  s.at(P, pos);
-  const played = s.act(P, { action: 'gamble', token: 'fish', qty: 1, at: 'casino' }, pos);
-  assert.equal(typeof played.win, 'boolean', 'at the casino with a pass the table plays');
   assert.throws(() => s.act(P, { action: 'casino', op: 'bet' }, pos), /Unknown casino action/);
 });
 

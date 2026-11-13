@@ -222,10 +222,6 @@ export class Extras {
   }
   /** Whether the village has a Casino building. */
   hasCasino(): boolean { return !!this.d.map()?.layout.buildings.some((b) => b.kind === 'casino'); }
-  /** The Luck Table inside the casino needs a running pass. */
-  needPass(account: string) {
-    if (this.st.pass(account, 'casino') <= this.d.now()) throw new HttpError(409, `You need a casino pass (${this.d.econ.fun.casino} coins at the casino door).`);
-  }
   passUntil(account: string): number { const u = this.st.pass(account, 'casino'); return u > this.d.now() ? u : 0; }
 
   /* ------------------------------------------------------------ mall cosmetics */

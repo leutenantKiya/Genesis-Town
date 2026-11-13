@@ -244,7 +244,6 @@
         "upgrade": [ { "cost": { "wood": 80, "ore": 40, "coin": 200 }, "secs": 600 }, { "cost": { "wood": 120, "ore": 60, "coin": 400 }, "secs": 1200 } ] }
     }
   },
-  "gamble": { "winChance": 0.45, "maxBet": 5, "dailyBets": 20, "goods": ["fish", "wood", "ore", "wheat", "bread", "meal"] },
   "monsters": {
     "chunk": "hutan",
     "nightFrom": 19,

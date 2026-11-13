@@ -901,7 +901,7 @@ var ROOMS = {
   casino: { w:12, h:10, floor:'floor_dark', fill: function(c){
     c.rect(5, 2, 6, 8, 'carpet_red');
     [1,2,3,4,7,8,9,10].forEach(function(sx){ c.put(sx, 1, 'slot', $t('Mesin slot berkedip. Hadiahnya tiket, bukan koin.')); });
-    c.put(5, 1, 'roulette', $t('Meja Untung: putar roda, tukar barang dengan barang.')); c.put(6, 1, 'roulette', $t('Meja Untung: putar roda, tukar barang dengan barang.'));
+    c.put(5, 1, 'roulette', $t('Meja Untung: lempar dadu dengan chip, hanya untuk seru-seruan.')); c.put(6, 1, 'roulette', $t('Meja Untung: lempar dadu dengan chip, hanya untuk seru-seruan.'));
     [[2,4],[3,4],[8,4],[9,4]].forEach(function(p){ c.put(p[0], p[1], 'card_table', $t('Meja kartu. Hanya untuk senang-senang.')); });
     [[2,6],[3,6],[8,6],[9,6]].forEach(function(p){ c.put(p[0], p[1], 'dice_table', $t('Meja dadu. Hanya untuk senang-senang.')); });
     c.put(1, 8, 'plant', $t('Tanaman plastik. Tetap terlihat mewah.')); c.put(10, 8, 'plant', $t('Tanaman plastik. Tetap terlihat mewah.'));

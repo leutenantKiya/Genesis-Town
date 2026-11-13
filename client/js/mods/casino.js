@@ -7,7 +7,8 @@
 /*
  * GT_CASINO - the Genesis Casino (the village's casino building; interior.js calls GT_CASINO.open(tile) at its tables).
  *   Ticket      act casino {op:'enter'}: coin buys a pass for a while (state.casinoPass, state.fun). No pass, no play.
- *   roulette    the Luck Table: stake goods (not coin) on a roll, act gamble {at:'casino'}; the server rolls and settles
+ *   roulette    the Luck Table: a chip game too (double or nothing on a roll). Since coin can be bought with NEAR it never stakes
+ *               goods or coin (the server act `gamble` is closed). Also opened free at the market: GT_CASINO.openFree(), no ticket.
  *   slot / card_table / dice_table   three free mini-games played with CHIPS. Chips are a toy kept in this browser: they
  *               cannot be bought with coin, cannot be turned into coin or goods, and nothing here ever pays coin or goods.
  *               What they win is only a title (a badge) and a place on the chip record board. Nothing is sent to the server.
@@ -31,14 +32,15 @@
     { id: 'king', name: function () { return $t('Raja Chip'); }, hint: function () { return $t('Kumpulkan 1000 chip.'); } },
     { id: 'seven', name: function () { return $t('Tujuh Keramat'); }, hint: function () { return $t('Tiga 7 di mesin slot.'); } },
     { id: 'cards', name: function () { return $t('Ahli Kartu'); }, hint: function () { return $t('Menangkan 5 putaran kartu.'); } },
-    { id: 'dice', name: function () { return $t('Dewa Dadu'); }, hint: function () { return $t('Menangkan 5 putaran dadu.'); } }
+    { id: 'dice', name: function () { return $t('Dewa Dadu'); }, hint: function () { return $t('Menangkan 5 putaran dadu.'); } },
+    { id: 'luck', name: function () { return $t('Bintang Meja Untung'); }, hint: function () { return $t('Menangkan 5 lemparan di Meja Untung.'); } }
   ];
   function key() { var c = C(); return 'gt.casino.chips.' + (c && c.state.account || 'guest'); }
   function load() {
     var d = null;
     try { d = JSON.parse(localStorage.getItem(key()) || 'null'); } catch (e) { d = null; }
-    if (!d || typeof d.chips !== 'number') d = { chips: START_CHIPS, best: START_CHIPS, plays: 0, wins: { cards: 0, dice: 0 }, titles: {}, board: [] };
-    d.wins = d.wins || { cards: 0, dice: 0 }; d.titles = d.titles || {}; d.board = d.board || [];
+    if (!d || typeof d.chips !== 'number') d = { chips: START_CHIPS, best: START_CHIPS, plays: 0, wins: { cards: 0, dice: 0, luck: 0 }, titles: {}, board: [] };
+    d.wins = d.wins || { cards: 0, dice: 0 }; d.wins.luck = d.wins.luck || 0; d.titles = d.titles || {}; d.board = d.board || [];
     return d;
   }
   function save(d) { try { localStorage.setItem(key(), JSON.stringify(d)); } catch (e) { /* storage blocked: chips live for this visit */ } }
@@ -52,6 +54,7 @@
     if (extra === 'seven') give('seven');
     if (d.wins.cards >= 5) give('cards');
     if (d.wins.dice >= 5) give('dice');
+    if (d.wins.luck >= 5) give('luck');
     return got;
   }
   // the record board: the best chip counts reached, kept in this browser (top 5)
@@ -74,9 +77,15 @@
     if (passUntil()) return table(game);
     ticket(game);
   }
+  // the Luck Table at the market: the free chip game, no ticket, no other tables
+  function openFree() {
+    var c = C();
+    if (!c || !c.state.account) { GT.toast($t('Masuk dulu.')); if (c && c.login) c.login(); return; }
+    table('luck', true);
+  }
   function ticket(game) {
     var c = C(), f = fun(), body = el('div');
-    body.appendChild(el('p', null, $t('Tiket masuk Genesis Casino: {0} koin, berlaku {1} menit. Di dalam kamu bisa main Meja Untung (taruhan barang), slot, kartu dan dadu dengan chip.', [f.casino, f.casinoPassMinutes])));
+    body.appendChild(el('p', null, $t('Tiket masuk Genesis Casino: {0} koin, berlaku {1} menit. Di dalam kamu bisa main Meja Untung, slot, kartu dan dadu dengan chip.', [f.casino, f.casinoPassMinutes])));
     body.appendChild(el('p', 'chain-dim', $t('Chip hanya mainan: tidak bisa dibeli dengan koin dan tidak bisa ditukar jadi koin atau barang. Hadiahnya gelar dan peringkat.')));
     body.appendChild(el('p', 'chain-dim', $t('Koinmu: {0}', [coins()])));
     GT.modal({ title: '🎰 ' + $t('Genesis Casino'), body: body, actions: [
@@ -90,9 +99,9 @@
   }
 
   /* ---------------------------------------------------------------- the table window */
-  function table(game) {
+  function table(game, free) {
     if (win && win.h.isOpen()) win.h.close('again');
-    var d = load(), body = el('div', 'gt-casino'), h = GT.modal({ title: '🎰 ' + $t('Genesis Casino'), wide: true, body: body, onClose: function () { win = null; clearInterval(spinT); }, actions: [{ label: $t('Tutup'), close: true }] });
+    var d = load(), body = el('div', 'gt-casino'), h = GT.modal({ title: free ? '🎲 ' + $t('Meja Untung') : '🎰 ' + $t('Genesis Casino'), wide: true, body: body, onClose: function () { win = null; clearInterval(spinT); clearTimeout(spinT); }, actions: [{ label: $t('Tutup'), close: true }] });
     win = { h: h };
     var spinT = 0, busy = false, note = '', slotSyms = null;
     if (d.chips < BETS[0]) { d.chips = START_CHIPS; note = $t('Tumpukan chip baru untukmu, gratis.'); save(d); }
@@ -107,11 +116,13 @@
       var top = el('div', 'gt-casino-head');
       top.appendChild(el('span', 'gt-casino-chips', '🪙 ' + $t('Chip: {0}', [d.chips])));
       var left = Math.max(0, Math.ceil((passUntil() - Date.now()) / 60000));
-      top.appendChild(el('span', 'chain-dim', left ? $t('Tiket berlaku {0} menit lagi', [left]) : $t('Tiketmu habis')));
+      if (free) top.appendChild(el('span', 'chain-dim', $t('Main gratis, tanpa tiket')));
+      else top.appendChild(el('span', 'chain-dim', left ? $t('Tiket berlaku {0} menit lagi', [left]) : $t('Tiketmu habis')));
       return top;
     }
     function tabs() {
       var row = el('div', 'gt-mall-tabs'); row.setAttribute('role', 'tablist');
+      if (free) return row; // the market table has only the Luck Table
       [['luck', '🎲 ' + $t('Meja Untung')], ['slot', '🎰 ' + $t('Slot')], ['cards', '🃏 ' + $t('Kartu')], ['dice', '🎲 ' + $t('Dadu')]].forEach(function (g) {
         var b = el('button', 'gt-mall-tab' + (g[0] === game ? ' on' : ''), g[1]); b.type = 'button'; b.setAttribute('role', 'tab');
         b.addEventListener('click', function () { if (busy) return; game = g[0]; note = ''; slotSyms = null; cardState = null; diceState = null; paint(); });
@@ -281,34 +292,28 @@
       return box;
     }
 
-    /* ---- the Luck Table: goods, settled by the server */
-    var luck = { pick: null, qty: 1, last: null };
+    /* ---- the Luck Table: chips only, a roll that doubles the stake or loses it */
+    var luck = { last: null }, LUCK_WIN = 0.45;
     function paintLuck() {
-      var c = C(), cfg = c.state.cfg, g = cfg && cfg.econ && cfg.econ.gamble, bag = (c.state.st && c.state.st.bag) || {}, box = el('div', 'gt-luck');
-      if (!g) { box.appendChild(el('p', null, $t('Meja Untung belum buka.'))); return box; }
-      if (!luck.pick) luck.pick = g.goods.filter(function (t) { var b = bag[t]; return b && b.settled + b.today > 0; })[0] || g.goods[0];
-      box.appendChild(el('p', null, $t('Taruh barang, lempar dadu. Menang: dapat sejumlah taruhanmu lagi. Kalah: taruhannya hilang. Peluang menang {0}%, maksimal {1} per taruhan, {2} taruhan sehari. Tidak pernah memakai koin.', [Math.round(g.winChance * 100), g.maxBet, g.dailyBets])));
-      var goods = el('div', 'gt-luck-row');
-      g.goods.forEach(function (t) {
-        var b = bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today, x = el('button', 'mbtn' + (t === luck.pick ? ' primary' : '')); x.type = 'button'; x.disabled = busy || n <= 0;
-        if (window.GT_ITEMS) x.appendChild(GT_ITEMS.icon(t, 16));
-        x.appendChild(document.createTextNode(' ' + ((cfg.econ.items[t] && cfg.econ.items[t].name) || t) + ' · ' + n));
-        x.addEventListener('click', function () { luck.pick = t; paint(); });
-        goods.appendChild(x);
-      });
-      box.appendChild(goods);
-      var q = el('div', 'gt-luck-row');
-      for (var i = 1; i <= g.maxBet; i++) (function (i) {
-        var x = el('button', 'mbtn' + (i === luck.qty ? ' primary' : ''), 'x' + i); x.type = 'button'; x.addEventListener('click', function () { luck.qty = i; paint(); }); q.appendChild(x);
-      })(i);
-      box.appendChild(q);
+      var box = el('div', 'gt-luck');
+      box.appendChild(el('p', null, $t('Taruh chip, lempar dadu. Menang: chip taruhanmu jadi dua kali lipat. Kalah: taruhannya hilang. Peluang menang {0}%.', [Math.round(LUCK_WIN * 100)])));
+      box.appendChild(el('p', 'chain-dim', $t('Chip hanya untuk seru-seruan dan tidak bisa ditukar dengan koin atau barang. Hadiahnya hanya gelar.')));
+      box.appendChild(betRow());
       var r = luck.last;
-      box.appendChild(el('div', 'gt-luck-dice' + (busy ? ' rolling' : r ? (r.win ? ' win' : ' lose') : ''), busy ? '🎲 🎲' : r ? (r.win ? '🎉 ' + $t('Menang! +{0}', [r.qty]) : '💨 ' + $t('Kalah −{0}', [r.qty])) : '🎲 🎲'));
-      var roll = el('button', 'mbtn primary', '🎲 ' + $t('Lempar dadu')); roll.type = 'button'; roll.disabled = busy;
+      box.appendChild(el('div', 'gt-luck-dice' + (busy ? ' rolling' : r ? (r.win ? ' win' : ' lose') : ''), busy ? '🎲 🎲' : r ? r.text : '🎲 🎲'));
+      var roll = el('button', 'mbtn primary', '🎲 ' + $t('Lempar dadu · {0} chip', [bet])); roll.type = 'button'; roll.disabled = busy || bet > d.chips;
       roll.addEventListener('click', function () {
-        if (busy) return;
-        busy = true; paint();
-        C().act({ action: 'gamble', token: luck.pick, qty: luck.qty, at: 'casino', world: 'public' }, true).then(function (res) { busy = false; luck.last = res || null; if (h.isOpen()) paint(); }, function (e) { busy = false; GT.toast((e && e.message) || ''); if (h.isOpen()) paint(); });
+        if (busy || bet > d.chips) return;
+        busy = true; note = ''; d.chips -= bet; d.plays++; sfx('ui_click'); paint();
+        spinT = setTimeout(function () {
+          busy = false;
+          var wonIt = Math.random() < LUCK_WIN;
+          if (wonIt) { d.chips += bet * 2; d.wins.luck++; }
+          luck.last = { win: wonIt, text: wonIt ? '🎉 ' + $t('Menang! +{0} chip', [bet]) : '💨 ' + $t('Kalah −{0} chip', [bet]) };
+          sfx(wonIt ? 'win' : 'lose');
+          if (d.chips < BETS[0]) { d.chips = START_CHIPS; note = $t('Tumpukan chip baru, gratis.'); }
+          newTitles(null); if (h.isOpen()) paint();
+        }, 700);
       });
       box.appendChild(roll);
       return box;
@@ -321,12 +326,12 @@
       var area = game === 'luck' ? paintLuck() : game === 'cards' ? paintCards() : game === 'dice' ? paintDice() : paintSlot();
       body.appendChild(area);
       if (note) body.appendChild(result(note, ''));
-      if (game !== 'luck') body.appendChild(badges());
+      body.appendChild(badges());
     }
     paint();
   }
 
-  window.GT_CASINO = { open: open, _load: load };
+  window.GT_CASINO = { open: open, openFree: openFree, _load: load };
 })();
 
 (function(){
