@@ -60,6 +60,13 @@ test('the casino entry charges once for a timed pass; the luck table inside the 
   // the luck table at the market needs no pass; played "in the casino" it needs a casino and a pass
   s.g.gs.add(1, Q, 'fish', 5, 'test');
   fails(() => s.act(Q, { action: 'gamble', token: 'fish', qty: 1, at: 'casino' }, pos), 409, /no casino here|casino pass/);
+  // a running pass does not let you play the casino's table from across the village
+  s.g.gs.add(1, P, 'fish', 5, 'test');
+  s.at(P, s.mall);
+  fails(() => s.act(P, { action: 'gamble', token: 'fish', qty: 1, at: 'casino' }, s.mall), 409, /casino door/);
+  s.at(P, pos);
+  const played = s.act(P, { action: 'gamble', token: 'fish', qty: 1, at: 'casino' }, pos);
+  assert.equal(typeof played.win, 'boolean', 'at the casino with a pass the table plays');
   assert.throws(() => s.act(P, { action: 'casino', op: 'bet' }, pos), /Unknown casino action/);
 });
 

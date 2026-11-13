@@ -165,7 +165,7 @@ export class Game {
   private gamble(account: string, wid: string, pos: Pos, token: string, qty: number, inCasino = false): { toast: string; tags: string[]; win: boolean; token: string; qty: number } {
     const g = this.econ.gamble;
     if (!g || !this.map || wid !== 'public') throw new HttpError(409, 'The luck table is at the market.');
-    if (inCasino) { if (!this.extras.hasCasino()) throw new HttpError(409, 'There is no casino here.'); this.extras.needPass(account); } // inside the casino: the paid pass is the ticket
+    if (inCasino) { if (!this.extras.hasCasino()) throw new HttpError(409, 'There is no casino here.'); this.extras.nearCasino(wid, pos, 3); this.extras.needPass(account); } // inside the casino: be at the casino, and the paid pass is the ticket
     else if (!this.map.nearLandmark(pos, 'gamble', 2)) throw new HttpError(409, 'Come to the luck table at the market.');
     if (!g.goods.includes(token)) throw new HttpError(400, 'That cannot be staked.');
     if (!Number.isInteger(qty) || qty < 1 || qty > g.maxBet) throw new HttpError(400, `Stake 1 to ${g.maxBet}.`);

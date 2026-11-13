@@ -216,7 +216,8 @@ export class Extras {
     const map = this.d.map();
     const c = map?.layout.buildings.find((b) => b.kind === 'casino');
     if (!map || !c || wid !== 'public') return !!c;
-    if (pos && Math.abs(pos.x - c.dx) + Math.abs(pos.y - c.dy) > d + 1) throw new HttpError(409, 'Come to the casino door first.');
+    // no position is a refusal, not a pass (indoors the client sends the door-front tile)
+    if (!pos || Math.abs(pos.x - c.dx) + Math.abs(pos.y - c.dy) > d + 1) throw new HttpError(409, 'Come to the casino door first.');
     return true;
   }
   /** Whether the village has a Casino building. */
