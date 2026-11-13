@@ -42,7 +42,10 @@ html.gt-full .gt3d-hint{transition:transform .42s cubic-bezier(.16,1,.3,1),opaci
 html.gt-full.gt-top-hide .gt3d-bar{transform:translateY(-24px);opacity:0;visibility:hidden;transition:transform .42s cubic-bezier(.16,1,.3,1),opacity .3s ease,visibility 0s linear .42s}
 html.gt-full.gt-top-hide .gt3d-hint{transform:translateY(16px);opacity:0}
 html.gt-full:not(.gt-top-hide) .gt3d-bar{top:calc(var(--gt-top-h,60px) + 12px)}
-html.gt-reduced-motion .gt-top,html.gt-reduced-motion .gt-top-tab,html.gt-reduced-motion .gt-top-hidebtn,html.gt-reduced-motion .gt3d-bar,html.gt-reduced-motion .gt3d-hint{transition:none}
+/* the mission card and the Homeland chip step down under the bar while it is out, and back up when it slides away */
+html.gt-full .gt-goals,html.gt-full .hl-where{transition:top .42s cubic-bezier(.16,1,.3,1)}
+html.gt-full:not(.gt-top-hide) #screen .gt-goals,html.gt-full:not(.gt-top-hide) #screen .hl-where{top:calc(var(--gt-top-h,60px) + 12px)}
+html.gt-reduced-motion .gt-top,html.gt-reduced-motion .gt-top-tab,html.gt-reduced-motion .gt-top-hidebtn,html.gt-reduced-motion .gt3d-bar,html.gt-reduced-motion .gt3d-hint,html.gt-reduced-motion .gt-goals,html.gt-reduced-motion .hl-where{transition:none}
 
 .gt-settings h3{margin:12px 0 6px;font-size:calc(16px*var(--ts));font-weight:600;color:var(--paper-ink)}
 .gt-settings h3:first-child{margin-top:0}

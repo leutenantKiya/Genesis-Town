@@ -54,6 +54,11 @@
 .gt-goals{position:absolute;left:8px;top:8px;max-width:min(300px,calc(100% - 16px));z-index:3;background:var(--paper);color:var(--paper-ink);border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);padding:7px 10px 9px;font-size:calc(14px*var(--ts));line-height:1.6;
   border-top:8px solid var(--season);box-shadow:inset 0 calc(-1*var(--edge)) 0 var(--shade)}
 .gt-goals p{margin:4px 0 0}
+/* a closed shop's needs: icon, name and count, a progress bar, what is missing (chain.js restoreBody) */
+.chain-need{display:flex;align-items:center;gap:10px;padding:6px 10px}.chain-need .grow{min-width:0}
+.chain-need-ic{font-size:18px;line-height:1}.chain-need .chain-done{font-size:18px;line-height:1}
+.chain-need-bar{height:6px;margin:4px 0 2px;border-radius:3px;background:var(--paper-3);overflow:hidden}
+.chain-need-bar i{display:block;height:100%;background:var(--accent)}.chain-need.done .chain-need-bar i{background:#4f9a55}
 .gt-goals-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .gt-goals-head b{font-weight:600;color:var(--paper-ink)}
 .gt-goals-x{border:0;background:transparent;color:var(--paper-dim);font-size:calc(14px*var(--ts));padding:4px 6px;min-height:28px;border-radius:var(--r-ctl)}

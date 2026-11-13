@@ -765,10 +765,13 @@
   var hoeBusy = false;
   function onDrawGround(ctx, camX, camY, T) {
     if (!GT.scene || GT.scene.kind !== 'out' || !isHL(wid())) return;
-    viewTilled().forEach(function (q) { // tilled soil: dark earth with furrows
+    // tilled soil: the very art of the field's own soil tiles (art.js 'soil', this season's ramp), so they match
+    var S = window.SPRITES, art = S && S.drawGround && T === S.TILE;
+    viewTilled().forEach(function (q) {
       var x = q[0] * T - camX, y = q[1] * T - camY;
-      ctx.fillStyle = '#6e4a2c'; ctx.fillRect(x, y, T, T);
-      ctx.fillStyle = '#4e321c'; for (var k = 2; k < T; k += 3) ctx.fillRect(x + 1, y + k, T - 2, 1);
+      if (art) { S.drawGround(ctx, 'soil', x, y, (q[0] * 7 + q[1] * 13) & 3); return; }
+      ctx.fillStyle = '#6a4024'; ctx.fillRect(x, y, T, T); // (no sprite kit: the soil's middle tone and its furrows)
+      ctx.fillStyle = '#4a2c18'; for (var k = 1; k < T; k += 3) ctx.fillRect(x, y + k, T, 1);
     });
   }
   // the hoe's squares: on the marks layer, which the 2.5D view never darkens (no sun shading, night or rain)
@@ -779,7 +782,7 @@
     for (var yy = f.y0 + 1; yy < f.y1; yy++) for (var xx = f.x0 + 1; xx < f.x1; xx++) {
       if (!hoeable(xx, yy)) continue;
       var sx = xx * T - camX, sy = yy * T - camY, reach = Math.abs(xx - p.x) + Math.abs(yy - p.y) <= 1;
-      ctx.fillStyle = reach ? 'rgba(90,240,120,.55)' : 'rgba(90,240,120,.28)'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2);
+      ctx.fillStyle = reach ? 'rgba(90,240,120,.38)' : 'rgba(90,240,120,.14)'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2); // light: the grass shows through
       ctx.strokeStyle = 'rgba(30,170,70,1)'; ctx.lineWidth = 1; ctx.strokeRect(sx + 1.5, sy + 1.5, T - 3, T - 3);
       drew = true;
     }

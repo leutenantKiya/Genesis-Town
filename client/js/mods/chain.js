@@ -466,16 +466,17 @@
   }
   /* ---- Misi: a newcomer's next step through the whole first loop (village, then Homeland), one at a time, ticked off
      by what they actually do (history rows, the Homeland's state, the farm plots) ---- */
+  // each step: an icon and a few words on the card, one short hint under them; the full how-to is the card's tooltip
   var GOALS = [
-    { id: 'signin', text: $t('Tekan Masuk untuk membuat akunmu (Google atau email). Tanpa dompet, tanpa gas.') },
-    { id: 'gather', text: $t('Klik kolam, pohon atau batu (atau hadap lalu tekan F). Hasilnya masuk ke Tas.') },
-    { id: 'craft', text: $t('Buat sesuatu di Meja Kerja: 2 Gandum jadi Roti, atau Ikan + Kayu jadi Ikan Bakar.') },
-    { id: 'sell', text: $t('Jalan ke Pasar di timur rumahmu dan jual hasilmu ke Sari, Budi, Wati atau Joko.') },
-    { id: 'home', text: $t('Berdiri di portal batu dekat alun-alun dan tunggu sebentar: kamu pindah ke Homeland-mu sendiri.') },
-    { id: 'build', text: $t('Di Homeland, buka lahan kosong (klik pintunya) dan bangun Kolam Ikan.') },
-    { id: 'th', text: $t('Tekan Tingkatkan di atas dan naikkan Balai Kota ke level 2: bangunan baru terbuka.') },
-    { id: 'plant', text: $t('Kamu mulai dengan 5 Gandum. Cangkul petak kebun dengan Cangkul, lalu pegang Gandum dan klik kanan petaknya untuk menanam.') },
-    { id: 'board', text: $t('Masuk ke Balai Desa di samping pasar dan lihat papan proyek di rak belakang.') }
+    { id: 'signin', icon: '🔑', title: $t('Masuk'), hint: $t('Google atau email. Tanpa dompet, tanpa gas.'), text: $t('Tekan Masuk untuk membuat akunmu (Google atau email). Tanpa dompet, tanpa gas.') },
+    { id: 'gather', icon: '🧺', title: $t('Kumpulkan bahan'), hint: $t('Klik kolam, pohon atau batu.'), text: $t('Klik kolam, pohon atau batu (atau hadap lalu tekan F). Hasilnya masuk ke Tas.') },
+    { id: 'craft', icon: '🔨', title: $t('Buat sesuatu'), hint: $t('Meja Kerja: 2 Gandum jadi Roti.'), text: $t('Buat sesuatu di Meja Kerja: 2 Gandum jadi Roti, atau Ikan + Kayu jadi Ikan Bakar.') },
+    { id: 'sell', icon: '🪙', title: $t('Jual hasilmu'), hint: $t('Ke pedagang di Pasar.'), text: $t('Jalan ke Pasar di timur rumahmu dan jual hasilmu ke Sari, Budi, Wati atau Joko.') },
+    { id: 'home', icon: '🌀', title: $t('Pergi ke Homeland'), hint: $t('Berdiri di portal batu.'), text: $t('Berdiri di portal batu dekat alun-alun dan tunggu sebentar: kamu pindah ke Homeland-mu sendiri.') },
+    { id: 'build', icon: '🏗️', title: $t('Bangun Kolam Ikan'), hint: $t('Klik lahan kosong di Homeland.'), text: $t('Di Homeland, buka lahan kosong (klik pintunya) dan bangun Kolam Ikan.') },
+    { id: 'th', icon: '🏛️', title: $t('Naikkan Balai Kota'), hint: $t('Ke level 2 lewat Tingkatkan.'), text: $t('Tekan Tingkatkan di atas dan naikkan Balai Kota ke level 2: bangunan baru terbuka.') },
+    { id: 'plant', icon: '🌱', title: $t('Tanam Gandum'), hint: $t('Cangkul petak, lalu tanam 5 Gandummu.'), text: $t('Kamu mulai dengan 5 Gandum. Cangkul petak kebun dengan Cangkul, lalu pegang Gandum dan klik kanan petaknya untuk menanam.') },
+    { id: 'board', icon: '📋', title: $t('Lihat papan proyek'), hint: $t('Di Balai Desa, samping pasar.'), text: $t('Masuk ke Balai Desa di samping pasar dan lihat papan proyek di rak belakang.') }
   ];
   var lastGoal = null, goalsSince = 0; // no 'done' toast while the first loads catch up (history arrives late)
   var goalBox = null;
@@ -509,7 +510,8 @@
     if (!next) return;
     goalBox.textContent = '';
     var head = $('div', 'gt-goals-head');
-    head.appendChild($('b', null, next.rescue ? $t('Semua toko tutup') : '🎯 ' + $t('Misi {0}/{1}', [GOALS.indexOf(next) + 1, GOALS.length])));
+    head.appendChild($('b', null, next.rescue ? next.icon + ' ' + next.title : next.icon + ' ' + next.title + ' · ' + (GOALS.indexOf(next) + 1) + '/' + GOALS.length));
+    goalBox.title = next.text;
     var x = $('button', 'gt-goals-x', $t('Tutup')); x.type = 'button'; x.setAttribute('aria-label', next.rescue ? $t('Sembunyikan untuk hari ini') : $t('Sembunyikan langkah pertama'));
     x.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -518,7 +520,7 @@
     });
     head.appendChild(x);
     goalBox.appendChild(head);
-    goalBox.appendChild($('p', null, next.text));
+    goalBox.appendChild($('p', null, next.hint || next.text));
   }
 
   // When every shop is closed: the board that needs the fewest goods, and what is still missing on it.
@@ -537,7 +539,7 @@
     });
     if (!best) return null;
     var what = best.miss.length ? $t('masih kurang {0}', [best.miss.join(', ')]) : $t('tinggal kurang koin');
-    return { rescue: true, text: $t('Bantu buka lagi toko {0}: {1}. Kumpulkan barangnya, lalu bicara dengan {2} di pasar dan pilih Sumbang. Penyumbang dapat saham toko.', [best.name, what, best.name]) };
+    return { rescue: true, icon: '🏪', title: $t('Toko {0} tutup', [best.name]), hint: $t('{0} · sumbang lewat {1} di pasar.', [what, best.name]), text: $t('Bantu buka lagi toko {0}: {1}. Kumpulkan barangnya, lalu bicara dengan {2} di pasar dan pilih Sumbang. Penyumbang dapat saham toko.', [best.name, what, best.name]) };
   }
 
   /* ---- Night monsters (the server decides; this draws them and runs the fight window) ---- */
@@ -969,7 +971,8 @@
       var p = S.st.plots[i]; if (!p) return;
       var x = pp.x * T - camX, y = pp.y * T - camY;
       if (x < -T || y < -T || x > vw || y > vh) return;
-      if (p.state === 'empty') { ctx.fillStyle = 'rgba(214,170,110,.55)'; ctx.fillRect(x + 1, y + 1, T - 2, T - 2); return; }
+      // an empty plot: the soil stays as it is, four light corner marks say "a plot, till me"
+      if (p.state === 'empty') { ctx.fillStyle = 'rgba(240,214,160,.85)'; [[1, 1], [T - 4, 1], [1, T - 2], [T - 4, T - 2]].forEach(function (c) { ctx.fillRect(x + c[0], y + c[1], 3, 1); }); [[1, 2], [T - 2, 2], [1, T - 4], [T - 2, T - 4]].forEach(function (c) { ctx.fillRect(x + c[0], y + c[1], 1, 2); }); return; }
       if (p.state === 'planted' && p.wateredToday) { ctx.fillStyle = 'rgba(30,20,40,.28)'; ctx.fillRect(x, y, T, T); }
       if (p.state === 'planted') {
         var h = 2 + p.grown * 2;
@@ -1094,29 +1097,32 @@
     }, 'primary'));
   }
 
-  var WHERE = { fish: $t('mancing di kolam atau sungai'), wood: $t('tebang pohon'), ore: $t('nambang di Tambang Utara (butuh Beliung)'), wheat: $t('tanam di kebunmu (kalau Gandummu habis, desa memberi 3 benih gratis per hari)'), bread: $t('Meja Kerja: 2 Gandum'), meal: $t('Meja Kerja: Ikan + Kayu'), tool: $t('Meja Kerja: 2 Bijih + Kayu'), coin: $t('jual ke pedagang yang buka, atau Kotak Kirim di rumahmu') };
+  var WHERE = { fish: $t('🎣 mancing'), wood: $t('🪓 tebang pohon'), ore: $t('⛏️ nambang (butuh Beliung)'), wheat: $t('🌱 tanam di kebun'), bread: $t('🔨 2 Gandum di Meja Kerja'), meal: $t('🔨 Ikan + Kayu di Meja Kerja'), tool: $t('🔨 2 Bijih + Kayu di Meja Kerja'), coin: $t('🪙 jual ke pedagang') };
   function restoreBody(id, m, wrap) {
     var s = (S.shops || []).filter(function (x) { return x.id === id; })[0];
-    wrap.appendChild($('p', 'chain-closed', $t('TUTUP. {0} tidak sanggup membayar sewa.', [m.name])));
+    // short: one line why, one line what to do, then one compact row per good (icon, progress bar, what is missing)
+    wrap.appendChild($('p', 'chain-closed', '🔒 ' + $t('Tutup: {0} tak sanggup bayar sewa.', [m.name])));
     if (!s) { wrap.appendChild($('p', null, $t('Memuat papan pemulihan…'))); return wrap; }
-    wrap.appendChild($('p', null, $t('Lengkapi semua baris untuk membuka lagi tokonya. Penyumbang dapat saham dan bagian untung.')));
+    wrap.appendChild($('p', 'chain-dim', $t('Lengkapi semuanya untuk membuka toko lagi. Penyumbang dapat saham.') + (s.contributors ? ' · ' + $t('{0} penyumbang', [s.contributors]) : '')));
     var lines = [], allDone = true;
     s.need.forEach(function (n) {
       var got = 0; (s.pledged || []).forEach(function (p) { if (p.token_id === n.token_id) got = +p.amount; });
       var missing = Math.max(0, +n.amount - got), have = spendable(n.token_id);
-      var row = $('div', 'mrow chain-item');
+      var row = $('div', 'mrow chain-item chain-need' + (missing === 0 ? ' done' : ''));
+      var ic = n.token_id === 'coin' || !window.GT_ITEMS ? $('span', 'chain-need-ic', '🪙') : GT_ITEMS.icon(n.token_id, 20);
+      ic.setAttribute('aria-hidden', 'true'); row.appendChild(ic);
       var info = $('div', 'grow');
-      info.appendChild($('div', null, item(n.token_id) + ': ' + got + '/' + n.amount));
-      if (missing === 0) info.appendChild($('div', 'chain-done', $t('Lengkap')));
-      else {
+      info.appendChild($('b', null, item(n.token_id) + ' ' + got + '/' + n.amount));
+      var bar = $('div', 'chain-need-bar'), fill = $('i'); fill.style.width = Math.round(100 * Math.min(1, got / Math.max(1, +n.amount))) + '%'; bar.appendChild(fill); info.appendChild(bar);
+      if (missing > 0) {
         allDone = false;
-        info.appendChild($('div', 'num', $t('Kurang {0} · kamu punya {1}{2}', [missing, have, have < missing ? $t(' · cari: {0}', [WHERE[n.token_id] || '']) : ''])));
+        info.appendChild($('div', 'num', $t('kurang {0} · punya {1}', [missing, have]) + (have < missing && WHERE[n.token_id] ? ' · ' + WHERE[n.token_id] : '')));
       }
       row.appendChild(info);
+      if (missing === 0) row.appendChild($('span', 'chain-done', '✓'));
       wrap.appendChild(row);
       if (missing > 0 && have > 0) lines.push({ token_id: n.token_id, amount: String(Math.min(missing, have)) });
     });
-    if (s.contributors) wrap.appendChild($('p', 'chain-dim', $t('{0} penyumbang sejauh ini.', [s.contributors])));
     if (lines.length) {
       var label = $t('Sumbang {0}{1}', [lines.map(function (l) { return l.amount + ' ' + item(l.token_id); }).join(' + '), oc()]);
       wrap.appendChild(button(label, function () {
@@ -1125,7 +1131,7 @@
           .then(function () { GT.toast(chainUI() ? $t('Terima kasih! Sumbanganmu tercatat on-chain.') : $t('Terima kasih! Sumbanganmu tercatat.')); refreshModal(); }, function (e) { GT.toast(e.message); });
       }, 'primary'));
     } else if (!allDone) {
-      wrap.appendChild($('p', 'chain-dim', $t('Kamu belum punya barang yang masih kurang (barang hari ini bisa disumbang setelah pukul 06:00). Kalau semua toko tutup, dana desa ikut menyumbang koinnya pada penyelesaian pukul 06:00.')));
+      wrap.appendChild($('p', 'chain-dim', $t('Belum punya barangnya. Barang hari ini bisa disumbang setelah 06:00.')));
     }
     return wrap;
   }
