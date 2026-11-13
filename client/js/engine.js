@@ -2295,17 +2295,19 @@ function updateHud(){
 // Hackathon change (2026-11-01): full-window layout. When <html> has class "gt-full" (set by mods/settings.js on
 // desktop, or by the fullscreen toggle) the view fills the window: the largest whole-pixel scale that shows at least
 // 15x11 tiles, then as many columns/rows as fit (up to 40x24). Otherwise the original boxed layout below runs.
+// Full window: the game covers the whole window, edge to edge (the HUD floats over it, settings.js). The view is the
+// window's own size at a whole-pixel scale, so no band is left round it; past 48 x 30 tiles the scale grows instead,
+// so a big screen sees no further than anyone else. The pixel or two over the edge is clipped by #screen.
 function layoutFull(){
+  if (window.scrollY || window.scrollX) window.scrollTo(0, 0); // the page never scrolls in a full window
   var W = elFit.clientWidth || window.innerWidth;
-  var top = elFit.getBoundingClientRect().top;
-  var H = Math.max(11 * T, window.innerHeight - top - 12);
+  var H = Math.max(11 * T, elFit.clientHeight || window.innerHeight); // #fit is the whole game area (css/settings.css)
   var s = Math.max(1, Math.min(6, Math.floor(Math.min(W / (15 * T), H / (11 * T)))));
-  var cols = Math.max(11, Math.min(40, Math.floor(W / (T * s))));
-  var rows = Math.max(11, Math.min(24, Math.floor(H / (T * s))));
-  S = s; VW = cols * T; VH = rows * T;
+  while (s < 8 && (W / s > 48 * T || H / s > 30 * T)) s++;
+  S = s; VW = Math.max(11 * T, Math.ceil(W / s)); VH = Math.max(11 * T, Math.ceil(H / s));
   elCv.width = VW * s; elCv.height = VH * s;
   elCv.style.width = (VW * s) + 'px'; elCv.style.height = (VH * s) + 'px';
-  elScreen.style.width = (VW * s) + 'px';
+  elScreen.style.width = Math.min(W, VW * s) + 'px'; elScreen.style.height = Math.min(H, VH * s) + 'px';
   var fsTable = [10, 8, 10, 12, 14, 16, 18];
   elScreen.style.setProperty('--fs', fsTable[Math.min(s, 6)] + 'px');
   elScreen.classList.toggle('short', VH * s < 340);
@@ -2338,6 +2340,7 @@ function layoutPhone(){
   fxBub.forEach(function(r){ r.w = 0; }); fxTag.forEach(function(r){ r.w = 0; });
 }
 function layout(){
+  elScreen.style.height = ''; // only the full window sets it
   if (document.documentElement.classList.contains('gt-phone')) return layoutPhone();
   if (document.documentElement.classList.contains('gt-full')) return layoutFull();
   var avail = elFit.clientWidth || 340;

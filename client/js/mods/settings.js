@@ -505,7 +505,60 @@
   // a language switch: rebuild this window and the key hint line in the new language
   if (window.GT_I18N) GT_I18N.onChange(function () { redraw(); rebuild(); });
 
-  window.GT_SETTINGS = { label: label, keyName: keyName, open: openSettings, toggleFullscreen: toggleFullscreen, _state: st };
+  /* ------------------------------------------------------------ the top bar (full window)
+     The banner and the HUD float over the game as one bar. It shows for a moment at the start, then slides up; the
+     pointer at the top edge brings it back for as long as it is near, and the tab (or U) brings it back pinned; its
+     own button unpins and hides it. A window or a focused button in it keeps it shown. */
+  var LS_TOP = 'gt.topbar', topBar = null, topTab = null, topPinned = false, topHideT = 0, topNear = false;
+  try { topPinned = localStorage.getItem(LS_TOP) === 'pinned'; } catch (e) { /* storage blocked */ }
+  function topFull() { return document.documentElement.classList.contains('gt-full'); }
+  function topShown() { return !document.documentElement.classList.contains('gt-top-hide'); }
+  function topShow(on) { document.documentElement.classList.toggle('gt-top-hide', !on); }
+  function topPin(on) {
+    topPinned = on; try { localStorage.setItem(LS_TOP, on ? 'pinned' : 'auto'); } catch (e) { /* storage blocked */ }
+    clearTimeout(topHideT); topShow(on);
+  }
+  function topHideSoon(ms) {
+    clearTimeout(topHideT);
+    topHideT = setTimeout(function () {
+      if (topPinned || topNear || !topFull()) return;
+      if (GT.isUiOpen() || (topBar && topBar.contains(document.activeElement))) return topHideSoon(1200);
+      topShow(false);
+    }, ms);
+  }
+  function buildTop() {
+    if (topBar) return;
+    var shell = document.querySelector('.shell'), hud = document.getElementById('hud');
+    if (!shell || !hud) return;
+    topBar = $('div', 'gt-top'); shell.insertBefore(topBar, hud); topBar.appendChild(hud);
+    var hb = $('button', 'gt-top-hidebtn'); hb.type = 'button'; hb.innerHTML = '▴ <kbd>U</kbd>';
+    hb.setAttribute('aria-label', $t('Sembunyikan bilah atas (U)')); hb.title = $t('Sembunyikan bilah atas (U)');
+    hb.addEventListener('click', function (e) { e.currentTarget.blur(); topPin(false); });
+    topBar.appendChild(hb);
+    topTab = $('button', 'gt-top-tab'); topTab.type = 'button'; topTab.innerHTML = '▾ ' + $t('Menu') + ' <kbd>U</kbd>';
+    topTab.setAttribute('aria-label', $t('Tampilkan bilah atas (U)'));
+    topTab.addEventListener('click', function (e) { e.currentTarget.blur(); topPin(true); });
+    shell.appendChild(topTab);
+    window.addEventListener('mousemove', function (e) {
+      if (!topFull() || topPinned) return;
+      var h = topBar.offsetHeight || 60;
+      topNear = e.clientY < (topShown() ? h + 24 : 36);
+      if (topNear) { clearTimeout(topHideT); topShow(true); } else if (topShown()) topHideSoon(700);
+    });
+    topBar.addEventListener('focusin', function () { clearTimeout(topHideT); topShow(true); });
+    topShow(true);
+    if (!topPinned) topHideSoon(3500); // a moment to see what is there, then the game has the screen
+    window.dispatchEvent(new Event('resize')); // the HUD left the flow: the game view takes the whole height
+  }
+  function topFrame() {
+    if (!topBar) return;
+    var banner = document.querySelector('.shell > .chain-banner'); // made by chain.js after this bar: it joins the bar
+    if (banner) { topBar.insertBefore(banner, topBar.firstChild); window.dispatchEvent(new Event('resize')); } // it took room in the flow: measure again
+    var h = topBar.offsetHeight; if (h !== topH) { topH = h; document.documentElement.style.setProperty('--gt-top-h', h + 'px'); }
+  }
+  var topH = 0;
+
+  window.GT_SETTINGS = { label: label, keyName: keyName, open: openSettings, toggleFullscreen: toggleFullscreen, _state: st, topBar: function (on) { topPin(on == null ? !topShown() : !!on); } };
   GT.register({
     id: 'settings',
     onFrame: function () { actTick(); joyTick(); },
@@ -517,6 +570,9 @@
       GT.addHudButton({ id: 'gt-morebtn', label: $t('Pengaturan'), onClick: moreSheet, secondary: false });
       renderHelp();
       applyLayout();
-    }
+      buildTop();
+      GT.hotkey('U', function () { if (topFull()) topPin(!topShown()); });
+    },
+    onFrame: topFrame
   });
 })();
