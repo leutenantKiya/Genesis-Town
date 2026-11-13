@@ -35,8 +35,8 @@
 >   pledges are burned when it is built and the new area opens for everyone;
 > - warmer art, a full-window layout, fullscreen (F) and a settings menu (O) with rebindable keys.
 > - **2.5D view** (2026-11-10, Pengaturan > Tampilan): the village and Homelands in three.js with the HD-2D look of
->   the 3D kit (solid buildings and trees, sun and shadows, seasons, night glow, see-through walls). Default on a
->   computer, 2D on a phone; without WebGL the 2D view draws. Camera and keys: **Q / E** turn the
+>   the 3D kit (solid buildings and trees, sun and shadows, seasons, night glow, see-through walls). Default on every device
+>   (2D stays one switch away in Settings), behind a pixel loading screen that follows the real load; without WebGL the 2D view draws. Camera and keys: **Q / E** turn the
 >   view by 45 degrees (the bag stays on I and the Tas button), **+ / -** zoom, and the arrows walk the way they point on
 >   screen. Signs and name tags follow each head at any turn, drawn small so they do not cover the world.
 >   The lab's controls are in the game too: its trays (top right) hold **Desa / Homeland** (walks to the portal, then
