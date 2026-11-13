@@ -594,6 +594,8 @@ export function createApp(deps: AppDeps) {
         const acct = accountOf(req, url, raw);
         game.assertActive(acct);
         const b = parseJson(raw) as { name?: unknown; look?: unknown };
+        // the body (look) is chosen once, when the character is made; afterwards only Mall outfits change how you look
+        if (b.look !== undefined && deps.store.nameOf(acct) && b.look !== social.look(acct)) throw new HttpError(409, 'Your look is chosen when your character is made. Change your outfit with clothes from the Genesis Mall.');
         if (b.look !== undefined) social.setLook(acct, b.look); // validated first: a bad look changes nothing
         if (b.name !== undefined) social.setNick(acct, b.name);
         return send(res, 200, { name: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct) });

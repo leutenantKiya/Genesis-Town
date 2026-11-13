@@ -59,17 +59,18 @@ test('names: one table, 3-16 characters, unique ignoring case, frozen accounts r
     assert.equal((await r.get(P2, '/api/player')).status, 400);
     assert.equal((await r.post(P2, '/api/name', { name: 'a' })).status, 400);
     assert.equal((await r.post(P2, '/api/name', { name: 'a<b>c' })).status, 400);
-    assert.equal((await r.post(P2, '/api/name', { name: 'Budi Santoso' })).status, 200);
-    const nm = await r.post(P2, '/api/name', { look: 3 });
-    assert.equal(nm.status, 200); assert.equal(nm.json.name, 'Budi Santoso'); assert.equal(nm.json.look, 3); assert.match(nm.json.tag, /^[0-9]{5}$/);
     assert.equal((await r.post(P2, '/api/name', { look: 9 })).status, 400);
+    const nm = await r.post(P2, '/api/name', { name: 'Budi Santoso', look: 3 }); // the look is picked with the first name
+    assert.equal(nm.status, 200); assert.equal(nm.json.name, 'Budi Santoso'); assert.equal(nm.json.look, 3); assert.match(nm.json.tag, /^[0-9]{5}$/);
+    assert.equal((await r.post(P2, '/api/name', { look: 5 })).status, 409, 'a made character keeps its look; outfits come from the Mall');
+    assert.equal((await r.post(P2, '/api/name', { look: 3 })).status, 200, 'sending the same look again is fine');
     r.game.gs.recordShortfall(1, 0, P3, 'fish', -5, -3);
     assert.equal((await r.post(P3, '/api/name', { name: 'Cici' })).status, 403);
     assert.equal((await r.post(P3, '/api/chat', { world: 'public', text: 'hai' })).status, 403);
   } finally { r.close(); }
 });
 
-test('the look a player picks is the look the others get, also when it changes after they were seen', async () => {
+test('the look a player picks is the look the others get, and it cannot be swapped later', async () => {
   const r = await rig();
   try {
     await r.post(P1, '/api/name', { name: 'Ayu', look: 6 });
@@ -79,8 +80,8 @@ test('the look a player picks is the look the others get, also when it changes a
     assert.equal(mine.json.look, 6, 'P1 is told its own look');
     const ayu = async () => (await r.post(P2, '/api/presence', at)).json.players.find((p: any) => p.account === P1);
     assert.equal((await ayu()).look, 6);
-    await r.post(P1, '/api/name', { look: 0 }); // look 0 is a real choice, not "unset"
-    assert.equal((await ayu()).look, 0);
+    assert.equal((await r.post(P1, '/api/name', { look: 0 })).status, 409, 'no skin swap after the character is made');
+    assert.equal((await ayu()).look, 6);
   } finally { r.close(); }
 });
 

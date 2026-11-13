@@ -329,6 +329,7 @@ html.gt-phone .gt-cs-stage{min-height:150px}
 .gt-cs-stage{flex:1;min-height:200px;display:flex;align-items:center;justify-content:center;background:var(--stage);border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl)}
 .gt-cs-prev{width:128px;height:160px;image-rendering:pixelated}
 .gt-cs-h{margin:0;font-size:calc(18px*var(--ts));font-weight:600}
+.gt-cs-note{margin:6px 0 0;font-size:calc(13px*var(--ts));opacity:.8;line-height:1.4}
 .gt-cs-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .gt-cs-sw{padding:4px;border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);background:var(--paper-2);cursor:pointer;line-height:0;box-shadow:inset 0 1px 0 var(--paper-hi);transition:background-color var(--t-press) var(--ease)}
 .gt-cs-sw:hover{outline:2px dashed var(--paper-dim);outline-offset:1px}

@@ -40,6 +40,7 @@ export const EXACT: Record<string, string> = {
  "No free tag, try another name": "Tidak ada tag kosong, coba nama lain",
  "Look must be 0-7.": "Penampilan harus 0-7.",
  "That name is already taken by another player": "Nama itu sudah dipakai pemain lain",
+ "Your look is chosen when your character is made. Change your outfit with clothes from the Genesis Mall.": "Tampilan tubuh dipilih sekali saat karakter dibuat. Ganti gayamu dengan pakaian dari Genesis Mall.",
  "New device: game session key added (signed with NEAR Auth)": "Perangkat baru: kunci sesi game ditambahkan (ditandatangani dengan NEAR Auth)",
  "Name 3–16 characters: letters, digits, spaces, _ or -.": "Nama 3–16 karakter: huruf, angka, spasi, _ atau -.",
  "That name can't be used.": "Nama itu tidak bisa dipakai.",

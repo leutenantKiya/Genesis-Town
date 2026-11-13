@@ -118,7 +118,9 @@
 
     // right: look swatches + Mulai
     var right = el('div', 'gt-cs-right');
-    right.appendChild(el('h2', 'gt-cs-h', $t('Pilih penampilan')));
+    // the body look is picked once, when the character is made; a made character only changes clothes (Mall outfits)
+    var chooseLook = !mine.named;
+    right.appendChild(el('h2', 'gt-cs-h', chooseLook ? $t('Pilih penampilan') : $t('Gaya pakaianmu')));
     var grid = el('div', 'gt-cs-grid'); grid.setAttribute('role', 'radiogroup'); grid.setAttribute('aria-label', $t('Penampilan'));
     var sw = [];
     for (var i = 0; i < LOOKS; i++) (function (i) {
@@ -131,7 +133,8 @@
     pick(look);
     var msg = el('p', 'gt-cs-msg'); msg.setAttribute('role', 'status');
     var go = el('button', 'gt-cs-go', $t('Mulai')); go.type = 'button';
-    right.appendChild(grid);
+    if (chooseLook) right.appendChild(grid);
+    else right.appendChild(el('p', 'gt-cs-note', $t('Tampilan tubuh dipilih sekali saat karakter dibuat. Ganti gayamu dengan pakaian dari Genesis Mall.')));
     var wardrobe = el('div', 'gt-cs-wardrobe'); right.appendChild(wardrobe);
     right.appendChild(msg); right.appendChild(go);
     function wardrobePaint() { paintWardrobe(wardrobe, function () { wardrobePaint(); paintStage(prev, look, 'down', 0); }); }
@@ -155,7 +158,7 @@
       if (!NAME_RE.test(v)) { msg.textContent = $t('Nama 3-16 karakter: huruf, angka, spasi, _ atau -.'); input.focus(); return; }
       busy = true; go.disabled = true; msg.textContent = '';
       try { window.GT_SFX && GT_SFX.play('quest_done'); } catch (e) { /* no sound */ }
-      var body = { look: look };
+      var body = chooseLook ? { look: look } : {};
       if (v !== mine.name) body.name = v;
       c.api('/name', { method: 'POST', body: body }).then(function (r) {
         mine = { name: r.named ? r.name : v, tag: r.tag, look: r.look | 0, named: !!r.named };
