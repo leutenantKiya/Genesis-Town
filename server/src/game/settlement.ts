@@ -54,9 +54,10 @@ export function netEntries(rows: LedgerRow[]): DeltaEntry[] {
 export class Settlement {
   d: SettleDeps;
   busy = false;
-  /** Accounts whose refresh was asked for while a settlement ran: read after it, so a chain balance that already holds
-   *  the day's deltas is never stored before the books add those same deltas (a double credit). */
-  private refreshLater = new Set<string>();
+  /** Resolves when the running settlement ends. A refresh waits for it, so a chain balance that already holds the day's
+   *  deltas is never stored before the books add those same deltas (a double credit), and callers still get fresh books. */
+  private idle: Promise<void> = Promise.resolve();
+  private release: () => void = () => {};
   /** Per-day retry backoff after a failed settlement (memory only): next attempt time and current delay. */
   retry = new Map<number, { until: number; delay: number }>();
   /** Set when the contract has already closed a later day than this database has reached: the database is an older copy
@@ -84,6 +85,7 @@ export class Settlement {
   async settleDue(): Promise<number[]> {
     if (this.busy) return [];
     this.busy = true;
+    this.idle = new Promise<void>((r) => { this.release = r; });
     const done: number[] = [];
     let sent = 0, lastQuiet = -1;
     try {
@@ -125,10 +127,7 @@ export class Settlement {
     } finally {
       this.busy = false;
       this.onSettled?.();
-      if (this.refreshLater.size) {
-        const later = [...this.refreshLater]; this.refreshLater.clear();
-        try { await this.refresh(later); } catch (e) { console.error('refresh after settlement:', (e as Error).message); }
-      }
+      this.release();
     }
     return done;
   }
@@ -379,10 +378,20 @@ export class Settlement {
 
   /** Re-reads settled balances from chain for the given accounts. */
   async refresh(accounts: string[]) {
-    if (this.busy) { accounts.forEach((a) => this.refreshLater.add(a)); return; } // read once the settlement has finished
-    await this.readChain(accounts);
+    const tokens = Object.keys(this.d.econ.items);
+    for (const a of accounts) {
+      for (;;) {
+        while (this.busy) await this.idle; // a settlement is running: wait for it to end
+        const b = await this.d.chain.balances(a, tokens);
+        if (this.busy) continue; // one started while the read was out: that read may hold its deltas, read again
+        tokens.forEach((t, i) => this.d.gs.setSettled(a, t, Number(b[i])));
+        break;
+      }
+    }
+    this.onSettled?.(accounts);
   }
 
+  /** Reads from chain now, without waiting: only for use inside a running settlement. */
   private async readChain(accounts: string[]) {
     const tokens = Object.keys(this.d.econ.items);
     for (const a of accounts) {

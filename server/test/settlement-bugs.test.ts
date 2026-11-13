@@ -240,16 +240,21 @@ test('a database level with the chain settles as before', async () => {
   assert.equal(chain.lastSettled, game.settlement.settledThrough());
 });
 
-test('a refresh asked for while a settlement runs is read only after it, so the day is not counted twice', async () => {
+test('a refresh asked for while a settlement runs waits for it, then reads, so the day is not counted twice', async () => {
   const P = 'p1.players.gt.test';
   const { chain, store, game } = await world([P]);
-  const coin = () => store.db.prepare("SELECT amount FROM settled WHERE account = ? AND token = 'coin'").get(P) as { amount: number } | undefined;
-  const before = coin()?.amount ?? 0;
+  const coin = () => (store.db.prepare("SELECT amount FROM settled WHERE account = ? AND token = 'coin'").get(P) as { amount: number } | undefined)?.amount ?? 0;
+  const before = coin();
   chain.add(P, 'coin', 7n); // a move on chain (e.g. a top-up) that the books learn through refresh
-  game.settlement.busy = true;
-  await game.settlement.refresh([P]);
-  assert.equal(coin()?.amount ?? 0, before, 'not read during the settlement');
-  game.settlement.busy = false;
-  await game.settlement.settleDue(); // nothing due; its finally runs the deferred read
-  assert.equal(coin()?.amount, before + 7, 'read once the settlement finished');
+  const s = game.settlement as any;
+  let end!: () => void;
+  s.busy = true; s.idle = new Promise<void>((r) => { end = r; });
+  let done = false;
+  const p = game.settlement.refresh([P]).then(() => { done = true; });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(done, false, 'waits while the settlement runs');
+  assert.equal(coin(), before, 'not read during the settlement');
+  s.busy = false; end();
+  await p;
+  assert.equal(coin(), before + 7, 'read once the settlement finished, before refresh returns');
 });
