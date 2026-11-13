@@ -19,15 +19,16 @@ import { Parties } from './party.ts';
 import { Consign } from './consign.ts';
 import { leaderboard } from './leaderboard.ts';
 import { Extras } from './extras.ts';
+import { Chips } from './chips.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall', 'repair', 'maketool', 'ride', 'casino', 'mission', 'grass'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall', 'repair', 'maketool', 'ride', 'casino', 'mission', 'grass', 'chips'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', grass: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', repair: 'visit', maketool: 'visit', ride: 'visit', casino: 'visit', mission: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', grass: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', repair: 'visit', maketool: 'visit', ride: 'visit', casino: 'visit', chips: 'visit', mission: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -37,6 +38,7 @@ export class Game {
   clock: Clock;
   world: World;
   rng: () => number;
+  chips: Chips;
   market: Market;
   settlement: Settlement;
   /** The shared village map; absent in unit tests and the simulator, which use abstract tile coordinates. */
@@ -80,6 +82,15 @@ export class Game {
       nameOf: (a) => store.nameOf(a), board: (p) => this.leaderboard(p, null), merchantName: (acct) => this.econ.merchants[acct.split('.')[0]]?.name ?? acct.split('.')[0],
     });
     this.world.tools = this.extras;
+    this.chips = new Chips({
+      cfg: () => this.econ.chips, db: this.gs.db, town: o.town, rng: () => this.rng(), day: () => this.clock.time().settleDay,
+      coinOf: (a) => this.gs.balance(a, 'coin'),
+      addCoin: (a, delta, kind, ref) => this.gs.add(this.clock.time().settleDay, a, 'coin', delta, kind, ref),
+      payTown: (a, coin, kind, ref) => this.extras.payTown(a, coin, kind, ref),
+      checkGain: (a, coin) => this.world.checkGain(a, 'coin', coin),
+      passUntil: (a) => this.extras.passUntil(a),
+      atLuckTable: (a) => { if (!this.map || !this.positions) return true; const p = this.positions.lastOf(a); return !!p && this.positions.worldOf(a) === 'public' && this.map.nearLandmark(p, 'gamble', 3); },
+    });
     this.party = new Parties({
       econ: this.econ, gs: this.gs, now: this.now, assertActive: (a) => this.assertActive(a),
       names: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) },
@@ -360,7 +371,16 @@ export class Game {
         res = this.extras.claimMission(account, body.id);
         break;
       }
-      case 'gamble': throw new HttpError(409, 'The Luck Table now plays for chips only.'); // goods and coin can no longer be staked; the chip games live in the browser (client casino.js)
+      case 'chips': {
+        if (wid !== 'public') throw new HttpError(409, 'Chips are played in the public village.');
+        const op = s('op');
+        if (op === 'buy') res = this.chips.buy(account, body.n);
+        else if (op === 'sell') res = this.chips.sell(account, body.n);
+        else if (op === 'play') res = this.chips.play(account, body.game, body);
+        else throw new HttpError(400, 'Unknown chips action.');
+        break;
+      }
+      case 'gamble': throw new HttpError(409, 'The Luck Table now plays for chips only.'); // goods and coin can no longer be staked; chips are bought and played through the `chips` act
       case 'hoe': {
         if (!w.row) throw new HttpError(409, 'Use the hoe in a Homeland farm.');
         const hx = n('x', -1), hy = n('y', -1);
@@ -456,6 +476,7 @@ export class Game {
       cosmetics: this.extras.cosmeticsView(account),
       missions: this.extras.missionsView(account),
       casinoPass: this.extras.passUntil(account),
+      chips: this.chips.view(account),
       fun: this.econ.fun,
       bag,
       worldId: hrow ? wid : 'public',

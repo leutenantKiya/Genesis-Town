@@ -15,7 +15,6 @@ import { TransferStore } from './transfer.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
 import { AdminGrants } from './admingrant.ts';
-import { topupInfo, topupRelay, topupResolve, type TopupDeps } from './topup.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
 import { Social, worldIdOk } from './social.ts';
 import { playerProfile } from './profile.ts';
@@ -131,10 +130,7 @@ export function createApp(deps: AppDeps) {
   });
   game.settlement.onSettled = (accts) => chainCheck.invalidate(accts);
   game.trade.verify = (a, tokens) => chainCheck.verify(a, tokens, 'trade/swap'); // a live trade's swap re-checks both sides
-  const topupLimiter = new RateLimiter(30, 200); // top-up requests per account (each costs the relayer a NEAR Auth sign call and gas)
-  const topupResolveLimiter = new RateLimiter(30, 600);
   const adminGrantLimiter = new RateLimiter(30, 300);
-  const topupDeps: TopupDeps = { cfg: deps.cfg, chain: deps.chain, store: deps.store, game, verify: deps.verify, currentBlockHeight: deps.currentBlockHeight, invalidate: (a) => chainCheck.invalidate(a) };
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
   const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
@@ -400,7 +396,6 @@ export function createApp(deps: AppDeps) {
           fastAuth: deps.cfg.fastAuth,
           google: deps.cfg.googleClientId && deps.verifyGoogle ? { clientId: deps.cfg.googleClientId } : null,
           devLogin: deps.cfg.devLogin,
-          topup: { enabled: deps.cfg.topupEnabled },
           devTools: devAllowed(req),
           dialogue: dialogue.provider,
           world: game.map?.view() ?? null,
@@ -440,24 +435,6 @@ export function createApp(deps: AppDeps) {
         const ip = clientIp(req);
         if (!deviceLimiter.take(ip)) throw new HttpError(429, 'too many new-device requests');
         return send(res, 200, await addDeviceKey(deps, await readJson(req)));
-      }
-      if (p === '/api/topup/info' || p === '/api/topup/resolve' || p === '/api/topup/relay') {
-        // buying coin with NEAR from the town treasury (topup.ts); all three answer 403 / {open:false} unless TOPUP_ENABLED=1
-        if (req.method === 'GET' && p === '/api/topup/info') return send(res, 200, await topupInfo(topupDeps, accountOf(req, url)));
-        if (req.method === 'GET' && p === '/api/topup/resolve') {
-          const acct = accountOf(req, url);
-          if (!deps.cfg.topupEnabled) throw new HttpError(403, 'Top up is not open yet.');
-          if (!topupResolveLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
-          return send(res, 200, topupResolve(topupDeps, url.searchParams.get('name')));
-        }
-        if (req.method === 'POST' && p === '/api/topup/relay') {
-          const raw = await readRaw(req);
-          const acct = accountOf(req, url, raw);
-          if (!deps.cfg.topupEnabled) throw new HttpError(403, 'Top up is not open yet.');
-          if (!topupLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
-          return send(res, 200, await topupRelay(topupDeps, acct, parseJson(raw)));
-        }
-        throw new HttpError(404, 'no such route');
       }
       if (req.method === 'POST' && p === '/api/relay') {
         const body = await readJson(req);
@@ -503,7 +480,7 @@ export function createApp(deps: AppDeps) {
       }
       if (p === '/api/admin/frozen' || p === '/api/admin/status' || p === '/api/admin/unfreeze') {
         if (req.method === 'GET' && p !== '/api/admin/unfreeze') {
-          adminOf(req, url);
+          const acct = adminOf(req, url);
           if (p === '/api/admin/frozen') {
             const by = new Map<string, { account: string; items: Array<{ token: string; day: number; wanted: number; applied: number }> }>();
             for (const f of game.gs.shortfalls()) {
@@ -515,12 +492,14 @@ export function createApp(deps: AppDeps) {
             return send(res, 200, { frozen: [...by.values()] });
           }
           const t = game.clock.time(), now = game.clock.now();
+          // the town's coin on chain next to the books' figure (they differ by the not-yet-settled ledger of the day); null when the network cannot be read
+          const treasuryChain = await deps.chain.balances(deps.cfg.townAccountId, ['coin']).then((b) => Number(b[0]), () => null);
           return send(res, 200, {
             day: t.day, hour: t.hour, settleDay: t.settleDay, settledThrough: game.settlement.settledThrough(),
             retry: [...game.settlement.retry.entries()].map(([day, r]) => ({ day, inSeconds: Math.max(0, Math.round((r.until - now) / 1000)), delaySeconds: Math.round(r.delay / 1000) })),
             settlements: game.gs.settlements(8),
             chainCheck: { mode: deps.cfg.chainCheck.mode, ttlMs: deps.cfg.chainCheck.ttlMs, mismatches: chainCheck.mismatches.slice().reverse() },
-            treasury: adminGrants.treasury(), grantLimits: adminGrants.limits(), grants: adminGrants.log.slice().reverse()
+            treasury: adminGrants.treasury(), treasuryChain, grantLimits: { ...adminGrants.limits(), sentToday: adminGrants.sentToday(acct) }, grants: adminGrants.recent()
           });
         } else if (req.method === 'POST' && p === '/api/admin/unfreeze') {
           const raw = await readRaw(req);
@@ -749,7 +728,7 @@ export function createApp(deps: AppDeps) {
       throw new HttpError(404, 'no such route');
     }
     // Static client.
-    const rel = p === '/' || p === '/topup' ? '/index.html' : p; // /topup is the game page; chain.js opens the Top up window
+    const rel = p === '/' || p === '/admin' ? '/index.html' : p; // /admin is the game page; admin.js opens the Admin window after login
     let decoded: string;
     try { decoded = decodeURIComponent(rel); } catch { throw new HttpError(400, 'bad path'); }
     const file = normalize(join(clientRoot, decoded));

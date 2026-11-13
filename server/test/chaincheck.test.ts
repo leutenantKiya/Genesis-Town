@@ -128,6 +128,8 @@ test('which tokens an action can take: spends only, never gains', () => {
   assert.deepEqual(spendTokens(econ, 'craft', { recipe: rid }).sort(), [...Object.keys(r.inputs), ...(r.fee > 0 ? ['coin'] : [])].sort());
   for (const a of ['eat', 'ship', 'stock']) assert.deepEqual(spendTokens(econ, a, { token: 'bread' }), ['bread'], a);
   for (const a of ['hire', 'dress', 'ride', 'casino']) assert.deepEqual(spendTokens(econ, a, {}), ['coin'], a);
+  assert.deepEqual(spendTokens(econ, 'chips', { op: 'buy', n: 100 }), ['coin'], 'buying chips spends coin');
+  for (const op of ['sell', 'play']) assert.deepEqual(spendTokens(econ, 'chips', { op }), [], 'chips ' + op);
   assert.deepEqual(spendTokens(econ, 'gamble', { token: 'bread' }), [], 'the luck table spends nothing now');
   assert.deepEqual(spendTokens(econ, 'mall', { op: 'buy' }), ['coin']);
   assert.deepEqual(spendTokens(econ, 'mall', { op: 'wear' }), []);

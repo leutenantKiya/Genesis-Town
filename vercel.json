@@ -4,7 +4,7 @@
   "installCommand": "npm --prefix client/build ci",
   "buildCommand": "npm run build:client && rm -rf client/build",
   "outputDirectory": "client",
-  "rewrites": [{ "source": "/topup", "destination": "/index.html" }],
+  "rewrites": [{ "source": "/admin", "destination": "/index.html" }],
   "headers": [
     { "source": "/sw.js", "headers": [{ "key": "cache-control", "value": "no-cache" }] },
     { "source": "/(js|css|vendor)/(.*)", "headers": [{ "key": "cache-control", "value": "no-cache" }] }

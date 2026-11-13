@@ -2,6 +2,20 @@
 // Edit freely; keep {0} placeholders.
 export const EXACT: Record<string, string> = {
  "Unknown tool.": "Alat tidak dikenal.",
+ "Unknown game.": "Permainan tidak dikenal.",
+ "Unknown chips action.": "Aksi chip tidak dikenal.",
+ "Pick big or small.": "Pilih besar atau kecil.",
+ "Come to the Luck Table at the market.": "Datang ke Meja Untung di pasar.",
+ "You need a casino pass to play this table.": "Kamu butuh tiket kasino untuk main di meja ini.",
+ "Finish your current hand first.": "Selesaikan kartumu yang sekarang dulu.",
+ "No hand in play. Deal first.": "Tidak ada kartu yang sedang main. Bagi kartu dulu.",
+ "Guess at least once before you take the pot.": "Tebak minimal sekali sebelum mengambil hadiah.",
+ "Pick higher, lower or cash.": "Pilih lebih tinggi, lebih rendah atau ambil.",
+ "Nothing is higher than a King.": "Tidak ada yang lebih tinggi dari K.",
+ "Nothing is lower than an Ace.": "Tidak ada yang lebih rendah dari A.",
+ "That is too few chips to give a coin.": "Chip sebanyak itu terlalu sedikit untuk jadi satu koin.",
+ "Two alike: your stake comes back.": "Dua sama: taruhanmu kembali.",
+ "Chips are played in the public village.": "Chip dimainkan di desa umum.",
  "Unknown Mall item.": "Barang Mall tidak dikenal.",
  "Unknown Mall action.": "Aksi Mall tidak dikenal.",
  "Unknown slot.": "Slot tidak dikenal.",
@@ -222,18 +236,6 @@ export const EXACT: Record<string, string> = {
  "Famous": "Terkenal",
  "Known": "Dikenal",
  "Price steady.": "Harga tetap.",
- "Top up is not open yet.": "Top up belum dibuka.",
- "You can only pay from your own account.": "Kamu hanya bisa membayar dari akunmu sendiri.",
- "The receiver is not a known player.": "Penerimanya bukan pemain yang dikenal.",
- "This login is not the account you are playing.": "Login ini bukan akun yang sedang kamu mainkan.",
- "The receiver has no game account on the network yet.": "Penerima belum punya akun game di jaringan.",
- "The town treasury is short of coin right now. Try a smaller pack later.": "Kas kota sedang kurang koin. Coba paket yang lebih kecil nanti.",
- "You reached today's top-up limit.": "Kamu sudah mencapai batas top up hari ini.",
- "This top-up is still being processed.": "Top up ini masih diproses.",
- "This top-up did not go through. Start a new one.": "Top up ini tidak berhasil. Mulai yang baru.",
- "The pack does not match what was signed.": "Paketnya tidak sama dengan yang ditandatangani.",
- "The receiver does not match what was signed.": "Penerimanya tidak sama dengan yang ditandatangani.",
- "The top-up did not go through.": "Top up tidak berhasil.",
  "Price steady (capped at 10% per hour).": "Harga tetap (dibatasi 10% per jam)."
 };
 export const PATTERNS: Array<[string, string]> = [
@@ -268,22 +270,6 @@ export const PATTERNS: Array<[string, string]> = [
  [
   "You found all the seeds the grass has for today ({0}). Come back tomorrow.",
   "Benih dari rumput hari ini sudah kamu temukan semua ({0}). Kembali lagi besok."
- ],
- [
-  "Top up: bought {0} coin with NEAR",
-  "Top up: membeli {0} koin dengan NEAR"
- ],
- [
-  "Top up: {0} bought you {1} coin",
-  "Top up: {0} membelikanmu {1} koin"
- ],
- [
-  "Top up: bought {0} coin for {1}",
-  "Top up: membeli {0} koin untuk {1}"
- ],
- [
-  "The top-up did not go through: {0}",
-  "Top up tidak berhasil: {0}"
  ],
  [
   "Your {0} is broken. Repair it or make a new one.",
@@ -800,6 +786,106 @@ export const PATTERNS: Array<[string, string]> = [
  [
   "My cash is thin ({0} coins), so my buying offers are low.",
   "Kas saya tipis ({0} koin), jadi tawaran beli saya rendah."
+ ],
+ [
+  "{0} must be a whole number above 0.",
+  "{0} harus bilangan bulat di atas 0."
+ ],
+ [
+  "Chips come in steps of {0} (1 coin each step).",
+  "Chip dibeli kelipatan {0} (1 koin tiap kelipatan)."
+ ],
+ [
+  "Chips are exchanged in steps of {0}.",
+  "Chip ditukar kelipatan {0}."
+ ],
+ [
+  "You can buy chips for at most {0} coin a day ({1} used today).",
+  "Kamu hanya bisa membeli chip senilai maksimal {0} koin per hari ({1} terpakai hari ini)."
+ ],
+ [
+  "Only chips you bought can be exchanged (you have {0} bought). Chips you won cannot be exchanged.",
+  "Hanya chip yang kamu beli yang bisa ditukar (kamu punya {0} chip beli). Chip hasil menang tidak bisa ditukar."
+ ],
+ [
+  "You only have {0} chips that can be exchanged.",
+  "Kamu hanya punya {0} chip yang bisa ditukar."
+ ],
+ [
+  "You can exchange at most {0} chips a day ({1} used today).",
+  "Kamu hanya bisa menukar maksimal {0} chip per hari ({1} terpakai hari ini)."
+ ],
+ [
+  "The town fund has only {0} coin right now. Try fewer chips.",
+  "Kas kota sekarang hanya punya {0} koin. Coba tukar chip lebih sedikit."
+ ],
+ [
+  "A stake is {0} to {1} chips.",
+  "Taruhan {0} sampai {1} chip."
+ ],
+ [
+  "You can play for at most {0} chips a day ({1} played today).",
+  "Kamu hanya bisa bermain maksimal {0} chip per hari ({1} dimainkan hari ini)."
+ ],
+ [
+  "Not enough chips (have {0}, need {1}).",
+  "Chip tidak cukup (punya {0}, butuh {1})."
+ ],
+ [
+  "Bought {0} chips (−{1} coins).",
+  "Membeli {0} chip (−{1} koin)."
+ ],
+ [
+  "Exchanged {0} chips for {1} coins (fee {2}%).",
+  "Menukar {0} chip jadi {1} koin (biaya {2}%)."
+ ],
+ [
+  "You win! +{0} chips.",
+  "Menang! +{0} chip."
+ ],
+ [
+  "You lose. −{0} chips.",
+  "Kalah. −{0} chip."
+ ],
+ [
+  "Three alike! +{0} chips.",
+  "Tiga sama! +{0} chip."
+ ],
+ [
+  "No luck. −{0} chips.",
+  "Tidak beruntung. −{0} chip."
+ ],
+ [
+  "Total {0}: you win! +{1} chips.",
+  "Jumlah {0}: menang! +{1} chip."
+ ],
+ [
+  "Triple {0}: everyone loses. −{1} chips.",
+  "Tiga sama ({0}): semua kalah. −{1} chip."
+ ],
+ [
+  "Total {0}: you lose. −{1} chips.",
+  "Jumlah {0}: kalah. −{1} chip."
+ ],
+ [
+  "Cards dealt. Stake {0} chips.",
+  "Kartu dibagi. Taruhan {0} chip."
+ ],
+ [
+  "You take {0} chips.",
+  "Kamu ambil {0} chip."
+ ],
+ [
+  "Same rank: you lose. −{0} chips.",
+  "Sama: kalah. −{0} chip."
+ ],
+ [
+  "Wrong. −{0} chips.",
+  "Salah. −{0} chip."
+ ],
+ [
+  "Right! The pot is {0} chips.",
+  "Benar! Hadiahnya jadi {0} chip."
  ]
 ];
 /** Item, merchant, shop and building names from economy/config.json (English -> Indonesian). */

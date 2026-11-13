@@ -63,8 +63,6 @@ export interface Econ {
   fees: { marketPct: number };
   starter: Record<string, number>;
   caps: { dailyGainPerItem: number; dailySends: number; maxSendAmount: number };
-  /** Buying coin with NEAR (topup.ts): `rate` coin per 1 NEAR (must equal the contract's coin_per_near), the pack sizes in coin, the most coin one payer may buy per UTC day, and the NEAR the wallet keeps for fees. The coin comes from the town treasury, never newly minted. */
-  topup?: { rate: number; packs: number[]; dailyMaxCoin: number; reserveNear: number };
   /** Admin coin grants from the town treasury (admingrant.ts): the most one grant may send and one admin may send per ledger day. */
   adminGrant?: { maxPerGrant: number; maxPerDay: number };
   /** Town projects; the contract holds the live state (create_project with these values). */
@@ -80,8 +78,16 @@ export interface Econ {
   tools: Record<string, ToolDef>;
   /** Entertainment is paid in coin: the carousel ride, and the casino entry that gives a timed pass. */
   fun: { ride: number; rideSecs: number; casino: number; casinoPassMinutes: number };
+  /** Casino chips (chips.ts): bought with coin at `perCoin` chips per coin, sold back (bought chips only) minus `sellFeePct`; chips won at the tables can never be sold. Daily limits per account. */
+  chips: ChipsConfig;
   missions: MissionDef[];
   mall: { slots: string[]; items: MallItem[] };
+}
+
+export interface ChipsConfig {
+  perCoin: number; sellFeePct: number; minStake: number; maxStake: number;
+  buyMaxCoinPerDay: number; sellMaxChipsPerDay: number; stakeMaxPerDay: number;
+  luckWin: number; slot: { weights: number[]; pays: number[] }; cardsEdge: number; cardsMaxSteps: number;
 }
 
 export function loadEcon(): Econ {

@@ -128,6 +128,7 @@ export function spendTokens(econ: Econ, action: string, body: Record<string, unk
     case 'cook': case 'build': case 'repair': case 'maketool': return Object.keys(econ.items);
     case 'hire': case 'dress': case 'ride': case 'casino': return ['coin'];
     case 'mall': return body.op === 'wear' ? [] : ['coin'];
+    case 'chips': return body.op === 'buy' ? ['coin'] : []; // buying chips spends coin; selling and playing only add or move chips
     default: return [];
   }
 }

@@ -8,22 +8,21 @@ import type { Store } from './db.ts';
 import type { Social } from './social.ts';
 import { HttpError } from './auth.ts';
 
-export interface AdminGrantConfig { maxPerGrant: number; maxPerDay: number }
+export interface AdminGrantConfig { maxPerGrant: number; maxPerDay: number; receiverDailyCap: number }
 export interface GrantRecord { at: number; admin: string; to: string; toName: string; coin: number; note: string; day: number }
 
-const MAX_KEPT = 50;
+const RECENT = 50;
 const NOTE_MAX = 120;
 
 export class AdminGrants {
-  /** The last grants, newest last (memory only; the ledger is the permanent record). */
-  readonly log: GrantRecord[] = [];
   private d: { game: Game; store: Store; social: Social; invalidate: (accounts: string[]) => void };
 
   constructor(d: { game: Game; store: Store; social: Social; invalidate: (accounts: string[]) => void }) { this.d = d; }
 
   limits(): AdminGrantConfig {
     const c = this.d.game.econ.adminGrant;
-    return { maxPerGrant: c?.maxPerGrant ?? 5000, maxPerDay: c?.maxPerDay ?? 50000 };
+    const caps = this.d.game.econ.caps as { dailyCoinGain?: number };
+    return { maxPerGrant: c?.maxPerGrant ?? 5000, maxPerDay: c?.maxPerDay ?? 50000, receiverDailyCap: caps.dailyCoinGain ?? 5000 };
   }
 
   /** Town treasury coin (settled plus today's pending). */
@@ -52,10 +51,23 @@ export class AdminGrants {
     return acct;
   }
 
-  /** The player a grant would reach (for the confirmation line in the window). */
+  /** The player a grant would reach (for the confirmation card in the window): name#tag, look, and the coin they can still receive today. */
   who(to: unknown) {
-    const acct = this.resolve(to);
-    return { account: acct, nick: this.d.store.nameOf(acct) ?? acct, tag: this.d.store.tagOf(acct) };
+    const acct = this.resolve(to), day = this.d.game.clock.time().settleDay;
+    const { receiverDailyCap } = this.limits();
+    return {
+      account: acct, nick: this.d.store.nameOf(acct) ?? acct, tag: this.d.store.tagOf(acct), look: this.d.store.lookOf(acct),
+      gainLeft: Math.max(0, receiverDailyCap - this.d.game.world.dayNet(acct, 'coin', day)), gainCap: receiverDailyCap,
+    };
+  }
+
+  /** The latest grants (newest first), read from the ledger so they survive a restart. */
+  recent(): GrantRecord[] {
+    const rows = this.d.game.gs.db.prepare("SELECT account, delta, ref, day, created_at FROM ledger WHERE kind = 'admin_grant' AND delta > 0 ORDER BY seq DESC LIMIT ?").all(RECENT) as Array<{ account: string; delta: number; ref: string | null; day: number; created_at: number }>;
+    return rows.map((r) => {
+      const ref = r.ref ?? '', cut = ref.indexOf('|');
+      return { at: r.created_at, admin: cut < 0 ? ref : ref.slice(0, cut), to: r.account, toName: this.d.store.nameOf(r.account) ?? r.account, coin: r.delta, note: cut < 0 ? '' : ref.slice(cut + 1), day: r.day };
+    });
   }
 
   grant(admin: string, body: Record<string, unknown>) {
@@ -77,9 +89,6 @@ export class AdminGrants {
     const toName = store.nameOf(to) ?? to, adminName = store.nameOf(admin) ?? admin;
     store.addHistory(to, 'admin_grant', `The town treasury sent you ${coin} coin${note ? `: ${note}` : '.'}`, 'offchain', null, null, []);
     store.addHistory(admin, 'admin_grant', `You sent ${coin} coin from the town treasury to ${toName}.`, 'offchain', null, null, []);
-    const rec: GrantRecord = { at: game.now(), admin, to, toName, coin, note, day };
-    this.log.push(rec);
-    if (this.log.length > MAX_KEPT) this.log.shift();
     console.warn(`[admin grant] ${adminName} (${admin}) -> ${toName} (${to}): ${coin} coin, note: ${note || '-'}`);
     this.d.invalidate([to]);
     return { ok: true, to, toName, coin, treasury: this.treasury(), sentToday: sent + coin, ...lim };

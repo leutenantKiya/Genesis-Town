@@ -343,16 +343,26 @@ html.gt-phone .gt-slot-dur{left:3px;right:3px}
 .gt-cs-wb:focus-visible{outline:3px solid var(--paper-ink);outline-offset:1px}
 @media (max-width:480px){.gt-casino-reel{width:54px;height:62px}.gt-mall-grid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}.gt-tool{flex-wrap:wrap}}
 
-/* Top up window (HUD coin counter, /topup) */
-#hud .coinc[data-topup]{cursor:pointer}
-#hud .coinc[data-topup]:focus-visible{outline:3px solid var(--paper-ink);outline-offset:2px}
-.topup p{margin:6px 0}
-.topup-wallet{font-weight:600}
-.topup-who{display:flex;gap:8px;flex-wrap:wrap}
-.topup-find input{flex:1 1 auto;min-width:0;width:auto}
-.topup-to{min-height:1.5em}
-.topup-admin{margin-top:14px;padding-top:10px;border-top:var(--line) solid var(--paper-dim)}
-.topup-treasury{font-weight:600}
-.topup-packs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:6px 0}
-.topup-packs .mbtn{min-height:44px;overflow-wrap:anywhere}
-.topup-packs .mbtn:disabled{opacity:.5}
+/* Admin window (admin.js) and the chip exchange (casino.js) */
+.adm-card{background:var(--paper-2);border:var(--line) solid var(--paper-dim);border-radius:var(--r-win);padding:10px 12px;margin:8px 0}
+.adm-card .chain-h{margin-top:0}
+.adm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.adm-stat{background:var(--paper);border-radius:var(--r-ctl);padding:6px 10px}
+.adm-num{font-size:calc(20px*var(--ts));font-weight:700}
+.adm-step{margin:10px 0 2px;font-weight:600;font-size:calc(14px*var(--ts))}
+.adm-find input{flex:1 1 auto;min-width:0;width:auto}
+.adm-who{display:flex;align-items:center;gap:10px;margin:6px 0;padding:6px 10px;background:var(--paper);border-radius:var(--r-ctl)}
+.adm-who:empty{display:none}
+.adm-who-t{flex:1 1 auto;min-width:0}
+.adm-who-n{font-size:calc(17px*var(--ts));font-weight:700;overflow-wrap:anywhere}
+.adm-look{width:48px;height:60px;image-rendering:pixelated;flex:none}
+.adm-quick{display:inline-flex;gap:4px;flex-wrap:wrap}
+.adm-limits{margin:2px 0 6px}
+.adm-result{min-height:1.4em;margin:8px 0 0;font-weight:600}
+.adm-result.ok{color:var(--good,#2f7d32)}
+.adm-result.bad{color:var(--bad)}
+.gt-chipbar{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;margin:2px 0}
+.gt-chipbar b{font-size:calc(18px*var(--ts))}
+.gt-chipx{margin:8px 0;padding:8px 10px;background:var(--paper-2);border:var(--line) solid var(--paper-dim);border-radius:var(--r-win)}
+.gt-chipx-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
+@media (max-width:480px){.adm-grid{grid-template-columns:1fr}}

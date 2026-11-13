@@ -25,7 +25,7 @@
     { id: 'wati', pal: 5, dx: -3, dy: 2, tag: $t('Wati · Roti') },
     { id: 'joko', pal: 4, dx: -5, dy: 2, tag: $t('Joko · Serba Ada') }
   ];
-  var S = { wantTopup: location.pathname === '/topup', mode: 'loading', cfg: null, account: null, st: null, market: null, shops: null, history: [], busy: false, poll: 0, modal: null, plots: [], npcs: {} };
+  var S = { mode: 'loading', cfg: null, account: null, st: null, market: null, shops: null, history: [], busy: false, poll: 0, modal: null, plots: [], npcs: {} };
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -168,26 +168,7 @@
     var coin = st.bag.coin.settled + st.bag.coin.today;
     var delta = coin - GT.state.coins;
     if (delta !== 0) GT.addCoins(delta);
-    // The player's own NEAR balance is read quietly for the Top up window (walletRead); the HUD no longer shows it.
-    walletRead();
-    bindCoinClick();
   }
-  var wallet = { coin: null, yocto: null, at: 0, busy: false };
-  // The player's own testnet account balance, read only (1000 coin per NEAR when shown as coin). Shown inside the Top up window.
-  function walletRead(force) {
-    var L = window.NearLib, now = Date.now();
-    if (wallet.busy || (!force && now - wallet.at < 60000) || S.mode !== 'testnet' || !S.account || !L || !S.cfg || !S.cfg.rpcUrl) return;
-    wallet.busy = true; wallet.at = now;
-    new L.JsonRpcProvider({ url: S.cfg.rpcUrl }).query({ request_type: 'view_account', finality: 'final', account_id: S.account })
-      .then(function (a) {
-        var y = BigInt(String(a.amount));
-        var changed = wallet.yocto === null || y !== wallet.yocto; wallet.yocto = y;
-        wallet.coin = Number(y / 1000000000000000000000n); // yocto / 1e21 = NEAR x 1000
-        if (changed && TOP.h && TOP.h.isOpen()) drawTopup();
-      }, function () { /* no answer: keep the last value */ })
-      .then(function () { wallet.busy = false; });
-  }
-
   /* ------------------------------------------------------------ session key + login */
   function keyRing() { try { return JSON.parse(lsGet(LS_KEYS) || '{}') || {}; } catch (e) { return {}; } }
   function keepKey(account, kp) { var k = keyRing(); k[account] = kp.toString(); lsSet(LS_KEYS, JSON.stringify(k)); lsSet(LS_KEY, null); }
@@ -324,218 +305,6 @@
     });
   }
 
-
-  /* ------------------------------------------------------------ top up: buy coin with NEAR (server/src/topup.ts, the /topup page) */
-  // The player signs ONE function call to the game contract, buy_coin, with their NEAR Auth full-access key: the same popup and
-  // signing path as approveDevice (the MPC signs, the server checks it and the relayer pays the gas). The deposit is the pack's
-  // price, taken from the player's own wallet; the coin comes out of the town treasury, for the player or for another player.
-  var TOP = { h: null, info: null, who: 'self', other: null, otherErr: '', busy: false, input: '', inputEl: null };
-  // Admins (state.admin, ADMIN_ACCOUNTS) also get "Kirim koin dari kas kota" in this window: coin moves from the town treasury to a
-  // player off-chain, like the starter kit (POST /api/admin/grant). It does not depend on the NEAR purchase being open.
-  var ADM = { input: '', who: null, err: '', amount: '', note: '', busy: false, focus: '' };
-  var YOCTO = 1000000000000000000000000n;
-  function fmtNear(y) { return (Number(y / 1000000000000000000000n) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 }); }
-  function packYocto(coin, rate) { return BigInt(coin) * YOCTO / BigInt(rate); }
-  function bindCoinClick() {
-    var c = document.querySelector('#hud .coinc');
-    if (!c || c.getAttribute('data-topup')) return;
-    c.setAttribute('data-topup', '1'); c.setAttribute('role', 'button'); c.tabIndex = 0; c.style.cursor = 'pointer';
-    c.setAttribute('aria-label', $t('Top up koin'));
-    c.addEventListener('click', openTopup);
-    c.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTopup(); } });
-  }
-  function openTopup() {
-    if (S.mode === 'offline' || !S.account) { GT.toast($t('Masuk dulu untuk top up koin.')); return; }
-    if (TOP.h && TOP.h.isOpen()) return;
-    TOP.who = 'self'; TOP.other = null; TOP.otherErr = ''; TOP.busy = false; TOP.info = null; TOP.input = ''; TOP.inputEl = null;
-    ADM.input = ''; ADM.who = null; ADM.err = ''; ADM.amount = ''; ADM.note = ''; ADM.busy = false; ADM.focus = '';
-    TOP.h = GT.modal({ title: $t('Top up koin'), body: $('p', null, $t('Memuat…')), onClose: function () { TOP.h = null; }, actions: [{ label: $t('Tutup') }] });
-    var off = S.cfg && S.cfg.topup && !S.cfg.topup.enabled;
-    (off ? Promise.resolve({ open: false }) : api('/topup/info').catch(function () { return { open: false }; })).then(function (info) { TOP.info = info; drawTopup(); });
-    walletRead(true);
-  }
-  function drawTopup() {
-    var h = TOP.h; if (!h || !h.isOpen()) return;
-    var info = TOP.info, body = $('div', 'topup');
-    var hadFocus = TOP.inputEl && document.activeElement === TOP.inputEl;
-    TOP.inputEl = null;
-    var ae = document.activeElement; ADM.focus = ae && ae.getAttribute && ae.closest && ae.closest('.topup-admin') ? (ae.getAttribute('data-ag') || '') : '';
-    if (!info) { body.appendChild($('p', null, $t('Memuat…'))); h.setBody(body); return; }
-    if (!info.open) {
-      body.appendChild($('p', 'chain-closed', $t('Top up belum dibuka')));
-      adminSection(body);
-      h.setBody(body); adminRefocus(h); return;
-    }
-    var rate = info.rate;
-    body.appendChild($('p', null, $t('Koin diambil dari kas kota. Ini pembayaran NEAR yang kamu tandatangani di jendela NEAR Auth. Gas dibayar game.')));
-    body.appendChild($('p', 'topup-wallet', wallet.yocto === null ? $t('Saldo NEAR-mu: belum terbaca') : $t('Saldo NEAR-mu: {0} NEAR', [fmtNear(wallet.yocto)])));
-    var blocked = info.legacyOwner ? msgLegacyOwner() : (!nearAuthHere() || !info.ownerPublicKey) ? msgNoNearAuth() : null;
-    if (blocked) body.appendChild($('p', 'chain-closed', blocked));
-    // who gets the coin
-    body.appendChild($('div', 'chain-h', $t('Koin untuk')));
-    var row = $('div', 'topup-who');
-    [['self', $t('Akunku')], ['other', $t('Pemain lain')]].forEach(function (o) {
-      var b = button(o[1], function () { if (TOP.busy) return; TOP.who = o[0]; drawTopup(); }, TOP.who === o[0] ? 'primary' : '');
-      b.setAttribute('aria-pressed', TOP.who === o[0] ? 'true' : 'false'); b.disabled = TOP.busy;
-      row.appendChild(b);
-    });
-    body.appendChild(row);
-    var syncPacks = function () { /* set below once the packs exist */ };
-    if (TOP.who === 'other') {
-      var f = $('div', 'chain-field topup-find'), inp = $('input'); inp.type = 'text'; inp.placeholder = $t('nama#tag'); inp.maxLength = 40; inp.value = TOP.input; inp.setAttribute('aria-label', $t('Nama pemain dengan tag'));
-      TOP.inputEl = inp;
-      inp.addEventListener('input', function () { TOP.input = inp.value; TOP.other = null; TOP.otherErr = ''; var l = body.querySelector('.topup-to'); if (l) { l.textContent = ''; l.className = 'topup-to'; } syncPacks(); });
-      var find = function () {
-        var v = inp.value.trim(); if (!v || TOP.busy) return;
-        api('/topup/resolve?name=' + encodeURIComponent(v)).then(function (r) { TOP.other = r; TOP.otherErr = ''; drawTopup(); }, function (e) { TOP.other = null; TOP.otherErr = e.status === 404 ? $t('Pemain tidak ditemukan.') : e.message; drawTopup(); });
-      };
-      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } });
-      f.appendChild(inp); f.appendChild(button($t('Cari'), find));
-      body.appendChild(f);
-      var to = $('p', 'topup-to', TOP.other ? $t('Kirim ke {0}#{1}', [TOP.other.nick, TOP.other.tag]) : TOP.otherErr);
-      if (!TOP.other && TOP.otherErr) to.className += ' chain-closed';
-      body.appendChild(to);
-    }
-    // packs
-    body.appendChild($('div', 'chain-h', $t('Pilih paket')));
-    var reserve = BigInt(Math.round((info.reserveNear || 0) * 1000)) * 1000000000000000000000n, packs = $('div', 'topup-packs'), btns = [];
-    (info.packs || []).forEach(function (coin) {
-      var price = packYocto(coin, rate), near = coin / rate;
-      var b = button($t('{0} koin · {1} NEAR', [coin.toLocaleString(), near]), function () { topupPay(coin); });
-      b.setAttribute('data-coin', coin);
-      btns.push({ b: b, coin: coin, price: price });
-      packs.appendChild(b);
-    });
-    body.appendChild(packs);
-    body.appendChild($('p', 'chain-dim', $t('Paket aktif bila saldomu cukup untuk harga paket ditambah {0} NEAR.', [info.reserveNear])));
-    body.appendChild($('p', 'chain-dim', $t('Terpakai hari ini: {0} dari {1} koin.', [(info.used || 0).toLocaleString(), (info.dailyMaxCoin || 0).toLocaleString()])));
-    if (TOP.busy) body.appendChild($('p', 'chain-dim', $t('Menunggu pembayaran…')));
-    if (TOP.pending && !TOP.busy) {
-      var pend = $('div', 'topup-confirm');
-      pend.appendChild($('p', null, TOP.pending.receiver ? $t('Siap membayar {0} NEAR untuk {1} koin ke {2}.', [TOP.pending.near, TOP.pending.coin.toLocaleString(), TOP.pending.nick]) : $t('Siap membayar {0} NEAR untuk {1} koin.', [TOP.pending.near, TOP.pending.coin.toLocaleString()])));
-      pend.appendChild(button($t('Setujui pembayaran'), function () { topupConfirm(); }, 'primary'));
-      pend.appendChild(button($t('Batal'), function () { TOP.pending = null; drawTopup(); }));
-      body.appendChild(pend);
-    }
-    syncPacks = function () {
-      var needOther = TOP.who === 'other' && !TOP.other;
-      btns.forEach(function (x) {
-        var short = wallet.yocto !== null && wallet.yocto < x.price + reserve;
-        var over = (info.used || 0) + x.coin > (info.dailyMaxCoin || Infinity);
-        x.b.disabled = !!(TOP.busy || blocked || needOther || short || over);
-        x.b.title = blocked ? '' : short ? $t('Saldo NEAR kurang.') : over ? $t('Melebihi batas harian.') : needOther ? $t('Pilih pemain dulu.') : '';
-      });
-    };
-    syncPacks();
-    adminSection(body);
-    h.setBody(body);
-    adminRefocus(h);
-    if (hadFocus && TOP.inputEl) { TOP.inputEl.focus(); try { TOP.inputEl.setSelectionRange(TOP.inputEl.value.length, TOP.inputEl.value.length); } catch (e) { /* not selectable */ } }
-  }
-  function adminRefocus(h) {
-    if (!ADM.focus) return;
-    var root = h.el || document, e = root.querySelector ? root.querySelector('.topup-admin [data-ag="' + ADM.focus + '"]') : null;
-    if (e && !e.disabled) { e.focus(); try { e.setSelectionRange(e.value.length, e.value.length); } catch (x) { /* not selectable */ } }
-  }
-  function adminSection(body) {
-    var st = S.st; if (!st || !st.admin) return;
-    var lim = st.grantLimits || {}, sec = $('div', 'topup-admin');
-    sec.appendChild($('div', 'chain-h', $t('Kirim koin dari kas kota')));
-    sec.appendChild($('p', 'chain-dim', $t('Khusus admin. Koin pindah dari kas kota ke pemain dan tersimpan permanen pukul 06:00. Tidak ada koin baru dicetak.')));
-    sec.appendChild($('p', 'topup-treasury', $t('Kas kota: {0} koin', [(st.treasury || 0).toLocaleString()])));
-    var f = $('div', 'chain-field topup-find'), inp = $('input'); inp.type = 'text'; inp.placeholder = $t('nama atau nama#tag'); inp.maxLength = 80; inp.value = ADM.input; inp.disabled = ADM.busy;
-    inp.setAttribute('data-ag', 'who'); inp.setAttribute('aria-label', $t('Nama pemain'));
-    var to = $('p', 'topup-to', ADM.who ? $t('Kirim ke {0}#{1}', [ADM.who.nick, ADM.who.tag]) : ADM.err);
-    if (!ADM.who && ADM.err) to.className += ' chain-closed';
-    var go = button($t('Kirim'), function () { send(); });
-    var amt = $('input'), note = $('input');
-    function sync() { var n = Number(amt.value); go.disabled = !!(ADM.busy || !ADM.who || !(n >= 1) || n !== Math.floor(n) || (lim.maxPerGrant && n > lim.maxPerGrant)); }
-    inp.addEventListener('input', function () { ADM.input = inp.value; ADM.who = null; ADM.err = ''; to.textContent = ''; to.className = 'topup-to'; sync(); });
-    function find() {
-      var v = inp.value.trim(); if (!v || ADM.busy) return;
-      api('/admin/resolve?name=' + encodeURIComponent(v)).then(function (r) { ADM.who = r; ADM.err = ''; drawTopup(); }, function (e) { ADM.who = null; ADM.err = e.status === 404 ? $t('Pemain tidak ditemukan.') : e.message; drawTopup(); });
-    }
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } });
-    f.appendChild(inp); var fb = button($t('Cari'), find); fb.disabled = ADM.busy; f.appendChild(fb);
-    sec.appendChild(f); sec.appendChild(to);
-    var f2 = $('div', 'chain-field');
-    amt.type = 'number'; amt.min = '1'; amt.step = '1'; amt.placeholder = $t('Jumlah koin'); amt.value = ADM.amount; amt.disabled = ADM.busy; amt.setAttribute('data-ag', 'amount'); amt.setAttribute('aria-label', $t('Jumlah koin'));
-    amt.addEventListener('input', function () { ADM.amount = amt.value; sync(); });
-    f2.appendChild(amt); sec.appendChild(f2);
-    var f3 = $('div', 'chain-field');
-    note.type = 'text'; note.maxLength = 120; note.placeholder = $t('Catatan (boleh kosong)'); note.value = ADM.note; note.disabled = ADM.busy; note.setAttribute('data-ag', 'note'); note.setAttribute('aria-label', $t('Catatan'));
-    note.addEventListener('input', function () { ADM.note = note.value; });
-    f3.appendChild(note); sec.appendChild(f3);
-    if (lim.maxPerGrant) sec.appendChild($('p', 'chain-dim', $t('Maks {0} koin per kirim, {1} per hari (terkirim hari ini: {2}).', [lim.maxPerGrant.toLocaleString(), (lim.maxPerDay || 0).toLocaleString(), (lim.sentToday || 0).toLocaleString()])));
-    go.setAttribute('data-ag', 'go');
-    sec.appendChild(go);
-    sync();
-    function send() {
-      var n = Number(amt.value);
-      if (ADM.busy || !ADM.who || !(n >= 1)) return;
-      var nick = ADM.who.nick + '#' + ADM.who.tag;
-      ADM.busy = true; drawTopup();
-      api('/admin/grant', { method: 'POST', body: { to: ADM.who.account, coin: n, note: ADM.note.trim() || undefined } }).then(function (r) {
-        ADM.busy = false; ADM.amount = ''; ADM.note = '';
-        GT.toast($t('{0} koin dikirim ke {1}', [r.coin.toLocaleString(), nick]));
-        return refresh(true).then(noop, noop);
-      }, function (e) { ADM.busy = false; GT.toast($t('Gagal: {0}', [e && e.message || e])); })
-        .then(function () { drawTopup(); });
-    }
-    body.appendChild(sec);
-  }
-  // Paying takes two clicks, because a browser lets one click open one popup: the pack click opens the NEAR Auth login
-  // and prepares the payment; then "Setujui pembayaran" opens the signing popup from its own click.
-  function topupPay(coin) {
-    var info = TOP.info, L = window.NearLib;
-    if (!info || !info.open || TOP.busy || !L) return;
-    var receiver = TOP.who === 'other' && TOP.other ? TOP.other.account : null;
-    if (TOP.who === 'other' && !receiver) return;
-    var provider = nearProvider(), prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl }), ownerKey = L.PublicKey.from(info.ownerPublicKey), idToken;
-    var nick = receiver ? TOP.other.nick + '#' + TOP.other.tag : '';
-    TOP.busy = true; TOP.pending = null; drawTopup();
-    GT.toast($t('Membuka NEAR Auth…'));
-    provider.login(undefined, true) // popup 1: from this click
-      .then(function () { return provider.client.getIdTokenClaims(); })
-      .then(function (claims) {
-        if (!claims || !claims.__raw) throw new Error($t('Login tidak memberi token'));
-        idToken = claims.__raw;
-        return Promise.all([prov.viewAccessKey({ accountId: S.account, publicKey: ownerKey }), prov.viewBlock({ finality: 'final' })])
-          .catch(function () { throw new Error($t('Kunci NEAR Auth-mu tidak ditemukan di akun ini.')); });
-      })
-      .then(function (x) {
-        var da = L.buildDelegateAction({
-          senderId: S.account, receiverId: S.cfg.gameContractId,
-          actions: [L.actions.functionCall('buy_coin', receiver ? { receiver_id: receiver } : {}, L.teraToGas('30'), packYocto(coin, info.rate))],
-          nonce: BigInt(x[0].nonce) + 1n, maxBlockHeight: BigInt(x[1].header.height) + 1500n, publicKey: ownerKey
-        });
-        TOP.pending = { provider: provider, da: da, idToken: idToken, coin: coin, receiver: receiver, nick: nick, near: coin / info.rate };
-        TOP.busy = false;
-      }, function (e) { TOP.busy = false; TOP.pending = null; GT.toast($t('Gagal: {0}', [e && e.message || e])); })
-      .then(function () { drawTopup(); });
-  }
-  function topupConfirm() {
-    var P = TOP.pending, L = window.NearLib;
-    if (!P || TOP.busy || !L) return;
-    TOP.busy = true; drawTopup();
-    P.provider.requestDelegateActionSignature({ delegateAction: P.da }) // popup 2: from this click
-      .then(function () { return P.provider.getSignatureRequest(); })
-      .then(function (res) {
-        GT.toast($t('Mengirim pembayaran…'));
-        var sr = res.signatureRequest;
-        return api('/topup/relay', { method: 'POST', body: {
-          idToken: P.idToken, pack: P.coin, receiver: P.receiver || undefined,
-          delegateAction: b64(L.encodeDelegateAction(P.da).slice(4)), // plain borsh DelegateAction (without the NEP-461 prefix)
-          signatureRequest: { guardId: sr.guardId, verifyPayload: sr.verifyPayload, signPayload: Array.from(sr.signPayload), algorithm: sr.algorithm || 'eddsa' }
-        } });
-      })
-      .then(function (out) {
-        GT.toast(P.receiver ? $t('Top up berhasil: {0} koin dikirim ke {1}', [out.coin.toLocaleString(), P.nick]) : $t('Top up berhasil: +{0} koin', [out.coin.toLocaleString()]));
-        TOP.busy = false; TOP.pending = null;
-        return refresh(true).then(function () { return api('/topup/info'); }).then(function (i) { TOP.info = i; }, noop);
-      }, function (e) { TOP.busy = false; TOP.pending = null; GT.toast($t('Gagal: {0}', [e && e.message || e])); })
-      .then(function () { drawTopup(); setTimeout(function () { walletRead(true); }, 1500); });
-  }
 
   // Sign out: forget the account in this browser and clear the NEAR Auth login cache (no redirect). The game key stays
   // in the key ring, so signing back in as the same account needs no new-device step. The next sign-in asks for the
@@ -705,7 +474,7 @@
     } else {
       jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); S.weather = t.weather; S.season = t.season; }));
     }
-    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); if (S.wantTopup && S.account && S.st && !GT.isUiOpen()) { S.wantTopup = false; openTopup(); } if (!S.account) renderTitle(); applyWeatherClass(); if (S.st && S.st.encounter && !fightOpen() && !GT.isUiOpen()) openFight(); else if (S.st && !S.st.encounter && fightOpen()) closeFight(); }).catch(function (e) {
+    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); if (!S.account) renderTitle(); applyWeatherClass(); if (S.st && S.st.encounter && !fightOpen() && !GT.isUiOpen()) openFight(); else if (S.st && !S.st.encounter && fightOpen()) closeFight(); }).catch(function (e) {
       if (e.status === 401) { S.account = null; lsSet(LS_ACC, null); renderBanner(); }
     });
   }
@@ -1135,6 +904,7 @@
     if (a === 'build' || a === 'assist') return 'build';
     if (a === 'collect') return 'coin';
     if (a === 'fight') return 'hit';
+    if (a === 'chips') return body.op === 'buy' ? 'buy' : body.op === 'sell' ? 'sell' : 'ui_click'; // the table plays its own win / lose sound
     if (a === 'gamble') return r && r.win ? 'win' : 'lose';
     if (a === 'travel' || a === 'boat') return 'portal';
     return 'pickup';
@@ -2094,6 +1864,6 @@
     return true;
   }
 
-  window.GT_CHAIN = { openTopup: openTopup, weather: weatherKind, approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, toolBroken: toolBroken, _signedCall: signedCall };
+  window.GT_CHAIN = { weather: weatherKind, approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, toolBroken: toolBroken, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame, onKey: onKey });
 })();

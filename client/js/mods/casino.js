@@ -7,11 +7,14 @@
 /*
  * GT_CASINO - the Genesis Casino (the village's casino building; interior.js calls GT_CASINO.open(tile) at its tables).
  *   Ticket      act casino {op:'enter'}: coin buys a pass for a while (state.casinoPass, state.fun). No pass, no play.
- *   roulette    the Luck Table: a chip game too (double or nothing on a roll). Since coin can be bought with NEAR it never stakes
- *               goods or coin (the server act `gamble` is closed). Also opened free at the market: GT_CASINO.openFree(), no ticket.
- *   slot / card_table / dice_table   three free mini-games played with CHIPS. Chips are a toy kept in this browser: they
- *               cannot be bought with coin, cannot be turned into coin or goods, and nothing here ever pays coin or goods.
- *               What they win is only a title (a badge) and a place on the chip record board. Nothing is sent to the server.
+ *   Chips       live on the server (state.chips {bought, won}), never in the browser. act chips {op:'buy', n}: coin -> chips
+ *               (rate and daily limits in economy/config.json `chips`); act chips {op:'sell', n}: BOUGHT chips back to coin at
+ *               the same rate minus a fee. Chips WON at a table cannot be sold: nothing here ever turns gambling into coin.
+ *   Games       act chips {op:'play', game, stake, pick?}: luck | slot | dice | cards. The server draws every outcome (this file
+ *               only animates what it is told) and takes the stake from bought chips first, then won chips; wins are paid in
+ *               won chips.
+ *   roulette    the Luck Table: double or nothing on a roll. Also opened without a ticket at the market: GT_CASINO.openFree().
+ *   Titles and the record board are cosmetic and stay in this browser (localStorage); they pay nothing.
  * The casino building is a separate IIFE from the old play-coin "Rumah Judi" below (behind GT_FLAGS.casino).
  */
 (function () {
@@ -19,13 +22,13 @@
   var GT = window.GT;
   if (!GT) return;
 
-  var START_CHIPS = 100, BETS = [5, 10, 25, 50, 100];
+  var BETS = [5, 10, 25, 50, 100];
   function C() { return window.GT_CHAIN; }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfx(n) { try { window.GT_SFX && GT_SFX.play(n); } catch (e) { /* no sound */ } }
-  function rint(n) { return Math.floor(Math.random() * n); }
+  function rint(n) { return Math.floor(Math.random() * n); } // only for the spinning animation, never an outcome
 
-  /* ---------------------------------------------------------------- chips, titles, record board (this browser only) */
+  /* ---------------------------------------------------------------- titles, record board (this browser only, cosmetic) */
   var TITLES = [
     { id: 'first', name: function () { return $t('Pemain Baru'); }, hint: function () { return $t('Main satu putaran.'); } },
     { id: 'lucky', name: function () { return $t('Si Mujur'); }, hint: function () { return $t('Kumpulkan 300 chip.'); } },
@@ -35,15 +38,15 @@
     { id: 'dice', name: function () { return $t('Dewa Dadu'); }, hint: function () { return $t('Menangkan 5 putaran dadu.'); } },
     { id: 'luck', name: function () { return $t('Bintang Meja Untung'); }, hint: function () { return $t('Menangkan 5 lemparan di Meja Untung.'); } }
   ];
-  function key() { var c = C(); return 'gt.casino.chips.' + (c && c.state.account || 'guest'); }
+  function key() { var c = C(); return 'gt.casino.titles.' + (c && c.state.account || 'guest'); }
   function load() {
     var d = null;
     try { d = JSON.parse(localStorage.getItem(key()) || 'null'); } catch (e) { d = null; }
-    if (!d || typeof d.chips !== 'number') d = { chips: START_CHIPS, best: START_CHIPS, plays: 0, wins: { cards: 0, dice: 0, luck: 0 }, titles: {}, board: [] };
-    d.wins = d.wins || { cards: 0, dice: 0 }; d.wins.luck = d.wins.luck || 0; d.titles = d.titles || {}; d.board = d.board || [];
+    if (!d || typeof d.plays !== 'number') d = { best: 0, plays: 0, wins: { cards: 0, dice: 0, luck: 0 }, titles: {}, board: [] };
+    d.wins = d.wins || {}; d.wins.cards = d.wins.cards || 0; d.wins.dice = d.wins.dice || 0; d.wins.luck = d.wins.luck || 0; d.titles = d.titles || {}; d.board = d.board || [];
     return d;
   }
-  function save(d) { try { localStorage.setItem(key(), JSON.stringify(d)); } catch (e) { /* storage blocked: chips live for this visit */ } }
+  function save(d) { try { localStorage.setItem(key(), JSON.stringify(d)); } catch (e) { /* storage blocked: the badges live for this visit */ } }
   // a title is earned once; returns the new ones so the window can celebrate
   function award(d, extra) {
     var got = [];
@@ -64,10 +67,15 @@
     d.board.sort(function (a, b) { return b.chips - a.chips; }); d.board = d.board.slice(0, 5);
   }
 
-  /* ---------------------------------------------------------------- the ticket */
+  /* ---------------------------------------------------------------- server state: ticket, chips */
   function passUntil() { var c = C(), st = c && c.state.st; return st && st.casinoPass > Date.now() ? st.casinoPass : 0; }
   function fun() { var c = C(), st = c && c.state.st; return (st && st.fun) || { casino: 15, casinoPassMinutes: 30 }; }
   function coins() { var c = C(), st = c && c.state.st, b = st && st.bag && st.bag.coin; return b ? b.settled + b.today : 0; }
+  function chips() {
+    var c = C(), st = c && c.state.st, h = st && st.chips;
+    return h || { bought: 0, won: 0, hand: null, perCoin: 10, feePct: 5, minStake: 5, maxStake: 100, cardsEdge: 0.94, buyLeftCoin: 0, sellLeftChips: 0, stakeLeft: 0 };
+  }
+  function act(body) { return C().act(Object.assign({ action: 'chips' }, body), true); } // the table shows the result itself; errors still toast
 
   var win = null;
   function open(tile) {
@@ -77,7 +85,7 @@
     if (passUntil()) return table(game);
     ticket(game);
   }
-  // the Luck Table at the market: the free chip game, no ticket, no other tables
+  // the Luck Table at the market: no ticket, no other tables
   function openFree() {
     var c = C();
     if (!c || !c.state.account) { GT.toast($t('Masuk dulu.')); if (c && c.login) c.login(); return; }
@@ -86,7 +94,7 @@
   function ticket(game) {
     var c = C(), f = fun(), body = el('div');
     body.appendChild(el('p', null, $t('Tiket masuk Genesis Casino: {0} koin, berlaku {1} menit. Di dalam kamu bisa main Meja Untung, slot, kartu dan dadu dengan chip.', [f.casino, f.casinoPassMinutes])));
-    body.appendChild(el('p', 'chain-dim', $t('Chip hanya mainan: tidak bisa dibeli dengan koin dan tidak bisa ditukar jadi koin atau barang. Hadiahnya gelar dan peringkat.')));
+    body.appendChild(el('p', 'chain-dim', $t('Chip dibeli dengan koin. Chip yang kamu beli bisa ditukar kembali jadi koin (ada biaya kecil), tapi chip hasil menang tidak bisa ditukar.')));
     body.appendChild(el('p', 'chain-dim', $t('Koinmu: {0}', [coins()])));
     GT.modal({ title: '🎰 ' + $t('Genesis Casino'), body: body, actions: [
       { label: $t('Beli tiket · {0} koin', [f.casino]), primary: true, disabled: coins() < f.casino, onClick: function (h) {
@@ -103,42 +111,91 @@
     if (win && win.h.isOpen()) win.h.close('again');
     var d = load(), body = el('div', 'gt-casino'), h = GT.modal({ title: free ? '🎲 ' + $t('Meja Untung') : '🎰 ' + $t('Genesis Casino'), wide: true, body: body, onClose: function () { win = null; clearInterval(spinT); clearTimeout(spinT); }, actions: [{ label: $t('Tutup'), close: true }] });
     win = { h: h };
-    var spinT = 0, busy = false, note = '', slotSyms = null;
-    if (d.chips < BETS[0]) { d.chips = START_CHIPS; note = $t('Tumpukan chip baru untukmu, gratis.'); save(d); }
+    var spinT = 0, busy = false, note = '', slotSyms = null, shown = null; // shown: the balances to display while an animation runs (the server has already paid)
     var bet = BETS[1];
+    var cardState = null, diceState = null, luck = { last: null };
+    var RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SUITS = ['♠', '♥', '♦', '♣'];
+    function cardOf(n) { return { r: n % 13 + 1, s: Math.floor(n / 13) }; }
+    // an open hand on the server (page reloaded in the middle of it) is picked up again
+    if (chips().hand) { var hd = chips().hand; cardState = { card: cardOf(hd.card), pot: hd.pot, step: hd.step, bet: hd.bet }; }
+
+    function bal() { return shown || chips(); }
+    function total() { var b = chips(); return b.bought + b.won; }
 
     function newTitles(extra) {
-      d.best = Math.max(d.best, d.chips); record(d);
+      d.best = Math.max(d.best, total()); record(d);
       var got = award(d, extra); save(d);
       got.forEach(function (id) { var t = TITLES.filter(function (x) { return x.id === id; })[0]; if (t) { GT.toast('🏅 ' + $t('Gelar baru: {0}', [t.name()])); sfx('quest_done'); } });
     }
     function head() {
+      var wrap = el('div'), b = bal();
       var top = el('div', 'gt-casino-head');
-      top.appendChild(el('span', 'gt-casino-chips', '🪙 ' + $t('Chip: {0}', [d.chips])));
+      var bar = el('div', 'gt-chipbar');
+      bar.appendChild(el('b', null, '🪙 ' + $t('Chip beli: {0}', [b.bought])));
+      bar.appendChild(el('span', null, '🏆 ' + $t('Chip menang: {0}', [b.won])));
+      top.appendChild(bar);
       var left = Math.max(0, Math.ceil((passUntil() - Date.now()) / 60000));
-      if (free) top.appendChild(el('span', 'chain-dim', $t('Main gratis, tanpa tiket')));
+      if (free) top.appendChild(el('span', 'chain-dim', $t('Main tanpa tiket')));
       else top.appendChild(el('span', 'chain-dim', left ? $t('Tiket berlaku {0} menit lagi', [left]) : $t('Tiketmu habis')));
-      return top;
+      wrap.appendChild(top);
+      wrap.appendChild(el('p', 'chain-dim', $t('Chip beli bisa ditukar jadi koin. Chip menang tidak bisa ditukar.')));
+      wrap.appendChild(exchange());
+      return wrap;
+    }
+    // buy / exchange controls: coin <-> bought chips, server-checked (act chips buy / sell)
+    function exchange() {
+      var ch = chips(), box = el('div', 'gt-chipx'), per = ch.perCoin || 10, fee = ch.feePct || 0;
+      box.appendChild(el('b', null, $t('Beli / tukar chip')));
+      box.appendChild(el('p', 'chain-dim', $t('1 koin = {0} chip. Tukar kembali chip beli: dipotong biaya {1}%. Koinmu: {2}', [per, fee, coins()])));
+      var buy = el('div', 'gt-chipx-row');
+      buy.appendChild(el('span', null, $t('Beli')));
+      [10, 50, 100].forEach(function (coin) {
+        var n = coin * per, b = el('button', 'mbtn', $t('{0} chip · {1} koin', [n, coin])); b.type = 'button';
+        b.disabled = busy || coins() < coin || ch.buyLeftCoin < coin;
+        b.addEventListener('click', function () { exch({ op: 'buy', n: n }); });
+        buy.appendChild(b);
+      });
+      box.appendChild(buy);
+      var sell = el('div', 'gt-chipx-row');
+      sell.appendChild(el('span', null, $t('Tukar')));
+      var opts = [10, 50, 100].map(function (coin) { return coin * per; }).filter(function (n) { return n < ch.bought; });
+      var all = Math.floor(Math.min(ch.bought, ch.sellLeftChips) / per) * per;
+      if (all > 0 && opts.indexOf(all) < 0) opts.push(all);
+      if (!opts.length) sell.appendChild(el('span', 'chain-dim', ch.bought > 0 ? $t('Batas tukar hari ini habis.') : $t('Belum ada chip beli untuk ditukar.')));
+      opts.forEach(function (n) {
+        var coin = Math.floor(n * (100 - fee) / (100 * per)), b = el('button', 'mbtn', $t('{0} chip → {1} koin', [n, coin])); b.type = 'button';
+        b.disabled = busy || n > ch.bought || n > ch.sellLeftChips;
+        b.addEventListener('click', function () { exch({ op: 'sell', n: n }); });
+        sell.appendChild(b);
+      });
+      box.appendChild(sell);
+      return box;
+    }
+    function exch(o) {
+      if (busy) return;
+      busy = true; paint();
+      act(o).then(function (r) { busy = false; note = r.toast; paint(); }, function () { busy = false; paint(); });
     }
     function tabs() {
       var row = el('div', 'gt-mall-tabs'); row.setAttribute('role', 'tablist');
       if (free) return row; // the market table has only the Luck Table
       [['luck', '🎲 ' + $t('Meja Untung')], ['slot', '🎰 ' + $t('Slot')], ['cards', '🃏 ' + $t('Kartu')], ['dice', '🎲 ' + $t('Dadu')]].forEach(function (g) {
         var b = el('button', 'gt-mall-tab' + (g[0] === game ? ' on' : ''), g[1]); b.type = 'button'; b.setAttribute('role', 'tab');
-        b.addEventListener('click', function () { if (busy) return; game = g[0]; note = ''; slotSyms = null; cardState = null; diceState = null; paint(); });
+        b.addEventListener('click', function () { if (busy) return; game = g[0]; note = ''; slotSyms = null; diceState = null; paint(); });
         row.appendChild(b);
       });
       return row;
     }
     function betRow() {
-      var row = el('div', 'gt-luck-row');
+      var row = el('div', 'gt-luck-row'), have = bal().bought + bal().won;
       BETS.forEach(function (n) {
-        var b = el('button', 'mbtn' + (n === bet ? ' primary' : ''), String(n)); b.type = 'button'; b.disabled = busy || n > d.chips;
+        var b = el('button', 'mbtn' + (n === bet ? ' primary' : ''), String(n)); b.type = 'button'; b.disabled = busy || n > have;
         b.addEventListener('click', function () { if (busy) return; bet = n; paint(); });
         row.appendChild(b);
       });
       return row;
     }
+    function canBet() { return !busy && bet <= total(); }
     function badges() {
       var wrap = el('div', 'gt-casino-badges');
       wrap.appendChild(el('b', null, $t('Gelarmu')));
@@ -154,78 +211,73 @@
       return wrap;
     }
     function result(text, cls) { var r = el('div', 'gt-luck-dice ' + (cls || ''), text); return r; }
+    // a play: send it, keep showing the old balances while the animation runs, then reveal
+    function play(body, anim, done) {
+      if (busy) return;
+      shown = Object.assign({}, chips()); busy = true; note = ''; sfx('ui_click');
+      act(Object.assign({ op: 'play' }, body)).then(function (r) {
+        anim(r.play, function () { busy = false; shown = null; d.plays++; done(r.play); newTitles(r.play.game === 'slot' && r.play.reels[0] === 4 && r.play.reels[1] === 4 && r.play.reels[2] === 4 ? 'seven' : null); if (h.isOpen()) paint(); });
+        paint();
+      }, function () { busy = false; shown = null; if (h.isOpen()) paint(); });
+    }
 
     /* ---- slot: three reels */
-    var SYM = [['🍒', 30, 4], ['🍋', 25, 7], ['🔔', 20, 10], ['⭐', 15, 20], ['7️⃣', 10, 50]];
-    function pickSym() { var r = rint(100), a = 0; for (var i = 0; i < SYM.length; i++) { a += SYM[i][1]; if (r < a) return i; } return 0; }
-    function slotPay(s) {
-      if (s[0] === s[1] && s[1] === s[2]) return SYM[s[0]][2];
-      if (s[0] === s[1] || s[1] === s[2] || s[0] === s[2]) return 1;
-      return 0;
-    }
+    var SYM = ['🍒', '🍋', '🔔', '⭐', '7️⃣'];
     function paintSlot() {
       var box = el('div', 'gt-luck');
-      box.appendChild(el('p', null, $t('Tiga gulungan. Tiga yang sama membayar berlipat (7 7 7 paling besar), dua yang sama mengembalikan taruhan. Chip saja, tidak ada koin atau barang.')));
+      box.appendChild(el('p', null, $t('Tiga gulungan. Tiga yang sama membayar berlipat (7 7 7 paling besar), dua yang sama mengembalikan taruhan. Dibayar dengan chip menang.')));
       var reels = el('div', 'gt-casino-reels');
-      for (var i = 0; i < 3; i++) reels.appendChild(el('span', 'gt-casino-reel', slotSyms ? SYM[slotSyms[i]][0] : '❔'));
+      for (var i = 0; i < 3; i++) reels.appendChild(el('span', 'gt-casino-reel', slotSyms ? SYM[slotSyms[i]] : '❔'));
       box.appendChild(reels);
       box.appendChild(betRow());
-      var go = el('button', 'mbtn primary', '🎰 ' + $t('Putar · {0} chip', [bet])); go.type = 'button'; go.disabled = busy || bet > d.chips;
+      var go = el('button', 'mbtn primary', '🎰 ' + $t('Putar · {0} chip', [bet])); go.type = 'button'; go.disabled = !canBet();
       go.addEventListener('click', function () {
-        if (busy || bet > d.chips) return;
-        busy = true; d.chips -= bet; d.plays++; sfx('ui_click');
-        var fin = [pickSym(), pickSym(), pickSym()], cells = reels.children, ticks = 0;
-        spinT = setInterval(function () {
-          ticks++;
-          for (var k = 0; k < 3; k++) if (ticks < 6 + k * 4) cells[k].textContent = SYM[pickSym()][0]; else cells[k].textContent = SYM[fin[k]][0];
-          if (ticks >= 14) {
-            clearInterval(spinT); busy = false; slotSyms = fin;
-            var m = slotPay(fin), won = m * bet; d.chips += won;
-            var seven = fin[0] === 4 && fin[1] === 4 && fin[2] === 4;
-            note = m > 1 ? '🎉 ' + $t('Menang +{0} chip!', [won - bet]) : m === 1 ? $t('Dua sama: taruhan kembali.') : $t('Tidak beruntung. −{0} chip', [bet]);
-            sfx(m > 1 ? 'win' : m === 1 ? 'ui_click' : 'lose');
-            if (d.chips < BETS[0]) { d.chips = START_CHIPS; note += ' · ' + $t('Tumpukan chip baru, gratis.'); }
-            newTitles(seven ? 'seven' : null); paint();
-          }
-        }, 80);
-        go.disabled = true; // the reels run on this very picture: it is repainted when they stop
+        if (!canBet()) return;
+        play({ game: 'slot', stake: bet }, function (p, fin) {
+          var cells = reels.children, ticks = 0;
+          spinT = setInterval(function () {
+            ticks++;
+            for (var k = 0; k < 3; k++) cells[k].textContent = ticks < 6 + k * 4 ? SYM[rint(SYM.length)] : SYM[p.reels[k]];
+            if (ticks >= 14) { clearInterval(spinT); fin(); }
+          }, 80);
+        }, function (p) {
+          slotSyms = p.reels;
+          note = p.mult > 1 ? '🎉 ' + $t('Menang +{0} chip!', [p.payout - p.stake]) : p.mult === 1 ? $t('Dua sama: taruhan kembali.') : $t('Tidak beruntung. −{0} chip', [p.stake]);
+          sfx(p.mult > 1 ? 'win' : p.mult === 1 ? 'ui_click' : 'lose');
+        });
       });
       box.appendChild(go);
       return box;
     }
 
     /* ---- dice: three dice, big or small, a triple loses */
-    var diceState = null;
-    function die(n) { var e = el('span', 'gt-casino-die', ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][n - 1]); return e; }
+    var FACE = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+    function die(n) { return el('span', 'gt-casino-die', FACE[n - 1]); }
     function paintDice() {
       var box = el('div', 'gt-luck');
-      box.appendChild(el('p', null, $t('Tiga dadu. Besar: jumlah 11-17. Kecil: jumlah 4-10. Kalau ketiganya sama, semua kalah. Menang membayar sama dengan taruhan. Chip saja.')));
+      box.appendChild(el('p', null, $t('Tiga dadu. Besar: jumlah 11-17. Kecil: jumlah 4-10. Kalau ketiganya sama, semua kalah. Menang membayar sama dengan taruhan, dalam chip menang.')));
       var row = el('div', 'gt-casino-reels');
       (diceState ? diceState.dice : [0, 0, 0]).forEach(function (n) { row.appendChild(n ? die(n) : el('span', 'gt-casino-die', '🎲')); });
       box.appendChild(row);
       box.appendChild(betRow());
       var acts = el('div', 'gt-luck-row');
-      [['besar', $t('Besar')], ['kecil', $t('Kecil')]].forEach(function (s) {
-        var b = el('button', 'mbtn primary', s[1] + ' · ' + bet); b.type = 'button'; b.disabled = busy || bet > d.chips;
+      [['big', $t('Besar')], ['small', $t('Kecil')]].forEach(function (s) {
+        var b = el('button', 'mbtn primary', s[1] + ' · ' + bet); b.type = 'button'; b.disabled = !canBet();
         b.addEventListener('click', function () {
-          if (busy || bet > d.chips) return;
-          busy = true; d.chips -= bet; d.plays++; sfx('ui_click');
-          var dice = [1 + rint(6), 1 + rint(6), 1 + rint(6)], total = dice[0] + dice[1] + dice[2], triple = dice[0] === dice[1] && dice[1] === dice[2];
-          var big = total >= 11 && total <= 17, small = total >= 4 && total <= 10, wonIt = !triple && ((s[0] === 'besar' && big) || (s[0] === 'kecil' && small));
-          var cells = row.children, ticks = 0;
-          spinT = setInterval(function () {
-            ticks++;
-            for (var k = 0; k < 3; k++) cells[k].textContent = ticks < 8 ? ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][rint(6)] : ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][dice[k] - 1];
-            if (ticks >= 9) {
-              clearInterval(spinT); busy = false; diceState = { dice: dice };
-              if (wonIt) { d.chips += bet * 2; d.wins.dice++; }
-              note = (wonIt ? '🎉 ' + $t('Jumlah {0}: menang +{1} chip!', [total, bet]) : triple ? $t('Tiga sama ({0}): semua kalah. −{1} chip', [dice[0], bet]) : $t('Jumlah {0}: kalah. −{1} chip', [total, bet]));
-              sfx(wonIt ? 'win' : 'lose');
-              if (d.chips < BETS[0]) { d.chips = START_CHIPS; note += ' · ' + $t('Tumpukan chip baru, gratis.'); }
-              newTitles(null); paint();
-            }
-          }, 80);
-          [].forEach.call(acts.children, function (x) { x.disabled = true; });
+          if (!canBet()) return;
+          play({ game: 'dice', stake: bet, pick: s[0] }, function (p, fin) {
+            var cells = row.children, ticks = 0;
+            spinT = setInterval(function () {
+              ticks++;
+              for (var k = 0; k < 3; k++) cells[k].textContent = ticks < 8 ? FACE[rint(6)] : FACE[p.dice[k] - 1];
+              if (ticks >= 9) { clearInterval(spinT); fin(); }
+            }, 80);
+          }, function (p) {
+            diceState = { dice: p.dice };
+            if (p.win) d.wins.dice++;
+            note = p.win ? '🎉 ' + $t('Jumlah {0}: menang +{1} chip!', [p.total, p.stake]) : p.triple ? $t('Tiga sama ({0}): semua kalah. −{1} chip', [p.dice[0], p.stake]) : $t('Jumlah {0}: kalah. −{1} chip', [p.total, p.stake]);
+            sfx(p.win ? 'win' : 'lose');
+          });
         });
         acts.appendChild(b);
       });
@@ -233,48 +285,41 @@
       return box;
     }
 
-    /* ---- cards: high or low, the pot grows by fair odds less a small cut; take it or push on */
-    var cardState = null, RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SUITS = ['♠', '♥', '♦', '♣'];
+    /* ---- cards: high or low, the pot grows by fair odds less a small cut; take it or push on (the hand lives on the server) */
     function cardEl(c, hidden) {
-      var e = el('span', 'gt-casino-card' + (!hidden && (c.s === 1 || c.s === 2) ? ' red' : ''), hidden ? '🂠' : RANKS[c.r - 1] + SUITS[c.s]);
-      return e;
+      return el('span', 'gt-casino-card' + (!hidden && (c.s === 1 || c.s === 2) ? ' red' : ''), hidden ? '🂠' : RANKS[c.r - 1] + SUITS[c.s]);
     }
-    function draw() { return { r: 1 + rint(13), s: rint(4) }; }
     function paintCards() {
-      var box = el('div', 'gt-luck');
-      box.appendChild(el('p', null, $t('Tebak kartu berikutnya lebih tinggi atau lebih rendah (A paling rendah, K paling tinggi, sama = kalah). Tiap tebakan benar menaikkan hadiah; ambil kapan saja. Chip saja.')));
+      var box = el('div', 'gt-luck'), edge = chips().cardsEdge || 0.94;
+      box.appendChild(el('p', null, $t('Tebak kartu berikutnya lebih tinggi atau lebih rendah (A paling rendah, K paling tinggi, sama = kalah). Tiap tebakan benar menaikkan hadiah; ambil kapan saja. Hadiah dibayar dengan chip menang.')));
       var row = el('div', 'gt-casino-reels');
       if (!cardState) { row.appendChild(cardEl(null, true)); }
       else { row.appendChild(cardEl(cardState.card)); if (cardState.next) row.appendChild(cardEl(cardState.next)); }
       box.appendChild(row);
       if (!cardState) {
         box.appendChild(betRow());
-        var st = el('button', 'mbtn primary', '🃏 ' + $t('Bagi kartu · {0} chip', [bet])); st.type = 'button'; st.disabled = busy || bet > d.chips;
-        st.addEventListener('click', function () { d.chips -= bet; d.plays++; sfx('ui_click'); cardState = { card: draw(), pot: bet, step: 0, bet: bet }; save(d); paint(); });
+        var st = el('button', 'mbtn primary', '🃏 ' + $t('Bagi kartu · {0} chip', [bet])); st.type = 'button'; st.disabled = !canBet();
+        st.addEventListener('click', function () {
+          if (!canBet()) return;
+          play({ game: 'cards', stake: bet }, function (p, fin) { fin(); }, function (p) { cardState = { card: cardOf(p.card), pot: p.pot, step: 0, bet: p.bet }; });
+        });
         box.appendChild(st);
         return box;
       }
       var acts = el('div', 'gt-luck-row'), r = cardState.card.r;
-      function guess(hi) {
-        var p = hi ? (13 - r) / 13 : (r - 1) / 13;
-        if (p <= 0) return;
-        var nx = draw(), wonIt = hi ? nx.r > r : nx.r < r, mult = Math.round(0.94 / p * 100) / 100;
-        cardState.next = nx; sfx('ui_click');
-        if (wonIt) {
-          cardState.pot = Math.max(cardState.pot + 1, Math.floor(cardState.pot * mult)); cardState.step++; cardState.card = nx; cardState.next = null;
-          note = '🎉 ' + $t('Benar! Hadiah jadi {0} chip.', [cardState.pot]); sfx('win');
-          if (cardState.step >= 6) { cashOut(); return; } // six in a row: the pot is paid out
-        } else {
-          note = (nx.r === r ? $t('Sama: kalah.') : $t('Salah.')) + ' −' + cardState.bet + ' chip'; sfx('lose');
-          var lost = cardState; cardState = { card: lost.card, next: nx, over: true };
-          if (d.chips < BETS[0]) { d.chips = START_CHIPS; note += ' · ' + $t('Tumpukan chip baru, gratis.'); }
-          newTitles(null);
-        }
-        paint();
-      }
-      function cashOut() {
-        d.chips += cardState.pot; d.wins.cards++; note = '💰 ' + $t('Kamu ambil {0} chip.', [cardState.pot]);
-        cardState = null; newTitles(null); paint();
+      function step(pick) {
+        if (busy) return;
+        play({ game: 'cards', pick: pick }, function (p, fin) { fin(); }, function (p) {
+          if (pick === 'cash' || p.taken) { d.wins.cards++; note = '💰 ' + $t('Kamu ambil {0} chip.', [p.taken]); cardState = null; sfx('win'); return; }
+          if (p.lost) {
+            var nx = cardOf(p.next);
+            note = (nx.r === cardState.card.r ? $t('Sama: kalah.') : $t('Salah.')) + ' −' + p.bet + ' chip'; sfx('lose');
+            cardState = { card: cardState.card, next: nx, over: true };
+            return;
+          }
+          note = '🎉 ' + $t('Benar! Hadiah jadi {0} chip.', [p.pot]); sfx('win');
+          cardState = { card: cardOf(p.card), pot: p.pot, step: p.step, bet: p.bet };
+        });
       }
       if (cardState.over) {
         var again = el('button', 'mbtn primary', $t('Main lagi')); again.type = 'button';
@@ -283,43 +328,38 @@
         return box;
       }
       box.appendChild(el('p', 'gt-casino-pot', $t('Hadiah sekarang: {0} chip', [cardState.pot])));
-      var hiB = el('button', 'mbtn primary', '⬆ ' + $t('Lebih tinggi') + (r < 13 ? ' ×' + (Math.round(0.94 / ((13 - r) / 13) * 100) / 100) : '')); hiB.type = 'button'; hiB.disabled = r >= 13;
-      var loB = el('button', 'mbtn primary', '⬇ ' + $t('Lebih rendah') + (r > 1 ? ' ×' + (Math.round(0.94 / ((r - 1) / 13) * 100) / 100) : '')); loB.type = 'button'; loB.disabled = r <= 1;
-      hiB.addEventListener('click', function () { guess(true); }); loB.addEventListener('click', function () { guess(false); });
+      var hiB = el('button', 'mbtn primary', '⬆ ' + $t('Lebih tinggi') + (r < 13 ? ' ×' + (Math.round(edge / ((13 - r) / 13) * 100) / 100) : '')); hiB.type = 'button'; hiB.disabled = busy || r >= 13;
+      var loB = el('button', 'mbtn primary', '⬇ ' + $t('Lebih rendah') + (r > 1 ? ' ×' + (Math.round(edge / ((r - 1) / 13) * 100) / 100) : '')); loB.type = 'button'; loB.disabled = busy || r <= 1;
+      hiB.addEventListener('click', function () { step('higher'); }); loB.addEventListener('click', function () { step('lower'); });
       acts.appendChild(hiB); acts.appendChild(loB);
-      if (cardState.step > 0) { var co = el('button', 'mbtn', $t('Ambil {0}', [cardState.pot])); co.type = 'button'; co.addEventListener('click', cashOut); acts.appendChild(co); }
+      if (cardState.step > 0) { var co = el('button', 'mbtn', $t('Ambil {0}', [cardState.pot])); co.type = 'button'; co.disabled = busy; co.addEventListener('click', function () { step('cash'); }); acts.appendChild(co); }
       box.appendChild(acts);
       return box;
     }
 
-    /* ---- the Luck Table: chips only, a roll that doubles the stake or loses it */
-    var luck = { last: null }, LUCK_WIN = 0.45;
+    /* ---- the Luck Table: a roll that doubles the stake or loses it */
     function paintLuck() {
-      var box = el('div', 'gt-luck');
-      box.appendChild(el('p', null, $t('Taruh chip, lempar dadu. Menang: chip taruhanmu jadi dua kali lipat. Kalah: taruhannya hilang. Peluang menang {0}%.', [Math.round(LUCK_WIN * 100)])));
-      box.appendChild(el('p', 'chain-dim', $t('Chip hanya untuk seru-seruan dan tidak bisa ditukar dengan koin atau barang. Hadiahnya hanya gelar.')));
+      var box = el('div', 'gt-luck'), pct = Math.round((chips().luckWin || 0.45) * 100);
+      box.appendChild(el('p', null, $t('Taruh chip, lempar dadu. Menang: taruhanmu jadi dua kali lipat, dibayar dengan chip menang. Kalah: taruhannya hilang. Peluang menang {0}%.', [pct])));
+      box.appendChild(el('p', 'chain-dim', $t('Chip menang tidak bisa ditukar jadi koin atau barang. Hadiahnya gelar.')));
       box.appendChild(betRow());
       var r = luck.last;
       box.appendChild(el('div', 'gt-luck-dice' + (busy ? ' rolling' : r ? (r.win ? ' win' : ' lose') : ''), busy ? '🎲 🎲' : r ? r.text : '🎲 🎲'));
-      var roll = el('button', 'mbtn primary', '🎲 ' + $t('Lempar dadu · {0} chip', [bet])); roll.type = 'button'; roll.disabled = busy || bet > d.chips;
+      var roll = el('button', 'mbtn primary', '🎲 ' + $t('Lempar dadu · {0} chip', [bet])); roll.type = 'button'; roll.disabled = !canBet();
       roll.addEventListener('click', function () {
-        if (busy || bet > d.chips) return;
-        busy = true; note = ''; d.chips -= bet; d.plays++; sfx('ui_click'); paint();
-        spinT = setTimeout(function () {
-          busy = false;
-          var wonIt = Math.random() < LUCK_WIN;
-          if (wonIt) { d.chips += bet * 2; d.wins.luck++; }
-          luck.last = { win: wonIt, text: wonIt ? '🎉 ' + $t('Menang! +{0} chip', [bet]) : '💨 ' + $t('Kalah −{0} chip', [bet]) };
-          sfx(wonIt ? 'win' : 'lose');
-          if (d.chips < BETS[0]) { d.chips = START_CHIPS; note = $t('Tumpukan chip baru, gratis.'); }
-          newTitles(null); if (h.isOpen()) paint();
-        }, 700);
+        if (!canBet()) return;
+        play({ game: 'luck', stake: bet }, function (p, fin) { spinT = setTimeout(fin, 700); }, function (p) {
+          if (p.win) d.wins.luck++;
+          luck.last = { win: p.win, text: p.win ? '🎉 ' + $t('Menang! +{0} chip', [p.stake]) : '💨 ' + $t('Kalah −{0} chip', [p.stake]) };
+          sfx(p.win ? 'win' : 'lose');
+        });
       });
       box.appendChild(roll);
       return box;
     }
 
     function paint() {
+      if (!h.isOpen()) return;
       body.textContent = '';
       body.appendChild(head());
       body.appendChild(tabs());

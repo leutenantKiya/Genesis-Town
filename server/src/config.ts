@@ -39,8 +39,6 @@ export interface Config {
   chainMode: 'testnet' | 'mock';
   /** Every off-chain spend is also checked against the chain's balance (chaincheck.ts). CHAIN_CHECK: strict | lenient (default) | off. */
   chainCheck: { mode: 'strict' | 'lenient' | 'off'; ttlMs: number };
-  /** TOPUP_ENABLED=1: the coin top-up sale (topup.ts, /topup) answers; off by default. */
-  topupEnabled: boolean;
   devLogin: boolean; // mock chain only: accept idToken "dev:<name>" so tests run without a Google account
   // Merchant dialogue via NEAR AI Cloud (optional; local lines without a key). Base URL: near-ai-cloud skill / docs.near.ai.
   nearai: { apiKey?: string; model?: string; baseUrl: string; timeoutMs: number };
@@ -111,7 +109,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       mode: env.CHAIN_CHECK === 'strict' || env.CHAIN_CHECK === 'off' ? env.CHAIN_CHECK : 'lenient',
       ttlMs: Number.isFinite(Number(env.CHAIN_CHECK_TTL_MS)) && Number(env.CHAIN_CHECK_TTL_MS) > 0 ? Number(env.CHAIN_CHECK_TTL_MS) : 15_000,
     },
-    topupEnabled: env.TOPUP_ENABLED === '1' || env.TOPUP_ENABLED === 'true',
     devLogin: chainMode === 'mock' && env.DEV_LOGIN === '1',
     worldSeed: Number(env.WORLD_SEED ?? 20261114) >>> 0,
     nearai: {

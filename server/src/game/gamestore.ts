@@ -64,9 +64,6 @@ export class GameStore {
       CREATE TABLE IF NOT EXISTS party_members (account TEXT PRIMARY KEY, party INTEGER NOT NULL, joined_at INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS party_members_by_party ON party_members(party);
       CREATE TABLE IF NOT EXISTS party_invites (from_acct TEXT NOT NULL, account TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (from_acct, account));
-      CREATE TABLE IF NOT EXISTS topups (delegate_hash TEXT PRIMARY KEY, tx_hash TEXT UNIQUE, payer TEXT NOT NULL, receiver TEXT NOT NULL, near_yocto TEXT NOT NULL,
-        coin INTEGER NOT NULL, day INTEGER NOT NULL, status TEXT NOT NULL, t INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS topups_by_payer ON topups(payer, day);
     `);
     const jc = (this.db.prepare('PRAGMA table_info(homeland_jobs)').all() as Array<{ name: string }>).map((c) => c.name);
     const bc = (this.db.prepare('PRAGMA table_info(homeland_bots)').all() as Array<{ name: string }>).map((c) => c.name);
@@ -189,24 +186,6 @@ export class GameStore {
   /** New coin created today (town purchases and shipping), for the off-chain faucet check. */
   newCoin(day: number): number {
     return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND token = 'coin' AND kind IN ('town_buy', 'ship_pay', 'consign_sale', 'consign_fee')").get(day) as { s: number }).s;
-  }
-
-  /* ------------------------------------------------------------ top-ups (NEAR paid for coin, topup.ts) */
-
-  topupByDelegate(delegateHash: string) {
-    return this.db.prepare('SELECT * FROM topups WHERE delegate_hash = ?').get(delegateHash) as { delegate_hash: string; tx_hash: string | null; payer: string; receiver: string; near_yocto: string; coin: number; day: number; status: string; t: number } | undefined;
-  }
-  /** Coin a payer bought on a UTC day: finished top-ups and ones still being paid (a failed one does not count). */
-  topupUsed(payer: string, day: number): number {
-    return (this.db.prepare("SELECT COALESCE(SUM(coin), 0) AS s FROM topups WHERE payer = ? AND day = ? AND status != 'failed'").get(payer, day) as { s: number }).s;
-  }
-  topupBegin(delegateHash: string, payer: string, receiver: string, nearYocto: string, coin: number, day: number, t: number) {
-    this.db.prepare("INSERT INTO topups (delegate_hash, tx_hash, payer, receiver, near_yocto, coin, day, status, t) VALUES (?, NULL, ?, ?, ?, ?, ?, 'pending', ?)").run(delegateHash, payer, receiver, nearYocto, coin, day, t);
-  }
-  topupFail(delegateHash: string) { this.db.prepare("UPDATE topups SET status = 'failed' WHERE delegate_hash = ? AND status = 'pending'").run(delegateHash); }
-  /** The payment landed: the row turns 'ok' with its transaction hash (UNIQUE, so a hash can never be booked twice). */
-  topupDone(delegateHash: string, txHash: string) {
-    this.db.prepare("UPDATE topups SET status = 'ok', tx_hash = ? WHERE delegate_hash = ?").run(txHash, delegateHash);
   }
 
   /* ------------------------------------------------------------ players */

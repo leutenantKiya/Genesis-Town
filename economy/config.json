@@ -129,6 +129,13 @@
     "hoe": { "name": "Hoe", "use": "farm", "durability": 80, "make": { "wood": 2, "ore": 1 }, "repair": { "wood": 1 } }
   },
   "fun": { "ride": 1, "rideSecs": 90, "casino": 15, "casinoPassMinutes": 30 },
+  "chips": {
+    "perCoin": 10, "sellFeePct": 5, "minStake": 5, "maxStake": 100,
+    "buyMaxCoinPerDay": 200, "sellMaxChipsPerDay": 2000, "stakeMaxPerDay": 5000,
+    "luckWin": 0.45,
+    "slot": { "weights": [30, 25, 20, 15, 10], "pays": [4, 7, 10, 20, 50] },
+    "cardsEdge": 0.94, "cardsMaxSteps": 6
+  },
   "missions": [
     { "id": "wood5", "name": "Chop 5 wood", "hint": "Stand next to a tree and use your Axe.", "counter": "gather:wood", "need": 5, "reward": { "wood": 2 } },
     { "id": "ore3", "name": "Mine 3 ore", "hint": "Hit a rock in the public mine with your Pickaxe.", "counter": "gather:ore", "need": 3, "reward": { "coin": 5 } },
@@ -181,7 +188,6 @@
     "dailySends": 20,
     "maxSendAmount": 10
   },
-  "topup": { "rate": 1000, "packs": [100, 500, 1000, 5000], "dailyMaxCoin": 5000, "reserveNear": 0.01 },
   "adminGrant": { "maxPerGrant": 5000, "maxPerDay": 50000 },
   "projects": [
     { "id": "jembatan-timur", "name": "Bridge to Far Bank Hamlet", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } },

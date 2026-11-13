@@ -10,11 +10,14 @@ import { loadConfig } from '../src/config.ts';
 import { createApp } from '../src/app.ts';
 import { requestMessage } from '../src/reqauth.ts';
 import { ChainCheck } from '../src/chaincheck.ts';
+import { mkdtempSync, writeFileSync as wf } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const TOWN = 'town.gt.test', ADM = 'p1.players.test', Q = 'p2.players.test', R = 'p3.players.test';
 const NOW = 1_800_000_000_000;
 
-async function harness(opts: { admin?: boolean; treasury?: bigint; limits?: { maxPerGrant: number; maxPerDay: number } } = {}) {
+async function harness(opts: { admin?: boolean; treasury?: bigint; limits?: { maxPerGrant: number; maxPerDay: number }; clientDir?: string } = {}) {
   const econ = loadEcon();
   if (opts.limits) econ.adminGrant = opts.limits;
   const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: TOWN, MERCHANT_PARENT_ACCOUNT_ID: 'gt.test', ...(opts.admin === false ? {} : { ADMIN_ACCOUNTS: ADM }) } as NodeJS.ProcessEnv);
@@ -37,7 +40,7 @@ async function harness(opts: { admin?: boolean; treasury?: bigint; limits?: { ma
     else store.setName(a, name);
     keys[a] = sess;
   }
-  const { server } = createApp({ cfg, chain, store, game, verify: async (t) => ({ sub: t }), currentBlockHeight: async () => 100n, clientDir: '.' });
+  const { server } = createApp({ cfg, chain, store, game, verify: async (t) => ({ sub: t }), currentBlockHeight: async () => 100n, clientDir: opts.clientDir ?? '.' });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const port = (server.address() as { port: number }).port;
   const call = async (as: string, method: string, path: string, body?: unknown) => {
@@ -48,7 +51,7 @@ async function harness(opts: { admin?: boolean; treasury?: bigint; limits?: { ma
   };
   const grant = (to: string, coin: unknown, note?: string) => call(ADM, 'POST', '/api/admin/grant', { to, coin, ...(note !== undefined ? { note } : {}) });
   const ledger = () => game.gs.db.prepare("SELECT account, delta, ref FROM ledger WHERE kind = 'admin_grant' ORDER BY seq").all() as Array<{ account: string; delta: number; ref: string }>;
-  return { cfg, chain, game, store, call, grant, ledger, close: () => { server.closeAllConnections(); server.close(); } };
+  return { cfg, chain, game, store, call, grant, ledger, port, close: () => { server.closeAllConnections(); server.close(); } };
 }
 const quiet = () => { const w = console.warn; console.warn = () => {}; return () => { console.warn = w; }; };
 
@@ -87,7 +90,11 @@ test('an admin moves coin from the town treasury to a player: ledger rows, histo
     assert.deepEqual(st.grants.map((g: any) => [g.admin, g.to, g.coin, g.note]), [[ADM, Q, 50, ''], [ADM, Q, 300, 'prize']]);
     assert.equal((await h.call(ADM, 'GET', '/api/state')).json.grantLimits.sentToday, 350);
     const who = await h.call(ADM, 'GET', `/api/admin/resolve?name=${encodeURIComponent('Budi#' + tag)}`);
-    assert.deepEqual(who.json, { account: Q, nick: 'Budi', tag });
+    assert.deepEqual(who.json, { account: Q, nick: 'Budi', tag, look: 0, gainLeft: 5000 - h.game.world.dayNet(Q, 'coin', h.game.clock.time().settleDay), gainCap: 5000 });
+    assert.equal(st.treasuryChain, 20_000, 'the chain figure sits next to the books figure');
+    assert.equal(st.grantLimits.receiverDailyCap, 5000);
+    assert.equal(st.grantLimits.sentToday, 350);
+    assert.ok(st.grants[0].at > 0 && st.grants[0].toName === 'Budi', 'recent grants come from the ledger');
   } finally { unquiet(); h.close(); }
 });
 
@@ -172,4 +179,39 @@ test('server text comes out in Indonesian', async () => {
   assert.equal(toId('The town treasury sent you 300 coin: prize'), 'Kas kota mengirimmu 300 koin: prize');
   assert.equal(toId('You sent 5 coin from the town treasury to Budi.'), 'Kamu mengirim 5 koin dari kas kota ke Budi.');
   assert.equal(toId('One grant can be at most 200 coin.'), 'Satu kiriman paling banyak 200 koin.');
+});
+
+test('the old top-up is gone: no /api/topup routes, no config switch, the page /topup is not special', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gt-client-'));
+  wf(join(dir, 'index.html'), '<title>game</title>');
+  const h = await harness({ clientDir: dir });
+  try {
+    for (const [m, path] of [['GET', '/api/topup/info'], ['GET', '/api/topup/resolve?name=x'], ['POST', '/api/topup/relay']] as const) {
+      assert.equal((await h.call(ADM, m, path, m === 'POST' ? {} : undefined)).status, 404, path);
+    }
+    const cfg = await (await fetch(`http://127.0.0.1:${(h as any).port}/api/config`)).json().catch(() => null);
+    if (cfg) assert.equal('topup' in cfg, false, '/api/config has no top-up block');
+    assert.equal((h.cfg as any).topupEnabled, undefined);
+    assert.equal((h.game.econ as any).topup, undefined);
+    assert.equal((await fetch(`http://127.0.0.1:${(h as any).port}/topup`)).status, 404);
+  } finally { h.close(); }
+});
+
+test('/admin serves the game page to everyone; its APIs stay admin-only, a non-admin gets nothing', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gt-client-'));
+  wf(join(dir, 'index.html'), '<title>game</title>');
+  const h = await harness({ clientDir: dir });
+  const g = await harness({ admin: false, clientDir: dir });
+  try {
+    const page = await fetch(`http://127.0.0.1:${(h as any).port}/admin`);
+    assert.equal(page.status, 200); assert.match(await page.text(), /game/);
+    assert.equal((await fetch(`http://127.0.0.1:${(g as any).port}/admin`)).status, 200, 'the page itself is public: it is the game');
+    for (const path of ['/api/admin/status', '/api/admin/guests', '/api/admin/frozen', '/api/admin/bans', '/api/admin/resolve?name=Ani']) {
+      assert.equal((await g.call(ADM, 'GET', path)).status, 403, path);
+      assert.equal((await h.call(Q, 'GET', path)).status, 403, 'a signed-in player who is not an admin: ' + path);
+    }
+    assert.equal((await g.call(Q, 'POST', '/api/admin/grant', { to: Q, coin: 5 })).status, 403);
+    const st = await h.call(Q, 'GET', '/api/state');
+    assert.equal(st.json.admin, undefined); assert.equal(st.json.treasury, undefined);
+  } finally { h.close(); g.close(); }
 });

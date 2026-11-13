@@ -245,7 +245,7 @@ test('a refresh asked for while a settlement runs waits for it, then reads, so t
   const { chain, store, game } = await world([P]);
   const coin = () => (store.db.prepare("SELECT amount FROM settled WHERE account = ? AND token = 'coin'").get(P) as { amount: number } | undefined)?.amount ?? 0;
   const before = coin();
-  chain.add(P, 'coin', 7n); // a move on chain (e.g. a top-up) that the books learn through refresh
+  chain.add(P, 'coin', 7n); // a move on chain that the books learn through refresh
   const s = game.settlement as any;
   let end!: () => void;
   s.busy = true; s.idle = new Promise<void>((r) => { end = r; });

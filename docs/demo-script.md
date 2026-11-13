@@ -47,12 +47,12 @@ Every player also gets a Homeland. You raise the Town Hall, open new land, hire 
 Workers get tired and need beds and food from your restaurant, so running a town costs real resources.
 Friends can visit, help you gather or build, and trade with you face to face.
 
-## 2:30 to 2:50, coin with a real price
+## 2:30 to 2:50, coin and chips
 
-[Click the coin counter. Show the top-up window, pick 100 coin for 0.1 NEAR, approve in the NEAR Auth window. Then show the explorer: the buy_coin call.]
+[Open the Luck Table at the market. Buy 100 chips for 10 coin, play a roll, then show Bought chips and Won chips side by side. Try to exchange the won chips: the game refuses.]
 
-Coin can also be bought with NEAR, at a thousand coin per NEAR.
-The coin comes out of the town treasury, the contract doesn't mint it, and the purchase is one public call you can audit.
+Chips are bought with coin and can go back to coin for a small fee. Chips you win can't be exchanged, so gambling never makes coin.
+The town treasury is the only source of coin the admins can send from, and every move is a ledger row settled on chain at six.
 
 ## 2:50 to 3:00, close
 
@@ -65,8 +65,7 @@ Built on NEAR testnet. Come and sell us some fish.
 
 ## Notes for recording
 
-- Before recording, make sure the town treasury has coin and the coin sale is on (`coin_sale` view), and use an
-  account made with NEAR Auth for the top-up shot.
+- Before recording, make sure the town treasury has coin (the chip exchange pays from it).
 - The Budi price drop shows best with a quiet shop: sell fish in two batches and keep the price visible between them.
 - Keep the explorer tab open in advance: `testnet.nearblocks.io/address/game.genesistown.testnet`.
 - If a shot runs long, cut the Homeland section first; the economy loop and the on-chain section matter most for the
