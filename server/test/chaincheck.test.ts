@@ -268,3 +268,83 @@ test('a change to another account during the read does not skip the check; a cha
   const iv = setInterval(() => cc3.invalidate(A), 5);
   await refuses(p3).finally(() => clearInterval(iv));
 });
+
+/* ------------------------------------------------------------ trades check BOTH sides */
+
+import { world as tradeWorld, P, Q } from './tradeworld.ts';
+
+/** The tradeworld game behind createApp, with P and Q able to sign requests; P holds fish, Q coin, both sit by the consignment stall. */
+async function tradeHarness() {
+  const w = await tradeWorld();
+  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: 'town.gt.test', MERCHANT_PARENT_ACCOUNT_ID: 'gt.test' } as NodeJS.ProcessEnv);
+  const chain = w.game.chain as MockChain;
+  const keys = new Map<string, near.KeyPair>();
+  for (const a of [P, Q]) { const kp = near.KeyPair.fromRandom('ed25519'); keys.set(a, kp); w.store.addSessionKey(kp.getPublicKey().toString(), a); }
+  const { server } = createApp({ cfg, chain, store: w.store, game: w.game, verify: async () => ({ sub: 'x' }), currentBlockHeight: async () => 0n, clientDir: '.' });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const port = (server.address() as { port: number }).port;
+  const call = async (as: string, method: string, path: string, body?: unknown) => {
+    const kp = keys.get(as)!, raw = body === undefined ? '' : JSON.stringify(body), ts = String(Date.now());
+    const sig = kp.sign(new TextEncoder().encode(requestMessage(method, path, ts, raw))).signature;
+    const res = await fetch(`http://127.0.0.1:${port}${path}`, { method, body: raw || undefined, headers: { 'x-account-id': as, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') } });
+    return { status: res.status, json: await res.json().catch(() => null) as any };
+  };
+  // the books start from what the chain holds: P 10 fish, Q 100 coin
+  chain.add(P, 'fish', 10n); chain.add(Q, 'coin', 100n);
+  w.game.gs.setSettled(P, 'fish', 10); w.game.gs.setSettled(Q, 'coin', 100);
+  return { ...w, chain, call, close: () => server.close() };
+}
+
+test('over HTTP: accepting an old offer also checks the SENDER against the chain', async () => {
+  const h = await tradeHarness();
+  try {
+    const o = await h.call(P, 'POST', '/api/trade/offer', { to: 'Budi#' + h.store.tagOf(Q), give: { fish: 5 }, want: { coin: 40 } });
+    assert.equal(o.status, 200, JSON.stringify(o.json));
+    h.chain.add(P, 'fish', -8n); // the sender moved fish away on chain: books say 10, chain holds 2
+    const bad = await h.call(Q, 'POST', '/api/trade/accept', { id: o.json.id });
+    assert.equal(bad.status, 409, JSON.stringify(bad.json));
+    assert.equal(bad.json.code, 'chain_check');
+    assert.equal(h.bal(P, 'fish'), 10, 'nothing moved');
+    h.chain.add(P, 'fish', 8n);
+    const ok = await h.call(Q, 'POST', '/api/trade/accept', { id: o.json.id });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    assert.equal(h.bal(P, 'fish'), 5);
+  } finally { h.close(); }
+});
+
+test('a live trade is checked for BOTH parties right before the swap; a side the chain cannot back cancels it', async () => {
+  for (const [bad, token, drop] of [[P, 'fish', 8n], [Q, 'coin', 90n]] as const) {
+    const h = await tradeHarness();
+    try {
+      const t = h.game.trade, before = [h.bal(P, 'fish'), h.bal(Q, 'coin'), h.bal(P, 'coin')];
+      const s = t.open(P, { to: 'Budi#' + h.store.tagOf(Q) });
+      t.join(Q, s.id);
+      t.set(P, s.id, { lines: { fish: 5 } });
+      t.set(Q, s.id, { lines: { coin: 40 } });
+      t.ready(P, s.id, { version: 2 }); t.ready(Q, s.id, { version: 2 });
+      h.chain.add(bad, token, -drop); // after both said yes, one side's chain balance falls below the books
+      h.adv(h.econ.trade.countdownMs + 1);
+      await t.finishDueChecked();
+      const v = t.session(P)!;
+      assert.equal(v.status, 'cancelled', `${bad} short on the chain`);
+      assert.equal(v.note, CHAIN_CHECK_BUSY);
+      assert.deepEqual([h.bal(P, 'fish'), h.bal(Q, 'coin'), h.bal(P, 'coin')], before, 'nothing moved');
+    } finally { h.close(); }
+  }
+});
+
+test('a live trade whose two sides the chain backs swaps normally through finishDueChecked, and once', async () => {
+  const h = await tradeHarness();
+  try {
+    const t = h.game.trade, f0 = h.bal(P, 'fish'), c0 = h.bal(P, 'coin');
+    const s = t.open(P, { to: 'Budi#' + h.store.tagOf(Q) });
+    t.join(Q, s.id);
+    t.set(P, s.id, { lines: { fish: 5 } }); t.set(Q, s.id, { lines: { coin: 40 } });
+    t.ready(P, s.id, { version: 2 }); t.ready(Q, s.id, { version: 2 });
+    h.adv(h.econ.trade.countdownMs + 1);
+    await Promise.all([t.finishDueChecked(), t.finishDueChecked()]);
+    assert.equal(t.session(P)!.status, 'done');
+    assert.equal(h.bal(P, 'fish'), f0 - 5); assert.equal(h.bal(P, 'coin'), c0 + 40);
+  } finally { h.close(); }
+});

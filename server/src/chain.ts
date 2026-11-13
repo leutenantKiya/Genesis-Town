@@ -8,6 +8,8 @@ export interface DeltaEntry { account_id: string; token_id: string; delta: strin
 export interface ShopInfo { account_id: string; name: string; open: boolean; coin: string; total_shares: string; need: Array<{ token_id: string; amount: string }>; pledged: Array<{ token_id: string; amount: string }>; contributors: number; times_closed: number }
 export interface HoldingInfo { shares: string; total_shares: string; claimable: string }
 export interface ProjectInfo { id: string; name: string; chunk: string; need: Array<{ token_id: string; amount: string }>; pledged: Array<{ token_id: string; amount: string }>; contributors: Array<{ account_id: string; lines: Array<{ token_id: string; amount: string }> }>; done: boolean; done_ns: number }
+/** The contract's `coin_sale()`: the coin top-up settings (contracts/game/src/coin_sale.rs). */
+export interface CoinSaleInfo { dev_id: string; coin_per_near: number; dev_bps: number; max_coin_per_call: string; enabled: boolean }
 export interface ListingInfo { id: number; seller: string; token_id: string; amount: string; price_each: string; created_ns: number }
 
 
@@ -25,6 +27,8 @@ export interface Chain {
   payDividend(merchant: string, day: number, amount: number): Promise<TxResult>;
   relay(signedDelegate: unknown, senderId: string): Promise<TxResult>;
   balances(accountId: string, tokenIds: string[]): Promise<string[]>;
+  /** The coin sale settings (`coin_sale` view); null when the contract has no such method yet or it was never configured. */
+  coinSale(): Promise<CoinSaleInfo | null>;
   /** Whether the account is registered with the game contract (`is_registered`); unregistered entries are skipped by `settle_day`. */
   isRegistered(accountId: string): Promise<boolean>;
   listShops(): Promise<ShopInfo[]>;
@@ -136,6 +140,13 @@ export class TestnetChain implements Chain {
   }
 
   balances(accountId: string, tokenIds: string[]) { return this.view<string[]>('mt_batch_balance_of', { account_id: accountId, token_ids: tokenIds }); }
+  async coinSale(): Promise<CoinSaleInfo | null> {
+    try { return (await this.view<CoinSaleInfo | null>('coin_sale', {})) ?? null; } catch (e) {
+      // a contract without the method (not redeployed yet) is simply "no sale"; any other failure (RPC down) is the caller's to see
+      if (/MethodNotFound|method .*not found|does not exist|CompilationError|no such method/i.test(String((e as Error)?.message ?? e) + String((e as { type?: unknown })?.type ?? ''))) return null;
+      throw e;
+    }
+  }
   isRegistered(accountId: string) { return this.view<boolean>('is_registered', { account_id: accountId }); }
   listShops() { return this.view<ShopInfo[]>('list_shops', {}); }
   holding(merchant: string, holder: string) { return this.view<HoldingInfo>('get_holding', { merchant, holder }); }
@@ -315,7 +326,25 @@ export class MockChain implements Chain {
     return { txHash: this.hash(), ok: true };
   }
 
-  private mockMethod(sender: string, method: string, a: Record<string, unknown>) {
+  /** What `coin_sale()` answers on the mock chain; tests set it to null (never configured) or { ...sale, enabled: false }. */
+  sale: CoinSaleInfo | null = { dev_id: 'dev.gt.test', coin_per_near: 1000, dev_bps: 1000, max_coin_per_call: '5000', enabled: true };
+  async coinSale() { return this.sale ? { ...this.sale } : null; }
+
+  private mockMethod(sender: string, method: string, a: Record<string, unknown>, deposit = 0n) {
+    if (method === 'buy_coin') {
+      // mirrors coin_sale.rs: the receiver (default the payer) gets floor(deposit * rate / 1 NEAR) coin out of the town treasury
+      const receiver = typeof a.receiver_id === 'string' ? a.receiver_id : sender;
+      if (!this.accounts.has(receiver) || this.shops.has(receiver)) throw new Error('receiver is not a registered player');
+      if (!this.sale) throw new Error('coin sale is not configured');
+      if (!this.sale.enabled) throw new Error('coin sale is not enabled');
+      const coin = deposit * BigInt(this.sale.coin_per_near) / 10n ** 24n;
+      if (coin < 1n) throw new Error('deposit too small');
+      if (coin > BigInt(this.sale.max_coin_per_call)) throw new Error('too much coin in one call');
+      if (this.get(this.townAccount, 'coin') < coin) throw new Error('the town treasury is short of coin');
+      this.add(this.townAccount, 'coin', -coin);
+      this.add(receiver, 'coin', coin);
+      return;
+    }
     if (method === 'send_item') {
       const r = a as { receiver_id: string; token_id: string; amount: string };
       if (!this.accounts.has(r.receiver_id) || this.shops.has(r.receiver_id)) throw new Error('receiver is not a registered player');
@@ -425,11 +454,11 @@ export class MockChain implements Chain {
   }
 
   async relay(signedDelegate: unknown, senderId: string): Promise<TxResult> {
-    const sd = signedDelegate as { delegateAction: { actions: Array<{ functionCall?: { methodName: string; args: ArrayLike<number> } }> } };
+    const sd = signedDelegate as { delegateAction: { actions: Array<{ functionCall?: { methodName: string; args: ArrayLike<number>; deposit?: bigint } }> } };
     const fc = sd.delegateAction.actions[0]?.functionCall;
     if (fc) {
       try {
-        this.mockMethod(senderId, fc.methodName, JSON.parse(Buffer.from(Uint8Array.from(fc.args)).toString('utf8')));
+        this.mockMethod(senderId, fc.methodName, JSON.parse(Buffer.from(Uint8Array.from(fc.args)).toString('utf8')), BigInt(fc.deposit ?? 0));
       } catch (e) {
         return { txHash: this.hash(), ok: false, error: (e as Error).message };
       }

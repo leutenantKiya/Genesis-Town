@@ -245,7 +245,7 @@ export class Game {
         this.consign.tick();
       }
       this.gs.setMeta('clock.hour', String(now));
-      this.trade.finishDue();
+      await this.trade.finishDueChecked();
       await this.settlement.settleDue();
     } finally {
       this.ticking = false;

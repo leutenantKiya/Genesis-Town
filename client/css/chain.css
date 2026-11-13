@@ -20,7 +20,6 @@
 
 /* energy in the HUD: a flat fill, no gradient */
 .chain-hud .val{display:flex;align-items:center;gap:6px}
-.chain-hud .gt-savings{font-size:.85em;opacity:.85}
 .chain-energy{display:inline-block;width:46px;height:8px;background:var(--hud);box-shadow:0 0 0 1px var(--outline);border-radius:var(--r-ctl);overflow:hidden;flex:none}
 .chain-energy i{display:block;height:100%;background:var(--energy)}
 .chain-reason{font-size:calc(14px*var(--ts));color:var(--paper-dim);line-height:1.5;margin-top:2px}
@@ -343,3 +342,15 @@ html.gt-phone .gt-slot-dur{left:3px;right:3px}
 .gt-cs-wb.on{background:var(--accent);color:var(--accent-ink)}
 .gt-cs-wb:focus-visible{outline:3px solid var(--paper-ink);outline-offset:1px}
 @media (max-width:480px){.gt-casino-reel{width:54px;height:62px}.gt-mall-grid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}.gt-tool{flex-wrap:wrap}}
+
+/* Top up window (HUD coin counter, /topup) */
+#hud .coinc[data-topup]{cursor:pointer}
+#hud .coinc[data-topup]:focus-visible{outline:3px solid var(--paper-ink);outline-offset:2px}
+.topup p{margin:6px 0}
+.topup-wallet{font-weight:600}
+.topup-who{display:flex;gap:8px;flex-wrap:wrap}
+.topup-find input{flex:1 1 auto;min-width:0;width:auto}
+.topup-to{min-height:1.5em}
+.topup-packs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:6px 0}
+.topup-packs .mbtn{min-height:44px;overflow-wrap:anywhere}
+.topup-packs .mbtn:disabled{opacity:.5}

@@ -14,6 +14,7 @@ import { langOf, localizeJson, LangMemory, type Lang } from './lang.ts';
 import { TransferStore } from './transfer.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
+import { topupInfo, topupRelay, topupResolve, type TopupDeps } from './topup.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
 import { Social, worldIdOk } from './social.ts';
 import type { Game } from './game/game.ts';
@@ -127,6 +128,10 @@ export function createApp(deps: AppDeps) {
     settling: () => game.settlement.busy, holding: (a) => game.gs.hasReserved(a),
   });
   game.settlement.onSettled = (accts) => chainCheck.invalidate(accts);
+  game.trade.verify = (a, tokens) => chainCheck.verify(a, tokens, 'trade/swap'); // a live trade's swap re-checks both sides
+  const topupLimiter = new RateLimiter(30, 200); // top-up requests per account (each costs the relayer a NEAR Auth sign call and gas)
+  const topupResolveLimiter = new RateLimiter(30, 600);
+  const topupDeps: TopupDeps = { cfg: deps.cfg, chain: deps.chain, store: deps.store, game, verify: deps.verify, currentBlockHeight: deps.currentBlockHeight, invalidate: (a) => chainCheck.invalidate(a) };
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
   social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs, perIp: game.econ.guest.perIp, maxMinutes: game.econ.guest.maxMinutes };
@@ -315,7 +320,7 @@ export function createApp(deps: AppDeps) {
     if (!isTrade && !isConsign && p !== '/api/leaderboard') return false;
     if (req.method === 'GET') {
       const acct = p === '/api/leaderboard' ? (() => { try { return accountOf(req, url); } catch { return null; } })() : accountOf(req, url);
-      if (p === '/api/trade') { game.trade.finishDue(); return send(res, 200, { ...game.trade.list(acct!), session: game.trade.session(acct!), invites: game.trade.invites(acct!) }), true; }
+      if (p === '/api/trade') { await game.trade.finishDueChecked(); return send(res, 200, { ...game.trade.list(acct!), session: game.trade.session(acct!), invites: game.trade.invites(acct!) }), true; }
       if (p === '/api/consign') return send(res, 200, { lots: game.consign.lots(acct!), merchant: game.econ.consign.merchant, feeBps: game.econ.consign.feeBps, maxPerItem: game.econ.consign.maxPerItem }), true;
       if (p === '/api/leaderboard') {
         const period = url.searchParams.get('period') ?? 'day';
@@ -340,14 +345,21 @@ export function createApp(deps: AppDeps) {
     let spend: string[] = [];
     if (p === '/api/trade/set' || p === '/api/trade/offer' || p === '/api/consign') spend = offeredTokens(game.econ, b);
     else if (p === '/api/trade/ready') spend = Object.keys(game.trade.session(acct)?.mine ?? {});
-    else if (p === '/api/trade/accept') spend = Object.keys(game.trade.list(acct).incoming.find((o) => o.id === b.id)?.want ?? {});
-    if (spend.length) await chainCheck.verify(acct, spend, p.slice('/api/'.length));
+    // accepting an offer swaps both sides: the accepter's tokens (`want`) and the sender's tokens (`give`) must both be on the chain
+    let senderAcct = '', senderSpend: string[] = [];
+    if (p === '/api/trade/accept') {
+      const o = game.trade.list(acct).incoming.find((x) => x.id === b.id);
+      spend = Object.keys(o?.want ?? {});
+      if (o) { senderAcct = o.from_account; senderSpend = Object.keys(o.give); }
+    }
     try {
+    if (spend.length) await chainCheck.verify(acct, spend, p.slice('/api/'.length));
+    if (senderSpend.length) await chainCheck.verify(senderAcct, senderSpend, 'trade/accept (sender)');
     const isSession = /^\/api\/trade\/(open|join|set|ready|close)$/.test(p);
     const tw = isSession ? worldOf(b.world) : 'public'; // live sessions run in any world the player stands in; the old offers stay public
     if (b.pos !== undefined) game.reportPosition(acct, b.pos as { x: number; y: number }, tw); // the client's tile, checked like any report
     if (isSession) {
-      game.trade.finishDue();
+      await game.trade.finishDueChecked();
       const out = (session: unknown) => send(res, 200, { session, state: game.state(acct) });
       if (p === '/api/trade/open') out(game.trade.open(acct, b));
       else if (p === '/api/trade/join') out(game.trade.join(acct, b.id));
@@ -363,7 +375,7 @@ export function createApp(deps: AppDeps) {
     else if (p === '/api/consign/withdraw') send(res, 200, { ...game.consign.withdraw(acct, b.token), state: game.state(acct) });
     else throw new HttpError(404, 'no such route');
     return true;
-    } finally { if (spend.length) chainCheck.invalidate(acct); }
+    } finally { if (spend.length) chainCheck.invalidate(acct); if (senderSpend.length) chainCheck.invalidate(senderAcct); }
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
@@ -383,6 +395,7 @@ export function createApp(deps: AppDeps) {
           fastAuth: deps.cfg.fastAuth,
           google: deps.cfg.googleClientId && deps.verifyGoogle ? { clientId: deps.cfg.googleClientId } : null,
           devLogin: deps.cfg.devLogin,
+          topup: { enabled: deps.cfg.topupEnabled },
           devTools: devAllowed(req),
           dialogue: dialogue.provider,
           world: game.map?.view() ?? null,
@@ -422,6 +435,24 @@ export function createApp(deps: AppDeps) {
         const ip = clientIp(req);
         if (!deviceLimiter.take(ip)) throw new HttpError(429, 'too many new-device requests');
         return send(res, 200, await addDeviceKey(deps, await readJson(req)));
+      }
+      if (p === '/api/topup/info' || p === '/api/topup/resolve' || p === '/api/topup/relay') {
+        // buying coin with NEAR from the town treasury (topup.ts); all three answer 403 / {open:false} unless TOPUP_ENABLED=1
+        if (req.method === 'GET' && p === '/api/topup/info') return send(res, 200, await topupInfo(topupDeps, accountOf(req, url)));
+        if (req.method === 'GET' && p === '/api/topup/resolve') {
+          const acct = accountOf(req, url);
+          if (!deps.cfg.topupEnabled) throw new HttpError(403, 'Top up is not open yet.');
+          if (!topupResolveLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+          return send(res, 200, topupResolve(topupDeps, url.searchParams.get('name')));
+        }
+        if (req.method === 'POST' && p === '/api/topup/relay') {
+          const raw = await readRaw(req);
+          const acct = accountOf(req, url, raw);
+          if (!deps.cfg.topupEnabled) throw new HttpError(403, 'Top up is not open yet.');
+          if (!topupLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+          return send(res, 200, await topupRelay(topupDeps, acct, parseJson(raw)));
+        }
+        throw new HttpError(404, 'no such route');
       }
       if (req.method === 'POST' && p === '/api/relay') {
         const body = await readJson(req);
@@ -689,7 +720,7 @@ export function createApp(deps: AppDeps) {
       throw new HttpError(404, 'no such route');
     }
     // Static client.
-    const rel = p === '/' ? '/index.html' : p;
+    const rel = p === '/' || p === '/topup' ? '/index.html' : p; // /topup is the game page; chain.js opens the Top up window
     let decoded: string;
     try { decoded = decodeURIComponent(rel); } catch { throw new HttpError(400, 'bad path'); }
     const file = normalize(join(clientRoot, decoded));

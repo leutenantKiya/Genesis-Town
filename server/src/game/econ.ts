@@ -63,6 +63,8 @@ export interface Econ {
   fees: { marketPct: number };
   starter: Record<string, number>;
   caps: { dailyGainPerItem: number; dailySends: number; maxSendAmount: number };
+  /** Buying coin with NEAR (topup.ts): `rate` coin per 1 NEAR (must equal the contract's coin_per_near), the pack sizes in coin, the most coin one payer may buy per UTC day, and the NEAR the wallet keeps for fees. The coin comes from the town treasury, never newly minted. */
+  topup?: { rate: number; packs: number[]; dailyMaxCoin: number; reserveNear: number };
   /** Town projects; the contract holds the live state (create_project with these values). */
   projects: Array<{ id: string; name: string; chunk: string; need: Record<string, number>; /** why it was stopped: no new pledges, withdrawals still work */ retired?: string }>;
   monsters: MonsterConfig;

@@ -167,6 +167,12 @@ export class Store {
       | undefined;
   }
 
+  playerByAccount(accountId: string) {
+    return this.db.prepare('SELECT * FROM players WHERE account_id = ?').get(accountId) as
+      | { account_id: string; sub: string; owner_pk: string; created_at: number }
+      | undefined;
+  }
+
   addPlayer(accountId: string, sub: string, ownerPk: string) {
     this.db.prepare('INSERT INTO players (account_id, sub, owner_pk, created_at) VALUES (?, ?, ?, ?)')
       .run(accountId, sub, ownerPk, Date.now());

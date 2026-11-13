@@ -217,9 +217,37 @@ export const EXACT: Record<string, string> = {
  "Famous": "Terkenal",
  "Known": "Dikenal",
  "Price steady.": "Harga tetap.",
+ "Top up is not open yet.": "Top up belum dibuka.",
+ "You can only pay from your own account.": "Kamu hanya bisa membayar dari akunmu sendiri.",
+ "The receiver is not a known player.": "Penerimanya bukan pemain yang dikenal.",
+ "This login is not the account you are playing.": "Login ini bukan akun yang sedang kamu mainkan.",
+ "The receiver has no game account on the network yet.": "Penerima belum punya akun game di jaringan.",
+ "The town treasury is short of coin right now. Try a smaller pack later.": "Kas kota sedang kurang koin. Coba paket yang lebih kecil nanti.",
+ "You reached today's top-up limit.": "Kamu sudah mencapai batas top up hari ini.",
+ "This top-up is still being processed.": "Top up ini masih diproses.",
+ "This top-up did not go through. Start a new one.": "Top up ini tidak berhasil. Mulai yang baru.",
+ "The pack does not match what was signed.": "Paketnya tidak sama dengan yang ditandatangani.",
+ "The receiver does not match what was signed.": "Penerimanya tidak sama dengan yang ditandatangani.",
+ "The top-up did not go through.": "Top up tidak berhasil.",
  "Price steady (capped at 10% per hour).": "Harga tetap (dibatasi 10% per jam)."
 };
 export const PATTERNS: Array<[string, string]> = [
+ [
+  "Top up: bought {0} coin with NEAR",
+  "Top up: membeli {0} koin dengan NEAR"
+ ],
+ [
+  "Top up: {0} bought you {1} coin",
+  "Top up: {0} membelikanmu {1} koin"
+ ],
+ [
+  "Top up: bought {0} coin for {1}",
+  "Top up: membeli {0} koin untuk {1}"
+ ],
+ [
+  "The top-up did not go through: {0}",
+  "Top up tidak berhasil: {0}"
+ ],
  [
   "Your {0} is broken. Repair it or make a new one.",
   "{0}mu rusak. Perbaiki atau buat yang baru."

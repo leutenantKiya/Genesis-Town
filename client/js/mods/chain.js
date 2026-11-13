@@ -25,7 +25,7 @@
     { id: 'wati', pal: 5, dx: -3, dy: 2, tag: $t('Wati · Roti') },
     { id: 'joko', pal: 4, dx: -5, dy: 2, tag: $t('Joko · Serba Ada') }
   ];
-  var S = { mode: 'loading', cfg: null, account: null, st: null, market: null, shops: null, history: [], busy: false, poll: 0, modal: null, plots: [], npcs: {} };
+  var S = { wantTopup: location.pathname === '/topup', mode: 'loading', cfg: null, account: null, st: null, market: null, shops: null, history: [], busy: false, poll: 0, modal: null, plots: [], npcs: {} };
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -168,24 +168,22 @@
     var coin = st.bag.coin.settled + st.bag.coin.today;
     var delta = coin - GT.state.coins;
     if (delta !== 0) GT.addCoins(delta);
-    // Savings: the player's own testnet account balance, read only and shown in coin (1000 coin per NEAR). Never spent.
+    // The player's own NEAR balance is read quietly for the Top up window (walletRead); the HUD no longer shows it.
     walletRead();
-    if (wallet.coin != null) {
-      var sv = $('span', 'val gt-savings', $t('Tabungan: {0} koin', [wallet.coin.toLocaleString()]));
-      sv.title = $t('Hanya tampilan, tidak terpakai untuk belanja di game.');
-      hudCell.appendChild(sv);
-    }
+    bindCoinClick();
   }
-  var wallet = { coin: null, at: 0, busy: false };
-  function walletRead() {
+  var wallet = { coin: null, yocto: null, at: 0, busy: false };
+  // The player's own testnet account balance, read only (1000 coin per NEAR when shown as coin). Shown inside the Top up window.
+  function walletRead(force) {
     var L = window.NearLib, now = Date.now();
-    if (wallet.busy || now - wallet.at < 60000 || S.mode !== 'testnet' || !S.account || !L || !S.cfg || !S.cfg.rpcUrl) return;
+    if (wallet.busy || (!force && now - wallet.at < 60000) || S.mode !== 'testnet' || !S.account || !L || !S.cfg || !S.cfg.rpcUrl) return;
     wallet.busy = true; wallet.at = now;
     new L.JsonRpcProvider({ url: S.cfg.rpcUrl }).query({ request_type: 'view_account', finality: 'final', account_id: S.account })
       .then(function (a) {
-        var c = Number(BigInt(String(a.amount)) / 1000000000000000000000n); // yocto / 1e21 = NEAR x 1000
-        var changed = c !== wallet.coin; wallet.coin = c;
-        if (changed) renderHud();
+        var y = BigInt(String(a.amount));
+        var changed = wallet.yocto === null || y !== wallet.yocto; wallet.yocto = y;
+        wallet.coin = Number(y / 1000000000000000000000n); // yocto / 1e21 = NEAR x 1000
+        if (changed && TOP.h && TOP.h.isOpen()) drawTopup();
       }, function () { /* no answer: keep the last value */ })
       .then(function () { wallet.busy = false; });
   }
@@ -293,16 +291,18 @@
     if (!window.NearLib || !fa || S.cfg.devLogin) return false;
     return !fa.origins || fa.origins.indexOf(location.origin) >= 0;
   }
+  function msgLegacyOwner() { return $t('Akunmu dibuat dengan NEAR Auth versi lama, jadi perangkat ini belum bisa disetujui di sini. Kamu tetap bisa bermain; untuk Pasar, hadiah, saham, dan proyek kota, pakai perangkat tempat akunmu dibuat.'); }
+  function msgNoNearAuth() { return $t('Pasar, hadiah, saham, dan proyek kota di perangkat ini perlu persetujuan NEAR Auth, yang belum aktif di alamat ini. Kamu tetap bisa bermain; untuk hal on-chain, pakai perangkat pertamamu.'); }
   function approveDevice() {
     var usable = nearAuthHere(), ownerPk = lsGet(LS_OWNER);
     var body = $('div');
     if (lsGet(LS_LEGACY) === '1') {
-      body.appendChild($('p', null, $t('Akunmu dibuat dengan NEAR Auth versi lama, jadi perangkat ini belum bisa disetujui di sini. Kamu tetap bisa bermain; untuk Pasar, hadiah, saham, dan proyek kota, pakai perangkat tempat akunmu dibuat.')));
+      body.appendChild($('p', null, msgLegacyOwner()));
       GT.modal({ title: $t('Setujui perangkat ini'), body: body });
       return Promise.reject(new Error($t('Perangkat ini belum disetujui.')));
     }
     if (!usable || !ownerPk) {
-      body.appendChild($('p', null, $t('Pasar, hadiah, saham, dan proyek kota di perangkat ini perlu persetujuan NEAR Auth, yang belum aktif di alamat ini. Kamu tetap bisa bermain; untuk hal on-chain, pakai perangkat pertamamu.')));
+      body.appendChild($('p', null, msgNoNearAuth()));
       GT.modal({ title: $t('Setujui perangkat ini'), body: body });
       return Promise.reject(new Error($t('Perangkat ini belum disetujui.')));
     }
@@ -322,6 +322,143 @@
         return false;
       } }] });
     });
+  }
+
+
+  /* ------------------------------------------------------------ top up: buy coin with NEAR (server/src/topup.ts, the /topup page) */
+  // The player signs ONE function call to the game contract, buy_coin, with their NEAR Auth full-access key: the same popup and
+  // signing path as approveDevice (the MPC signs, the server checks it and the relayer pays the gas). The deposit is the pack's
+  // price, taken from the player's own wallet; the coin comes out of the town treasury, for the player or for another player.
+  var TOP = { h: null, info: null, who: 'self', other: null, otherErr: '', busy: false, input: '', inputEl: null };
+  var YOCTO = 1000000000000000000000000n;
+  function fmtNear(y) { return (Number(y / 1000000000000000000000n) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 }); }
+  function packYocto(coin, rate) { return BigInt(coin) * YOCTO / BigInt(rate); }
+  function bindCoinClick() {
+    var c = document.querySelector('#hud .coinc');
+    if (!c || c.getAttribute('data-topup')) return;
+    c.setAttribute('data-topup', '1'); c.setAttribute('role', 'button'); c.tabIndex = 0; c.style.cursor = 'pointer';
+    c.setAttribute('aria-label', $t('Top up koin'));
+    c.addEventListener('click', openTopup);
+    c.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTopup(); } });
+  }
+  function openTopup() {
+    if (S.mode === 'offline' || !S.account) { GT.toast($t('Masuk dulu untuk top up koin.')); return; }
+    if (TOP.h && TOP.h.isOpen()) return;
+    TOP.who = 'self'; TOP.other = null; TOP.otherErr = ''; TOP.busy = false; TOP.info = null; TOP.input = ''; TOP.inputEl = null;
+    TOP.h = GT.modal({ title: $t('Top up koin'), body: $('p', null, $t('Memuat…')), onClose: function () { TOP.h = null; }, actions: [{ label: $t('Tutup') }] });
+    var off = S.cfg && S.cfg.topup && !S.cfg.topup.enabled;
+    (off ? Promise.resolve({ open: false }) : api('/topup/info').catch(function () { return { open: false }; })).then(function (info) { TOP.info = info; drawTopup(); });
+    walletRead(true);
+  }
+  function drawTopup() {
+    var h = TOP.h; if (!h || !h.isOpen()) return;
+    var info = TOP.info, body = $('div', 'topup');
+    var hadFocus = TOP.inputEl && document.activeElement === TOP.inputEl;
+    TOP.inputEl = null;
+    if (!info) { body.appendChild($('p', null, $t('Memuat…'))); h.setBody(body); return; }
+    if (!info.open) {
+      body.appendChild($('p', 'chain-closed', $t('Top up belum dibuka')));
+      h.setBody(body); return;
+    }
+    var rate = info.rate;
+    body.appendChild($('p', null, $t('Koin diambil dari kas kota. Ini pembayaran NEAR yang kamu tandatangani di jendela NEAR Auth. Gas dibayar game.')));
+    body.appendChild($('p', 'topup-wallet', wallet.yocto === null ? $t('Saldo NEAR-mu: belum terbaca') : $t('Saldo NEAR-mu: {0} NEAR', [fmtNear(wallet.yocto)])));
+    var blocked = info.legacyOwner ? msgLegacyOwner() : (!nearAuthHere() || !info.ownerPublicKey) ? msgNoNearAuth() : null;
+    if (blocked) body.appendChild($('p', 'chain-closed', blocked));
+    // who gets the coin
+    body.appendChild($('div', 'chain-h', $t('Koin untuk')));
+    var row = $('div', 'topup-who');
+    [['self', $t('Akunku')], ['other', $t('Pemain lain')]].forEach(function (o) {
+      var b = button(o[1], function () { if (TOP.busy) return; TOP.who = o[0]; drawTopup(); }, TOP.who === o[0] ? 'primary' : '');
+      b.setAttribute('aria-pressed', TOP.who === o[0] ? 'true' : 'false'); b.disabled = TOP.busy;
+      row.appendChild(b);
+    });
+    body.appendChild(row);
+    var syncPacks = function () { /* set below once the packs exist */ };
+    if (TOP.who === 'other') {
+      var f = $('div', 'chain-field topup-find'), inp = $('input'); inp.type = 'text'; inp.placeholder = $t('nama#tag'); inp.maxLength = 40; inp.value = TOP.input; inp.setAttribute('aria-label', $t('Nama pemain dengan tag'));
+      TOP.inputEl = inp;
+      inp.addEventListener('input', function () { TOP.input = inp.value; TOP.other = null; TOP.otherErr = ''; var l = body.querySelector('.topup-to'); if (l) { l.textContent = ''; l.className = 'topup-to'; } syncPacks(); });
+      var find = function () {
+        var v = inp.value.trim(); if (!v || TOP.busy) return;
+        api('/topup/resolve?name=' + encodeURIComponent(v)).then(function (r) { TOP.other = r; TOP.otherErr = ''; drawTopup(); }, function (e) { TOP.other = null; TOP.otherErr = e.status === 404 ? $t('Pemain tidak ditemukan.') : e.message; drawTopup(); });
+      };
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+      f.appendChild(inp); f.appendChild(button($t('Cari'), find));
+      body.appendChild(f);
+      var to = $('p', 'topup-to', TOP.other ? $t('Kirim ke {0}#{1}', [TOP.other.nick, TOP.other.tag]) : TOP.otherErr);
+      if (!TOP.other && TOP.otherErr) to.className += ' chain-closed';
+      body.appendChild(to);
+    }
+    // packs
+    body.appendChild($('div', 'chain-h', $t('Pilih paket')));
+    var reserve = BigInt(Math.round((info.reserveNear || 0) * 1000)) * 1000000000000000000000n, packs = $('div', 'topup-packs'), btns = [];
+    (info.packs || []).forEach(function (coin) {
+      var price = packYocto(coin, rate), near = coin / rate;
+      var b = button($t('{0} koin · {1} NEAR', [coin.toLocaleString(), near]), function () { topupPay(coin); });
+      b.setAttribute('data-coin', coin);
+      btns.push({ b: b, coin: coin, price: price });
+      packs.appendChild(b);
+    });
+    body.appendChild(packs);
+    body.appendChild($('p', 'chain-dim', $t('Paket aktif bila saldomu cukup untuk harga paket ditambah {0} NEAR.', [info.reserveNear])));
+    body.appendChild($('p', 'chain-dim', $t('Terpakai hari ini: {0} dari {1} koin.', [(info.used || 0).toLocaleString(), (info.dailyMaxCoin || 0).toLocaleString()])));
+    if (TOP.busy) body.appendChild($('p', 'chain-dim', $t('Menunggu pembayaran…')));
+    syncPacks = function () {
+      var needOther = TOP.who === 'other' && !TOP.other;
+      btns.forEach(function (x) {
+        var short = wallet.yocto !== null && wallet.yocto < x.price + reserve;
+        var over = (info.used || 0) + x.coin > (info.dailyMaxCoin || Infinity);
+        x.b.disabled = !!(TOP.busy || blocked || needOther || short || over);
+        x.b.title = blocked ? '' : short ? $t('Saldo NEAR kurang.') : over ? $t('Melebihi batas harian.') : needOther ? $t('Pilih pemain dulu.') : '';
+      });
+    };
+    syncPacks();
+    h.setBody(body);
+    if (hadFocus && TOP.inputEl) { TOP.inputEl.focus(); try { TOP.inputEl.setSelectionRange(TOP.inputEl.value.length, TOP.inputEl.value.length); } catch (e) { /* not selectable */ } }
+  }
+  function topupPay(coin) {
+    var info = TOP.info, L = window.NearLib;
+    if (!info || !info.open || TOP.busy || !L) return;
+    var receiver = TOP.who === 'other' && TOP.other ? TOP.other.account : null;
+    if (TOP.who === 'other' && !receiver) return;
+    var provider = nearProvider(), prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl }), ownerKey = L.PublicKey.from(info.ownerPublicKey), da, idToken;
+    var nick = receiver ? TOP.other.nick + '#' + TOP.other.tag : '';
+    TOP.busy = true; drawTopup();
+    GT.toast($t('Membuka NEAR Auth…'));
+    // the popup must open from this click, so it is the first thing that happens
+    provider.login(undefined, true)
+      .then(function () { return provider.client.getIdTokenClaims(); })
+      .then(function (claims) {
+        if (!claims || !claims.__raw) throw new Error($t('Login tidak memberi token'));
+        idToken = claims.__raw;
+        return Promise.all([prov.viewAccessKey({ accountId: S.account, publicKey: ownerKey }), prov.viewBlock({ finality: 'final' })])
+          .catch(function () { throw new Error($t('Kunci NEAR Auth-mu tidak ditemukan di akun ini.')); });
+      })
+      .then(function (x) {
+        da = L.buildDelegateAction({
+          senderId: S.account, receiverId: S.cfg.gameContractId,
+          actions: [L.actions.functionCall('buy_coin', receiver ? { receiver_id: receiver } : {}, L.teraToGas('30'), packYocto(coin, info.rate))],
+          nonce: BigInt(x[0].nonce) + 1n, maxBlockHeight: BigInt(x[1].header.height) + 1500n, publicKey: ownerKey
+        });
+        return provider.requestDelegateActionSignature({ delegateAction: da });
+      })
+      .then(function () { return provider.getSignatureRequest(); })
+      .then(function (res) {
+        GT.toast($t('Mengirim pembayaran…'));
+        var sr = res.signatureRequest;
+        return api('/topup/relay', { method: 'POST', body: {
+          idToken: idToken, pack: coin, receiver: receiver || undefined,
+          delegateAction: b64(L.encodeDelegateAction(da).slice(4)), // plain borsh DelegateAction (without the NEP-461 prefix)
+          signatureRequest: { guardId: sr.guardId, verifyPayload: sr.verifyPayload, signPayload: Array.from(sr.signPayload), algorithm: sr.algorithm || 'eddsa' }
+        } });
+      })
+      .then(function (out) {
+        GT.toast(receiver ? $t('Top up berhasil: {0} koin dikirim ke {1}', [out.coin.toLocaleString(), nick]) : $t('Top up berhasil: +{0} koin', [out.coin.toLocaleString()]));
+        TOP.busy = false;
+        return refresh(true).then(function () { return api('/topup/info'); }).then(function (i) { TOP.info = i; }, noop);
+      }, function (e) { TOP.busy = false; GT.toast($t('Gagal: {0}', [e && e.message || e])); })
+      .then(function () { drawTopup(); setTimeout(function () { walletRead(true); }, 1500); });
   }
 
   // Sign out: forget the account in this browser and clear the NEAR Auth login cache (no redirect). The game key stays
@@ -492,7 +629,7 @@
     } else {
       jobs.push(api('/time').then(function (t) { syncClock(t); followWorld(t.world); S.weather = t.weather; S.season = t.season; }));
     }
-    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); if (!S.account) renderTitle(); applyWeatherClass(); if (S.st && S.st.encounter && !fightOpen() && !GT.isUiOpen()) openFight(); else if (S.st && !S.st.encounter && fightOpen()) closeFight(); }).catch(function (e) {
+    return Promise.all(jobs).then(function () { renderHud(); redraw(); renderGoals(); if (S.wantTopup && S.account && S.st && !GT.isUiOpen()) { S.wantTopup = false; openTopup(); } if (!S.account) renderTitle(); applyWeatherClass(); if (S.st && S.st.encounter && !fightOpen() && !GT.isUiOpen()) openFight(); else if (S.st && !S.st.encounter && fightOpen()) closeFight(); }).catch(function (e) {
       if (e.status === 401) { S.account = null; lsSet(LS_ACC, null); renderBanner(); }
     });
   }
@@ -1862,6 +1999,6 @@
     return true;
   }
 
-  window.GT_CHAIN = { weather: weatherKind, approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, toolBroken: toolBroken, _signedCall: signedCall };
+  window.GT_CHAIN = { openTopup: openTopup, weather: weatherKind, approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, toolBroken: toolBroken, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame, onKey: onKey });
 })();

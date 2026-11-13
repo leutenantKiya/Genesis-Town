@@ -39,6 +39,8 @@ const NEAR = 3;
 
 export class Trade {
   d: TradeDeps;
+  /** Throws HttpError 409 (chain_check) when the chain cannot back `account`'s `tokens`; wired by app.ts to the ChainCheck. */
+  verify?: (account: string, tokens: string[]) => Promise<void>;
   constructor(d: TradeDeps) { this.d = d; }
 
   private name(token: string) { return this.d.econ.items[token]?.name ?? token; }
@@ -275,19 +277,48 @@ export class Trade {
     return this.sview(this.row(r.id)!, account);
   }
 
-  /** Swaps every locked session whose countdown has run out. Safe to call from several places: one claim wins. */
+  /** Swaps every locked session whose countdown has run out, without the chain check (unit tests; see finishDueChecked). Safe to call from several places: one claim wins. */
   finishDue() {
     this.expire();
-    const due = this.d.gs.db.prepare("SELECT id, version FROM trade_sessions WHERE status = 'locked' AND swap_at <= ? ORDER BY id").all(this.d.now()) as unknown as Array<{ id: number; version: number }>;
-    for (const { id, version } of due) {
+    for (const { id, version } of this.due()) this.finishOne(id, version);
+  }
+
+  private due() {
+    return this.d.gs.db.prepare("SELECT id, version FROM trade_sessions WHERE status = 'locked' AND swap_at <= ? ORDER BY id").all(this.d.now()) as unknown as Array<{ id: number; version: number }>;
+  }
+
+  private finishOne(id: number, version: number) {
+    try {
+      this.d.gs.tx(() => this.swap(id, version));
+    } catch (e) {
+      // nothing was written; both windows go back to 'open' with the reason
+      const note = e instanceof HttpError ? e.message : 'The swap failed.';
+      this.d.gs.db.prepare("UPDATE trade_sessions SET status = 'open', a_ok = 0, b_ok = 0, version = version + 1, note = ?, updated_at = ? WHERE id = ? AND status = 'locked'")
+        .run(note, this.d.now(), id);
+    }
+  }
+
+  /** Like finishDue, but right before each swap BOTH sides' offered tokens are compared with the chain (`verify`, set by
+   *  the router). A side the chain cannot back cancels the whole trade (status 'cancelled', the 409 chain_check message
+   *  as its note) and nothing moves. The check awaits the chain; the swap itself runs in the same tick as the check's
+   *  end, and a trade that changed or ended meanwhile is not swapped (the claim in `swap` matches the version). */
+  async finishDueChecked() {
+    const verify = this.verify;
+    if (!verify) return this.finishDue();
+    this.expire();
+    for (const { id, version } of this.due()) {
+      const r = this.row(id);
+      if (!r || r.status !== 'locked' || r.version !== version) continue;
       try {
-        this.d.gs.tx(() => this.swap(id, version));
+        await verify(r.a, Object.keys(JSON.parse(r.a_lines)));
+        await verify(r.b, Object.keys(JSON.parse(r.b_lines)));
       } catch (e) {
-        // nothing was written; both windows go back to 'open' with the reason
-        const note = e instanceof HttpError ? e.message : 'The swap failed.';
-        this.d.gs.db.prepare("UPDATE trade_sessions SET status = 'open', a_ok = 0, b_ok = 0, version = version + 1, note = ?, updated_at = ? WHERE id = ? AND status = 'locked'")
-          .run(note, this.d.now(), id);
+        if (!(e instanceof HttpError)) throw e;
+        this.d.gs.db.prepare("UPDATE trade_sessions SET status = 'cancelled', a_ok = 0, b_ok = 0, note = ?, updated_at = ? WHERE id = ? AND status = 'locked' AND version = ?")
+          .run(e.message, this.d.now(), id, version);
+        continue;
       }
+      this.finishOne(id, version);
     }
   }
 
