@@ -12,7 +12,7 @@
 import { createHash } from 'node:crypto';
 import { PublicKey } from 'near-api-js';
 import type { IncomingHttpHeaders } from 'node:http';
-import { HttpError } from './auth.ts';
+import { HttpError, LEGACY_MESSAGE } from './auth.ts';
 
 export const SKEW_MS = 120_000;
 
@@ -31,13 +31,17 @@ export class ReplayCache {
   }
 }
 
-export interface ReqAuthDeps { sessionKeyOwner(key: string): string | undefined; isSuperseded?(key: string, account: string): boolean; replay: ReplayCache; now?: () => number }
+export interface ReqAuthDeps { sessionKeyOwner(key: string): string | undefined; isRetired?(account: string): boolean; isSuperseded?(key: string, account: string): boolean; replay: ReplayCache; now?: () => number }
 
 /** Verifies a signed request and returns the account it acts for. */
 export function verifyRequest(d: ReqAuthDeps, h: IncomingHttpHeaders, method: string, pathQuery: string, body: string): string {
   const account = h['x-account-id'], key = h['x-gt-key'], ts = h['x-gt-ts'], sig = h['x-gt-sig'];
   if (typeof account !== 'string' || typeof key !== 'string' || typeof ts !== 'string' || typeof sig !== 'string') throw new HttpError(401, 'not signed in');
-  if (d.sessionKeyOwner(key) !== account) throw new HttpError(401, 'unknown session key for this account');
+  if (d.sessionKeyOwner(key) !== account) {
+    // an old NEAR Auth account an admin retired (src/purge.ts): say so instead of a bare "unknown key"
+    if (d.isRetired?.(account)) throw new HttpError(409, LEGACY_MESSAGE, 'legacy_account');
+    throw new HttpError(401, 'unknown session key for this account');
+  }
   if (d.isSuperseded?.(key, account)) throw new HttpError(409, 'Your account was opened on another device.', 'superseded');
   const now = (d.now ?? Date.now)();
   const t = Number(ts);

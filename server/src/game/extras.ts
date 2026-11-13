@@ -101,6 +101,9 @@ export class Extras {
 
   private day() { return this.d.clock.time().settleDay; }
 
+  /** Drops what is cached for an account an admin purged (src/purge.ts). */
+  forget(account: string) { this.wornCache.delete(account); }
+
   /** Takes coin from a player into the town fund (the same path as the Mall's worker gear). 409 when short. */
   payTown(account: string, coin: number, kind: string, ref: string) {
     const have = this.d.gs.balance(account, 'coin');

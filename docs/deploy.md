@@ -39,8 +39,8 @@ private keys are typed by you into the host, never committed and never put in a 
 | `PLAYERS_PARENT_ACCOUNT_ID`, `PLAYERS_PARENT_PRIVATE_KEY` | as in `.env` (**secret**) |
 | `MERCHANT_PARENT_ACCOUNT_ID` | as in `.env` |
 | `WORLD_SEED` | empty (keeps the current village) |
-| `FASTAUTH_CLIENT_ID`, `FASTAUTH_DOMAIN` | empty, or the client id and Auth0 domain NEAR Auth gives for the public domain (see Login below) |
-| `NEAR_AUTH_ORIGINS` | page origins where NEAR Auth's login may return (default `http://localhost:3000`); add the deployed origin only after NEAR Auth allows it, otherwise the game hides NEAR Auth there |
+| `FASTAUTH_DOMAIN`, `FASTAUTH_CLIENT_ID`, `FASTAUTH_CONTRACT_ID`, `FASTAUTH_SIGNING_AUDIENCE` | our own NEAR Auth deployment ([docs/fastauth-fork-plan.md](fastauth-fork-plan.md)); **all four are required for any login** (Google included, they fix each player's owner key). There is no fallback to NEAR's shared NEAR Auth: with one missing the server refuses logins with 503 and `/api/config` sends `fastAuth: null` |
+| `NEAR_AUTH_ORIGINS` | page origins where our NEAR Auth's login may return (default `http://localhost:3000`; our Auth0 tenant's allowed callbacks); elsewhere the game hides the NEAR Auth button |
 | `GOOGLE_CLIENT_ID` | the Google OAuth client id for "Masuk dengan Google" (see Login below); empty hides the button |
 | `ANTHROPIC_API_KEY` | optional (**secret**); Claude writes merchant replies; without any AI key merchants answer with local lines |
 | `DIALOGUE_PROVIDER` | empty (`anthropic` if the Anthropic key is set, else `nearai` if its key is set, else `local`), or `anthropic` / `nearai` / `local` |

@@ -60,7 +60,7 @@ const { server } = createApp({
   chain,
   store,
   game,
-  verify: withDevLogin(cfg, auth0Verifier(cfg)),
+  verify: withDevLogin(cfg, cfg.fastAuth.enabled ? auth0Verifier(cfg) : async () => { throw new Error('NEAR Auth is not set up on this server'); }),
   verifyGoogle: cfg.googleClientId ? googleVerifier(cfg.googleClientId) : undefined,
   currentBlockHeight: cfg.chainMode === 'mock' ? async () => 0n : blockHeightSource(cfg),
   clientDir: join(here, '../../client'),

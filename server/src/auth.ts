@@ -22,7 +22,7 @@ export function withDevLogin(cfg: Config, inner: TokenVerifier): TokenVerifier {
 }
 
 export function auth0Verifier(cfg: Config, keys?: JWTVerifyGetKey): TokenVerifier {
-  // jwks_uri and issuer come from https://login.testnet.fast-auth.com/.well-known/openid-configuration
+  // jwks_uri and issuer come from our Auth0 tenant's https://<FASTAUTH_DOMAIN>/.well-known/openid-configuration
   const issuer = `https://${cfg.fastAuth.domain}/`;
   const jwks = keys ?? createRemoteJWKSet(new URL(`${issuer}.well-known/jwks.json`));
   return async (idToken) => {
@@ -92,15 +92,22 @@ export async function ensureRegistered(deps: { chain: Chain; store: Store }, acc
   return txHashes;
 }
 
-/** `legacyOwner`: the account's owner key comes from another NEAR Auth deployment than the one this server uses now (e.g.
- *  NEAR's shared one before we ran our own), so this server's NEAR Auth cannot approve a new device for it. */
-export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsChainApproval?: boolean; ownerPublicKey?: string; legacyOwner?: boolean }
+export interface RegisterResult { accountId: string; created: boolean; txHashes: string[]; needsChainApproval?: boolean; ownerPublicKey?: string }
+
+export const LEGACY_MESSAGE = 'This account was made with the old NEAR Auth and is retired. Please make a new account with a different login.';
+/** A player made with NEAR's shared (public) NEAR Auth before we ran our own: the owner key stored for them is not the one
+ *  our NEAR Auth derives for the same login. Such accounts cannot be approved on a new device and are retired by an admin
+ *  (src/purge.ts); their logins are answered with LEGACY_MESSAGE. */
+export async function isLegacyOwner(chain: Chain, p: { sub: string; owner_pk: string }): Promise<boolean> {
+  return (await chain.derivedOwnerKey(p.sub)) !== p.owner_pk;
+}
 
 export async function register(
   deps: { cfg: Config; chain: Chain; store: Store; verify: TokenVerifier; verifyGoogle?: TokenVerifier; onNewPlayer?: (accountId: string) => void },
   body: { idToken?: unknown; sessionPublicKey?: unknown; provider?: unknown },
 ): Promise<RegisterResult> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'body must be a JSON object');
+  if (!deps.cfg.fastAuth.enabled) throw new HttpError(503, 'Login is not set up on this server (the FASTAUTH_* settings are missing).');
   if (typeof body.idToken !== 'string') throw new HttpError(400, 'idToken required');
   if (!isEd25519Key(body.sessionPublicKey)) throw new HttpError(400, 'sessionPublicKey must be an ed25519 public key');
   if (body.provider !== undefined && body.provider !== 'near' && body.provider !== 'google') throw new HttpError(400, 'provider must be "near" or "google"');
@@ -112,6 +119,8 @@ export async function register(
   }
   const existing = deps.store.playerBySub(sub);
   if (existing) {
+    // admins keep their account even when it was made with the old NEAR Auth (they run the purge, and are never purged)
+    if (!deps.cfg.adminAccounts.includes(existing.account_id) && await isLegacyOwner(deps.chain, existing).catch(() => false)) throw new HttpError(409, LEGACY_MESSAGE, 'legacy_account');
     // Same login again, or the same login on a new device. The verified login token is the proof of identity, so a new
     // device plays off-chain at once with its key stored as onchain = 0. The key is added to the NEAR account (signed by
     // the player's NEAR Auth key, POST /api/auth/add-key, src/newdevice.ts) only when the player first needs the relayer.
@@ -121,13 +130,13 @@ export async function register(
     deps.store.setActiveKey(existing.account_id, body.sessionPublicKey);
     await ensureRegistered(deps, existing.account_id);
     if (deps.store.sessionKeyOnchain(body.sessionPublicKey)) return { accountId: existing.account_id, created: false, txHashes: [] };
-    if (await deps.chain.derivedOwnerKey(sub) !== existing.owner_pk) return { accountId: existing.account_id, created: false, txHashes: [], needsChainApproval: true, legacyOwner: true };
     return { accountId: existing.account_id, created: false, txHashes: [], needsChainApproval: true, ownerPublicKey: existing.owner_pk };
   }
   // A session key belongs to exactly one account. A second login in the same browser must bring a fresh key.
   if (deps.store.sessionKeyOwner(body.sessionPublicKey)) throw new HttpError(409, 'session key already belongs to another account');
   const ownerPk = await deps.chain.derivedOwnerKey(sub);
   const accountId = playerAccountId(sub, deps.cfg.playersParentId);
+  if (deps.store.isRetired(accountId)) throw new HttpError(409, LEGACY_MESSAGE, 'legacy_account');
   // The account name comes from the login, so the account can already be on chain while this server's database has
   // no row for it (a fresh database after a redeploy, or another server on the same parent). Adopt it instead of
   // trying to create it again, which fails with AccountAlreadyExists on every login.
@@ -161,14 +170,16 @@ async function adopt(
   deps: { chain: Chain; store: Store },
   sub: string, accountId: string, ownerPk: string, sessionPk: string, hasKey: boolean, iat?: number,
 ): Promise<RegisterResult> {
-  if (!hasKey) requireFreshLogin(iat);
+  if (!hasKey) {
+    requireFreshLogin(iat);
+    // the account was made under another NEAR Auth deployment: its owner key is not this one, nobody here can approve it
+    if ((await deps.chain.accountHasKey(accountId, ownerPk)) !== true) throw new HttpError(409, LEGACY_MESSAGE, 'legacy_account');
+  }
   deps.store.addPlayer(accountId, sub, ownerPk);
   const txHashes = await ensureRegistered(deps, accountId);
   deps.store.setActiveKey(accountId, sessionPk);
   if (!hasKey) {
     deps.store.addSessionKey(sessionPk, accountId, false);
-    // the account may have been made under another NEAR Auth deployment: then its owner key is not this one
-    if ((await deps.chain.accountHasKey(accountId, ownerPk)) !== true) return { accountId, created: false, txHashes, needsChainApproval: true, legacyOwner: true };
     return { accountId, created: false, txHashes, needsChainApproval: true, ownerPublicKey: ownerPk };
   }
   deps.store.addSessionKey(sessionPk, accountId);

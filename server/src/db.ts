@@ -65,6 +65,14 @@ export class Store {
         status TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS retired_accounts (
+        account_id TEXT PRIMARY KEY,
+        name TEXT,
+        tag TEXT,
+        reason TEXT NOT NULL,
+        by TEXT NOT NULL,
+        at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS pending_mints (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         account_id TEXT NOT NULL,
@@ -162,6 +170,19 @@ export class Store {
     }
     if (!use) use = this.freeTag(name, account);
     this.db.prepare('INSERT INTO names (account, name, tag) VALUES (?, ?, ?) ON CONFLICT(account) DO UPDATE SET name = excluded.name, tag = excluded.tag').run(account, name, use);
+  }
+
+  /** Accounts an admin purged (src/purge.ts): their login is answered with "make a new account" instead of being adopted again. */
+  isRetired(account: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM retired_accounts WHERE account_id = ?').get(account);
+  }
+  retire(account: string, name: string | null, tag: string | null, reason: string, by: string) {
+    this.db.prepare('INSERT OR REPLACE INTO retired_accounts (account_id, name, tag, reason, by, at) VALUES (?, ?, ?, ?, ?, ?)').run(account, name, tag, reason, by, Date.now());
+  }
+  /** Every player with the time of their last login (the active key's row, else the day the account was made). */
+  playersWithSeen() {
+    return this.db.prepare('SELECT p.account_id, p.sub, p.owner_pk, p.created_at, COALESCE(k.at, p.created_at) AS last_seen FROM players p LEFT JOIN active_keys k ON k.account_id = p.account_id ORDER BY p.created_at')
+      .all() as unknown as Array<{ account_id: string; sub: string; owner_pk: string; created_at: number; last_seen: number }>;
   }
 
   playerBySub(sub: string) {

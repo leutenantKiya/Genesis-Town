@@ -15,6 +15,7 @@ import { TransferStore } from './transfer.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
 import { AdminGrants } from './admingrant.ts';
+import { Purge } from './purge.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
 import { Social, worldIdOk } from './social.ts';
 import { playerProfile } from './profile.ts';
@@ -133,7 +134,9 @@ export function createApp(deps: AppDeps) {
   const adminGrantLimiter = new RateLimiter(30, 300);
   const bazaar = new Bazaar(deps.store.db);
   const social = new Social(deps.store);
+  game.trade.onDone = (a, b, world) => social.tradeLine(a, b, world); // a finished swap is a public line for its world
   const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
+  const purge = new Purge({ cfg: deps.cfg, chain: deps.chain, store: deps.store, game, social, invalidate: (a) => { chainCheck.invalidate(a); readCache.clear(); } });
   social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs, perIp: game.econ.guest.perIp, maxMinutes: game.econ.guest.maxMinutes };
   const guestHelloLimiter = new RateLimiter(game.econ.guest.helloPerMinute, 200); // new guests per IP
   const guestPresenceLimiter = new RateLimiter(240, 100_000); // guest position reports per IP
@@ -201,7 +204,7 @@ export function createApp(deps: AppDeps) {
   // Off-chain play is signed with the player's session key (src/reqauth.ts); the account header alone proves nothing.
   const replay = new ReplayCache();
   function accountOf(req: IncomingMessage, url: URL, raw = ''): string {
-    return verifyRequest({ sessionKeyOwner: (k) => deps.store.sessionKeyOwner(k), isSuperseded: (k, a) => deps.store.isSuperseded(k, a), replay }, req.headers, req.method ?? 'GET', url.pathname + url.search, raw);
+    return verifyRequest({ sessionKeyOwner: (k) => deps.store.sessionKeyOwner(k), isRetired: (a) => deps.store.isRetired(a), isSuperseded: (k, a) => deps.store.isSuperseded(k, a), replay }, req.headers, req.method ?? 'GET', url.pathname + url.search, raw);
   }
   /** Like accountOf, for anything that moves items or coin to another player (live trade, old offers, device-transfer
    *  codes): a key that is not yet on the NEAR account (signed in on a new device, not approved with NEAR Auth) is refused. */
@@ -393,8 +396,8 @@ export function createApp(deps: AppDeps) {
           gameContractId: deps.cfg.gameContractId,
           explorerTxUrl: deps.cfg.explorerTxUrl,
           rpcUrl: deps.cfg.rpcUrl,
-          fastAuth: deps.cfg.fastAuth,
-          google: deps.cfg.googleClientId && deps.verifyGoogle ? { clientId: deps.cfg.googleClientId } : null,
+          fastAuth: deps.cfg.fastAuth.enabled ? deps.cfg.fastAuth : null,
+          google: deps.cfg.fastAuth.enabled && deps.cfg.googleClientId && deps.verifyGoogle ? { clientId: deps.cfg.googleClientId } : null,
           devLogin: deps.cfg.devLogin,
           devTools: devAllowed(req),
           dialogue: dialogue.provider,
@@ -478,6 +481,15 @@ export function createApp(deps: AppDeps) {
         }
         throw new HttpError(404, 'no such route');
       }
+      if (req.method === 'POST' && p === '/api/admin/purge-legacy') {
+        // old NEAR Auth accounts (purge.ts): {dryRun: true} lists them, {dryRun: false, accounts: [...]} deletes the confirmed ones
+        const raw = await readRaw(req);
+        const acct = adminOf(req, url, raw);
+        if (!adminGrantLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+        const b = parseJson(raw);
+        if (typeof b.dryRun !== 'boolean') throw new HttpError(400, 'dryRun must be true or false');
+        return send(res, 200, b.dryRun ? await purge.dryRun() : await purge.run(acct, b.accounts));
+      }
       if (p === '/api/admin/frozen' || p === '/api/admin/status' || p === '/api/admin/unfreeze') {
         if (req.method === 'GET' && p !== '/api/admin/unfreeze') {
           const acct = adminOf(req, url);
@@ -547,9 +559,11 @@ export function createApp(deps: AppDeps) {
         const ok = game.positions ? game.positions.lastOf(acct) : null;
         if (ok) { b.x = ok.x; b.y = ok.y; }
         if (onTile) social.report(acct, w, b);
-        const players = social.nearby(acct, w).map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), worn: game.extras.worn(s.account), ...(s.party ? { party: true } : {}) }) }));
+        const trading = game.trade.tradingPairs(); // who is in an open trade right now: everyone in the world sees "A <-> B"
+        const tradeOf = (a: string) => { const o = trading.get(a); return o ? { trading: social.nick(o), tradingWith: o } : {}; };
+        const players = social.nearby(acct, w).map((s) => ({ ...(s.npc || s.guest ? {} : tradeOf(s.account)), nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), worn: game.extras.worn(s.account), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
-        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w) });
+        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w), ...tradeOf(acct) });
       }
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);

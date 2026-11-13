@@ -5,7 +5,9 @@
  * is only a convenience.
  * Tab "Kas kota": the town treasury (books and chain), "send coin to a player" in one flow (search -> confirmation card ->
  * amount with the limits shown -> note -> Send -> result inline), and the recent grants.
- * Tab "Keamanan": guests online (Kick / Ban IP), banned addresses, frozen accounts, settlement status.
+ * Tab "Keamanan": guests online (Kick / Ban IP), banned addresses, frozen accounts, settlement status, and the purge of old
+ * NEAR Auth accounts (POST /api/admin/purge-legacy: Dry run -> list with checkboxes -> Delete selected after typing the
+ * confirmation word; the server only deletes accounts that are on a fresh dry-run list).
  */
 (function () {
   'use strict';
@@ -13,6 +15,7 @@
   var panel = null, timer = 0, tab = 'coin', wantPage = location.pathname === '/admin';
   var guests = [], bans = [], frozen = [], status = null;
   var F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
+  var PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' }; // the purge of old NEAR Auth accounts
   var ui = {};
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -203,11 +206,70 @@
     body.appendChild($('div', 'chain-dim', $t('Jadi admin: isi ADMIN_ACCOUNTS=akun1,akun2 (id akun NEAR kamu) di .env dan di Railway Variables, lalu restart server.')));
   }
 
+  /* ---------------------------------------------------------------- purge of old NEAR Auth accounts */
+  function confirmWord() { return $t('HAPUS'); }
+  function picked() { return (PG.rows || []).filter(function (r) { return PG.sel[r.account]; }); }
+  function itemsText(items) { var k = Object.keys(items || {}); return k.length ? k.map(function (t) { return t + ' ' + items[t]; }).join(', ') : $t('tidak ada barang'); }
+  function dryRun() {
+    if (PG.busy) return;
+    PG.busy = true; PG.msg = $t('Memeriksa semua akun…'); renderPurge();
+    post('/admin/purge-legacy', { dryRun: true }).then(function (r) {
+      PG.busy = false; PG.rows = r.accounts || []; PG.info = r; PG.sel = {}; PG.word = '';
+      PG.msg = $t('{0} akun lama dari {1} diperiksa.', [PG.rows.length, r.checked]) + (r.unknown ? ' ' + $t('{0} tidak bisa diperiksa (jaringan).', [r.unknown]) : '');
+      renderPurge();
+    }, function (e) { PG.busy = false; PG.msg = (e && e.message) || $t('Gagal.'); renderPurge(); });
+  }
+  function doPurge() {
+    var sel = picked();
+    if (PG.busy || !sel.length || PG.word.trim() !== confirmWord()) return;
+    PG.busy = true; PG.msg = $t('Menghapus…'); renderPurge();
+    post('/admin/purge-legacy', { dryRun: false, accounts: sel.map(function (r) { return r.account; }) }).then(function (r) {
+      PG.busy = false; PG.rows = null; PG.sel = {}; PG.word = '';
+      PG.msg = $t('{0} akun dihapus. Jalankan dry run lagi untuk daftar terbaru.', [(r.purged || []).length]);
+      renderPurge();
+    }, function (e) { PG.busy = false; PG.msg = (e && e.message) || $t('Gagal.'); renderPurge(); });
+  }
+  function renderPurge() {
+    if (!ui.purge) return;
+    var b = ui.purge; b.textContent = '';
+    b.appendChild($('div', 'chain-h', $t('Akun NEAR Auth lama')));
+    b.appendChild($('p', 'chain-dim', $t('Akun yang kunci pemiliknya dibuat NEAR Auth publik, bukan NEAR Auth kita. Data game-nya dihapus; token di blockchain tetap. Mulai dengan dry run: tidak ada yang dihapus sebelum kamu memilih dan mengetik konfirmasi.')));
+    var go = btn($t('Dry run'), dryRun); go.disabled = PG.busy; b.appendChild(go);
+    if (PG.msg) b.appendChild($('p', 'chain-dim', PG.msg));
+    if (PG.info && PG.info.settling) b.appendChild($('p', 'chain-closed', $t('Settlement sedang berjalan: penghapusan ditolak sampai selesai.')));
+    if (!PG.rows) return;
+    if (!PG.rows.length) { b.appendChild($('p', 'chain-dim', $t('Tidak ada akun lama.'))); return; }
+    var all = btn($t('Pilih semua'), function () { PG.rows.forEach(function (r) { PG.sel[r.account] = true; }); renderPurge(); }); all.disabled = PG.busy;
+    var none = btn($t('Kosongkan'), function () { PG.sel = {}; renderPurge(); }); none.disabled = PG.busy;
+    b.appendChild(all); b.appendChild(none);
+    PG.rows.forEach(function (r) {
+      var line = $('label', 'tr-lot'), cb = $('input'), tx = $('div', 'tr-lot-t');
+      cb.type = 'checkbox'; cb.checked = !!PG.sel[r.account]; cb.disabled = PG.busy;
+      cb.addEventListener('change', function () { PG.sel[r.account] = cb.checked; renderPurge(); });
+      tx.appendChild($('div', 'tr-lot-n gt-data', r.nameTag));
+      tx.appendChild($('div', 'chain-dim', $t('terakhir masuk {0}', [when(r.lastSeen)]) + ' · ' + num(r.coin) + ' ' + $t('koin') + ' · ' + itemsText(r.items)));
+      var extra = [];
+      if (r.chips && (r.chips.bought || r.chips.won)) extra.push($t('chip {0} dibeli, {1} menang', [r.chips.bought, r.chips.won]));
+      if (r.homeland) extra.push($t('Homeland TH{0}: {1} bangunan, {2} pekerja', [r.homeland.th, r.homeland.buildings, r.homeland.bots]));
+      if (r.consigned && r.consigned.length) extra.push($t('titipan: {0}', [r.consigned.map(function (c) { return c.token + ' ' + c.qty; }).join(', ')]));
+      if (extra.length) tx.appendChild($('div', 'chain-dim', extra.join(' · ')));
+      line.appendChild(cb); line.appendChild(tx); b.appendChild(line);
+    });
+    var n = picked().length;
+    b.appendChild($('p', 'chain-dim', $t('Ketik {0} untuk mengonfirmasi penghapusan {1} akun terpilih.', [confirmWord(), n])));
+    var f = $('div', 'chain-field'), inp = $('input');
+    inp.type = 'text'; inp.value = PG.word; inp.maxLength = 12; inp.disabled = PG.busy; inp.setAttribute('aria-label', $t('Kata konfirmasi'));
+    var del = btn($t('Hapus yang dipilih'), doPurge, 'primary');
+    function sync() { del.disabled = !!(PG.busy || !n || PG.word.trim() !== confirmWord() || (PG.info && PG.info.settling)); }
+    inp.addEventListener('input', function () { PG.word = inp.value; sync(); });
+    sync(); f.appendChild(inp); f.appendChild(del); b.appendChild(f);
+  }
+
   /* ---------------------------------------------------------------- the window */
   function showTab() {
     if (!ui.coinView) return;
     ui.coinView.style.display = tab === 'coin' ? '' : 'none';
-    ui.safety.style.display = tab === 'safety' ? '' : 'none';
+    ui.safetyView.style.display = tab === 'safety' ? '' : 'none';
     [].forEach.call(ui.tabs.children, function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === tab); b.setAttribute('aria-selected', b.getAttribute('data-tab') === tab ? 'true' : 'false'); });
   }
   function build() {
@@ -224,10 +286,12 @@
     ui.coinView.appendChild(buildForm());
     ui.grants = $('div', 'adm-card'); ui.coinView.appendChild(ui.grants);
     root.appendChild(ui.coinView);
-    ui.safety = $('div', 'adm-card'); root.appendChild(ui.safety);
+    ui.safetyView = $('div'); root.appendChild(ui.safetyView);
+    ui.safety = $('div', 'adm-card'); ui.safetyView.appendChild(ui.safety);
+    ui.purge = $('div', 'adm-card'); ui.safetyView.appendChild(ui.purge);
     return root;
   }
-  function renderAll() { renderTreasury(); renderGrants(); renderSafety(); syncForm(); showTab(); }
+  function renderAll() { renderTreasury(); renderGrants(); renderSafety(); renderPurge(); syncForm(); showTab(); }
   function load() {
     C.api('/admin/guests').then(function (r) { guests = r.guests || []; renderSafety(); }, fail);
     C.api('/admin/frozen').then(function (r) { frozen = r.frozen || []; renderSafety(); }, function () {});
@@ -239,6 +303,7 @@
     if (panel && panel.isOpen()) return;
     if (GT.isUiOpen()) return;
     F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
+    PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' };
     ui = {};
     panel = GT.modal({ title: $t('Admin'), wide: true, body: build(), onClose: function () { clearInterval(timer); }, actions: [{ label: $t('Muat ulang'), onClick: function () { load(); return false; } }, { label: $t('Tutup'), close: true }] });
     renderAll(); load();

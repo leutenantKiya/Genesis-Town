@@ -26,3 +26,14 @@ test('/api/config tells the client where NEAR Auth works', async () => {
     assert.deepEqual(cfg.fastAuth.origins, s.cfg.fastAuth.origins);
   } finally { server.closeAllConnections(); server.close(); }
 });
+
+test('no fallback to the public NEAR Auth: with the FASTAUTH_* settings unset a real config has NEAR Auth off and login refused', async () => {
+  const real = { GAME_CONTRACT_ID: 'g', RELAYER_ACCOUNT_ID: 'r', RELAYER_PRIVATE_KEYS: 'k', SETTLER_ACCOUNT_ID: 'm', SETTLER_PRIVATE_KEY: 'k', TOWN_ACCOUNT_ID: 't', MERCHANT_PARENT_ACCOUNT_ID: 'gt', PLAYERS_PARENT_ACCOUNT_ID: 'p', PLAYERS_PARENT_PRIVATE_KEY: 'k' };
+  const off = loadConfig(real as NodeJS.ProcessEnv);
+  assert.equal(off.fastAuth.enabled, false);
+  assert.equal(off.fastAuth.domain, ''); assert.equal(off.fastAuth.contractId, '');
+  const on = loadConfig({ ...real, FASTAUTH_DOMAIN: 'a.auth0.com', FASTAUTH_CLIENT_ID: 'c', FASTAUTH_CONTRACT_ID: 'fa.t', FASTAUTH_SIGNING_AUDIENCE: 'aud' } as NodeJS.ProcessEnv);
+  assert.equal(on.fastAuth.enabled, true); assert.equal(on.fastAuth.contractId, 'fa.t');
+  const { register } = await import('../src/auth.ts');
+  await assert.rejects(register({ cfg: off, chain: {} as never, store: {} as never, verify: async () => ({ sub: 'x' }) }, { idToken: 't', sessionPublicKey: 'ed25519:' + '1'.repeat(44) }), (e: { status: number }) => e.status === 503);
+});

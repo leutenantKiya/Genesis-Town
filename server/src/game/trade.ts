@@ -43,6 +43,8 @@ export class Trade {
   d: TradeDeps;
   /** Throws HttpError 409 (chain_check) when the chain cannot back `account`'s `tokens`; wired by app.ts to the ChainCheck. */
   verify?: (account: string, tokens: string[]) => Promise<void>;
+  /** Told after a live trade really swapped (wired by app.ts to a public chat line in the trade's world). */
+  onDone?: (a: string, b: string, world: string) => void;
   constructor(d: TradeDeps) { this.d = d; }
 
   private name(token: string) { return this.d.econ.items[token]?.name ?? token; }
@@ -213,6 +215,17 @@ export class Trade {
     return ended ? this.sview(ended, account) : null;
   }
 
+  /** Who is in an open live trade right now (window open, countdown included; an invitation not yet joined does not count),
+   *  as account -> the other account, for the presence answer: everyone in the world sees "A <-> B". */
+  tradingPairs(): Map<string, string> {
+    const out = new Map<string, string>();
+    for (const r of this.d.gs.db.prepare("SELECT a, b, updated_at, status FROM trade_sessions WHERE status IN ('open', 'locked')").all() as unknown as Array<{ a: string; b: string; updated_at: number; status: string }>) {
+      if (this.d.now() - r.updated_at > this.d.econ.trade.sessionIdleSecs * 1000) continue; // idle windows expire on the next trade call
+      out.set(r.a, r.b); out.set(r.b, r.a);
+    }
+    return out;
+  }
+
   /** Invitations waiting for the caller to join. */
   invites(account: string): SessionView[] {
     this.expire();
@@ -343,5 +356,6 @@ export class Trade {
     const n = this.d.names, tokens = [...Object.keys(la), ...Object.keys(lb)];
     this.d.history(r.a, `Trade with ${n.nameOf(r.b) ?? r.b}: give ${fmt(la)}, receive ${fmt(lb)}`, tokens, ref);
     this.d.history(r.b, `Trade with ${n.nameOf(r.a) ?? r.a}: give ${fmt(lb)}, receive ${fmt(la)}`, tokens, ref);
+    this.onDone?.(r.a, r.b, r.world);
   }
 }

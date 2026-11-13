@@ -15,6 +15,7 @@ function world() {
   s.store.addPlayer(ACC, 'google-oauth2|1', owner.getPublicKey().toString());
   s.store.addSessionKey(near.KeyPair.fromRandom('ed25519').getPublicKey().toString(), ACC); // the old device's key
   s.chain.mpcSign = (payload) => owner.sign(payload).signature; // stands in for NEAR Auth's MPC with the derived key
+  s.chain.derivedOwnerKey = async () => owner.getPublicKey().toString(); // ... so the derived key is the stored one: not an old NEAR Auth account
   const deps = { ...s, verify: async (t: string) => ({ sub: t }), currentBlockHeight: async () => 100n };
   return { s, owner, deps };
 }

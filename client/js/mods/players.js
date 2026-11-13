@@ -30,6 +30,7 @@
   function blocked() { try { return JSON.parse(localStorage.getItem(LS_BLOCK) || '[]') || []; } catch (e) { return []; } }
   function setBlocked(a) { try { localStorage.setItem(LS_BLOCK, JSON.stringify(a)); } catch (e) { /* storage blocked */ } }
   // chat identity is always name#tag (names repeat, tags do not), never the plain name
+  var myTrade = null; // { nick, acct }: the player I am in an open trade with, from the presence answer
   function key(nick, tag) { return String(nick).toLowerCase() + '#' + (tag || ''); }
   function isBlocked(nick, tag) { return blocked().indexOf(key(nick, tag)) >= 0; }
   function tagsOfName(name) { var n = String(name).toLowerCase(), t = {}; Object.keys(others).forEach(function (a) { var o = others[a]; if (String(o.nick).toLowerCase() === n && o.tag) t[o.tag] = 1; }); lines.forEach(function (m) { if (m.fromTag && String(m.from).toLowerCase() === n && m.from !== me) t[m.fromTag] = 1; }); return Object.keys(t); }
@@ -77,7 +78,7 @@
       }
       o.sx = sx; o.sy = sy; o.rt = now; o.x = q.x; o.y = q.y; o.age = ((q.age || 0) + rtt / 2) / 1000;
       o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; if (q.fish && !q.npc && (!o.fish || o.fish.phase !== q.fish.phase)) { var fp = q.fish.phase; var fs = fp === 'cast' ? 'cast' : fp === 'bite' ? 'bite' : fp === 'reel' ? 'reel' : ''; if (fs) sfx(fs, { vol: 0.6, x: q.x, y: q.y }); } // another player's rod
-      o.worn = q.worn || null; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.seen = now;
+      o.worn = q.worn || null; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.trading = q.trading || null; o.tradingWith = q.tradingWith || null; o.seen = now;
     });
     Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
   }
@@ -114,6 +115,7 @@
       if (r.world !== curWorld) return;
       backoff = 0;
       me = r.me; meTag = r.tag || meTag; online = r.online;
+      myTrade = r.trading ? { nick: r.trading, acct: r.tradingWith } : null; // who I am in an open trade with
       named = r.named !== false; if (named && GT.setPlayerName) GT.setPlayerName(me);
       if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.setMine(r.me, r.tag, r.look, named);
       applyPlayers(r.players || []);
@@ -215,7 +217,8 @@
       var small = o.guest || !!guestId, sz = small ? 5 : 7; // a guest's own tag is small and dim; a guest sees everyone's tags small
       ctx.font = sz + 'px "Pixelify Sans", sans-serif';
       var text = o.guest ? $t('Tamu') : o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
-      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag), worn: o.worn || null, acct: a });
+      if (o.trading && !o.npc && !o.guest) text = o.nick + ' \u21c4 ' + o.trading; // in an open trade: everyone in the world sees with whom
+      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.trading ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag), worn: o.worn || null, acct: a });
     });
     tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
     tags.forEach(function (t) {
@@ -251,8 +254,27 @@
       bp.push(b);
       bubble(ctx, TH, b, W);
     });
+    tradeBadges(ctx, TH, T, now);
     arrows(ctx, TH, W, T, now);
     ctx.restore();
+  }
+  // a small badge between two players in an open trade (once per pair; only when they stand near each other on screen)
+  function tradeBadges(ctx, TH, T, now) {
+    var c = C(), mine = c && c.state && c.state.account, done = {}, spot = function (acct) {
+      if (acct === mine) { var p = GT.player, a = GT.at(p.x, p.y); return { x: a.x + T / 2, y: a.y, tx: p.x, ty: p.y }; }
+      var o = others[acct]; if (!o || !here(o)) return null;
+      var cx = curX(o, now), cy = curY(o, now), a2 = GT.at(cx, cy); return { x: a2.x + T / 2, y: a2.y, tx: cx, ty: cy };
+    };
+    var pairs = [];
+    if (myTrade && mine) pairs.push([mine, myTrade.acct]);
+    Object.keys(others).forEach(function (a) { var o = others[a]; if (o.tradingWith && !o.npc && !o.guest) pairs.push([a, o.tradingWith]); });
+    pairs.forEach(function (pr) {
+      var k = pr[0] < pr[1] ? pr[0] + '|' + pr[1] : pr[1] + '|' + pr[0];
+      if (done[k]) return; done[k] = 1;
+      var a = spot(pr[0]), b = spot(pr[1]);
+      if (!a || !b || Math.abs(a.tx - b.tx) + Math.abs(a.ty - b.ty) > 10) return;
+      TH.label(ctx, '\u21c4', GT.snap((a.x + b.x) / 2), GT.snap(Math.min(a.y, b.y) - 16), { tone: 'accent', size: 9 });
+    });
   }
   // a small arrow on the screen edge towards each party mate who is off screen (GT.at projects in 2D and 2.5D alike)
   function arrows(ctx, TH, W, T, now) {
@@ -307,6 +329,7 @@
   function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound never breaks play */ } }
   function addLine(m) {
     if (!m.note && isBlocked(m.from, m.fromTag)) return;
+    if (m.sys === 'trade') { lines.push(m); if (lines.length > 60) lines.shift(); renderList(); return; } // the town's line: no sound, no bubble
     if (!m.note && key(m.from, m.fromTag) !== key(me || '', meTag)) sfx('chat', { vol: 0.5 }); // a message from someone else
     lines.push(m);
     if (lines.length > 60) lines.shift();
@@ -319,9 +342,10 @@
     list.textContent = '';
     var mine = key(me || '', meTag);
     lines.slice(-30).forEach(function (m) {
-      var row = el('div', 'gt-chat-line' + (m.to ? ' private' : '') + (m.party ? ' party' : '') + (m.note ? ' note' : ''));
+      var row = el('div', 'gt-chat-line' + (m.to ? ' private' : '') + (m.party ? ' party' : '') + (m.note || m.sys ? ' note' : ''));
       row.dataset.t = String(m.t || Date.now());
-      if (m.note) row.textContent = m.text;
+      if (m.sys === 'trade') row.textContent = $t('{0} bertukar barang dengan {1}', [m.from, m.with]);
+      else if (m.note) row.textContent = m.text;
       else {
         var from = m.from + (m.fromTag ? '#' + m.fromTag : ''), to = m.to ? m.to + (m.toTag ? '#' + m.toTag : '') : '';
         var who = m.party ? $t('[Party] {0}', [from]) : m.to ? (key(m.from, m.fromTag) === mine ? $t('kamu → {0}', [to]) : $t('{0} → kamu', [from])) : from;

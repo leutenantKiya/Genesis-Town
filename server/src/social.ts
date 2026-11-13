@@ -17,7 +17,7 @@ export interface Seen { account: string; world: string; nick: string; tag: strin
 /** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
 export interface Npc { id: string; account: string; name: string; look: number; x: number; y: number; title: string }
 export const NPC_TAG = 'NPC';
-export interface ChatMsg { id: number; t: number; from: string; fromTag: string; to: string | null; toTag: string | null; text: string; party?: true }
+export interface ChatMsg { id: number; t: number; from: string; fromTag: string; to: string | null; toTag: string | null; text: string; party?: true; /** a line the town wrote, not a player: 'trade' = "from traded with `with`" */ sys?: 'trade'; with?: string }
 interface Stored extends ChatMsg { fromAcc: string; toAcc: string | null; world: string; party: true | undefined; partyId: number | null }
 
 /** The slice of Store that names need (src/db.ts). */
@@ -54,7 +54,7 @@ export function cleanText(s: string) {
   // no control characters, one line, trimmed, and rude words masked
   return s.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u2028-\u202e]/g, ' ').replace(/\s+/g, ' ').trim().replace(ROUGH_RE, (w) => w[0] + '*'.repeat(w.length - 1));
 }
-function strip(m: Stored): ChatMsg { return { id: m.id, t: m.t, from: m.from, fromTag: m.fromTag, to: m.to, toTag: m.toTag, text: m.text, ...(m.party ? { party: true as const } : {}) }; }
+function strip(m: Stored): ChatMsg { return { id: m.id, t: m.t, from: m.from, fromTag: m.fromTag, to: m.to, toTag: m.toTag, text: m.text, ...(m.party ? { party: true as const } : {}), ...(m.sys ? { sys: m.sys, with: m.with } : {}) }; }
 /** What an account without a chosen name is shown as. */
 export function defaultNick(account: string) { return `Player_${account.replace(/^p/, '').slice(0, 4)}`; }
 
@@ -276,6 +276,12 @@ export class Social {
     this.chat.push(msg);
     if (this.chat.length > 300) this.chat.splice(0, this.chat.length - 300);
     return strip(msg);
+  }
+  /** A public line in `world` that two players traded (names only, no goods). */
+  tradeLine(a: string, b: string, world: string) {
+    const A = this.nick(a), B = this.nick(b);
+    this.chat.push({ id: ++this.seq, t: this.now(), from: A, fromTag: this.tag(a), to: null, toTag: null, text: `${A} traded with ${B}`, sys: 'trade', with: B, fromAcc: a, toAcc: null, world, party: undefined, partyId: null });
+    if (this.chat.length > 300) this.chat.splice(0, this.chat.length - 300);
   }
   /** Lines after `since` that this player may read in `world`: the world's public lines, plus private lines to or from them. */
   since(account: string, world: string, since: number) {

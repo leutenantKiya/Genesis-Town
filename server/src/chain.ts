@@ -172,7 +172,7 @@ export class TestnetChain implements Chain {
   }
 
   // The NEAR Auth key for a login is derived by the MPC contract at path `jwt#https://<domain>/#<sub>` with
-  // predecessor fast-auth.testnet (docs.auth.near.org protocol/concepts/auth0.md, contracts/fast-auth.md).
+  // predecessor our own deployment's contract (FASTAUTH_CONTRACT_ID; docs.auth.near.org protocol/concepts/auth0.md).
   async derivedOwnerKey(sub: string): Promise<string> {
     const fa = this.cfg.fastAuth;
     return (await this.provider.callFunction({

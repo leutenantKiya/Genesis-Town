@@ -17,7 +17,7 @@
   var LS_ACC = 'gt.chain.account', LS_KEY = 'gt.chain.sessionKey', LS_OFF = 'gt.chain.offline';
   // Game keys of every account that played in this browser ({account: secret key}), so signing out and back in (or
   // switching accounts) never loses a key. LS_KEY holds the key for the next sign-in until the server confirms it.
-  var LS_KEYS = 'gt.chain.keys', LS_FORCE = 'gt.chain.chooseAccount', LS_OWNER = 'gt.chain.ownerKey', LS_LEGACY = 'gt.chain.legacyOwner';
+  var LS_KEYS = 'gt.chain.keys', LS_FORCE = 'gt.chain.chooseAccount', LS_OWNER = 'gt.chain.ownerKey';
   var TILE_ITEM = { water: 'fish', rock: 'ore', tree: 'wood' };
   var MERCHANTS = [
     { id: 'sari', pal: 3, dx: 3, dy: 2, tag: $t('Sari · Ikan') },
@@ -58,10 +58,21 @@
       .then(function (r) {
         if (r.status === 502 || r.status === 503 || r.status === 504) netDown(); else netUp(); // a proxy with no server behind it (a deploy)
         return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; if (j.code) e.code = j.code; if (e.code === 'superseded') onSuperseded(); throw e; }
+          if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; if (j.code) e.code = j.code; if (e.code === 'superseded') onSuperseded(); if (e.code === 'legacy_account') onLegacy(); throw e; }
           return j;
         });
       });
+  }
+
+  // An account made with the old (public) NEAR Auth is retired by an admin; the server answers its login, or its old session,
+  // with 'legacy_account'. Say so once, forget the account here, and point the player to a new account.
+  function onLegacy() {
+    if (S.legacyShown) return;
+    S.legacyShown = true;
+    S.account = null; S.st = null; lsSet(LS_ACC, null);
+    var body = $('div');
+    body.appendChild($('p', null, $t('Akun ini dibuat dengan NEAR Auth versi lama dan sudah dihentikan. Buat akun baru dengan login yang berbeda (misalnya akun Google lain).')));
+    GT.modal({ title: $t('Akun lama'), body: body, actions: [{ label: $t('Oke'), primary: true, onClick: function (h) { S.legacyShown = false; h.close('action'); renderBanner(); renderHud(); return true; } }] });
   }
 
   // One live session per account: a newer login elsewhere makes the server answer 409 'superseded'. Stop polling and
@@ -239,7 +250,6 @@
         // A new device is in at once: the server keeps its key off-chain until the first on-chain action (approveDevice).
         var enter = function (res, key) {
           lsSet(LS_OWNER, res.needsChainApproval && res.ownerPublicKey ? res.ownerPublicKey : null);
-          lsSet(LS_LEGACY, res.needsChainApproval && res.legacyOwner ? '1' : null);
           keepKey(res.accountId, key);
           S.account = res.accountId; S.superseded = false; lsSet(LS_ACC, res.accountId); renderBanner();
           GT.toast(res.created ? $t('Akun dibuat! Paket awal: 100 koin, 1 Beliung, 3 Roti, 3 Gandum.') : $t('Selamat datang kembali!'));
@@ -259,29 +269,21 @@
   // unusable here (then nothing else can approve it).
   // NEAR Auth's login only returns to page addresses it has allowed (the server lists them in fastAuth.origins). Anywhere
   // else its popup can only fail with "Callback URL mismatch", so the game does not offer it there.
-  // NEAR Auth's browser provider. Our own NEAR Auth deployment (docs/fastauth-fork-plan.md) sends its Auth0 domain and
-  // signing audience in /api/config; without them the SDK uses NEAR's shared testnet values.
+  // NEAR Auth's browser provider: our own NEAR Auth deployment (docs/fastauth-fork-plan.md) sends its client id, Auth0
+  // domain and signing audience in /api/config (`fastAuth` is null when the server has none: then only Google login).
   function nearProvider() {
-    var fa = S.cfg.fastAuth, o = { network: 'testnet', clientId: fa.clientId };
-    if (fa.domain && fa.domain !== 'login.testnet.fast-auth.com') o.domain = fa.domain;
-    if (fa.signingAudience && fa.signingAudience !== 'auth0.jwt.fast-auth.testnet') o.signingAudience = fa.signingAudience;
-    return new window.NearLib.JavascriptProvider(o);
+    var fa = S.cfg.fastAuth;
+    return new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: fa.clientId, domain: fa.domain, signingAudience: fa.signingAudience });
   }
   function nearAuthHere() {
     var fa = S.cfg && S.cfg.fastAuth;
     if (!window.NearLib || !fa || S.cfg.devLogin) return false;
     return !fa.origins || fa.origins.indexOf(location.origin) >= 0;
   }
-  function msgLegacyOwner() { return $t('Akunmu dibuat dengan NEAR Auth versi lama, jadi perangkat ini belum bisa disetujui di sini. Kamu tetap bisa bermain; untuk Pasar, hadiah, saham, dan proyek kota, pakai perangkat tempat akunmu dibuat.'); }
   function msgNoNearAuth() { return $t('Pasar, hadiah, saham, dan proyek kota di perangkat ini perlu persetujuan NEAR Auth, yang belum aktif di alamat ini. Kamu tetap bisa bermain; untuk hal on-chain, pakai perangkat pertamamu.'); }
   function approveDevice() {
     var usable = nearAuthHere(), ownerPk = lsGet(LS_OWNER);
     var body = $('div');
-    if (lsGet(LS_LEGACY) === '1') {
-      body.appendChild($('p', null, msgLegacyOwner()));
-      GT.modal({ title: $t('Setujui perangkat ini'), body: body });
-      return Promise.reject(new Error($t('Perangkat ini belum disetujui.')));
-    }
     if (!usable || !ownerPk) {
       body.appendChild($('p', null, msgNoNearAuth()));
       GT.modal({ title: $t('Setujui perangkat ini'), body: body });

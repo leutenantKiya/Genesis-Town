@@ -24,9 +24,8 @@ export interface Config {
   /** Account ids (comma list in ADMIN_ACCOUNTS) that may use the in-game admin panel. */
   adminAccounts: string[];
   googleClientId: string | null; // Sign in with Google (GIS) OAuth client id; public, but kept in env with the rest
-  // origins: the page addresses NEAR Auth's login accepts as callback (the shared testnet client only lists the ones
-  // NEAR registered); elsewhere the client hides NEAR Auth instead of opening a popup that fails
-  fastAuth: { domain: string; clientId: string; contractId: string; signingAudience: string; mpcContractId: string; mpcDomainId: number; origins: string[] };
+  // origins: the page addresses NEAR Auth's login accepts as callback (our Auth0 tenant lists them); elsewhere the client hides NEAR Auth instead of opening a popup that fails
+  fastAuth: { enabled: boolean; domain: string; clientId: string; contractId: string; signingAudience: string; mpcContractId: string; mpcDomainId: number; origins: string[] };
   explorerTxUrl: string; // prefix, hash is appended
   relay: { perMinute: number; perDay: number; maxGasTera: number; maxBlocksAhead: number };
   settleChunk: number;
@@ -57,6 +56,21 @@ function need(env: NodeJS.ProcessEnv, name: string): string {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const chainMode = env.CHAIN_MODE === 'mock' ? 'mock' : 'testnet';
   const get = chainMode === 'mock' ? (n: string) => env[n] ?? `mock-${n.toLowerCase()}` : (n: string) => need(env, n);
+  // Our own NEAR Auth deployment (docs/fastauth-fork-plan.md). There is no fallback to NEAR's shared one: with any of the four
+  // unset NEAR Auth is off (`enabled` false) and players sign in with Google. A mock chain gets placeholder values for tests.
+  const mock = chainMode === 'mock';
+  const fa = {
+    domain: env.FASTAUTH_DOMAIN?.trim() || (mock ? 'mock-nearauth.test' : ''),
+    clientId: env.FASTAUTH_CLIENT_ID?.trim() || (mock ? 'mock-client-id' : ''),
+    contractId: env.FASTAUTH_CONTRACT_ID?.trim() || (mock ? 'mock-fa.testnet' : ''),
+    signingAudience: env.FASTAUTH_SIGNING_AUDIENCE?.trim() || (mock ? 'auth0.jwt.mock-fa.testnet' : ''),
+  };
+  const fastAuth = {
+    enabled: !!(fa.domain && fa.clientId && fa.contractId && fa.signingAudience), ...fa,
+    mpcContractId: 'v1.signer-prod.testnet',
+    mpcDomainId: 1,
+    origins: (env.NEAR_AUTH_ORIGINS ?? 'http://localhost:3000').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean),
+  };
   return {
     port: Number(env.PORT ?? 3000), // the shared NEAR Auth testnet Auth0 client accepts http://localhost:3000 as a callback (probed 2026-10-31)
     network: 'testnet',
@@ -80,17 +94,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     playerInitialNear: BigInt(env.PLAYER_INITIAL_YOCTO ?? '10000000000000000000000'), // 0.01 NEAR
     adminAccounts: (env.ADMIN_ACCOUNTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     googleClientId: env.GOOGLE_CLIENT_ID?.trim() || null,
-    // Values from https://docs.auth.near.org/resources/testnet.md and protocol/concepts/auth0.md
-    fastAuth: {
-      domain: env.FASTAUTH_DOMAIN || 'login.testnet.fast-auth.com',
-      clientId: env.FASTAUTH_CLIENT_ID || 'np8paqIpMWmNbzT4xAvOOapZBjsOpptl',
-      // our own NEAR Auth deployment (docs/fastauth-fork-plan.md) sets these; unset = NEAR's shared testnet deployment
-      contractId: env.FASTAUTH_CONTRACT_ID?.trim() || 'fast-auth.testnet',
-      signingAudience: env.FASTAUTH_SIGNING_AUDIENCE?.trim() || 'auth0.jwt.fast-auth.testnet',
-      mpcContractId: 'v1.signer-prod.testnet',
-      mpcDomainId: 1,
-      origins: (env.NEAR_AUTH_ORIGINS ?? 'http://localhost:3000').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean),
-    },
+    fastAuth,
     explorerTxUrl: 'https://testnet.nearblocks.io/txns/',
     relay: {
       perMinute: Number(env.RELAY_MAX_PER_MINUTE ?? 30),
