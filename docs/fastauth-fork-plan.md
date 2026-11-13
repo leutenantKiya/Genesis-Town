@@ -24,10 +24,10 @@
 
 ## STATUS
 
-- [ ] F0 (OWNER): testnet NEAR, Auth0 tenant domain, OK to clone and build the fork
+- [x] F0 (OWNER): testnet NEAR, Auth0 tenant domain, OK to clone and build the fork
 - [x] F1: clone at a pinned commit, build the three contracts, run their tests, measure storage (tests blocked: see F1 result)
-- [ ] F2 (OWNER, with exact values from F1): Auth0 tenant: APIs, Action, consent forms, connections, app URLs
-- [ ] F3: deploy and configure the three contracts on testnet; verify with view calls
+- [x] F2 (OWNER, with exact values from F1): Auth0 tenant: APIs, Action, consent forms, connections, app URLs
+- [x] F3: deploy and configure the three contracts on testnet; verify with view calls
 - [ ] F4: game reads the fork's settings from env; shared client stays the default; tests
 - [ ] F5: end-to-end on localhost testnet (Railway paused): new account, second device approval, on-chain action
 - [ ] F6: Railway env + redeploy; repeat F5 on the deployed domain; README and docs
@@ -127,6 +127,26 @@ Exact values (`<FA>` = `fa.genesistown.testnet`):
    ~1.02 NEAR.
 7. **Verify with views:** `fa.mpc_address`, `fa.mpc_domain_id` (= 1), `fa.get_guard("jwt")`, router guard lookup,
    and `v1.signer-prod.testnet.derived_public_key` for a test path with predecessor `fa.genesistown.testnet`.
+
+### F0–F3 result (2026-11-13)
+
+- **Funding:** faucet account `gtfund-11131953.testnet` (10 NEAR): 2 NEAR to `game.genesistown.testnet` (storage; this
+  also unstuck settlement, which had failed with `LackBalanceForState`), 7.9 NEAR to `genesistown.testnet`.
+- **Auth0 tenant** `genesis-town.us.auth0.com`, SPA client id `2msZbhVdhYzVKyCxFRc8G0gwUiYzoPQQ`. APIs, Google and
+  database connections, three forms (delegate `ap_pCjpwgcVpCCvyFcUhWkyqY`), Action `fast-auth` on post-login (owner).
+  The tenant is on a 21-day trial, which is what allows Forms and Action npm deps.
+- **Accounts** (each created by its parent): `fa.genesistown.testnet` (6.3), `jwt.fa.genesistown.testnet` (3.75),
+  `auth0.jwt.fa.genesistown.testnet` (2.05 + 0.15: the guard with two RSA keys needs a little more than its code).
+- **Deployed with init:**
+  - guard `{owner: genesistown.testnet, public_keys: both tenant JWKS keys as n/e byte arrays}`;
+  - router `{owner}`;
+  - fa `{init_guards: {jwt: jwt.fa…}, owner, pauser: owner}`.
+- `set_mpc_address v1.signer-prod.testnet`; `add_guard {guard_name: "https://genesis-town.us.auth0.com/",
+  guard_account: auth0.jwt.fa…}` with 1.0212 NEAR.
+- **Verified by views:**
+  - `fa.mpc_address` = `v1.signer-prod.testnet`, `mpc_domain_id` = 1;
+  - `fa.get_guard("jwt")` = router; router `get_guard(issuer)` = guard;
+  - owners = `genesistown.testnet`; guard holds 2 keys.
 
 ## F4: game settings (code, tests)
 
