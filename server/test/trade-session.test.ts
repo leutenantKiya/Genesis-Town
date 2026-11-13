@@ -9,7 +9,7 @@ const rows = (w: any, ref: string) => w.game.gs.db.prepare('SELECT * FROM ledger
 async function pair() {
   const w = await baseWorld();
   w.give(P, 'fish', 10); w.give(Q, 'coin', 100);
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  w.stand(P, 'board'); w.stand(Q, 'board', 1);
   return w;
 }
 /** Opens, joins, fills both sides (5 fish for 40 coin) and returns the session id. */
@@ -82,7 +82,7 @@ test('an empty trade cannot be confirmed', async () => {
 test('one live session per player', async () => {
   const w = await pair();
   const t = w.game.trade;
-  w.stand(R, 'consign', 2);
+  w.stand(R, 'board', 2);
   const s = t.open(P, { to: Q });
   fails(() => t.open(R, { to: Q }), 409, 'Budi is already trading.');
   fails(() => t.open(Q, { to: R }), 409, 'You are already trading.');
@@ -98,17 +98,17 @@ test('strangers need 3 tiles, party members only the same world, never across wo
   const w = await coopWorld();
   const t = w.game.trade;
   w.give(P, 'fish', 10);
-  w.stand(P, 'consign');
+  w.stand(P, 'board');
   // a stranger far away
   let far = 4;
-  for (; far < 30; far++) { try { w.stand(Q, 'consign', far); break; } catch { /* not walkable */ } }
+  for (; far < 30; far++) { try { w.stand(Q, 'board', far); break; } catch { /* not walkable */ } }
   assert.ok(far < 30);
   fails(() => t.open(P, { to: Q }), 409, /Stand close together/);
-  w.stand(Q, 'consign', 1);
+  w.stand(Q, 'board', 1);
   t.close(P, t.open(P, { to: Q }).id);
   // party mates: far apart in the same world is fine
   w.party(P, Q);
-  w.stand(Q, 'consign', far);
+  w.stand(Q, 'board', far);
   assert.equal(t.open(P, { to: Q }).status, 'invite');
   t.close(P, t.session(P)!.id);
   // never across worlds, party or not
@@ -200,7 +200,7 @@ test('frozen account cannot open, join or be swapped', async () => {
   let chunk = 0;
   const freeze = (a: string) => w.game.gs.recordShortfall(w.day(), ++chunk, a, 'coin', 5, 0);
   freeze(R);
-  w.stand(R, 'consign', 2);
+  w.stand(R, 'board', 2);
   fails(() => t.open(R, { to: P }), 403, /frozen/);
   fails(() => t.open(P, { to: R }), 403, /frozen/);
   // frozen while the trade runs: the swap does not happen

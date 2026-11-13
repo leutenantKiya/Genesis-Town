@@ -98,7 +98,6 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 | Worker bots | player `coin` | 120-150 coin per hire, paid to the town treasury (a transfer to the town, not a burn) |
 | Rare bots, furniture, hospital, cosmetics | player `coin` and raw items | Pemburu 400 and Koki 350 coin; Kasur, Hiburan, Rumah Pekerja, Rumah Sakit, Penggergajian, Kincir Angin and Gudang builds and upgrades cost wood, ore and coin; cosmetics 80-300 coin. Coin goes to the town treasury, items are burned |
 | Restoran | `fish`, `wood` (cook), `bread`, `meal` (stock) | the pantry consumes them to feed contractors; no new item tokens, the Restoran makes no meals by itself |
-| Consignment fee | seller `coin` | 5% of each Titip Jual sale, to the town treasury |
 
 ### The faucet throttle (why money supply stays bounded)
 
@@ -226,16 +225,22 @@ Built in M3: contract v3 (`contracts/game/src/market.rs`), on chain right away a
 Player-market trades do **not** feed merchant demand counts (B, S), so wash trading between your own accounts cannot
 move merchant prices, and every wash trade burns 5%.
 
-## 6b. Direct trade and consignment
+## 6b. Direct trade and merchants on the Player Market
 
 - **Direct trade.** Two players swap items and `coin` face to face in the public area. It is a transfer only: nothing is
   minted or burned, no merchant counter (B, S) moves, and each receiver's gain counts against `caps.dailyGainPerItem`.
   Rows are off-chain and settle daily like merchant trades.
-- **Titip Jual (consignment).** Deposited items sit on the town account. Each game hour up to `sellPerGameHour` (3) units
-  per lot sell to the town at the best merchant buy price, only if it is at least the owner's minimum. The coin paid is
-  town demand, so it comes out of the same daily faucet `W_day` (section 3) and is stopped by the same cap and throttle; it
-  is not a second faucet. The 5% fee goes to the town treasury, and a lot never sells more than was deposited (max 50
-  per item).
+- **Merchants on the Player Market.** About every 30 s the server reads the open listings (`npcMarket` in
+  `economy/config.json`). A merchant buys a listing of a good it trades when the price is at or below
+  `floor(mid * maxPayMidMult * cashFactor)` (the mid price and cash factor of section 4), never more than 15% of its cash
+  per buy or 35% per day, never past the daily buy cap it shares with player sales, a stock of 1.5 x target, 30 units a day
+  or a reserve of 3 days' rent. The buy is the settler's `merchant_buy_listing`: the merchant's own coin moves to the
+  seller (5% burned, as for any buyer), so no coin is created. The median listing price (median over sellers of each
+  seller's median, at least 3 sellers, last 6 readings) moves each good's base value by at most 5% per game day within
+  0.7x to 1.5x; when it stays at 2x or above or 0.5x or below the normal value, merchants stop offering that good until
+  it recovers. One seller or a few listings by one account cannot move it.
+- **Tool stall.** Ben's shop sells a new Pickaxe, Axe, Fishing Rod or Hoe and repairs worn ones for coin (`toolShop`);
+  a repair costs by the wear, the coin goes to Ben like any sale to a merchant.
 
 ## 7. How the economy changes without a dev patch
 

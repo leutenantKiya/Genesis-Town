@@ -530,7 +530,7 @@ Status runs `invite → open ⇄ locked → done | cancelled | expired`. An acco
 **`trade.js`:**
 
 - Replace `offerModal`, `incomingModal` and the old offer poll with a session flow:
-  - `poll()` runs every 1 s while a session or invite exists, else every 3 s. It runs in **any** world (drop `inPublic()` from the trade part; Titip Jual and Papan Juara stay public-only).
+  - `poll()` runs every 1 s while a session or invite exists, else every 3 s. It runs in **any** world (drop `inPublic()` from the trade part; Papan Juara stays public-only).
   - An incoming invite opens a modal "{0}#{1} mengajak dagang" with Buka / Tolak.
   - The window (`GT.modal`, wide) has two columns:
     - **Kamu beri**: item cards from my bag (reuse `GT_ITEMS.icon`), a qty input per card, a coin input, at most `maxLines` kinds. Edits are debounced 400 ms and then sent with `POST /trade/set`.

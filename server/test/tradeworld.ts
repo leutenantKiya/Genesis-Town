@@ -24,8 +24,8 @@ export async function world() {
   const give = (a: string, token: string, n: number) => game.gs.add(day(), a, token, n, 'test');
   const bal = (a: string, t: string) => game.gs.balance(a, t);
   /** Puts a player in the public area `dx` tiles east of the spot in front of a landmark. */
-  const stand = (a: string, spot: 'consign' | 'board' | Pos, dx = 0) => {
-    const l = spot === 'consign' || spot === 'board' ? game.map!.landmarks()[spot] : spot;
+  const stand = (a: string, spot: 'board' | Pos, dx = 0) => {
+    const l = spot === 'board' ? game.map!.landmarks()[spot] : spot;
     const t = { x: l.x + dx, y: l.y + 1 };
     assert.ok(game.map!.walkable(t.x, t.y), `walkable ${t.x},${t.y}`);
     game.positions!.reset(a);

@@ -5,7 +5,7 @@ import { world, fails, P, Q, R } from './tradeworld.ts';
 test('trade swaps items and coin atomically', async () => {
   const w = await world();
   w.give(P, 'fish', 5); w.give(Q, 'coin', 100);
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  w.stand(P, 'board'); w.stand(Q, 'board', 1);
   const pc = w.bal(P, 'coin'), qc = w.bal(Q, 'coin'), pf = w.bal(P, 'fish'), qf = w.bal(Q, 'fish');
   const o = w.game.trade.offer(P, { to: 'Budi#' + w.store.tagOf(Q), give: { fish: 5 }, want: { coin: 40 } });
   assert.ok(o.id > 0 && o.expires_at > 0);
@@ -25,7 +25,7 @@ test('trade swaps items and coin atomically', async () => {
 test('accept fails when offerer spent the items', async () => {
   const w = await world();
   w.give(P, 'fish', 5); w.give(Q, 'coin', 100);
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  w.stand(P, 'board'); w.stand(Q, 'board', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 5 }, want: { coin: 40 } });
   w.game.gs.add(w.day(), P, 'fish', -(w.bal(P, 'fish') - 2), 'test'); // P spends down to 2
   const snap = () => [w.bal(P, 'fish'), w.bal(Q, 'coin'), w.bal(P, 'coin'), w.bal(Q, 'fish')];
@@ -42,7 +42,7 @@ test('accept fails when offerer spent the items', async () => {
 test('double accept: second answers 409', async () => {
   const w = await world();
   w.give(P, 'fish', 5);
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  w.stand(P, 'board'); w.stand(Q, 'board', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 5 }, want: {} });
   w.game.trade.accept(Q, o.id);
   fails(() => w.game.trade.accept(Q, o.id), 409, /already/);
@@ -53,7 +53,7 @@ test('double accept: second answers 409', async () => {
 test('expired offer answers 409', async () => {
   const w = await world();
   w.give(P, 'fish', 5);
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  w.stand(P, 'board'); w.stand(Q, 'board', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 5 }, want: {} });
   w.adv(121_000);
   fails(() => w.game.trade.accept(Q, o.id), 409, 'The offer expired.');
@@ -63,11 +63,11 @@ test('expired offer answers 409', async () => {
 test('trade only in public and near each other', async () => {
   const w = await world();
   w.give(P, 'fish', 5);
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 8); // far apart
+  w.stand(P, 'board'); w.stand(Q, 'board', 8); // far apart
   fails(() => w.game.trade.offer(P, { to: Q, give: { fish: 1 }, want: {} }), 409, 'You both must be close together in the public area.');
-  w.stand(Q, 'consign', 1);
+  w.stand(Q, 'board', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 1 }, want: {} });
-  w.stand(Q, 'consign', 8);
+  w.stand(Q, 'board', 8);
   fails(() => w.game.trade.accept(Q, o.id), 409, 'You both must be close together in the public area.');
   // in a Homeland
   const row = w.game.homelands.ensure(Q);
@@ -83,7 +83,7 @@ test('trade only in public and near each other', async () => {
 test('cancel by either side', async () => {
   const w = await world();
   w.give(P, 'fish', 5);
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  w.stand(P, 'board'); w.stand(Q, 'board', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 1 }, want: {} });
   fails(() => w.game.trade.cancel(R, o.id), 404, /./);
   w.game.trade.cancel(Q, o.id);
@@ -93,7 +93,7 @@ test('cancel by either side', async () => {
 test('frozen accounts cannot offer or accept trades', async () => {
   const w = await world();
   w.give(P, 'fish', 5); w.give(Q, 'coin', 100);
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  w.stand(P, 'board'); w.stand(Q, 'board', 1);
   const o = w.game.trade.offer(P, { to: Q, give: { fish: 5 }, want: { coin: 40 } });
   w.game.gs.recordShortfall(1, 0, P, 'fish', -5, -3); // offerer frozen: the receiver cannot accept either
   fails(() => w.game.trade.accept(Q, o.id), 403, /frozen/);

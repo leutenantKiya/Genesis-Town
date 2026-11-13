@@ -16,19 +16,20 @@ import { Monsters } from './monsters.ts';
 import { worldIdOk } from '../social.ts';
 import { Trade } from './trade.ts';
 import { Parties } from './party.ts';
-import { Consign } from './consign.ts';
 import { leaderboard } from './leaderboard.ts';
 import { Extras } from './extras.ts';
 import { Chips } from './chips.ts';
+import { NpcMarket } from './npc.ts';
+import { returnConsignedGoods } from './consign-return.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
-const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall', 'repair', 'maketool', 'ride', 'casino', 'mission', 'grass', 'chips'] as const;
+const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall', 'repair', 'maketool', 'ride', 'casino', 'mission', 'grass', 'chips', 'toolshop'] as const;
 
 /** The least Homeland role an action needs: guests (invited or the owner's party) may walk, travel, eat and handle a monster fight; the rest is owner-only until later co-op steps. */
 export type Need = 'visit' | 'help' | 'build' | 'owner';
 const NEED: Record<(typeof ACTIONS)[number], Need> = {
-  gather: 'help', grass: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', repair: 'visit', maketool: 'visit', ride: 'visit', casino: 'visit', chips: 'visit', mission: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
+  gather: 'help', grass: 'help', boat: 'visit', hoe: 'help', gamble: 'visit', mall: 'visit', repair: 'visit', maketool: 'visit', toolshop: 'visit', ride: 'visit', casino: 'visit', chips: 'visit', mission: 'visit', craft: 'help', eat: 'visit', farm: 'help', ship: 'owner', sell: 'visit', buy: 'visit', fight: 'visit', flee: 'visit', engage: 'help',
   travel: 'visit', build: 'build', collect: 'help', assist: 'help', hire: 'owner', forage: 'owner', cook: 'owner', stock: 'owner', dress: 'owner',
 };
 
@@ -40,6 +41,8 @@ export class Game {
   rng: () => number;
   chips: Chips;
   market: Market;
+  /** Merchants buying cheap Player Market listings and following their price trend (npc.ts). */
+  npc: NpcMarket;
   settlement: Settlement;
   /** The shared village map; absent in unit tests and the simulator, which use abstract tile coordinates. */
   map: WorldMap | null = null;
@@ -48,7 +51,6 @@ export class Game {
   homelands: Homelands;
   trade: Trade;
   party: Parties;
-  consign: Consign;
   /** Tools with durability, paid entertainment, Mall cosmetics, missions and news (extras.ts). */
   extras: Extras;
   now: () => number;
@@ -70,6 +72,10 @@ export class Game {
     this.market = new Market(this.econ, this.gs, this.clock, o.merchantParent, o.town);
     this.settlement = new Settlement({ econ: this.econ, gs: this.gs, store, chain, clock: this.clock, market: this.market, town: o.town, chunkSize: o.chunkSize ?? 25 });
     this.now = o.now ?? Date.now;
+    this.npc = new NpcMarket({
+      econ: this.econ, gs: this.gs, clock: this.clock, market: this.market, settlement: this.settlement, chain, now: this.now, log: (l) => console.warn(l),
+      history: (a, summary, tx, tokens) => { store.addHistory(a, 'trade', summary, chain.mode === 'mock' ? 'mock' : 'ok', tx, null, tokens.filter((t) => t in this.econ.items)); },
+    });
     this.homelands = new Homelands({ econ: this.econ, gs: this.gs, worldSeed: o.worldSeed ?? 0, now: this.now, town: o.town, clock: this.clock, built: (a, k, t) => this.extras?.logBuilt(a, k, t), party: { same: (a, b) => this.party.same(a, b), mates: (a) => this.party.mates(a) }, players: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) } });
     const hist = (a: string, summary: string, tokens: string[], ref: string | null = null) => { store.addHistory(a, 'trade', summary, 'offchain', null, ref, tokens.filter((t) => t in this.econ.items)); };
     this.trade = new Trade({
@@ -80,6 +86,7 @@ export class Game {
     this.extras = new Extras({
       econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, town: o.town, now: this.now, map: () => this.map,
       nameOf: (a) => store.nameOf(a), board: (p) => this.leaderboard(p, null), merchantName: (acct) => this.econ.merchants[acct.split('.')[0]]?.name ?? acct.split('.')[0],
+      stall: () => { const id = this.econ.toolShop.merchant; return { account: this.market.account(id), name: this.market.def(id).name, open: this.market.isOpen(id) }; },
     });
     this.world.tools = this.extras;
     this.chips = new Chips({
@@ -95,14 +102,7 @@ export class Game {
       econ: this.econ, gs: this.gs, now: this.now, assertActive: (a) => this.assertActive(a),
       names: { nameOf: (a) => store.nameOf(a), tagOf: (a) => store.tagOf(a), accountByNameTag: (n, t) => store.accountByNameTag(n, t), isPlayer: (a) => store.isPlayer(a) },
     });
-    this.consign = new Consign({
-      econ: this.econ, gs: this.gs, clock: this.clock, world: this.world, market: this.market, town: o.town, history: hist,
-      atStall: (a) => {
-        if (!this.map || !this.positions) return;
-        const p = this.positions.worldOf(a) === 'public' ? this.positions.last.get(a) : undefined;
-        if (!p || !this.map.nearLandmark(p, 'consign')) throw new HttpError(409, `Come to the Consignment stall (${this.econ.consign.merchant}) at the market.`);
-      },
-    });
+    returnConsignedGoods(this.gs, this.clock, o.town, (t) => this.econ.items[t]?.name ?? t, hist); // the consignment stall is gone: goods left in it go back to their owners
     if (o.worldSeed != null) {
       this.map = new WorldMap(o.worldSeed, JSON.parse(this.gs.meta('world.unlocked') ?? '[]'));
       // every village area open from the start (owner's choice, 2026-11-12); town projects still run on chain
@@ -230,9 +230,9 @@ export class Game {
         this.market.tickAll();
         if (busy) this.market.merchantCraft();
         this.market.townDemand();
-        this.consign.tick();
       }
       this.gs.setMeta('clock.hour', String(now));
+      await this.npc.run();
       await this.trade.finishDueChecked();
       await this.settlement.settleDue();
     } finally {
@@ -283,7 +283,7 @@ export class Game {
       pos = this.positions.report(account, body.pos, this.now(), wid, w.map);
       const far = (msg: string) => { throw new HttpError(409, msg); };
       if ((a === 'gather' || a === 'grass') && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Too far. Stand right next to it.');
-      if ((a === 'sell' || a === 'buy') && !w.map.nearStall(pos)) far('Buying and selling happens at the merchants\' stalls in the market.');
+      if ((a === 'sell' || a === 'buy' || a === 'toolshop') && !w.map.nearStall(pos)) far('Buying and selling happens at the merchants\' stalls in the market.');
       if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Stand next to your garden plot.');
       if (a === 'craft' && !w.map.atWorkbench(pos)) far(w.row ? 'The Workbench is in your Town Hall and in your house.' : 'The Workbench is in your house.');
       if (a === 'ship' && !w.map.atOwnHouse(pos)) far('The Shipping Box is at your house.');
@@ -364,6 +364,7 @@ export class Game {
       }
       case 'repair': res = this.extras.repair(account, body.tool); break;
       case 'maketool': res = this.extras.make(account, body.tool); break;
+      case 'toolshop': res = this.extras.toolStall(account, body.op, body.tool); break;
       case 'ride': res = this.extras.ride(account, wid, pos); break;
       case 'casino': res = this.extras.casino(account, s('op') || 'enter', wid, pos); break;
       case 'mission': {

@@ -263,7 +263,6 @@
         var lm = V.landmarks && L.market ? V.landmarks(L) : null, at = function (q) { return !c.npc && q && q.x === t.x && q.y === t.y; };
         if (lm && at(lm.mall)) return { icon: '🛍️', label: $t('Mall') };
         // trade.js opens these on interact while you face them (walkable plaza tiles with no NPC, so nothing else shows the button)
-        if (lm && at(lm.consign)) return { icon: '🧺', label: $t('Titip Jual') };
         if (lm && at(lm.board)) return { icon: '🏆', label: $t('Papan Juara') };
         if (lm && at(lm.gamble)) return { icon: '🎲', label: $t('Main') };
         var fe = V.ferryOf && V.ferryOf(L);

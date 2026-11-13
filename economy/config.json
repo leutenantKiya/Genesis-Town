@@ -197,7 +197,20 @@
   "guest": { "max": 5, "idleSecs": 30, "helloPerMinute": 6, "perIp": 1, "maxMinutes": 30 },
   "party": { "max": 4, "inviteSecs": 120, "maxPendingInvites": 5 },
   "coop": { "partyRoleDefault": "visitor", "guestGatherPerHostDay": 40, "guestLeavesCharges": 1, "guestPlotsPerHost": 2, "assistEnergy": 10, "assistSecs": 15, "assistMaxShare": 0.5 },
-  "consign": { "merchant": "Granny Daisy", "feeBps": 500, "maxPerItem": 50, "sellPerGameHour": 3 },
+  "npcMarket": {
+    "buyEnabled": true, "trendEnabled": true,
+    "everySecs": 30, "maxBuysPerRun": 3,
+    "maxPayMidMult": 1.0,
+    "maxCashPctPerBuy": 15, "maxCashPctPerDay": 35, "reserveRentDays": 3,
+    "maxUnitsPerDayPerMerchant": 30, "maxStockOverTarget": 1.5,
+    "retryMissingMinutes": 30,
+    "trend": { "minSellers": 3, "histLen": 6, "maxMovePctPerDay": 5, "multMin": 0.7, "multMax": 1.5, "withdrawHighMult": 2, "withdrawLowMult": 0.5, "withdrawMinSamples": 4 }
+  },
+  "toolShop": {
+    "merchant": "budi",
+    "price": { "pickaxe": 70, "axe": 55, "rod": 35, "hoe": 45 },
+    "repair": { "pickaxe": 12, "axe": 9, "rod": 7, "hoe": 8 }
+  },
   "homeland": {
     "builders": 1,
     "publicTradeOnly": true, "publicGather": true, "publicOpenAll": true,

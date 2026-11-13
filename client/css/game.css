@@ -240,7 +240,7 @@ html.gt-riding #gt-hint,html.gt-riding .gt3d-bar,html.gt-riding .gt3d-hint,html.
   background:var(--season);color:var(--season-ink);border-radius:calc(var(--r-win) - var(--line)) calc(var(--r-win) - var(--line)) 0 0;
   transition:background-color 600ms var(--ease)}
 .mtitle{margin:0;flex:1;font-family:var(--font-display);font-size:16px;font-weight:400;line-height:1.4;overflow-wrap:anywhere}
-/* phones: the bitmap face at 16px wraps longer titles ("Titip Jual · Mbok Darmi") to two lines; the text face fits one */
+/* phones: the bitmap face at 16px wraps longer titles ("Papan Juara · hari ini") to two lines; the text face fits one */
 @media (max-width:520px){.mtitle{font-family:var(--font);font-size:calc(20px*var(--ts));font-weight:700;line-height:1.2}}
 .mx{flex:none;width:32px;height:32px;border:var(--line) solid var(--outline);border-radius:var(--r-ctl);background:var(--paper);color:var(--paper-ink);font-size:18px;line-height:1;padding:0;
   box-shadow:inset 0 calc(-2px) 0 var(--shade);transition:background-color var(--t-press) var(--ease),transform var(--t-press) var(--ease)}

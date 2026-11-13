@@ -1,6 +1,17 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Merchants and the Player Market, consignment removed** (2026-11-14): about every 30 s (`npcMarket.everySecs`) the
+>   server reads the open Player Market listings. Each merchant buys a listing of a good it trades when the price is at or
+>   below its fair price (its mid price from `economy/pricing.ts` times its cash factor), within a daily cap, never above 15%
+>   of its cash per buy or 35% per day, through the settler's new contract call `merchant_buy_listing` (the merchant's own
+>   coin on chain, the normal escrow, 5% burn and events; contract change in `contracts/game/src/market.rs`, no migration).
+>   If the contract is not redeployed yet the feature stays off quietly (`server/src/game/npc.ts`). The median listing price
+>   over at least 3 sellers (`server/src/game/trend.ts`) moves each good's merchant price level by at most 5% a game day
+>   (0.7x to 1.5x) and, when it stays 2x above or 0.5x below normal, merchants stop offering that good until it recovers.
+>   Ben's shop window now has a tool stall: new Pickaxe, Axe, Fishing Rod or Hoe, or a repair priced by the wear, for coin
+>   (act `toolshop`, config `toolShop`). **Titip Jual / Mbok Darmi is gone** (route, stall, sign, config); goods still held
+>   there are returned to their owners once at startup (ledger kind `consign_return`).
 > - **Chips on the server** (2026-11-14): casino chips are bought with coin (`economy/config.json` `chips`: 10 chips per coin, daily limits) and kept per account as `bought` (can be exchanged back to coin at the same rate minus a 5% fee, coin from the town fund) and `won` (won at a table, never exchangeable, so gambling creates no coin); a stake spends bought chips first, every win is paid in won chips, and the Luck Table, slot, dice and cards are decided by the server (act `chips {op: buy|sell|play}`, `server/src/game/chips.ts`, `/api/state` `chips {bought, won, ...}`); buying chips is on the chain-check spend list. The window shows both kinds and the Buy / Exchange buttons (`client/js/mods/casino.js`). The act `gamble` stays closed.
 > - **One Settings window** (2026-11-14): Atur / Pengaturan is now one panel like the character screen: your name (editable, with the fixed #tag) and a preview of you idling in your Mall outfit on the left; on the right Kustomisasi (wear or take off what you own, a button to the Genesis Mall if you own nothing; the body look is fixed after the character is made), Party (members, invite by name#tag, leave, kick; key G still opens it alone) beside Tampilan & suara (language, view, text size, layout, music, sound, keys), and a Simpan button that saves a changed name (a taken name is shown under the field) and closes; X or Esc closes too. Narrow screens stack the boxes (`client/js/mods/settings.js`, `charscreen.js` and `party.js` export the pieces). Needs a browser check.
 > - **Admin window and /admin** (2026-11-14, replaces the player Top up): the page `/admin` is the game page and opens the Admin window for accounts in `ADMIN_ACCOUNTS` (others get "admins only"); "Lainnya > Admin" opens it too. Tab Kas kota: the town treasury (books and chain) and one flow to send coin to a player (search, confirmation card with name#tag and look, amount with the limits shown, note, Send, result inline; `POST /api/admin/grant`, ledger kind `admin_grant`, limits `adminGrant`) plus the recent sends read from the ledger; tab Keamanan: guests, bans, frozen accounts, settlement. The NEAR top-up (`/topup`, `/api/topup/*`, `TOPUP_ENABLED`) is removed; the contract keeps `buy_coin`, unused by the game.
@@ -13,7 +24,7 @@
 >   trade window open everyone in the world sees "A ⇄ B" on their name tags and a badge between them, and a finished
 >   trade writes a public line "A traded with B" (names only).
 > - **Live trades and accepted offers check both sides against the chain** (2026-11-13) before the swap.
-> - **Every spend also checks the testnet** (2026-11-13): before a sell, buy, craft, cook, build, hire, Mall, repair, tool, ride, casino, shipping, pantry stock, live trade offer or consignment, the server reads the player's balance from the contract (cached 15 s) and refuses with a 409 when the chain holds less than the database's settled amount (`server/src/chaincheck.ts`; `CHAIN_CHECK` strict | lenient (default) | off, `CHAIN_CHECK_TTL_MS`). Settlement runs and relays in flight are skipped, a chain read that fails or takes over 1.5 s is allowed in lenient and refused in strict, and `/api/admin/status` lists the last 50 mismatches.
+> - **Every spend also checks the testnet** (2026-11-13): before a sell, buy, craft, cook, build, hire, Mall, repair, tool, ride, casino, shipping, pantry stock, live trade offer the server reads the player's balance from the contract (cached 15 s) and refuses with a 409 when the chain holds less than the database's settled amount (`server/src/chaincheck.ts`; `CHAIN_CHECK` strict | lenient (default) | off, `CHAIN_CHECK_TTL_MS`). Settlement runs and relays in flight are skipped, a chain read that fails or takes over 1.5 s is allowed in lenient and refused in strict, and `/api/admin/status` lists the last 50 mismatches.
 > - **Phones either way up** (2026-11-13): a phone held sideways no longer shows an empty frame with the old D-pad; it
 >   gets its own layout: the game takes the whole height under a one-line status bar, Tas, Pasar, Peta, Chat and Menu
 >   stand in a rail at the right edge, and the joystick and action button sit low in the corners beside the item bar
@@ -178,10 +189,8 @@
 >   items or coin and never trade. In the public area the four **merchants walk around as NPC players** (name tag `NPC`) and
 >   answer private messages (`/msg Sari harga ikan?`) through **Claude** (`claude-sonnet-5-5`, low effort), or NEAR AI Cloud,
 >   or a local line when no key is set; the model's text is display-only. Players can **trade face to face** (items and coin,
->   both must be in the public area within 3 tiles; atomic accept, off-chain ledger rows settled daily). **Titip Jual**: leave
->   goods with Mbok Darmi and a minimum price; she sells a few units each game hour, even while you are offline, for a 5% fee.
->   **Papan Juara** shows the top sellers of the day and of all time. Numbers: `economy/config.json` -> `homeland.bots`,
->   `trade`, `consign`; plan: [phase B](docs/superpowers/plans/2026-11-09-homeland-phase-b.md).
+>   both must be in the public area within 3 tiles; atomic accept, off-chain ledger rows settled daily). **Papan Juara** shows the top sellers of the day and of all time. Numbers: `economy/config.json` -> `homeland.bots`,
+>   `trade`; plan: [phase B](docs/superpowers/plans/2026-11-09-homeland-phase-b.md).
 >
 > - **Homeland, phase C**: everything feeds building speed. **Contractors** (the default Tukang and hired
 >   Tukang) get **tired** and build slower; the **Restoran** no longer makes meals on its own but keeps a **pantry** (cook meals
@@ -338,7 +347,7 @@ Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [wo
 | --- | --- | --- |
 | Game contract (NEP-245 items + `coin`, NEP-145 storage) | [`game.genesistown.testnet`](https://testnet.nearblocks.io/address/game.genesistown.testnet) | source: [contracts/game](contracts/game) |
 | Relayer (pays players' gas, NEP-366) | [`relayer.genesistown.testnet`](https://testnet.nearblocks.io/address/relayer.genesistown.testnet) | |
-| Settler (function-call key: `settle_day`, `register_player`, `close_shop`, `pay_dividend` only) | [`minter.genesistown.testnet`](https://testnet.nearblocks.io/address/minter.genesistown.testnet) | runs the daily settlement |
+| Settler (function-call key: `settle_day`, `register_player`, `close_shop`, `pay_dividend`, `merchant_buy_listing` only) | [`minter.genesistown.testnet`](https://testnet.nearblocks.io/address/minter.genesistown.testnet) | runs the daily settlement |
 | Town treasury (starter kits, initial shop shares) | [`town.genesistown.testnet`](https://testnet.nearblocks.io/address/town.genesistown.testnet) | |
 | Merchants Sari, Budi, Wati, Joko | [`sari`](https://testnet.nearblocks.io/address/sari.genesistown.testnet) · [`budi`](https://testnet.nearblocks.io/address/budi.genesistown.testnet) · [`wati`](https://testnet.nearblocks.io/address/wati.genesistown.testnet) · [`joko`](https://testnet.nearblocks.io/address/joko.genesistown.testnet) `.genesistown.testnet` | real accounts holding their own coin and stock as NEP-245 balances. The merchants don't sign: the server holds no keys for them, and the settler applies their trades by the contract's settlement rules |
 | Player accounts | `p<hash>.players.genesistown.testnet` | full-access key = the player's NEAR Auth key; plus a game-only session key |
@@ -346,7 +355,7 @@ Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [wo
 Contract methods: NEP-245 `mt_transfer`, `mt_batch_transfer`, `mt_transfer_call`, `mt_batch_transfer_call`,
 `mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`; NEP-145 `storage_*`. Game methods:
 `settle_day`, `register_player`, `register_merchant`, `close_shop`, `restore_contribute`, `restore_withdraw`,
-`pay_dividend`, `claim_dividends`, `send_item`, `list_item`, `buy_listing`, `cancel_listing`, `create_project`,
+`pay_dividend`, `claim_dividends`, `send_item`, `list_item`, `buy_listing`, `merchant_buy_listing` (settler, for a merchant), `cancel_listing`, `create_project`,
 `project_contribute`, `project_withdraw`, `migrate`; the v5 island methods (`buy_island`, `save_island`, `set_voucher_key`, `set_broker`,
 `get_island`) exist but the game does not use them. Full table: [contracts/game/README.md](contracts/game/README.md).
 

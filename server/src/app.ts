@@ -133,6 +133,7 @@ export function createApp(deps: AppDeps) {
   game.trade.verify = (a, tokens) => chainCheck.verify(a, tokens, 'trade/swap'); // a live trade's swap re-checks both sides
   const adminGrantLimiter = new RateLimiter(30, 300);
   const bazaar = new Bazaar(deps.store.db);
+  game.npc.onSale = (listingId, seller, units) => { bazaar.recordSale(listingId, seller, units); readCache.clear(); }; // a merchant bought a named listing
   const social = new Social(deps.store);
   game.trade.onDone = (a, b, world) => social.tradeLine(a, b, world); // a finished swap is a public line for its world
   const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
@@ -318,14 +319,13 @@ export function createApp(deps: AppDeps) {
 
   let newsCache: { at: number; body: unknown } | null = null;
   const boardCache = new Map<string, { at: number; body: unknown }>(); // Papan Juara: one heavy query per period and caller per 30 s
-  /** Public-area economy: POST /api/trade/{offer,accept,cancel}, GET /api/trade, GET|POST /api/consign, POST /api/consign/withdraw, GET /api/leaderboard. */
+  /** Public-area economy: POST /api/trade/{offer,accept,cancel}, GET /api/trade, GET /api/leaderboard. */
   async function tradeApi(req: IncomingMessage, res: ServerResponse, url: URL, p: string): Promise<boolean> {
-    const isTrade = p === '/api/trade' || p.startsWith('/api/trade/'), isConsign = p === '/api/consign' || p === '/api/consign/withdraw';
-    if (!isTrade && !isConsign && p !== '/api/leaderboard') return false;
+    const isTrade = p === '/api/trade' || p.startsWith('/api/trade/');
+    if (!isTrade && p !== '/api/leaderboard') return false;
     if (req.method === 'GET') {
       const acct = p === '/api/leaderboard' ? (() => { try { return accountOf(req, url); } catch { return null; } })() : accountOf(req, url);
       if (p === '/api/trade') { await game.trade.finishDueChecked(); return send(res, 200, { ...game.trade.list(acct!), session: game.trade.session(acct!), invites: game.trade.invites(acct!) }), true; }
-      if (p === '/api/consign') return send(res, 200, { lots: game.consign.lots(acct!), merchant: game.econ.consign.merchant, feeBps: game.econ.consign.feeBps, maxPerItem: game.econ.consign.maxPerItem }), true;
       if (p === '/api/leaderboard') {
         const period = url.searchParams.get('period') ?? 'day';
         if (period !== 'day' && period !== 'all') throw new HttpError(400, 'period must be day or all');
@@ -347,7 +347,7 @@ export function createApp(deps: AppDeps) {
     const b = parseJson(raw);
     // what this request puts up from the caller is also checked against the chain before it counts
     let spend: string[] = [];
-    if (p === '/api/trade/set' || p === '/api/trade/offer' || p === '/api/consign') spend = offeredTokens(game.econ, b);
+    if (p === '/api/trade/set' || p === '/api/trade/offer') spend = offeredTokens(game.econ, b);
     else if (p === '/api/trade/ready') spend = Object.keys(game.trade.session(acct)?.mine ?? {});
     // accepting an offer swaps both sides: the accepter's tokens (`want`) and the sender's tokens (`give`) must both be on the chain
     let senderAcct = '', senderSpend: string[] = [];
@@ -375,8 +375,6 @@ export function createApp(deps: AppDeps) {
     if (p === '/api/trade/offer') send(res, 200, game.trade.offer(acct, b));
     else if (p === '/api/trade/accept') send(res, 200, { ...game.trade.accept(acct, b.id), state: game.state(acct) });
     else if (p === '/api/trade/cancel') send(res, 200, game.trade.cancel(acct, b.id));
-    else if (p === '/api/consign') send(res, 200, { ...game.consign.deposit(acct, b.token, b.qty, b.min_price), state: game.state(acct) });
-    else if (p === '/api/consign/withdraw') send(res, 200, { ...game.consign.withdraw(acct, b.token), state: game.state(acct) });
     else throw new HttpError(404, 'no such route');
     return true;
     } finally { if (spend.length) chainCheck.invalidate(acct); if (senderSpend.length) chainCheck.invalidate(senderAcct); }
@@ -402,7 +400,7 @@ export function createApp(deps: AppDeps) {
           devTools: devAllowed(req),
           dialogue: dialogue.provider,
           world: game.map?.view() ?? null,
-          econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time, coop: game.econ.coop, mall: game.econ.mall ?? null, tools: game.econ.tools ?? null, fun: game.econ.fun ?? null, grass: game.econ.grass ?? null },
+          econ: { items: game.econ.items, recipes: game.econ.recipes, gather: game.econ.gather, farm: game.econ.farm, time: game.econ.time, coop: game.econ.coop, mall: game.econ.mall ?? null, tools: game.econ.tools ?? null, toolShop: game.econ.toolShop ?? null, fun: game.econ.fun ?? null, grass: game.econ.grass ?? null },
           monsters: game.monsters ? { fightEnergy: game.econ.monsters.fightEnergy, fleeEnergy: game.econ.monsters.fleeEnergy, nightFrom: game.econ.monsters.nightFrom, nightTo: game.econ.monsters.nightTo, roaming: game.econ.monsters.roaming, homelandRoaming: game.econ.monsters.homeland?.roaming ?? game.econ.monsters.roaming, reach: game.econ.monsters.reach, publicMonsters: !game.econ.homeland.publicTradeOnly } : null,
         });
       }

@@ -23,6 +23,8 @@ export interface Chain {
   lastSettledDay(): Promise<number>;
   closeShop(merchant: string): Promise<TxResult>;
   payDividend(merchant: string, day: number, amount: number): Promise<TxResult>;
+  /** The settler buys a player's Market listing for a merchant with the merchant's own coin on chain (`merchant_buy_listing`, contract v5.2+; an older contract answers MethodNotFound). */
+  merchantBuyListing(merchant: string, listingId: number, amount: number, maxPriceEach: number): Promise<TxResult>;
   relay(signedDelegate: unknown, senderId: string): Promise<TxResult>;
   balances(accountId: string, tokenIds: string[]): Promise<string[]>;
   /** Whether the account is registered with the game contract (`is_registered`); unregistered entries are skipped by `settle_day`. */
@@ -127,6 +129,9 @@ export class TestnetChain implements Chain {
   async lastSettledDay() { return Number((await this.view<{ last_settled_day: number }>('get_config', {})).last_settled_day); }
   closeShop(merchant: string) { return this.settlerCall('close_shop', { merchant }, '50'); }
   payDividend(merchant: string, day: number, amount: number) { return this.settlerCall('pay_dividend', { merchant, day, amount: String(amount) }, '50'); }
+  merchantBuyListing(merchant: string, listingId: number, amount: number, maxPriceEach: number) {
+    return this.settlerCall('merchant_buy_listing', { merchant_id: merchant, listing_id: listingId, amount: String(amount), max_price_each: String(maxPriceEach) }, '50');
+  }
 
   async relay(signedDelegate: unknown, _senderId: string): Promise<TxResult> {
     // Same as Account.relayMetaTransaction, but waits for FINAL (see settlerCall).
@@ -310,6 +315,29 @@ export class MockChain implements Chain {
     return { txHash: this.hash(), ok: true };
   }
 
+  /** Set false to behave like a contract without `merchant_buy_listing`. */
+  merchantBuyEnabled = true;
+  merchantBuys: Array<{ merchant: string; listingId: number; amount: number; maxPriceEach: number }> = [];
+  /** Mirrors `merchant_buy_listing` in contracts/game/src/market.rs: the same escrow, 5% fee and checks as `buy_listing`, paid from the merchant's own coin. */
+  async merchantBuyListing(merchant: string, listingId: number, amount: number, maxPriceEach: number): Promise<TxResult> {
+    if (!this.merchantBuyEnabled) return { txHash: this.hash(), ok: false, error: '{"ActionError":{"kind":{"FunctionCallError":{"MethodResolveError":"MethodNotFound"}}}}' };
+    const fail = (error: string) => ({ txHash: this.hash(), ok: false, error });
+    const sh = this.shops.get(merchant);
+    if (!sh) return fail('not a merchant');
+    if (!sh.open) return fail('the shop is closed');
+    const l = this.listings.get(listingId);
+    if (!l) return fail('no such listing');
+    if (Number(l.price_each) > maxPriceEach) return fail('price is above your limit');
+    if (!(amount >= 1 && amount <= Number(l.amount))) return fail('amount not available');
+    const total = BigInt(l.price_each) * BigInt(amount), fee = (total * 500n) / 10_000n;
+    if (this.get(merchant, 'coin') < total) return fail(`not enough coin for ${merchant}`);
+    this.add(merchant, 'coin', -total); this.add(l.seller, 'coin', total - fee);
+    this.add(this.contractId, l.token_id, -BigInt(amount)); this.add(merchant, l.token_id, BigInt(amount));
+    const left = Number(l.amount) - amount;
+    if (left === 0) this.listings.delete(l.id); else l.amount = String(left);
+    this.merchantBuys.push({ merchant, listingId, amount, maxPriceEach });
+    return { txHash: this.hash(), ok: true };
+  }
   async payDividend(merchant: string, _day: number, amount: number): Promise<TxResult> {
     const s = this.shops.get(merchant);
     if (!s || !s.open) return { txHash: this.hash(), ok: false, error: 'closed' };

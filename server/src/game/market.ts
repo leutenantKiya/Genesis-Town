@@ -5,6 +5,7 @@ import type { Econ, MerchantDef } from './econ.ts';
 import type { GameStore, MarketRow } from './gamestore.ts';
 import type { Clock } from './clock.ts';
 import { HttpError } from '../auth.ts';
+import { Trend } from './trend.ts';
 
 export interface MerchantView {
   id: string; account: string; name: string; shop: string; open: boolean; cash: number; rent: number;
@@ -18,6 +19,8 @@ export class Market {
   parent: string;
   town: string;
   closed = new Set<string>(); // merchant accounts whose shop is closed on chain
+  /** What players ask on the Player Market: scales the base values below and can pull a good off the merchants' shelves. */
+  trend: Trend;
 
   constructor(econ: Econ, gs: GameStore, clock: Clock, parent: string, town: string) {
     this.econ = econ;
@@ -25,6 +28,7 @@ export class Market {
     this.clock = clock;
     this.parent = parent;
     this.town = town;
+    this.trend = new Trend(econ, gs, clock);
   }
 
   account(id: string): string { return `${id}.${this.parent}`; }
@@ -43,7 +47,7 @@ export class Market {
     const acct = this.account(id);
     const it = this.econ.items[token];
     return {
-      item: token, itemName: it.name, base: it.base,
+      item: token, itemName: it.name, base: it.base * this.trend.mult(token),
       stock: this.gs.balance(acct, token), target: d.target[token] ?? 10,
       bought: row.bought, sold: row.sold, cash: this.gs.balance(acct, 'coin'), rent: this.econ.shops.rent,
       buys: d.buys.includes(token),
@@ -88,18 +92,18 @@ export class Market {
     return { unit, total: unit * qty };
   }
 
-  private consignKey(acct: string, token: string, day: number) { return `consign.bought.${day}.${acct}.${token}`; }
-  /** Units the consignment stall already sold to this merchant's demand today (they count against its daily buy cap). */
-  consignedToday(acct: string, token: string, day: number): number { return Number(this.gs.meta(this.consignKey(acct, token, day)) ?? 0); }
-  addConsigned(id: string, token: string, qty: number) {
+  private npcKey(acct: string, token: string, day: number) { return `npc.bought.${day}.${acct}.${token}`; }
+  /** Units merchant `acct` bought from the Player Market today (npc.ts); they count against its daily buy cap. */
+  npcBoughtToday(acct: string, token: string, day: number): number { return Number(this.gs.meta(this.npcKey(acct, token, day)) ?? 0); }
+  addNpcBought(id: string, token: string, qty: number) {
     const acct = this.account(id), day = this.clock.time().settleDay;
-    this.gs.setMeta(this.consignKey(acct, token, day), String(this.consignedToday(acct, token, day) + qty));
+    this.gs.setMeta(this.npcKey(acct, token, day), String(this.npcBoughtToday(acct, token, day) + qty));
   }
   /** How many more units of `token` merchant `id` will still buy today (the cap `sell` enforces). */
   buyRoom(id: string, token: string): number {
     const d = this.def(id), acct = this.account(id), day = this.clock.time().settleDay;
     const cap = (this.personality(d).buyCapMult ?? this.econ.pricing.dailyBuyCapPerTarget) * (d.target[token] ?? 10);
-    return Math.max(0, cap - this.gs.boughtToday(acct, token, day) - this.consignedToday(acct, token, day));
+    return Math.max(0, cap - this.gs.boughtToday(acct, token, day) - this.npcBoughtToday(acct, token, day));
   }
 
   /** Player sells `qty` of `token` to merchant `id` (off-chain; settled at 06:00). */
@@ -110,7 +114,7 @@ export class Market {
     const t = this.clock.time();
     const acct = this.account(id);
     const cap = (this.personality(d).buyCapMult ?? this.econ.pricing.dailyBuyCapPerTarget) * (d.target[token] ?? 10);
-    if (this.gs.boughtToday(acct, token, t.settleDay) + this.consignedToday(acct, token, t.settleDay) + qty > cap) throw new HttpError(409, `${d.name} has bought enough ${this.econ.items[token].name} today.`);
+    if (this.gs.boughtToday(acct, token, t.settleDay) + this.npcBoughtToday(acct, token, t.settleDay) + qty > cap) throw new HttpError(409, `${d.name} has bought enough ${this.econ.items[token].name} today.`);
     if (this.gs.balance(account, token) < qty) throw new HttpError(409, 'You don\'t have enough.');
     const { unit, total } = this.quote(id, token, 'sell', qty);
     if (this.gs.balance(acct, 'coin') < total) throw new HttpError(409, `${d.name} doesn't have enough money.`);
@@ -130,6 +134,7 @@ export class Market {
     const d = this.def(id);
     this.checkTrade(id, qty);
     if (!d.sells.includes(token)) throw new HttpError(409, `${d.name} doesn't sell ${this.itemName(token)}.`);
+    if (this.trend.withdrawn(token)) throw new HttpError(409, `${d.name} isn't offering ${this.itemName(token)} right now: the Player Market price is far from normal.`);
     const t = this.clock.time();
     const acct = this.account(id);
     if (this.gs.balance(acct, token) < qty) throw new HttpError(409, `${d.name} is out of stock.`);
@@ -191,7 +196,7 @@ export class Market {
       const base = this.econ.items[token].base;
       while (acc >= 1) {
         const offers = this.ids()
-          .filter((id) => this.isOpen(id) && this.def(id).sells.includes(token) && this.gs.balance(this.account(id), token) >= 1)
+          .filter((id) => this.isOpen(id) && this.def(id).sells.includes(token) && !this.trend.withdrawn(token) && this.gs.balance(this.account(id), token) >= 1)
           .map((id) => ({ id, ask: this.row(id, token).ask }))
           .filter((o) => o.ask <= tw.maxPriceMult * base)
           .sort((a, b) => a.ask - b.ask);
@@ -219,7 +224,7 @@ export class Market {
         const r = this.row(id, token);
         return {
           token, name: this.econ.items[token].name, stock: this.gs.balance(acct, token), target: d.target[token] ?? 0,
-          ask: d.sells.includes(token) ? r.ask : null, bid: d.buys.includes(token) ? r.bid : null,
+          ask: d.sells.includes(token) && !this.trend.withdrawn(token) ? r.ask : null, bid: d.buys.includes(token) ? r.bid : null,
           mid: Math.round(r.mid * 100) / 100, changePct: r.change_pct, reason: r.reason,
         };
       }),

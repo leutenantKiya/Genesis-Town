@@ -251,7 +251,6 @@
       var extra = [];
       if (r.chips && (r.chips.bought || r.chips.won)) extra.push($t('chip {0} dibeli, {1} menang', [r.chips.bought, r.chips.won]));
       if (r.homeland) extra.push($t('Homeland TH{0}: {1} bangunan, {2} pekerja', [r.homeland.th, r.homeland.buildings, r.homeland.bots]));
-      if (r.consigned && r.consigned.length) extra.push($t('titipan: {0}', [r.consigned.map(function (c) { return c.token + ' ' + c.qty; }).join(', ')]));
       if (extra.length) tx.appendChild($('div', 'chain-dim', extra.join(' · ')));
       line.appendChild(cb); line.appendChild(tx); b.appendChild(line);
     });

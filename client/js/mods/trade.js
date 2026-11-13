@@ -1,13 +1,12 @@
 /*
- * Public-area economy (client of server/src/game/trade.ts, consign.ts, leaderboard.ts):
+ * Public-area economy (client of server/src/game/trade.ts, leaderboard.ts):
  *  - "Trade" on a player card (mods/players.js), "Dagang" in the party panel and /dagang nama#tag open a live trade window (client of the
  *    /api/trade/open|join|set|ready|close sessions): both put in items and coin, both press Siap, any change clears both, then a 3 s countdown
  *    works in the village and in a Homeland; an invitation pops up with Buka / Tolak
  *  - when a trade completes, the goods each side gave fly across to the other player (arcing icons, a sparkle where they
  *    land, a short sound); both windows read the swapped lines from the finished session (`result`) and play it
- *  - Titip Jual stall (Mbok Darmi): leave items with a minimum price, she sells hourly even while you are away
  *  - Papan Juara board: top sellers today / of all time
- * The stall and the board stand at fixed plaza tiles from GTVillage.landmarks (same on the server). Only in the public area.
+ * The board and the luck table stand at fixed plaza tiles from GTVillage.landmarks (same on the server). Only in the public area.
  */
 (function () {
   'use strict';
@@ -366,63 +365,6 @@
     ctx.restore();
   }
 
-  /* ---------------------------------------------------------------- Titip Jual */
-  function bestBid(t) {
-    var s = S(), best = 0;
-    ((s && s.market) || []).forEach(function (m) {
-      if (!m.open) return;
-      m.items.forEach(function (it) { if (it.token === t && it.bid != null && it.bid > best) best = it.bid; });
-    });
-    return best;
-  }
-  function consignModal() {
-    if (!signedIn()) { GT.toast($t('Masuk dulu.')); return; }
-    C.api('/consign').then(function (r) {
-      var body = $('div');
-      body.appendChild($('p', 'tr-quote', $t('{0}: "Titipkan barangmu, nanti kujualkan per jam. Upahku {1}%."', [r.merchant, r.feeBps / 100])));
-      var lc = cell($t('Titipanmu'), r.lots.length ? String(r.lots.length) : null);
-      body.appendChild(lc);
-      if (!r.lots.length) lc.appendChild($('p', 'chain-dim', $t('Belum ada titipan.')));
-      r.lots.forEach(function (l) {
-        var row = $('div', 'tr-lot'), tx = $('div', 'tr-lot-t');
-        tx.appendChild($('div', 'tr-lot-n', iname(l.token)));
-        tx.appendChild($('div', 'tr-num-line', $t('sisa {0} (min {1}) · terjual {2} · dapat {3} koin', [l.qty, l.min_price, l.sold, l.earned])));
-        row.appendChild(tx);
-        if (l.qty > 0) {
-          var b = $('button', 'mbtn', $t('Ambil')); b.type = 'button';
-          b.addEventListener('click', function () { post('/consign/withdraw', { token: l.token }).then(function (x) { refreshState(x); GT.toast(x.toast); redo(); }, fail); });
-          row.appendChild(b);
-        }
-        lc.appendChild(row);
-      });
-      var nc = cell($t('Titip barang baru'));
-      body.appendChild(nc);
-      var tokens = Object.keys(items()).filter(function (t) { return t !== 'coin' && have(t) > 0; });
-      var sel = $('select', 'tr-sel'), qty = $('input', 'tr-num'), min = $('input', 'tr-num'), hint = $('p', 'chain-dim');
-      sel.setAttribute('aria-label', 'barang');
-      tokens.forEach(function (t) { var o = $('option', null, iname(t) + ' (' + have(t) + ')'); o.value = t; sel.appendChild(o); });
-      qty.type = 'number'; qty.min = '1'; qty.value = '1';
-      min.type = 'number'; min.min = '1';
-      function upd() { var b = tokens.length ? bestBid(sel.value) : 0; hint.textContent = b ? $t('Harga beli pedagang terbaik sekarang: {0} koin.', [b]) : ''; if (b && !min.value) min.value = String(b); }
-      sel.addEventListener('change', function () { min.value = ''; upd(); });
-      upd();
-      if (tokens.length) {
-        var row = $('div', 'tr-form');
-        function fld(label, input) { var l = $('label', 'tr-f'); l.appendChild($('span', null, label)); l.appendChild(input); return l; }
-        row.appendChild(fld('barang', sel)); row.appendChild(fld('jumlah', qty)); row.appendChild(fld($t('harga min'), min));
-        nc.appendChild(row); nc.appendChild(hint);
-      } else nc.appendChild($('p', 'chain-dim', $t('Tasmu kosong.')));
-      h = GT.modal({
-        title: $t('Titip Jual · {0}', [r.merchant]), body: body, actions: (tokens.length ? [{ label: $t('Titip'), primary: true, onClick: function () {
-          post('/consign', { token: sel.value, qty: Math.floor(Number(qty.value)), min_price: Math.floor(Number(min.value)) })
-            .then(function (x) { refreshState(x); GT.toast(x.toast); redo(); }, fail);
-        } }] : []).concat([{ label: $t('Tutup'), close: true }])
-      });
-    }, fail);
-    var h;
-    function redo() { if (h) h.close('redo'); consignModal(); }
-  }
-
   /* ---------------------------------------------------------------- Papan Juara */
   function boardModal(period) {
     period = period || 'day';
@@ -454,7 +396,6 @@
     if (ctx.scene.kind !== 'out' || ctx.mode !== 'talk' || ctx.npc) return false;
     var m = marks(); if (!m) return false;
     var t = ctx.tile;
-    if (t.x === m.consign.x && t.y === m.consign.y) { consignModal(); return true; }
     if (t.x === m.board.x && t.y === m.board.y) { boardModal('day'); return true; }
     if (m.gamble && t.x === m.gamble.x && t.y === m.gamble.y) { luckModal(); return true; }
     return false;
@@ -489,22 +430,15 @@
     var m = marks(); if (!m) return;
     ctx.save();
     var v3 = GT.view3dOn && GT.view3dOn();
-    if (v3) { // 2.5D: the stall, the board and the table stand in the 3D world (three/props.js, same tiles); here only their name signs, above them
-      [['consign', $t('Titip Jual')], ['board', $t('Papan Juara')], ['gamble', '🎲 ' + $t('Meja Untung')]].forEach(function (k) {
+    if (v3) { // 2.5D: the board and the table stand in the 3D world (three/props.js, same tiles); here only their name signs, above them
+      [['board', $t('Papan Juara')], ['gamble', '🎲 ' + $t('Meja Untung')]].forEach(function (k) {
         var q = m[k[0]]; if (!q) return;
         var a = GT.at(q.x, q.y); sign(ctx, k[1], a.x + T / 2, a.y + T - UP3);
       });
       ctx.restore(); return;
     }
-    // Titip Jual: striped awning over a counter, a crate of goods on it
-    var x = m.consign.x * T - camX, y = m.consign.y * T - camY, f = freeCols(m.consign.x, T, camX);
-    ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 1, y + 5, T - 2, T - 5);
-    ctx.fillStyle = '#b8864a'; ctx.fillRect(x + 1, y + 5, T - 2, 2);
-    for (var i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#f6ead0' : '#c8503c'; ctx.fillRect(x + 1 + i * 3, y + 1, 3, 4); }
-    ctx.fillStyle = '#e8c070'; ctx.fillRect(x + 4, y + 7, 4, 3);
-    sign(ctx, $t('Titip Jual'), x + T / 2, y, f[0], f[1]); // over the stall: the merchants' name tags sit above their own heads, one row up
     // Papan Juara: a board on two posts with a gold star
-    x = m.board.x * T - camX; y = m.board.y * T - camY; f = freeCols(m.board.x, T, camX);
+    var x = m.board.x * T - camX, y = m.board.y * T - camY, f = freeCols(m.board.x, T, camX);
     ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 2, y + 6, 1, T - 6); ctx.fillRect(x + T - 3, y + 6, 1, T - 6);
     ctx.fillStyle = '#3a2a40'; ctx.fillRect(x, y + 1, T, 7);
     ctx.fillStyle = '#f6ead0'; ctx.fillRect(x + 1, y + 2, T - 2, 5);
@@ -525,7 +459,7 @@
   function init() {
     C = window.GT_CHAIN || null;
     // the player card (mods/players.js) has its own Trade button and calls GT_TRADE.start
-    window.GT_TRADE = { start: startWith, consign: consignModal, board: boardModal, fly: flyStart };
+    window.GT_TRADE = { start: startWith, board: boardModal, fly: flyStart };
   }
   GT.register({ id: 'trade', init: function (g) { init(g); g.register({ id: 'trade-fx', onDraw: drawFly }); }, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw });
 })();

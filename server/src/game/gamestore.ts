@@ -57,8 +57,6 @@ export class GameStore {
         created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS trade_sessions_a ON trade_sessions(a, status);
       CREATE INDEX IF NOT EXISTS trade_sessions_b ON trade_sessions(b, status);
-      CREATE TABLE IF NOT EXISTS consign_lots (account TEXT NOT NULL, token TEXT NOT NULL, qty INTEGER NOT NULL, min_price INTEGER NOT NULL,
-        sold INTEGER NOT NULL DEFAULT 0, earned INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, token));
       CREATE TABLE IF NOT EXISTS homeland_invites (id INTEGER NOT NULL, account TEXT NOT NULL, PRIMARY KEY (id, account));
       CREATE TABLE IF NOT EXISTS parties (id INTEGER PRIMARY KEY AUTOINCREMENT, leader TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS party_members (account TEXT PRIMARY KEY, party INTEGER NOT NULL, joined_at INTEGER NOT NULL);
@@ -185,7 +183,7 @@ export class GameStore {
 
   /** New coin created today (town purchases and shipping), for the off-chain faucet check. */
   newCoin(day: number): number {
-    return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND token = 'coin' AND kind IN ('town_buy', 'ship_pay', 'consign_sale', 'consign_fee')").get(day) as { s: number }).s;
+    return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND token = 'coin' AND kind IN ('town_buy', 'ship_pay')").get(day) as { s: number }).s;
   }
 
   /* ------------------------------------------------------------ players */

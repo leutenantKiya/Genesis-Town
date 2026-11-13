@@ -262,7 +262,7 @@
     });
 
     // the merchants' stalls along the square's north side, two by two (merchants stand behind, customers in front); the
-    // gap between the pairs holds the Titip Jual stall and the Papan Juara board (landmarks); lapak stalls for players
+    // gap between the pairs stays open and the Papan Juara board stands east of the last stall (landmarks); lapak stalls for players
     // along the south side; the fountain in the middle with benches round it, a street lamp at each corner
     var stallColors = ['#e8503c', '#4a8ad8', '#e8a13c', '#58a858'], market = { stalls: [], lapak: [] };
     [plaza.x0 + 3, plaza.x0 + 5, plaza.x0 + 11, plaza.x0 + 13].forEach(function (sx, k) {
@@ -672,15 +672,15 @@
     return L._ferry;
   }
 
-  // Fixed public-area spots next to the market, derived only from market.stalls (no RNG, no tile changed): the Titip Jual
-  // stall stands in the gap between the 2nd and 3rd merchant stall, the Papan Juara board just east of the last stall.
-  // Both are plaza tiles in the stall row; people stand in front (south) of them.
+  // Fixed public-area spots next to the market, derived only from market.stalls (no RNG, no tile changed): the Papan Juara
+  // board just east of the last stall, the Luck Table west of the first and the Mall door. All are plaza tiles in the
+  // stall row; people stand in front (south) of them.
   function landmarks(L) {
     var s = L.market.stalls, y = s[0].y;
     // the luck table (Meja Untung) two tiles west of the first stall
     // version 3: the Mall is a building, its door is the shop counter (stand on the tile in front of the door)
     var mb = L.buildings.filter(function (b) { return b.kind === 'mall'; })[0];
-    return { consign: { x: s[1].x + 1, y: y }, board: { x: s[s.length - 1].x + 1, y: y }, gamble: { x: s[0].x - 2, y: y }, mall: mb ? { x: mb.dx, y: mb.dy } : { x: s[s.length - 1].x + 3, y: y } };
+    return { board: { x: s[s.length - 1].x + 1, y: y }, gamble: { x: s[0].x - 2, y: y }, mall: mb ? { x: mb.dx, y: mb.dy } : { x: s[s.length - 1].x + 3, y: y } };
   }
 
   var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf, ferryOf: ferryOf };

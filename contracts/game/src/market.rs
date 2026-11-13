@@ -40,6 +40,28 @@ impl Contract {
     fn view_listing(id: u64, l: &Listing) -> ListingView {
         ListingView { id, seller: l.seller.clone(), token_id: l.token_id.clone(), amount: U128(l.amount), price_each: U128(l.price_each), created_ns: l.created_ns }
     }
+    fn execute_buy(&mut self, buyer: &AccountId, listing_id: u64, amount: u128, max_price_each: u128) {
+        let mut l = self.listing(listing_id);
+        require!(*buyer != l.seller, "cannot buy your own listing");
+        require!(l.price_each <= max_price_each, "price is above your limit");
+        require!(amount >= 1 && amount <= l.amount, "amount not available");
+        let total = l.price_each.checked_mul(amount).unwrap_or_else(|| env::panic_str("overflow"));
+        let fee = total * self.market_fee_bps as u128 / 10_000;
+        self.debit(COIN, buyer, total);
+        self.credit(COIN, &l.seller, total - fee);
+        if fee > 0 {
+            let s = self.supply_of(COIN);
+            self.supply.insert(COIN.to_string(), s.saturating_sub(fee));
+            events::mt_burn(buyer.as_str(), &[COIN.to_string()], &[U128(fee)], Some("market fee"));
+        }
+        self.debit(&l.token_id, &env::current_account_id(), amount);
+        self.credit(&l.token_id, buyer, amount);
+        events::mt_transfer(l.seller.as_str(), buyer.as_str(), &[l.token_id.clone()], &[U128(amount)], Some("market"));
+        l.amount -= amount;
+        let seller = l.seller.clone();
+        events::gt_market("bought", listing_id, buyer.as_str(), &l.token_id, amount, l.price_each);
+        if l.amount == 0 { self.close_listing(listing_id, &seller); } else { self.listings.insert(listing_id, l); }
+    }
     fn close_listing(&mut self, id: u64, seller: &AccountId) {
         self.listings.remove(&id);
         let n = self.open_listings.get(seller).copied().unwrap_or(1);
@@ -75,26 +97,17 @@ impl Contract {
         self.require_not_paused();
         let buyer = env::predecessor_account_id();
         self.require_registered(&buyer);
-        let mut l = self.listing(listing_id);
-        require!(buyer != l.seller, "cannot buy your own listing");
-        require!(l.price_each <= max_price_each.0, "price is above your limit");
-        require!(amount.0 >= 1 && amount.0 <= l.amount, "amount not available");
-        let total = l.price_each.checked_mul(amount.0).unwrap_or_else(|| env::panic_str("overflow"));
-        let fee = total * self.market_fee_bps as u128 / 10_000;
-        self.debit(COIN, &buyer, total);
-        self.credit(COIN, &l.seller, total - fee);
-        if fee > 0 {
-            let s = self.supply_of(COIN);
-            self.supply.insert(COIN.to_string(), s.saturating_sub(fee));
-            events::mt_burn(buyer.as_str(), &[COIN.to_string()], &[U128(fee)], Some("market fee"));
-        }
-        self.debit(&l.token_id, &env::current_account_id(), amount.0);
-        self.credit(&l.token_id, &buyer, amount.0);
-        events::mt_transfer(l.seller.as_str(), buyer.as_str(), &[l.token_id.clone()], &[amount], Some("market"));
-        l.amount -= amount.0;
-        let seller = l.seller.clone();
-        events::gt_market("bought", listing_id, buyer.as_str(), &l.token_id, amount.0, l.price_each);
-        if l.amount == 0 { self.close_listing(listing_id, &seller); } else { self.listings.insert(listing_id, l); }
+        self.execute_buy(&buyer, listing_id, amount.0, max_price_each.0);
+    }
+
+    /// Settler: an NPC merchant buys a player's listing with its OWN coin balance on chain (same escrow, 5% burn
+    /// and events as `buy_listing`). The call carries the merchant's price ceiling; the merchant must hold the coin.
+    pub fn merchant_buy_listing(&mut self, merchant_id: AccountId, listing_id: u64, amount: U128, max_price_each: U128) {
+        self.require_not_paused();
+        self.require_settler();
+        require!(self.is_merchant(&merchant_id), "not a merchant");
+        require!(self.shops.get(&merchant_id).map(|s| s.open).unwrap_or(false), "the shop is closed");
+        self.execute_buy(&merchant_id, listing_id, amount.0, max_price_each.0);
     }
 
     /// Seller: cancel a listing and take the escrowed goods back.

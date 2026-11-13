@@ -223,7 +223,7 @@ Players in the same world see each other with `name#tag`, their look (skin, hair
 80 characters). The server keeps positions and the last 50 chat lines per world in memory; names are 3-16 characters
 plus a 5-digit tag, unique as `name#tag`. Nothing of this is stored on chain.
 
-### Public area: NPC merchants, Titip Jual and Papan Juara
+### Public area: NPC merchants and Papan Juara
 
 - **Merchants as NPC players.** Sari, Budi, Wati and Joko appear in public presence with the tag `NPC`, a fixed look and a
   place in front of their stall. Their player card has "Lihat dagangan" (their shop) and "Tanya" (prefills `/msg`). A
@@ -232,17 +232,14 @@ plus a 5-digit tag, unique as `name#tag`. Nothing of this is stored on chain.
   Same limits as `/api/talk` (6 questions a minute, 200 characters). Model text is display-only.
 - **Direct trade.** From another player's card, "Ajak dagang" offers up to 4 token lines each way (`coin` allowed). The
   receiver gets a toast and accepts or declines within 120 s. Both players must be in `public` and within 3 tiles.
-- **Titip Jual.** Mbok Darmi's stall: deposit up to 50 units of an item with a minimum price. Every game hour up to 3 units
-  per lot sell to the town at the best merchant buy price if it is at least your minimum, even while you are offline.
-  Her fee is 5%. Withdraw returns the unsold units.
 - **Papan Juara.** A board on the plaza ranks the top 10 sellers by items sold, for today or all time, and shows your own
-  rank. Counted: sales to merchants, consignment sales and items given in a direct trade that paid you coin.
+  rank. Counted: sales to merchants and items given in a direct trade that paid you coin.
 
 ## The public square (village generator 2, 2026-11-11)
 
 `village.js` VERSION 2 rebuilds the core around a 17 x 12 market square (`L.plaza`) with a 3 x 3 `fountain` in the
 middle (`L.fun.fountain`). The merchants' stalls stand two by two along the north side (seats behind them), so the
-Titip Jual stall and the Papan Juara board (`landmarks`) sit in the gap and east of the last stall; four players' lapak
+gap between the pairs stays open and the Papan Juara board (`landmarks`) stands east of the last stall; four players' lapak
 stalls (`L.market.lapak`, decor) line the south side. `bench` tiles (walkable: a character standing still on one sits)
 ring the fountain; lamps mark the corners. The church and the Puskesmas are no longer placed. Near the square, on free
 ground in the core, the fields or the forest: a 7 x 2 `stage` with a 7 x 4 audience area and benches (`L.fun.stage`), a

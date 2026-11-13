@@ -19,6 +19,7 @@ cargo-near.
 | `send_item(receiver_id, token_id, amount)` | player, **no deposit** | items only (never `coin`, never to a merchant), capped per call and per day |
 | `list_item(token_id, amount, price_each)` | player, **no deposit** | player market: escrows 1–50 of an item (not `coin`) in the contract; max 5 open listings per account; returns the listing id |
 | `buy_listing(listing_id, amount, max_price_each)` | player, **no deposit** | pays `price_each × amount` coin; 5% (`market_fee_bps`) is burned, the rest goes to the seller; buyer ≠ seller |
+| `merchant_buy_listing(merchant_id, listing_id, amount, max_price_each)` | settler | an open merchant's shop buys a player listing with the merchant's OWN coin: same escrow, 5% burn and `market` event as `buy_listing`; refused above `max_price_each`, when the merchant lacks the coin, or for a non-merchant. The server decides the price limits (`economy/config.json` `npcMarket`). Added after v5, no state change: plain redeploy |
 | `cancel_listing(listing_id)` | the seller | returns the escrowed items |
 | `create_project(id, name, chunk, need)` | owner | a town project that opens map area `chunk` when complete (max 20) |
 | `project_contribute(id, contribution)` | player, **no deposit** | pledges goods or coin; only what is still needed is taken; when every line is met the pledges are burned and the project is done |

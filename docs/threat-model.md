@@ -18,7 +18,7 @@ assets have no value, but the design assumes they might, so nothing here depends
 | Owner (contract admin) | dev machine keychain only, never on the server | config change, role change | not on the server. Config changes emit events. `pause` exists |
 | Relayer full-access keys | server env | thief spends the relayer's NEAR | keep a small balance and top up manually, daily spend alarm, rotate keys |
 | Account-creator key | server env | creates junk accounts, spends the float | small float, account creation rate limited per Auth0 identity, per IP, and globally per day |
-| Settler function-call key (the M1 minter account) | server env | submits daily settlements | per-account per-item daily gain caps, `coin` only within the faucet and money cap, each `(day, chunk)` once. The published ledger makes a dishonest settlement detectable. The key may only call `settle_day`, `register_player`, `close_shop` and `pay_dividend` on the game contract; since 2026-11-11 its gas allowance is unlimited (a capped allowance is charged the gas *attached*, and ran out), so what a leaked key can burn is bounded by the minter account's own small balance (about 0.4 NEAR) |
+| Settler function-call key (the M1 minter account) | server env | submits daily settlements | per-account per-item daily gain caps, `coin` only within the faucet and money cap, each `(day, chunk)` once. The published ledger makes a dishonest settlement detectable. The key may only call `settle_day`, `register_player`, `close_shop`, `pay_dividend` and `merchant_buy_listing` on the game contract; since 2026-11-11 its gas allowance is unlimited (a capped allowance is charged the gas *attached*, and ran out), so what a leaked key can burn is bounded by the minter account's own small balance (about 0.4 NEAR) |
 | Town function-call key | server env | pays coins to merchants | coins limited by the daily faucet `W_day`, settlement once per day, starter grants from existing treasury coins only |
 | Player session key | browser localStorage (M1). M4 moves it to a non-extractable WebCrypto Ed25519 key in IndexedDB | XSS or malware trades the player's items | function-call key limited to game methods on the game contract, so it can't move NEAR or call other contracts. Game methods have per-day limits. The player can revoke it with the full-access key |
 
@@ -239,17 +239,18 @@ still pass `checkGain`.
 - **No free healing or beds.** Hiring without a free bed answers 409 and charges nothing; sick contractors take no job; the
   pantry never goes negative and serving takes food only from the Restoran stock, never from the player's Tas.
 
-## Direct trade and consignment
+## Direct trade and merchants on the Player Market
 
 - **Trade atomicity.** `accept` runs in one SQLite transaction that re-checks both balances (409 `<Item> kurang.`), that both
   players are in `public` within 3 tiles, and that the offer has not expired (120 s) or already been used. Items are not
   reserved at offer time, so an offerer who spent them makes the accept fail cleanly; a second accept of the same offer
   answers 409. No balance can go negative, and each receiver is capped by `caps.dailyGainPerItem`. Offers allow 4 token
   lines per side and registry tokens only.
-- **Consignment.** Deposited items leave the player at once; a lot sells only when the merchant's buy price is at least the
-  owner's minimum, never more than was deposited (max 50 per item), and at most 3 units per lot per game hour. The coin is
-  paid within the daily faucet and `checkGain`, so offline sales cannot exceed the cap; the 5% fee goes to the town.
-  Withdraw returns what is unsold.
+- **Merchants buying player listings.** The settler may call `merchant_buy_listing` only for a registered open merchant,
+  with a price ceiling the call carries; the contract checks the ceiling, the merchant's own coin and the escrow, so a
+  leaked settler key can spend merchant coin on real listings at their listed price but cannot create coin or touch
+  player balances. The server also caps each buy by the fair price, the merchant's cash share and daily limits. The price
+  trend uses a median over at least 3 sellers, moves at most 5% a game day and cannot be pushed by one account.
 - **Leaderboard** is read-only from the ledger; direct trades count only when they paid coin, so swapping items back and
   forth for nothing does not climb the board.
 

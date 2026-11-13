@@ -3,6 +3,7 @@
 export const EXACT: Record<string, string> = {
  "This account was made with the old NEAR Auth and is retired. Please make a new account with a different login.": "Akun ini dibuat dengan NEAR Auth versi lama dan sudah dihentikan. Buat akun baru dengan login yang berbeda.",
  "Unknown tool.": "Alat tidak dikenal.",
+ "Unknown tool shop action.": "Aksi toko alat tidak dikenal.",
  "Unknown game.": "Permainan tidak dikenal.",
  "Unknown chips action.": "Aksi chip tidak dikenal.",
  "Pick big or small.": "Pilih besar atau kecil.",
@@ -73,8 +74,6 @@ export const EXACT: Record<string, string> = {
  "Merchant": "Pedagang",
  "New merchant": "Pedagang baru",
  "The amount must be a positive whole number.": "Jumlah harus bilangan bulat positif.",
- "The minimum price must be a positive whole number.": "Harga minimum harus bilangan bulat positif.",
- "No consignments to collect.": "Tidak ada titipan yang bisa diambil.",
  "The Homeland world isn't active yet.": "Dunia Homeland belum aktif.",
  "This isn't your Homeland. Guests can only look around.": "Ini bukan Homeland-mu. Tamu hanya boleh jalan-jalan.",
  "The village is full of guests.": "Desa sedang penuh tamu.",
@@ -433,32 +432,32 @@ export const PATTERNS: Array<[string, string]> = [
   "{0} di rantai baru {1} (perlu {2}). Hasil hari ini masuk ke rantai saat penyelesaian 06:00."
  ],
  [
-  "Consignment max {0} per item (already {1}).",
-  "Titipan maks {0} per barang (sudah {1})."
+  "The consignment stall closed: {0} {1} returned to you.",
+  "Lapak Titip Jual ditutup: {0} {1} dikembalikan padamu."
+ ],
+ [
+  "{0} isn't offering {1} right now: the Player Market price is far from normal.",
+  "{0} sedang tidak menawarkan {1}: harga di Pasar Pemain jauh dari normal."
+ ],
+ [
+  "{0} bought {1} {2} from your Market listing: +{3} coins",
+  "{0} membeli {1} {2} dari dagangan Pasarmu: +{3} koin"
+ ],
+ [
+  "New {0} bought from {1} (-{2} coins).",
+  "{0} baru dibeli dari {1} (-{2} koin)."
+ ],
+ [
+  "{0} repaired by {1} (-{2} coins).",
+  "{0} diperbaiki oleh {1} (-{2} koin)."
+ ],
+ [
+  "{0} doesn't offer that.",
+  "{0} tidak menjual itu."
  ],
  [
   "Not enough {0}.",
   "{0} kurang."
- ],
- [
-  "{0} {1} consigned to {2}, minimum {3} coins.",
-  "{0} {1} dititip ke {2}, minimal {3} koin."
- ],
- [
-  "Daily limit {0} reached. Collect the rest tomorrow.",
-  "Batas harian {0} tercapai. Ambil sisanya besok."
- ],
- [
-  "{0} {1} taken back.",
-  "{0} {1} diambil kembali."
- ],
- [
-  "Your consignment sold: {0} {1}, +{2} coins",
-  "Titipanmu terjual: {0} {1}, +{2} koin"
- ],
- [
-  "Come to the Consignment stall ({0}) at the market.",
-  "Datang ke lapak Titip Jual ({0}) di pasar."
  ],
  [
   "The village fund only has {0} free coins.",
@@ -913,7 +912,6 @@ export const NAMES: Record<string, string> = {
  "Bridge to Far Bank Hamlet": "Jembatan ke Dusun Seberang",
  "Watch Post in the North Forest": "Pos Ronda di Hutan Utara",
  "Monsters now live in each player's Homeland, so the village forest no longer needs guarding.": "Monster sekarang ada di Homeland masing-masing, jadi hutan desa tidak perlu dijaga lagi.",
- "Granny Daisy": "Mbok Darmi",
  "Straw Hat": "Caping",
  "Scarf": "Syal",
  "Crown": "Mahkota",

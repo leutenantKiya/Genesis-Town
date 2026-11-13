@@ -87,6 +87,8 @@ export interface ExtrasDeps {
   nameOf: (account: string) => string | null;
   board: (period: 'day' | 'all') => Board;
   merchantName: (account: string) => string;
+  /** The tool stall's merchant: its account and whether its shop is open (Ben, `toolShop.merchant`). */
+  stall: () => { account: string; name: string; open: boolean };
 }
 type Res = { toast: string; tags: string[] };
 
@@ -177,6 +179,27 @@ export class Extras {
     this.st.setTool(account, k, def.durability);
     this.st.bump(account, 'maketool'); this.st.bump(account, `maketool:${k}`);
     return { toast: `New ${def.name} made (${costText(this.d.econ, cost)}).`, tags: Object.keys(cost) };
+  }
+
+  /** The tool stall at Ben's shop: coin for a brand-new tool (full durability) or for a repair (priced by the wear: the more
+   *  worn the tool, the more it costs, at most `toolShop.repair`). The coin goes to the merchant, an ordinary ledger transfer. */
+  toolStall(account: string, op: unknown, kind: unknown): Res {
+    const { gs, econ } = this.d, def = this.def(kind), k = kind as string, ts = econ.toolShop, st = this.d.stall();
+    if (!st.open) throw new HttpError(409, `The shop of ${st.name} is CLOSED.`);
+    if (op !== 'buy' && op !== 'repair') throw new HttpError(400, 'Unknown tool shop action.');
+    const left = Math.min(this.ensureTools(account)[k], def.durability);
+    if (left >= def.durability) throw new HttpError(409, `Your ${def.name} is already like new.`);
+    const full = op === 'buy' ? ts.price[k] : ts.repair[k];
+    if (!(full >= 1)) throw new HttpError(409, `${st.name} doesn't offer that.`);
+    const cost = op === 'buy' ? full : Math.max(1, Math.ceil((full * (def.durability - left)) / def.durability));
+    const have = gs.balance(account, 'coin');
+    if (have < cost) throw new HttpError(409, `Not enough coins (have ${have}, need ${cost}).`);
+    const ref = `${op}:${k}`;
+    gs.add(this.day(), account, 'coin', -cost, 'tool_shop', ref);
+    gs.add(this.day(), st.account, 'coin', cost, 'tool_shop', ref);
+    this.st.setTool(account, k, def.durability);
+    if (op === 'buy') { this.st.bump(account, 'maketool'); this.st.bump(account, `maketool:${k}`); } else { this.st.bump(account, 'repair'); this.st.bump(account, `repair:${k}`); }
+    return { toast: op === 'buy' ? `New ${def.name} bought from ${st.name} (-${cost} coins).` : `${def.name} repaired by ${st.name} (-${cost} coins).`, tags: ['coin'] };
   }
 
   /* ------------------------------------------------------------ counters (missions) */

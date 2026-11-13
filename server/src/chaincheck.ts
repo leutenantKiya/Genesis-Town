@@ -126,14 +126,14 @@ export function spendTokens(econ: Econ, action: string, body: Record<string, unk
       return r ? [...Object.keys(r.inputs), ...(r.fee > 0 ? ['coin'] : [])] : [];
     }
     case 'cook': case 'build': case 'repair': case 'maketool': return Object.keys(econ.items);
-    case 'hire': case 'dress': case 'ride': case 'casino': return ['coin'];
+    case 'hire': case 'dress': case 'ride': case 'casino': case 'toolshop': return ['coin'];
     case 'mall': return body.op === 'wear' ? [] : ['coin'];
     case 'chips': return body.op === 'buy' ? ['coin'] : []; // buying chips spends coin; selling and playing only add or move chips
     default: return [];
   }
 }
 
-/** Tokens a trade or consignment request puts up from the caller: `lines` {token: qty} (set), `give` (old offer), or `token` (consign). */
+/** Tokens a trade request puts up from the caller: `lines` {token: qty} (set) or `give` (old offer). */
 export function offeredTokens(econ: Econ, body: Record<string, unknown>): string[] {
   const out = new Set<string>();
   for (const k of ['lines', 'give'] as const) {

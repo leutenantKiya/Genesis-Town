@@ -1268,3 +1268,62 @@ fn the_faucet_supply_view_leaves_out_the_owner_minted_treasury() {
     assert_eq!(c.mt_supply("coin".into()).unwrap().0, supply + 900_000, "the true supply grows");
     assert_eq!(c.coin_faucet_supply().0, supply, "the faucet supply the server reads does not");
 }
+
+/* ------------------------------------------------------------ merchant buys a player listing */
+
+#[test]
+fn settler_buys_a_listing_for_a_merchant_with_its_own_coin() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(10), U128(8));
+    let merchant_coin = bal(&c, budi(), "coin");
+    let supply_before = c.mt_supply("coin".into()).unwrap().0;
+    ctx(settler(), 0);
+    c.merchant_buy_listing(budi(), id, U128(4), U128(8));
+    assert_eq!(bal(&c, budi(), "fish"), 4);
+    assert_eq!(bal(&c, budi(), "coin"), merchant_coin - 32);
+    assert_eq!(bal(&c, alice(), "coin"), 32 - 1, "5% fee burned like a normal buy");
+    assert_eq!(c.mt_supply("coin".into()).unwrap().0, supply_before - 1);
+    assert_eq!(c.get_listing(id).unwrap().amount.0, 6);
+    assert!(get_logs().iter().any(|l| l.contains(r#""event":"market""#) && l.contains("bought")));
+}
+
+#[test]
+#[should_panic(expected = "only the settler")]
+fn only_the_settler_may_buy_for_a_merchant() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(1), U128(1));
+    ctx(bob(), 0);
+    c.merchant_buy_listing(budi(), id, U128(1), U128(1));
+}
+
+#[test]
+#[should_panic(expected = "price is above your limit")]
+fn merchant_buy_respects_the_price_ceiling() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(1), U128(9));
+    ctx(settler(), 0);
+    c.merchant_buy_listing(budi(), id, U128(1), U128(8));
+}
+
+#[test]
+#[should_panic(expected = "not enough coin")]
+fn merchant_buy_needs_the_coin() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(20), U128(50));
+    ctx(settler(), 0);
+    c.merchant_buy_listing(budi(), id, U128(20), U128(50));
+}
+
+#[test]
+#[should_panic(expected = "not a merchant")]
+fn merchant_buy_refuses_players() {
+    let mut c = market_setup();
+    ctx(alice(), 0);
+    let id = c.list_item("fish".into(), U128(1), U128(1));
+    ctx(settler(), 0);
+    c.merchant_buy_listing(bob(), id, U128(1), U128(1));
+}

@@ -227,7 +227,7 @@ test('over HTTP: gains are not checked, chain-higher passes, and off turns the c
   } finally { o.close(); }
 });
 
-test('over HTTP: while settlement runs nothing is checked, and trade sets and consignments are', async () => {
+test('over HTTP: while settlement runs nothing is checked, and trade sets are', async () => {
   const h = await harness();
   try {
     h.chain.add(A, 'fish', 3n);
@@ -239,9 +239,6 @@ test('over HTTP: while settlement runs nothing is checked, and trade sets and co
     h.game.settlement.busy = false;
     h.chain.add(A, 'fish', 1n); // chain 2, books 3
     h.game.gs.setSettled(A, 'fish', 3);
-    const c = await h.call('POST', '/api/consign', { token: 'fish', qty: 1, min_price: 5 });
-    assert.equal(c.status, 409);
-    assert.equal(c.json.code, 'chain_check');
     const s = await h.call('POST', '/api/trade/set', { id: 1, lines: { fish: 1 }, world: 'public' });
     assert.equal(s.json.code, 'chain_check', JSON.stringify(s.json));
   } finally { h.close(); }
@@ -276,10 +273,10 @@ test('a change to another account during the read does not skip the check; a cha
 
 import { world as tradeWorld, P, Q } from './tradeworld.ts';
 
-/** The tradeworld game behind createApp, with P and Q able to sign requests; P holds fish, Q coin, both sit by the consignment stall. */
+/** The tradeworld game behind createApp, with P and Q able to sign requests; P holds fish, Q coin, both sit by the trading spot. */
 async function tradeHarness() {
   const w = await tradeWorld();
-  w.stand(P, 'consign'); w.stand(Q, 'consign', 1);
+  w.stand(P, 'board'); w.stand(Q, 'board', 1);
   const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: 'town.gt.test', MERCHANT_PARENT_ACCOUNT_ID: 'gt.test' } as NodeJS.ProcessEnv);
   const chain = w.game.chain as MockChain;
   const keys = new Map<string, near.KeyPair>();

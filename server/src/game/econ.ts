@@ -44,6 +44,23 @@ export interface HomelandConfig {
   buildings: Record<string, BuildingDef>;
 }
 
+export interface TrendConfig { minSellers: number; histLen: number; maxMovePctPerDay: number; multMin: number; multMax: number; withdrawHighMult: number; withdrawLowMult: number; withdrawMinSamples: number }
+/** Merchants and the Player Market (npc.ts, trend.ts): buying cheap listings through the contract, following the median listing price. */
+export interface NpcMarketConfig {
+  buyEnabled: boolean; trendEnabled: boolean;
+  /** Real seconds between two looks at the open listings. */
+  everySecs: number; maxBuysPerRun: number;
+  /** A merchant pays at most floor(mid price x this x its cash factor) per unit. */
+  maxPayMidMult: number;
+  maxCashPctPerBuy: number; maxCashPctPerDay: number; reserveRentDays: number;
+  maxUnitsPerDayPerMerchant: number; maxStockOverTarget: number;
+  /** After the contract answers that the method is missing (not yet redeployed), wait this long before asking again. */
+  retryMissingMinutes: number;
+  trend: TrendConfig;
+}
+/** The tool stall in Ben's shop: new tools and repairs for coin (paid to Ben). */
+export interface ToolShopConfig { merchant: string; price: Record<string, number>; repair: Record<string, number> }
+
 export interface Econ {
   time: TimeConfig;
   items: Record<string, ItemDef>;
@@ -73,7 +90,8 @@ export interface Econ {
   guest: { max: number; idleSecs: number; helloPerMinute: number; perIp: number; maxMinutes: number };
   party: { max: number; inviteSecs: number; maxPendingInvites: number };
   coop: { partyRoleDefault: 'none' | 'visitor' | 'helper' | 'builder'; guestGatherPerHostDay: number; guestLeavesCharges: number; guestPlotsPerHost: number; assistEnergy: number; assistSecs: number; assistMaxShare: number };
-  consign: { merchant: string; feeBps: number; maxPerItem: number; sellPerGameHour: number };
+  npcMarket: NpcMarketConfig;
+  toolShop: ToolShopConfig;
   /** Off-chain equipment with durability (no tokens): the starter kit gives every player one of each. */
   tools: Record<string, ToolDef>;
   /** Entertainment is paid in coin: the carousel ride, and the casino entry that gives a timed pass. */

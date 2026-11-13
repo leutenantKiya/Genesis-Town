@@ -902,6 +902,7 @@
     if (a === 'sell' || a === 'ship' || a === 'stock') return 'sell';
     if (a === 'mall' || a === 'hire' || a === 'dress' || a === 'casino' || a === 'ride') return 'buy'; // coin spent (the carousel's own music starts with the ride)
     if (a === 'repair' || a === 'maketool') return 'craft';
+    if (a === 'toolshop') return 'buy';
     if (a === 'mission') return 'quest_done';
     if (a === 'build' || a === 'assist') return 'build';
     if (a === 'collect') return 'coin';
@@ -1203,6 +1204,7 @@
       });
       wrap.appendChild(g1);
     }
+    toolStallRows(id, m, wrap);
     wrap.appendChild($('h4', 'chain-h', $t('Barangmu · jual ke {0}', [m.name])));
     var g2 = $('div', 'gt-grid'), byToken = {};
     m.items.forEach(function (it) { byToken[it.token] = it; });
@@ -1225,6 +1227,33 @@
     holdingLine(id, wrap);
     if (S.account) wrap.appendChild(button($t('Ngobrol dengan {0}', [m.name]), function () { talkTo(id, m.name); }));
     return wrap;
+  }
+
+  // The tool stall inside one merchant's shop (economy/config.json `toolShop`): a new tool or a repair for coin, paid to that merchant.
+  // A repair costs less the less worn the tool is (the same arithmetic as the server's Extras.toolStall).
+  function toolStallRows(id, m, wrap) {
+    var ts = S.cfg && S.cfg.econ && S.cfg.econ.toolShop, defs = S.cfg && S.cfg.econ && S.cfg.econ.tools;
+    if (!ts || ts.merchant !== id || !defs || !S.st || !S.st.tools) return;
+    wrap.appendChild($('h4', 'chain-h', $t('Alat · {0}', [m.name])));
+    TOOL_ORDER.forEach(function (k) {
+      var t = S.st.tools[k]; if (!t || !ts.price[k]) return;
+      var row = $('div', 'gt-tool' + (t.broken ? ' broken' : ''));
+      if (window.GT_ITEMS) row.appendChild(GT_ITEMS.icon(TOOL_ICON[k], 40));
+      var txt = $('div', 'grow'), full = t.uses >= t.max;
+      var fix = Math.max(1, Math.ceil(ts.repair[k] * (t.max - t.uses) / t.max)), coins = have('coin');
+      txt.appendChild($('b', null, toolName(k) + ' · ' + t.uses + '/' + t.max + (t.broken ? ' · ' + $t('rusak') : '')));
+      var pct = Math.max(0, Math.min(1, t.uses / Math.max(1, t.max))), bar = $('div', 'gt-dur'); bar.appendChild($('i'));
+      bar.firstChild.style.width = Math.round(pct * 100) + '%'; bar.firstChild.style.background = 'hsl(' + Math.round(pct * 120) + ',72%,46%)'; txt.appendChild(bar);
+      txt.appendChild($('div', 'chain-dim', full ? $t('Seperti baru.') : $t('Perbaiki {0} koin', [fix]) + ' · ' + $t('Baru {0} koin', [ts.price[k]])));
+      row.appendChild(txt);
+      var acts = $('div', 'gt-tool-acts');
+      var rb = button($t('Perbaiki'), function () { act({ action: 'toolshop', op: 'repair', tool: k }).then(refreshModal, refreshModal); }, t.broken ? 'primary' : '');
+      rb.disabled = full || coins < fix;
+      var nb = button($t('Beli baru'), function () { act({ action: 'toolshop', op: 'buy', tool: k }).then(refreshModal, refreshModal); });
+      nb.disabled = full || coins < ts.price[k];
+      acts.appendChild(rb); acts.appendChild(nb); row.appendChild(acts);
+      wrap.appendChild(row);
+    });
   }
 
   // Ask a merchant something. The answer uses the shop's real prices (NEAR AI Cloud when the server has a key,
