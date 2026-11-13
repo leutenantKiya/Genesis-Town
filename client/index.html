@@ -14,6 +14,41 @@
 <meta name="apple-mobile-web-app-title" content="Genesis Town">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&display=swap">
+<style>
+/* the boot screen (inline: it shows before the stylesheets arrive) */
+/* the iris: a hole that grows from the middle of the screen opens the boot screen onto the game (--gt-hole animates) */
+@property --gt-hole{syntax:'<length-percentage>';inherits:false;initial-value:0%}
+#gt-boot{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 35%,#24305a 0%,#121733 55%,#0a0c1c 100%);color:#f4ecd8;font-family:"Pixelify Sans",system-ui,sans-serif;
+  --gt-hole:0%;-webkit-mask:radial-gradient(circle at 50% 42%,transparent var(--gt-hole),#000 calc(var(--gt-hole) + 2px));mask:radial-gradient(circle at 50% 42%,transparent var(--gt-hole),#000 calc(var(--gt-hole) + 2px));
+  transition:--gt-hole 1.05s cubic-bezier(.76,0,.24,1) .18s,opacity .4s ease .85s,visibility 0s linear 1.3s}
+#gt-boot.out{--gt-hole:160%;opacity:0;visibility:hidden}
+.gt-boot__in{display:grid;justify-items:center;gap:14px;padding:24px;text-align:center;width:min(420px,88vw);transition:opacity .45s ease,transform .7s cubic-bezier(.16,1,.3,1)}
+#gt-boot.out .gt-boot__in{opacity:0;transform:translateY(-16px) scale(.96)}
+/* coming in: the island, the logo, the bar and the words rise one after another */
+.gt-boot__isle,.gt-boot__logo,.gt-boot__bar,.gt-boot__step{animation:gt-boot-rise .9s cubic-bezier(.16,1,.3,1) both}
+.gt-boot__logo{animation-delay:.1s}.gt-boot__bar{animation-delay:.18s}.gt-boot__step{animation-delay:.26s}
+@keyframes gt-boot-rise{from{opacity:0;transform:translateY(14px)}}
+.gt-boot__isle{width:min(220px,52vw);height:auto;image-rendering:pixelated;filter:drop-shadow(0 18px 18px rgba(0,0,0,.45))}
+.gt-boot__land{transform-box:fill-box;transform-origin:50% 60%;animation:gt-boot-bob 3.8s cubic-bezier(.45,0,.55,1) infinite}
+.gt-boot__cloud{animation:gt-boot-cloud 12s linear infinite}
+.gt-boot__drip{animation:gt-boot-drip 1.4s cubic-bezier(.5,0,.9,.6) infinite}
+@keyframes gt-boot-bob{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-2px) rotate(-.6deg)}50%{transform:translateY(-3.2px) rotate(0)}75%{transform:translateY(-1.4px) rotate(.6deg)}}
+@keyframes gt-boot-cloud{from{transform:translateX(-12px)}to{transform:translateX(62px)}}
+@keyframes gt-boot-drip{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(6px);opacity:0}}
+.gt-boot__logo{margin:4px 0 0;font:600 clamp(28px,6vw,44px)/1 "Pixelify Sans",system-ui,sans-serif;letter-spacing:.02em;color:#ffe9a8;text-shadow:0 3px 0 #b8742e,0 6px 0 rgba(0,0,0,.35)}
+.gt-boot__bar{width:100%;height:16px;padding:3px;border:3px solid #f4ecd8;background:#1a1f3c;box-shadow:0 4px 0 rgba(0,0,0,.4)}
+.gt-boot__bar i{position:relative;display:block;height:100%;width:0;overflow:hidden;background:repeating-linear-gradient(90deg,#00ec97 0 10px,#00b877 10px 12px)}
+.gt-boot__bar i::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.55) 50%,transparent 100%);transform:translateX(-100%);animation:gt-boot-shine 1.8s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes gt-boot-shine{60%,100%{transform:translateX(100%)}}
+.gt-boot__step{margin:0;font-size:15px;color:#cfd8ff;transition:color .3s ease}
+.gt-boot__tip{margin:6px 0 0;min-height:2.6em;font-size:14px;line-height:1.35;color:#9aa6d8;transition:opacity .45s ease,transform .45s cubic-bezier(.16,1,.3,1)}
+.gt-boot__tip.hide{opacity:0;transform:translateY(-5px)}
+/* the game behind: soft and a touch large while it loads, sharpening into place as the iris opens */
+.shell{transition:filter 1.1s ease .2s,transform 1.3s cubic-bezier(.16,1,.3,1) .1s}
+html.gt-booting .shell{filter:blur(8px) saturate(.75);transform:scale(1.04)}
+@media (prefers-reduced-motion:reduce){.gt-boot__land,.gt-boot__cloud,.gt-boot__drip,.gt-boot__bar i::after,.gt-boot__isle,.gt-boot__logo,.gt-boot__bar,.gt-boot__step,.gt-boot__tip{animation:none}
+  #gt-boot{-webkit-mask:none;mask:none;transition:opacity .4s ease,visibility 0s linear .4s}#gt-boot .gt-boot__in{transition:none}html.gt-booting .shell{filter:none;transform:none}.shell{transition:none}}
+</style>
 <link rel="stylesheet" href="css/theme.css">
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/chain.css">
@@ -23,6 +58,65 @@
 <link rel="stylesheet" href="css/phone.css">
 </head>
 <body>
+<!-- the boot screen: drawn before anything else loads (styles inline here), it follows the real loading (the page,
+     the 2.5D kit's files, the first frame) through window.GT_BOOT, and fades out when the world is on screen -->
+<div id="gt-boot" role="status" aria-live="polite">
+  <div class="gt-boot__in">
+    <svg class="gt-boot__isle" viewBox="0 0 64 48" shape-rendering="crispEdges" aria-hidden="true">
+      <g class="gt-boot__cloud"><rect x="2" y="6" width="10" height="3" fill="#fff"/><rect x="4" y="4" width="5" height="2" fill="#fff"/></g>
+      <g class="gt-boot__land">
+        <rect x="14" y="26" width="36" height="4" fill="#5fae3e"/><rect x="12" y="28" width="40" height="3" fill="#4c9a33"/>
+        <rect x="14" y="31" width="36" height="4" fill="#8a5a30"/><rect x="18" y="35" width="28" height="3" fill="#6e4424"/>
+        <rect x="23" y="38" width="18" height="3" fill="#5a3a1e"/><rect x="28" y="41" width="8" height="2" fill="#4a2e18"/>
+        <rect x="20" y="17" width="12" height="9" fill="#f2e2c4"/><rect x="18" y="13" width="16" height="4" fill="#c8503c"/><rect x="20" y="11" width="12" height="2" fill="#e0705a"/>
+        <rect x="25" y="20" width="3" height="6" fill="#8a5a30"/><rect x="21" y="19" width="3" height="3" fill="#7cc8f0"/><rect x="29" y="19" width="2" height="2" fill="#7cc8f0"/>
+        <rect x="40" y="20" width="2" height="6" fill="#6a4020"/><rect x="36" y="12" width="10" height="9" fill="#3f8a3a"/><rect x="38" y="10" width="6" height="3" fill="#56a64a"/>
+        <rect x="47" y="24" width="2" height="2" fill="#f0d048"/><rect x="16" y="24" width="2" height="2" fill="#e85a6a"/>
+        <rect x="34" y="43" width="2" height="4" fill="#9ad8ff" class="gt-boot__drip"/>
+      </g>
+    </svg>
+    <h1 class="gt-boot__logo">Genesis Town</h1>
+    <div class="gt-boot__bar" aria-hidden="true"><i></i></div>
+    <p class="gt-boot__step" id="gt-boot-step">Loading the town…</p>
+    <p class="gt-boot__tip" id="gt-boot-tip"></p>
+  </div>
+</div>
+<script>
+(function () {
+  var id = /[?&]lang=id\b/.test(location.search) || (function () { try { return localStorage.getItem('gt.lang') === 'id'; } catch (e) { return false; } })();
+  var TIPS = id ? ['Tips: berdiri di portal beberapa detik untuk pindah dunia.', 'Tips: jual saat stok pedagang menipis, harganya naik.', 'Tips: pegang Cangkul di dekat kebun untuk melihat kotak hijau.', 'Tips: Q dan E memutar kamera 2.5D.', 'Tips: bangunan di Homeland tetap menghasilkan saat kamu pergi.']
+    : ['Tip: stand in a portal for a few seconds to travel.', 'Tip: sell when a merchant’s stock runs low, the price climbs.', 'Tip: hold the Hoe by your farm to see where you can till.', 'Tip: Q and E turn the 2.5D camera.', 'Tip: Homeland buildings keep producing while you are away.'];
+  var el = document.getElementById('gt-boot'), bar = el.querySelector('.gt-boot__bar i'), step = document.getElementById('gt-boot-step'), tip = document.getElementById('gt-boot-tip');
+  var shown = 0, want = 0.08, t0 = Date.now(), ended = false, ti = Math.floor(Math.random() * TIPS.length), lastT = 0;
+  document.documentElement.classList.add('gt-booting');
+  // the bar eases toward where the loading is, the same speed at any frame rate
+  function paint(now) {
+    var dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 0.016; lastT = now;
+    shown += (want - shown) * (1 - Math.exp(-dt * (ended ? 9 : 3.2)));
+    bar.style.width = (shown * 100).toFixed(2) + '%';
+    if (!ended || shown < 0.998) requestAnimationFrame(paint);
+  }
+  requestAnimationFrame(paint);
+  tip.textContent = TIPS[ti];
+  // the tips cross-fade: the old one lifts out, then the new one settles in
+  var tipT = setInterval(function () { tip.classList.add('hide'); setTimeout(function () { ti = (ti + 1) % TIPS.length; tip.textContent = TIPS[ti]; tip.classList.remove('hide'); }, 450); }, 3600);
+  window.GT_BOOT = {
+    set: function (frac, label) { if (ended) return; want = Math.max(want, Math.min(0.98, frac)); if (label) step.textContent = label; },
+    done: function () {
+      if (ended) return; ended = true; want = 1; step.textContent = id ? 'Siap!' : 'Ready!';
+      var wait = Math.max(0, 900 - (Date.now() - t0)); // a flash of the screen reads as a glitch: stay up a moment at least
+      setTimeout(function () {
+        el.classList.add('out'); clearInterval(tipT);
+        document.documentElement.classList.remove('gt-booting'); // the game sharpens while the iris opens
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 1400);
+      }, wait + 450); // the bar fills first
+    },
+    zh: id
+  };
+  window.addEventListener('load', function () { GT_BOOT.set(0.35, id ? 'Membangun desa…' : 'Building the village…'); });
+  setTimeout(function () { GT_BOOT.done(); }, 25000); // never stuck: the game shows whatever is ready
+})();
+</script>
 <main id="app">
   <div class="shell">
     <div class="brand"><b>Genesis Town</b></div>

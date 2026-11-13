@@ -69,6 +69,8 @@
     "Penggergajian": "Sawmill",
     "atau": "or",
     "Tingkatkan": "Upgrade",
+    "Sembunyikan bilah atas (U)": "Hide the top bar (U)",
+    "Tampilkan bilah atas (U)": "Show the top bar (U)",
     "({0} sedang sibuk dan belum bisa membalas pesan.)": "({0} is busy and can't answer messages yet.)",
     "Buku \"Pedagang Pintar\": harga naik kalau stok pedagang sedikit. Jual saat stoknya kosong, beli saat penuh.": "Book \"Smart Trader\": prices rise when a merchant's stock is low. Sell when it's empty, buy when it's full.",
     "Buku \"Kebun Untuk Pemula\": cangkul petak, tanam Gandum, siram tiap hari. Panen setelah 3 hari permainan.": "Book \"Gardening for Beginners\": till a plot, plant Wheat, water it daily. Harvest after 3 game days.",

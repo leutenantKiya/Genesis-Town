@@ -191,3 +191,17 @@ test('party chat reaches mates in other worlds only', () => {
   assert.equal(social.since(C, P, 0).length, 0, 'a stranger in the same world does not');
   assert.equal(social.since(A, P, 0).length, 1);
 });
+
+test('presence: the smooth position and walking speed pass through for drawing, never far from the checked tile', () => {
+  const { social } = world();
+  social.report(A, P, { x: 10, y: 10, scene: 'out' });
+  social.report(B, P, { x: 12, y: 10, fx: 11.62, fy: 10.004, vx: 4.98, vy: 0, dir: 'right', scene: 'out' });
+  let b = social.nearby(A, P).find((s) => s.account === B)!;
+  assert.deepEqual([b.x, b.y, b.fx, b.fy, b.vx, b.vy], [12, 10, 11.62, 10.004, 4.98, 0]);
+  social.report(B, P, { x: 12, y: 10, fx: 40, fy: 10, vx: 99, vy: 0, scene: 'out' }); // drawn somewhere else: dropped
+  b = social.nearby(A, P).find((s) => s.account === B)!;
+  assert.equal(b.fx, undefined);
+  social.report(B, P, { x: 12, y: 10, fx: 12.5, fy: 10, vx: 99, vy: -Infinity, scene: 'out' }); // a run at most
+  b = social.nearby(A, P).find((s) => s.account === B)!;
+  assert.deepEqual([b.fx, b.vx, b.vy], [12.5, 8, 0]);
+});

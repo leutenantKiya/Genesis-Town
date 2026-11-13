@@ -10,7 +10,7 @@ import { randomBytes } from 'node:crypto';
 /** A visitor who has not signed in: in memory only, public village only, no chat. `ip` is who created it. */
 export interface Guest extends Seen { id: string; pub: string; ip: string; since: number }
 
-export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean; guest?: boolean }
+export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; fx?: number; fy?: number; vx?: number; vy?: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean; guest?: boolean }
 /** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
 export interface Npc { id: string; account: string; name: string; look: number; x: number; y: number; title: string }
 export const NPC_TAG = 'NPC';
@@ -124,13 +124,19 @@ export class Social {
   }
 
   /** Where a player is now, in `world` (only outdoor positions are shown to others). */
-  report(account: string, world: string, p: { x?: unknown; y?: unknown; dir?: unknown; scene?: unknown }) {
+  report(account: string, world: string, p: { x?: unknown; y?: unknown; fx?: unknown; fy?: unknown; vx?: unknown; vy?: unknown; dir?: unknown; scene?: unknown }) {
     const x = Number(p.x), y = Number(p.y);
     if (!worldIdOk(world)) throw new HttpError(400, 'bad world');
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 999 || y > 999) throw new HttpError(400, 'bad position');
     const dir = typeof p.dir === 'string' && DIRS.has(p.dir) ? p.dir : 'down';
     const scene = p.scene === 'out' ? 'out' : 'in';
-    this.seen.set(account, { account, world, nick: this.nick(account), tag: this.tag(account), look: this.look(account), x, y, dir, scene, t: this.now() });
+    // the smooth position (between tiles while walking) and the walking speed, only for drawing: never more than a tile
+    // off the checked tile, never faster than a run, so a client cannot draw itself anywhere else
+    const fx = Number(p.fx), fy = Number(p.fy), vx = Number(p.vx), vy = Number(p.vy);
+    const near = Number.isFinite(fx) && Number.isFinite(fy) && Math.abs(fx - x) <= 1 && Math.abs(fy - y) <= 1;
+    const v = (n: number) => Number.isFinite(n) ? Math.round(Math.max(-8, Math.min(8, n)) * 100) / 100 : 0;
+    const smooth = near ? { fx: Math.round(fx * 1000) / 1000, fy: Math.round(fy * 1000) / 1000, vx: v(vx), vy: v(vy) } : {};
+    this.seen.set(account, { account, world, nick: this.nick(account), tag: this.tag(account), look: this.look(account), x, y, ...smooth, dir, scene, t: this.now() });
   }
   /** Other players outdoors in the same world within `radius` tiles who reported in the last 15 seconds. */
   nearby(account: string, world: string, radius = 30, maxAge = 15_000) {

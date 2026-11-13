@@ -13,6 +13,36 @@ html.gt-full .shell{display:flex!important;flex-direction:column!important;grid-
 html.gt-full .bezel{width:100%;grid-column:auto!important;grid-row:auto!important}
 html.gt-full #fit{width:100%}
 html.gt-full .hud{grid-column:auto!important}
+/* full window, edge to edge: no frame round the game; the banner and the HUD float over it as one bar (.gt-top),
+   which slides up out of the way and comes back from the top edge, its tab, or U (settings.js) */
+html.gt-full,html.gt-full body{overflow:hidden;height:100%} /* no page scrollbars: they would shrink the view the moment it is measured */
+html.gt-full .shell{position:relative;padding:0;background:var(--bezel)}
+html.gt-full .bezel{border-radius:0}
+html.gt-full .gt-top{position:absolute;top:0;left:0;right:0;z-index:40;padding:8px 12px 6px;
+  background:color-mix(in oklab,var(--hud) 88%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  box-shadow:0 10px 28px -14px rgb(0 0 0 / .7);transition:transform .42s cubic-bezier(.16,1,.3,1),opacity .3s ease}
+html.gt-full .gt-top .hud{margin:0;padding-bottom:6px}
+html.gt-full .gt-top .chain-banner{margin-bottom:6px}
+html.gt-full.gt-top-hide .gt-top{transform:translateY(calc(-100% - 8px));opacity:0;pointer-events:none}
+.gt-top-tab,.gt-top-hidebtn{display:none}
+html.gt-full .gt-top-tab,html.gt-full .gt-top-hidebtn{display:flex;align-items:center;gap:6px;position:absolute;left:50%;z-index:41;
+  padding:3px 14px 5px;border:0;border-radius:0 0 10px 10px;background:var(--hud);color:var(--hud-ink);cursor:pointer;
+  font:600 calc(13px*var(--ts))/1.2 var(--font);box-shadow:0 6px 14px -8px rgb(0 0 0 / .7),inset 0 -2px 0 var(--season);
+  transition:transform .38s cubic-bezier(.16,1,.3,1),opacity .25s ease}
+html.gt-full .gt-top-tab{top:0;transform:translate(-50%,-110%);opacity:0;pointer-events:none}
+html.gt-full.gt-top-hide .gt-top-tab{transform:translate(-50%,0);opacity:1;pointer-events:auto;transition-delay:.15s}
+html.gt-full .gt-top-hidebtn{top:100%;transform:translate(-50%,0)}
+.gt-top-tab:hover,.gt-top-hidebtn:hover{background:var(--hud-3)}
+.gt-top-tab:focus-visible,.gt-top-hidebtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.gt-top-tab kbd,.gt-top-hidebtn kbd{font:inherit;font-size:11px;padding:0 4px;border:1px solid currentColor;border-radius:3px;opacity:.75}
+/* the 2.5D view's trays move down under the bar while it shows */
+html.gt-full .gt3d-bar{transition:top .42s cubic-bezier(.16,1,.3,1),transform .42s cubic-bezier(.16,1,.3,1),opacity .3s ease}
+html.gt-full .gt3d-hint{transition:transform .42s cubic-bezier(.16,1,.3,1),opacity .3s ease}
+/* the 2.5D trays and the key hint come and go with the bar: the trays rise away, the hint sinks away */
+html.gt-full.gt-top-hide .gt3d-bar{transform:translateY(-24px);opacity:0;visibility:hidden;transition:transform .42s cubic-bezier(.16,1,.3,1),opacity .3s ease,visibility 0s linear .42s}
+html.gt-full.gt-top-hide .gt3d-hint{transform:translateY(16px);opacity:0}
+html.gt-full:not(.gt-top-hide) .gt3d-bar{top:calc(var(--gt-top-h,60px) + 12px)}
+html.gt-reduced-motion .gt-top,html.gt-reduced-motion .gt-top-tab,html.gt-reduced-motion .gt-top-hidebtn,html.gt-reduced-motion .gt3d-bar,html.gt-reduced-motion .gt3d-hint{transition:none}
 
 .gt-settings h3{margin:12px 0 6px;font-size:calc(16px*var(--ts));font-weight:600;color:var(--paper-ink)}
 .gt-settings h3:first-child{margin-top:0}

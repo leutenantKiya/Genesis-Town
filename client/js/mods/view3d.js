@@ -4,7 +4,8 @@
  * Indoors, without WebGL, or with Tampilan 2D the 2D canvas draws as before.
  *
  * three.js and the kit load the first time the view is on. The choice is kept in localStorage 'gt.view' ('2d' | '3d');
- * the default is 2.5D on a computer and 2D on a phone (the forest is heavy on a small GPU).
+ * the default is 2.5D on every device (owner's choice, 2026-11-13); 2D stays one switch away in Settings, and a device
+ * without WebGL falls back to it by itself.
  * The camera is the lab's (GT3.Rig defaults: pitch 52, fov 28) and so are its keys and controls: Q / E turn it by 45
  * degrees, + / - and the mouse wheel over the world zoom, a drag on the world walks (the lab's ring), and the lab's
  * trays (top right of the view) hold Desa / Homeland, zoom and turn, with the lab's key hint. Desa / Homeland walk to
@@ -21,8 +22,8 @@
   var DV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var KIT = ['vendor/three.js', 'js/three/kit.js', 'js/three/ground.js', 'js/three/building.js', 'js/three/nature.js', 'js/three/props.js',
     'js/three/actor.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/fun.js', 'js/three/life.js', 'js/three/world.js', 'js/three/room.js', 'js/three/monsters.js'];
-  var mode = saved() || (phone() ? '2d' : '3d');
-  var loading = null, ok = false, failed = false;
+  var mode = saved() || '3d';
+  var loading = null, ok = false, failed = false, booted = false;
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
   var mctx = null, mtex = null, mDue = false, mAny = false; // the unlit marks sheet (onDrawMarks: the hoe's squares)
   var actors = new Map(), gctx = null, gtex = null, gAt = 0, last = 0, sw = 0, sh = 0, VW = 1, VH = 1;
@@ -30,7 +31,6 @@
   var ui = null, drag = null, took = 0, shownWorld = '', snapNext = true, last0 = 0;
 
   function saved() { try { var v = localStorage.getItem(LS); return v === '2d' || v === '3d' ? v : null; } catch (e) { return null; } }
-  function phone() { try { return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900; } catch (e) { return false; } }
 
   function loadKit() {
     if (loading) return loading;
@@ -39,6 +39,7 @@
       (function next() {
         if (i >= KIT.length) return res();
         var src = KIT[i++];
+        if (window.GT_BOOT) GT_BOOT.set(0.35 + 0.5 * i / KIT.length, (GT_BOOT.zh ? 'Memuat dunia 2.5D… ' : 'Loading the 2.5D world… ') + i + '/' + KIT.length);
         if (src === 'vendor/three.js' && window.THREE) return next();
         var s = document.createElement('script'); s.src = src; s.onload = next; s.onerror = function () { rej(new Error(src)); };
         document.head.appendChild(s);
@@ -47,7 +48,7 @@
     return loading;
   }
   function fail(msg) {
-    failed = true; ok = false; GT.setView3d(null); hide();
+    failed = true; ok = false; GT.setView3d(null); hide(); bootDone();
     if (GT.toast) GT.toast(msg);
   }
   function start() {
@@ -524,6 +525,7 @@
       updateMonsters(now);
       updateSwings(dt);
       renderer.render(scene, camera);
+      if (!booted) { booted = true; if (window.GT_BOOT) GT_BOOT.set(0.95, GT_BOOT.zh ? 'Menyalakan matahari…' : 'Lighting the world…'); setTimeout(bootDone, 350); }
       return toScreen(pt.x, pt.y, 0);
     },
     toScreen: function (x, z, l) { return toScreen(mx(x), mz(z), l); },
@@ -569,5 +571,7 @@
       return true;
     }
   };
-  GT.register({ id: 'view3d', init: function () { if (mode === '3d') start(); } });
+  function bootDone() { if (window.GT_BOOT) GT_BOOT.done(); }
+  // the 2D view is ready as soon as the engine is; the 2.5D view ends the boot screen on its first drawn frame (draw)
+  GT.register({ id: 'view3d', init: function () { if (mode === '3d') start(); else setTimeout(bootDone, 300); } });
 })();
