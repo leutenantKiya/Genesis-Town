@@ -1,6 +1,6 @@
 {
   "broker_id": "makelar.genesistown.testnet",
-  "voucher_key": "ed25519:REPLACE_WITH_SETTLER_PUBLIC_KEY",
+  "voucher_key": "ed25519:6sXkAaUNhx39jBQLeTzB3mYL4yuhr5JNqNUnqSzHxYUv",
   "new_tokens": [
     {
       "token_id": "emas",
