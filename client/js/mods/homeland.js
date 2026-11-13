@@ -965,15 +965,26 @@
   }
 
   /* ---- drawing over the world ---- */
+  // The Mall's marker: over the Genesis Mall building's door when the village has one (landmarks().mall is that door tile), else over the old
+  // plaza stand. Always drawn in the public village, outdoors, so the sign shows from the plaza (2.5D: above the door, over the 3D building).
+  function mallMarkSpot() {
+    var L = GT.world; if (wid() !== 'public' || !L || !L.market || !window.GTVillage || !GTVillage.landmarks) return null;
+    try { return GTVillage.landmarks(L).mall || null; } catch (e) { return null; }
+  }
   function drawMall(ctx, camX, camY, T) {
-    var m = mallSpot(); if (!m) return;
-    var x = m.x * T - camX, y = m.y * T - camY, v3 = GT.view3dOn && GT.view3dOn();
-    if (!v3) {
+    if (!GT.scene || GT.scene.kind !== 'out') return;
+    var m = mallMarkSpot(); if (!m) return;
+    var v3 = GT.view3dOn && GT.view3dOn(), stand = !hasMallBuilding(GT.world);
+    if (stand && !v3) {
+      var x = m.x * T - camX, y = m.y * T - camY;
       ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 1, y + 5, T - 2, T - 5);
       for (var i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#fff0f6' : '#d0508a'; ctx.fillRect(x + 1 + i * 3, y + 1, 3, 4); }
       ctx.fillStyle = '#f2c230'; ctx.fillRect(x + 3, y + 7, 3, 2); ctx.fillStyle = '#e0a050'; ctx.fillRect(x + 7, y + 7, 2, 3);
     }
-    if (window.GT_THEME && GT_THEME.label) { var a = GT.at(m.x, m.y); GT_THEME.label(ctx, '🛍️ ' + $t('Mall'), a.x + T / 2, a.y + T + 9, { tone: 'paper', size: 6, bold: true }); }
+    if (!window.GT_THEME || !GT_THEME.label) return;
+    var a = GT.at(m.x, m.y), txt = '🛍️ ' + $t('Mall');
+    // above the door (2D: just over the door tile's top; 2.5D: over the building's door, clear of the stalls' awnings and merchants' tags)
+    GT_THEME.label(ctx, txt, a.x + T / 2, v3 ? a.y + T - 20 : a.y - 1, { tone: 'paper', size: 6, bold: true });
   }
   function onDraw(ctx, camX, camY, T) {
     drawMall(ctx, camX, camY, T);

@@ -97,6 +97,38 @@
         ['#ffd84a', '#86c85a', '#6cc8e4', '#e8503c'].forEach(function (c, i) { box(parts, 0.14, 0.1, 0.14, cx - 0.33 + i * 0.22, 0.68, cz + 0.12, c); });
       }
     }
+    /* --- the public square's landmarks (the same tiles GTVillage.landmarks gives the server and mods/trade.js): the Titip Jual
+       stall (Mbok Darmi), the Papan Juara board and the Meja Untung table, so the 2.5D view has something under their name signs */
+    var lm = null, extraAwnings = [];
+    try {
+      var VL = L.layout || L;
+      if (window.GTVillage && GTVillage.landmarks && VL.buildings && VL.market && VL.market.stalls && VL.market.stalls.length > 2) lm = GTVillage.landmarks(VL);
+    } catch (e) { lm = null; }
+    if (lm) {
+      var qx = lm.consign.x + 0.5, qz = lm.consign.y + 0.5; // Titip Jual: a counter with a red and cream awning and a crate of goods
+      box(parts, 0.98, 0.62, 0.72, qx, 0, qz + 0.06, shaded('#a8743c', '#6a4020', '#4a2c18'));
+      box(parts, 1.0, 0.06, 0.76, qx, 0.62, qz + 0.06, '#b8864a');
+      box(parts, 0.06, 1.5, 0.06, qx - 0.46, 0, qz - 0.28, C.stallD); box(parts, 0.06, 1.5, 0.06, qx + 0.46, 0, qz - 0.28, C.stallD);
+      box(parts, 0.06, 1.24, 0.06, qx - 0.46, 0, qz + 0.4, C.stallD); box(parts, 0.06, 1.24, 0.06, qx + 0.46, 0, qz + 0.4, C.stallD);
+      box(parts, 0.3, 0.2, 0.24, qx - 0.12, 0.68, qz + 0.12, shaded('#f0d088', '#e8c070', '#a88838'));
+      box(parts, 0.16, 0.12, 0.16, qx + 0.2, 0.68, qz + 0.1, '#c8503c');
+      extraAwnings.push({ x: lm.consign.x, y: lm.consign.y, color: '#c8503c' });
+      var bx = lm.board.x + 0.5, bz = lm.board.y + 0.5; // Papan Juara: a dark board with a cream face and a gold star on two posts
+      box(parts, 0.08, 1.45, 0.08, bx - 0.42, 0, bz, '#6a4020'); box(parts, 0.08, 1.45, 0.08, bx + 0.42, 0, bz, '#6a4020');
+      box(parts, 1.0, 0.8, 0.1, bx, 0.7, bz, '#3a2a40');
+      box(parts, 0.86, 0.64, 0.04, bx, 0.78, bz + 0.065, '#f6ead0');
+      box(parts, 0.2, 0.07, 0.02, bx, 1.07, bz + 0.095, '#e8b030'); box(parts, 0.07, 0.22, 0.02, bx, 1.0, bz + 0.095, '#e8b030');
+      box(parts, 0.62, 0.04, 0.02, bx, 0.9, bz + 0.095, '#5a3c28'); box(parts, 0.5, 0.04, 0.02, bx, 0.82, bz + 0.095, '#5a3c28');
+      if (lm.gamble) { // Meja Untung: a green felt table with two dice
+        var gx = lm.gamble.x + 0.5, gz = lm.gamble.y + 0.5;
+        [[-0.4, -0.28], [0.4, -0.28], [-0.4, 0.28], [0.4, 0.28]].forEach(function (q) { box(parts, 0.07, 0.5, 0.07, gx + q[0], 0, gz + q[1], '#5a3a1e'); });
+        box(parts, 1.02, 0.1, 0.8, gx, 0.5, gz, shaded('#2a2430', '#2a2430', '#1a1620'));
+        box(parts, 0.9, 0.03, 0.68, gx, 0.6, gz, '#2f8a4a');
+        box(parts, 0.15, 0.15, 0.15, gx - 0.2, 0.63, gz - 0.04, '#f8f4ec', 0.3); box(parts, 0.15, 0.15, 0.15, gx + 0.16, 0.63, gz + 0.08, '#f8f4ec', -0.5);
+        box(parts, 0.04, 0.01, 0.04, gx - 0.2, 0.785, gz - 0.04, '#c83c3c'); box(parts, 0.04, 0.01, 0.04, gx + 0.16, 0.785, gz + 0.08, '#c83c3c');
+      }
+    }
+
     var mat = GT3.mat({ vertexColors: true });
     if (parts.length) {
       var mesh = new THREE.Mesh(GT3.merge(parts), mat);
@@ -177,7 +209,7 @@
     }
 
     /* --- awnings over the market stalls, in each stall's colour */
-    ((L.market && L.market.stalls) || []).concat((L.market && L.market.lapak) || []).forEach(function (st) {
+    ((L.market && L.market.stalls) || []).concat((L.market && L.market.lapak) || []).concat(extraAwnings).forEach(function (st) {
       var c = GT3.canvas(12, 8), g = c.getContext('2d');
       for (var i = 0; i < 12; i++) R(g, i, 0, 1, 8, Math.floor(i / 3) % 2 ? '#f6f0e0' : st.color);
       R(g, 0, 7, 12, 1, 'rgba(0,0,0,0.25)');
