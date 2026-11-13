@@ -253,7 +253,7 @@ test('tool stall over the act: only at the merchant stalls, not while the shop i
   const w = await world(), g = w.game;
   w.give(P, 'coin', 100);
   g.extras.st.setTool(P, 'rod', 1);
-  const far = w.stand(P, 'board', 12);
+  const far = w.stand(P, 'board');
   fails(() => g.act(P, { action: 'toolshop', op: 'repair', tool: 'rod', pos: far }), 409, /stalls in the market/);
   const pos = standNear(g.map!, g.map!.layout.market.stalls[1], 1);
   g.positions!.reset(P); g.reportPosition(P, pos, 'public');

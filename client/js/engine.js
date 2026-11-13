@@ -158,7 +158,8 @@ function sitDown(cx, cy){
   sitSpot = { x:cx, y:cy, dir:dir, scene:scene };
   P.dir = dir;
 }
-function selfPos(){ return sitSpot ? { px:sitSpot.x * T, py:sitSpot.y * T } : lerpPos(P); }
+var sailPos = null; // the ferry ride (mods/ferry.js): where the boat is, in tiles; the camera and the player's picture follow it
+function selfPos(){ return sailPos ? { px:sailPos.x * T, py:sailPos.y * T } : sitSpot ? { px:sitSpot.x * T, py:sitSpot.y * T } : lerpPos(P); }
 function drawChar(g, x, y, pal, dir, step){
   if (SPRITES.charShadow && scene && scene.kind === 'out') SPRITES.charShadow(g, x, y);
   // sitting: standing still on a bench (the public square, village v2) sets the sprite down on the seat, facing out
@@ -2857,6 +2858,8 @@ var GT = {
   // unit is several screen pixels while the camera glides, so rounding to units made tags hop and shiver as you walked.
   snap: function(v){ return ovK ? Math.round(v * ovK) / ovK : Math.round(v); },
   setPlayerHidden: function(on){ playerHidden = !!on; },
+  /** setSail(x, y): the player's picture and the camera sit at that tile position (fractions allowed) while a ferry ride runs; setSail(null) ends it. Game state is untouched. */
+  setSail: function(x, y){ sailPos = x == null ? null : { x:+x, y:+y }; },
   // where the player's feet are on #screen (CSS px) and how big one art pixel of their sprite is there, in 2D and 2.5D,
   // so an effect drawn over the view (the character screen's throw) can land exactly on the real sprite
   playerScreen: function(){

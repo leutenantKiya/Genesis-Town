@@ -1,7 +1,7 @@
 /*
  * fishing.js - fishing as a small skill game.
- * - Ripples mark the water where fish are gathering (they move every two game hours). Casting there gets a bite
- *   sooner and an easier fish; plain water still works, just slower and harder.
+ * - Ripples mark the water where fish are gathering (they move every few game hours). You can only fish where the water
+ *   ripples (the server refuses any other tile): the bite comes sooner and the fish is easier.
  * - Act on water (click, F, A): the line is cast, the float bobs while you wait, and "!" shows when a fish bites.
  *   Press in time and the reel starts: hold the button to lift the green zone, let go to drop it, and keep the fish
  *   inside until the catch bar is full. Let it escape and the bar empties.
@@ -22,15 +22,15 @@
   function snd(name, opts) { try { if (window.GT_SFX) GT_SFX.play(name, opts); } catch (e) { /* sound never blocks */ } }
   var lastReel = 0;
   function chain() { return window.GT_CHAIN; }
-  function bucket() { var c = chain(), st = c && c.state.st; return st && st.time ? Math.floor(st.time.totalHours / 2) : Math.floor(Date.now() / 120000); }
+  function hours() { var c = chain(), st = c && c.state.st; return st && st.time ? st.time.totalHours : Date.now() / 60000; }
   function empty(x, y) { var c = chain(), e = c && c.state.emptyWater; return !!(e && e[x + ',' + y] && e[x + ',' + y] > Date.now()); }
 
-  /** Fish gather at about one in six shore tiles (water next to land), different every two game hours. */
+  /** The ripple spots: the shared generator in world/village.js (about one in six shore water tiles of this world, moving on every few game
+      hours); the server refuses a cast anywhere else. */
   function isSpot(x, y) {
-    var sc = GT.scene, m = sc && sc.map;
-    if (!m || sc.kind !== 'out' || m.tiles[y * m.w + x] !== 'water' || empty(x, y)) return false;
-    var shore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(function (d) { var nx = x + d[0], ny = y + d[1]; return nx >= 0 && ny >= 0 && nx < m.w && ny < m.h && m.walk[ny * m.w + nx] === 1; });
-    return shore && hash(x, y, bucket()) < 0.17;
+    var sc = GT.scene, L = GT.world && GT.world.layout, V = window.GTVillage;
+    if (!sc || sc.kind !== 'out' || !L || !V || !V.fishSpot || empty(x, y)) return false;
+    return V.fishSpot(L, x, y, V.fishBucket(hours()));
   }
 
   /* ---------------------------------------------------------------- drawing */

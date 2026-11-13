@@ -432,6 +432,10 @@ export const PATTERNS: Array<[string, string]> = [
   "{0} di rantai baru {1} (perlu {2}). Hasil hari ini masuk ke rantai saat penyelesaian 06:00."
  ],
  [
+  "No fish here. Cast where the water ripples.",
+  "Tidak ada ikan di sini. Pancing di air yang beriak."
+ ],
+ [
   "The consignment stall closed: {0} {1} returned to you.",
   "Lapak Titip Jual ditutup: {0} {1} dikembalikan padamu."
  ],

@@ -336,7 +336,7 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
   const FREE = new Set(['grass', 'path', 'sand', 'flower', 'tallgrass', 'plaza', 'bridge']);
   const inBuilding = (x: number, y: number) => L.buildings.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
   const freeNb = (x: number, y: number) => [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => FREE.has(L.tiles[(y + dy) * L.w + x + dx]) && !inBuilding(x + dx, y + dy));
-  const openWater = find((x, y, t) => t === 'water' && map.chunkAt(x, y).open && [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => map.walkable(x + dx, y + dy)));
+  const openWater = find((x, y, t) => t === 'water' && map.chunkAt(x, y).open && map.fishSpot(x, y, game.clock.time().totalHours + 60) && [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => map.walkable(x + dx, y + dy)));
   const lockedTree = find((x, y, t) => t === 'tree' && map.chunkAt(x, y).id === 'seberang' && freeNb(x, y));
   const grass = find((x, y, t) => t === 'grass' && map.chunkAt(x, y).open);
   // stand on a walkable tile next to the target (an hour later, so walking there is plausible)
@@ -347,6 +347,8 @@ test('shared map: gathering must match the map, inside open areas; a finished pr
   };
   const gather = (tile: string, t: { x: number; y: number }) => { now += 3_600_000; return game.act(P, { action: 'gather', tile, x: t.x, y: t.y, pos: beside(t) }); };
   assert.match(gather('water', openWater).toast, /Fish/);
+  const noRipple = find((x, y, t) => t === 'water' && map.chunkAt(x, y).open && !map.fishSpot(x, y, game.clock.time().totalHours + 120) && [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => map.walkable(x + dx, y + dy)));
+  assert.throws(() => gather('water', noRipple), /No fish here/); // fishing only where the water ripples
   assert.throws(() => gather('water', grass), /Nothing to gather/);
   assert.throws(() => gather('tree', lockedTree), /Invalid position|Far Bank Hamlet isn't open yet/);
   // the town builds the bridge (on chain), and the server opens Dusun Seberang

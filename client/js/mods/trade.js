@@ -410,49 +410,54 @@
     pollT -= dt;
     if (pollT <= 0) { pollT = (sess || ui) ? 1 : 3; poll(); }
   }
-  // A name sign over a landmark, its bottom edge at `bottom`. The merchants' own name tags sit above their heads one row up, so a 2D sign
-  // is kept inside the free columns between the merchant stalls (never over a neighbouring merchant); the 2.5D signs are smaller.
-  function sign(ctx, txt, cx, bottom, lo, hi) {
-    if (window.GT_THEME && GT_THEME.scale === 1 && lo != null) { // 2D: measure the sign (same font as GT_THEME.label) and clamp it
-      ctx.save(); ctx.font = '600 6px "Pixelify Sans", sans-serif'; var w = Math.ceil(ctx.measureText(txt).width) + 4; ctx.restore();
-      if (hi - lo >= w) cx = Math.max(lo + w / 2, Math.min(hi - w / 2, cx));
+  // A name sign over a spot, its bottom edge at `bottom` (the shared label style). `placed` collects the signs drawn this frame: a sign that would
+  // cover an earlier one (neighbouring doors) is lifted a row, so no two signs overlap.
+  function sign(ctx, txt, cx, bottom, placed) {
+    var k = (window.GT_THEME && GT_THEME.scale) || 1, w = 0;
+    ctx.save(); ctx.font = '600 6px "Pixelify Sans", sans-serif'; w = (Math.ceil(ctx.measureText(txt).width) + 4) * k; ctx.restore();
+    var h = 9 * k, y = bottom;
+    for (var n = 0; n < 4; n++) {
+      var hit = placed.some(function (r) { return Math.abs(r.x - cx) < (r.w + w) / 2 && Math.abs(r.y - y) < h; });
+      if (!hit) break;
+      y -= h;
     }
-    GT_THEME.label(ctx, txt, cx, bottom, { tone: 'paper', size: 6, bold: true });
+    placed.push({ x: cx, y: y, w: w });
+    GT_THEME.label(ctx, txt, cx, y, { tone: 'paper', size: 6, bold: true });
   }
-  // the free columns (screen px, 2D) round tile column tx in the stall row: between the stalls on each side
-  function freeCols(tx, T, camX) {
-    var st = (GT.world && GT.world.layout && GT.world.layout.market && GT.world.layout.market.stalls) || [], lo = -1e9, hi = 1e9;
-    st.forEach(function (s) { if (s.x < tx) lo = Math.max(lo, s.x + 1); else if (s.x > tx) hi = Math.min(hi, s.x); });
-    return [lo * T - camX, hi * T - camX];
-  }
-  var UP3 = 15; // 2.5D: the signs' bottom edge, art px above the tile's ground point (the props stand about 1.5 tall)
+  // the public buildings' signs: kind -> icon + name (the Mall, the casino and the news hall read from afar; the rest are the village's services)
+  var BUILD_SIGNS = {
+    hall: ['🏛️', 'Balai Desa'], broker: ['📜', 'Kantor Makelar'], post: ['✉️', 'Kantor Pos'], warung: ['☕', 'Warung Kopi'],
+    mall: ['🛍️', 'Mall'], casino: ['🎰', 'Kasino'], papan: ['📰', 'Balai Berita'], tambangpub: ['⛏️', 'Tambang Umum']
+  };
+  var UP3 = 15; // 2.5D: a sign's bottom edge over a prop, art px above the tile's ground point (the props stand about 1.5 tall)
+  var DOOR3 = 12; // 2.5D: over a building's door
   function onDraw(ctx, camX, camY, T) {
-    var m = marks(); if (!m) return;
+    var m = marks(); if (!m || !GT.scene || GT.scene.kind !== 'out') return;
     ctx.save();
-    var v3 = GT.view3dOn && GT.view3dOn();
-    if (v3) { // 2.5D: the board and the table stand in the 3D world (three/props.js, same tiles); here only their name signs, above them
-      [['board', $t('Papan Juara')], ['gamble', '🎲 ' + $t('Meja Untung')]].forEach(function (k) {
-        var q = m[k[0]]; if (!q) return;
-        var a = GT.at(q.x, q.y); sign(ctx, k[1], a.x + T / 2, a.y + T - UP3);
-      });
-      ctx.restore(); return;
+    var v3 = GT.view3dOn && GT.view3dOn(), placed = [], L = GT.world.layout;
+    // Papan Juara: in 2.5D a 3D prop (three/props.js); in 2D a board on two posts with a gold star
+    var a = GT.at(m.board.x, m.board.y);
+    if (!v3) {
+      var x = a.x, y = a.y;
+      ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 2, y + 6, 1, T - 6); ctx.fillRect(x + T - 3, y + 6, 1, T - 6);
+      ctx.fillStyle = '#3a2a40'; ctx.fillRect(x, y + 1, T, 7);
+      ctx.fillStyle = '#f6ead0'; ctx.fillRect(x + 1, y + 2, T - 2, 5);
+      ctx.fillStyle = '#e8b030'; ctx.fillRect(x + 5, y + 3, 2, 3); ctx.fillRect(x + 4, y + 4, 4, 1);
+      if (m.gamble) { // the Luck Table (no sign): a green felt table with two dice
+        var g = GT.at(m.gamble.x, m.gamble.y); x = g.x; y = g.y;
+        ctx.fillStyle = '#5a3a1e'; ctx.fillRect(x + 2, y + 8, 1, T - 8); ctx.fillRect(x + T - 3, y + 8, 1, T - 8);
+        ctx.fillStyle = '#2a2430'; ctx.fillRect(x, y + 3, T, 6);
+        ctx.fillStyle = '#2f8a4a'; ctx.fillRect(x + 1, y + 4, T - 2, 4);
+        ctx.fillStyle = '#f8f4ec'; ctx.fillRect(x + 3, y + 4, 2, 2); ctx.fillRect(x + 7, y + 5, 2, 2);
+        ctx.fillStyle = '#c83c3c'; ctx.fillRect(x + 3, y + 4, 1, 1); ctx.fillRect(x + 8, y + 6, 1, 1);
+      }
     }
-    // Papan Juara: a board on two posts with a gold star
-    var x = m.board.x * T - camX, y = m.board.y * T - camY, f = freeCols(m.board.x, T, camX);
-    ctx.fillStyle = '#6a4020'; ctx.fillRect(x + 2, y + 6, 1, T - 6); ctx.fillRect(x + T - 3, y + 6, 1, T - 6);
-    ctx.fillStyle = '#3a2a40'; ctx.fillRect(x, y + 1, T, 7);
-    ctx.fillStyle = '#f6ead0'; ctx.fillRect(x + 1, y + 2, T - 2, 5);
-    ctx.fillStyle = '#e8b030'; ctx.fillRect(x + 5, y + 3, 2, 3); ctx.fillRect(x + 4, y + 4, 4, 1);
-    sign(ctx, $t('Papan Juara'), x + T / 2, y, f[0], f[1]);
-    if (m.gamble) { // Meja Untung: a green felt table with two dice
-      x = m.gamble.x * T - camX; y = m.gamble.y * T - camY; f = freeCols(m.gamble.x, T, camX);
-      ctx.fillStyle = '#5a3a1e'; ctx.fillRect(x + 2, y + 8, 1, T - 8); ctx.fillRect(x + T - 3, y + 8, 1, T - 8);
-      ctx.fillStyle = '#2a2430'; ctx.fillRect(x, y + 3, T, 6);
-      ctx.fillStyle = '#2f8a4a'; ctx.fillRect(x + 1, y + 4, T - 2, 4);
-      ctx.fillStyle = '#f8f4ec'; ctx.fillRect(x + 3, y + 4, 2, 2); ctx.fillRect(x + 7, y + 5, 2, 2);
-      ctx.fillStyle = '#c83c3c'; ctx.fillRect(x + 3, y + 4, 1, 1); ctx.fillRect(x + 8, y + 6, 1, 1);
-      sign(ctx, '🎲 ' + $t('Meja Untung'), x + T / 2, y + 2, f[0], f[1]);
-    }
+    sign(ctx, '🏆 ' + $t('Papan Juara'), a.x + T / 2, v3 ? a.y + T - UP3 : a.y - 1, placed);
+    (L && L.buildings || []).forEach(function (b) {
+      var s = BUILD_SIGNS[b.kind]; if (!s) return;
+      var d = GT.at(b.dx, b.dy);
+      sign(ctx, s[0] + ' ' + $t(s[1]), d.x + T / 2, v3 ? d.y + T - DOOR3 : d.y - 1, placed);
+    });
     ctx.restore();
   }
 

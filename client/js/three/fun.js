@@ -135,4 +135,46 @@
       face: function (camera) { band.forEach(function (a) { a.face(camera); }); }
     };
   };
+  /* The public ferry's boats (GTVillage.ferryOf: one at each landing), as a wooden rowing boat with a plank seat, a pair of oars and a
+     lantern on a post. They bob on the water; while a trip runs (window.GT_FERRY.sail, set by mods/ferry.js) the dock boat the player
+     left is hidden and a third boat, with the player seated, glides across. Returns { group, update(t) }. */
+  GT3.Boats = function (L) {
+    var group = new THREE.Group(), V = window.GTVillage, f = null;
+    group.name = 'boats';
+    try { f = V && V.ferryOf && L.market && L.market.stalls && L.market.stalls.length ? V.ferryOf(L) : null; } catch (e) { f = null; }
+    if (!f) return { group: group, update: function () {} };
+    var mat = GT3.mat({ vertexColors: true });
+    function model() {
+      var p = [], hull = '#9a6234', hullD = '#6a4020', rim = '#c8894a';
+      box(p, 1.12, 0.1, 0.5, 0, 0.02, 0, hullD); // keel and bottom
+      box(p, 1.0, 0.16, 0.5, 0, 0.1, 0, shaded(rim, hull, hullD));
+      box(p, 1.3, 0.14, 0.34, 0, 0.12, 0, shaded(rim, hull, hullD)); // the bow and stern stand a little wider
+      box(p, 0.08, 0.14, 0.5, 0.52, 0.2, 0, rim); box(p, 0.08, 0.14, 0.5, -0.52, 0.2, 0, rim); // rims across both ends
+      box(p, 0.08, 0.12, 0.54, 0.2, 0.2, 0, rim); box(p, 0.08, 0.12, 0.54, -0.2, 0.2, 0, rim);
+      box(p, 0.3, 0.05, 0.48, 0, 0.23, 0, '#e0bc80'); // the plank seat
+      box(p, 0.04, 0.5, 0.04, 0.5, 0.2, 0.0, '#5a3a1e'); box(p, 0.1, 0.1, 0.1, 0.5, 0.7, 0, '#ffd88a'); // lantern post
+      box(p, 0.6, 0.03, 0.04, -0.05, 0.27, 0.36, '#6a4020', 0.35); box(p, 0.6, 0.03, 0.04, -0.05, 0.27, -0.36, '#6a4020', -0.35); // oars
+      var g = new THREE.Group(), m = new THREE.Mesh(GT3.merge(p), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); g.visible = false;
+      group.add(g); return g;
+    }
+    var docks = [{ w: f.wa, land: f.a, g: model() }, { w: f.wb, land: f.b, g: model() }], sailer = model();
+    // a boat lies across its landing: along the shore line, the bow to the water side
+    docks.forEach(function (d) { d.yaw = Math.atan2(d.land.x - d.w.x, d.land.y - d.w.y) + Math.PI / 2; });
+    return {
+      group: group, boats: docks,
+      update: function (t) {
+        var S = window.GT_FERRY && window.GT_FERRY.sail;
+        docks.forEach(function (d, i) {
+          d.g.visible = !(S && S.fromIdx === i);
+          d.g.position.set(d.w.x + 0.5, -0.2 + Math.sin(t * 1.6 + i * 2) * 0.012, d.w.y + 0.5);
+          d.g.rotation.set(Math.sin(t * 1.3 + i) * 0.02, d.yaw, Math.cos(t * 1.1 + i) * 0.03);
+        });
+        sailer.visible = !!S;
+        if (S) {
+          sailer.position.set(S.x + 0.5, -0.2 + Math.sin(t * 3) * 0.02, S.y + 0.5);
+          sailer.rotation.set(Math.sin(t * 2.2) * 0.04, S.yaw, Math.cos(t * 2.6) * 0.05);
+        }
+      }
+    };
+  };
 })();

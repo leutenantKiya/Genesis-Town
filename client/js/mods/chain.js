@@ -1108,7 +1108,7 @@
       var L = GT.world && GT.world.layout, night = S.st && S.st.night;
       var danger = tok !== 'fish' && night && night.now && !night.guarded && wildAt(L, x, y);
       var spot = tok === 'fish' && window.GT_FISH && GT_FISH.isSpot(x, y);
-      if (tok === 'fish') return spot ? $t('Mancing di riak air: ikan berkumpul di sini') : $t('Mancing (lebih cepat di riak air)');
+      if (tok === 'fish') return spot ? $t('Mancing di riak air: ikan berkumpul di sini') : $t('Tidak ada ikan di sini: cari air yang beriak');
       return $t('{0} (−4 energi){1}{2}', [verb, needTool ? $t(' · butuh Beliung') : '', danger ? $t(' · malam: awas monster') : '']);
     }
     return null;
@@ -1813,6 +1813,7 @@
       if (S.st && S.st.energy < cost) { GT.toast($t('Energimu habis. Makan dulu atau tunggu besok.')); return true; }
       var em = S.emptyWater && S.emptyWater[tx + ',' + ty];
       if (em && em > Date.now()) { GT.toast($t('Ikan di sini sudah habis. Cari riak air di tempat lain.')); return true; }
+      if (!GT_FISH.isSpot(tx, ty)) { GT.toast($t('Tidak ada ikan di sini. Pancing di air yang beriak.')); return true; }
       GT_FISH.start({ tile: { x: tx, y: ty }, onCatch: gather });
       return true;
     }
@@ -1833,7 +1834,11 @@
     if (now - grassAt < g.cooldownSecs * 1000) return true; // the server has the same cooldown; do not ask before it is over
     if (S.st && S.st.energy < g.energyCost) { GT.toast($t('Energimu habis. Makan dulu atau tunggu besok.')); return true; }
     grassAt = now; S.busy = true;
-    act({ action: 'grass', x: ctx.tile.x, y: ctx.tile.y }).then(noop, noop).then(function () { S.busy = false; });
+    var gt = { x: ctx.tile.x, y: ctx.tile.y };
+    if (window.GT_FX && GT_FX.rustle) GT_FX.rustle(gt, false); // the tuft shakes while the answer travels
+    act({ action: 'grass', x: gt.x, y: gt.y }).then(function (r) {
+      if (r && r.gained && Object.keys(r.gained).length && window.GT_FX && GT_FX.rustle) GT_FX.rustle(gt, true); // a seed: it pops out of the grass
+    }, noop).then(function () { S.busy = false; });
     return true;
   }
 

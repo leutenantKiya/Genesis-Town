@@ -304,6 +304,8 @@ export class Game {
     switch (a) {
       case 'gather': {
         w.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
+        // fishing only where the water ripples (the same spots the client draws, from the world's seed and the game time)
+        if (s('tile') === 'water' && w.map && !w.map.fishSpot(n('x', -1), n('y', -1), this.clock.time().totalHours)) throw new HttpError(409, 'No fish here. Cast where the water ripples.');
         // a guest (helper or builder) in someone else's Homeland: a daily share per host and never a node's last charge
         const guest = !!w.row && w.row.account !== account;
         const minLeft = guest ? this.econ.coop.guestLeavesCharges : 0;

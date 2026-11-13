@@ -5,6 +5,7 @@
  * - strike(tile, hit): the same swing at a monster; on a hit it bursts sparks, on a miss the slash cuts air.
  * - float(tile, text, colour): a number or word that rises and fades over a tile ("-1", "Meleset!", "-4 energi").
  * - flash(tile, colour): a tile blinks (a monster hit white, the player hit red).
+ * - rustle(tile, found): the grass at the tile shakes (green blades jump up); `found` pops a seed icon over it.
  * - poof(tile): a puff of smoke where a beaten monster was.
  * - shake(px): a small screen shake (skipped with "Kurangi animasi").
  */
@@ -16,6 +17,7 @@
   var fx = [];          // swings: { kind, t, tile, from, dir, hit, parts }
   var texts = [];       // { tile, text, col, t }
   var flashes = [];     // { tile, col, t }
+  var rustles = [];     // { tile, t, parts } tufts of grass shaken by a search
   var puffs = [];       // { tile, t, parts }
   var DUR = 0.5, HIT = 0.19;
   var ANG = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
@@ -48,6 +50,12 @@
     var parts = [];
     for (var i = 0; i < 10; i++) { var a = Math.random() * Math.PI * 2, v = 10 + Math.random() * 18; parts.push({ x: 0, y: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 8, r: 1 + Math.random() * 2 }); }
     puffs.push({ tile: { x: tile.x, y: tile.y }, t: 0, parts: parts });
+  }
+  function rustle(tile, found) {
+    var parts = [], i;
+    for (i = 0; i < 9; i++) parts.push({ x: (Math.random() - 0.5) * 8, y: 2 + Math.random() * 3, vx: (Math.random() - 0.5) * 16, vy: -14 - Math.random() * 14, c: Math.random() < 0.5 ? '#58b048' : '#8ad060' });
+    rustles.push({ tile: { x: tile.x, y: tile.y }, t: 0, parts: parts });
+    if (found) texts.push({ tile: { x: tile.x, y: tile.y }, text: '🌱 +1', col: themed('#ffd84a'), t: -0.25 });
   }
   function shake(px) {
     if (reduced()) return;
@@ -95,6 +103,7 @@
       var alive = e.t < DUR || (e.parts && e.parts.some(function (q) { return q.life > 0; }));
       if (!alive) fx.splice(i, 1);
     }
+    for (var r = rustles.length - 1; r >= 0; r--) { var ru = rustles[r]; ru.t += dt; ru.parts.forEach(function (q) { q.vy += 70 * dt; q.x += q.vx * dt; q.y += q.vy * dt; }); if (ru.t > 0.55) rustles.splice(r, 1); }
     [texts, flashes, puffs].forEach(function (list) { for (var j = list.length - 1; j >= 0; j--) { list[j].t += dt; if (list[j].t > (list === texts ? 1.1 : list === flashes ? 0.25 : 0.7)) list.splice(j, 1); } });
     puffs.forEach(function (p) { p.parts.forEach(function (q) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.9; q.vy *= 0.9; }); });
   }
@@ -127,7 +136,7 @@
 
   function onDraw(ctx, camX, camY, T) {
     if (!GT.scene || GT.scene.kind !== 'out') return;
-    if (!fx.length && !texts.length && !flashes.length && !puffs.length) return;
+    if (!fx.length && !texts.length && !flashes.length && !puffs.length && !rustles.length) return;
     ctx.save();
     var v3 = GT.view3dOn && GT.view3dOn(); // 2.5D: view3d.js swings a 3D axe from the sprite's hand and throws 3D chips
     flashes.forEach(function (f) {
@@ -171,12 +180,19 @@
         ctx.globalAlpha = 1;
       });
     });
+    rustles.forEach(function (ru) { // the tuft sways side to side, blades jump up and fall
+      var ra = GT.at(ru.tile.x, ru.tile.y), cx = ra.x + T / 2, cy = ra.y + T / 2 + 2, sway = Math.sin(ru.t * 40) * 1.5 * Math.max(0, 1 - ru.t / 0.4);
+      ctx.fillStyle = '#3f9a3c';
+      for (var b = -2; b <= 2; b++) ctx.fillRect(Math.round(cx + b * 2 + sway * (b % 2 ? 1 : -1)), Math.round(cy - 5 + Math.abs(b)), 1, 5 - Math.abs(b));
+      ru.parts.forEach(function (q) { ctx.globalAlpha = Math.max(0, 1 - ru.t / 0.55); ctx.fillStyle = q.c; ctx.fillRect(Math.round(cx + q.x), Math.round(cy + q.y), 1, 2); ctx.globalAlpha = 1; });
+    });
     puffs.forEach(function (p) {
       var pa = GT.at(p.tile.x, p.tile.y), cx = pa.x + T / 2, cy = pa.y + T / 2, a = Math.max(0, 1 - p.t / 0.7);
       p.parts.forEach(function (q) { ctx.fillStyle = 'rgba(230,230,236,' + (a * 0.9).toFixed(3) + ')'; var r = q.r * (1 + p.t * 2); ctx.fillRect(Math.round(cx + q.x - r / 2), Math.round(cy + q.y - r / 2), Math.ceil(r), Math.ceil(r)); });
     });
     // rising words and numbers, outlined so they read on any ground
     texts.forEach(function (s) {
+      if (s.t < 0) return;
       var k = s.t / 1.1, sa = GT.at(s.tile.x, s.tile.y), x = GT.snap(sa.x + T / 2), y = GT.snap(sa.y - 2 - k * 10);
       ctx.globalAlpha = k < 0.7 ? 1 : Math.max(0, 1 - (k - 0.7) / 0.3);
       if (window.GT_THEME) GT_THEME.text(ctx, s.text, x, y, s.col, 8);
@@ -185,7 +201,7 @@
     ctx.restore();
   }
 
-  window.GT_FX = { chop: chop, mine: mine, strike: strike, float: float, flash: flash, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; },
+  window.GT_FX = { chop: chop, mine: mine, strike: strike, float: float, flash: flash, rustle: rustle, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; },
     // the swings in progress and their timing, for the 2.5D view's 3D axe (view3d.js)
     swings: function () { return fx; }, DUR: DUR, HIT: HIT };
   GT.register({ id: 'actfx', onFrame: onFrame, init: function (g) { g.register({ id: 'actfx-draw', onDraw: onDraw }); } }); // drawn last, over signs and tags

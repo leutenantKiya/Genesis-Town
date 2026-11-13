@@ -5,7 +5,7 @@
  *
  * The front wall carries the game's own 2D facade (door, windows, sign, awning: SPRITES.drawPublic / drawHouse), cut
  * below the painted roof band. Side and back walls, the gabled roof and the gables are generated from the same style
- * colours. By kind: a bell tower (church), a flag (hall, townhall), a cloth awning (warung, restoran), a chimney
+ * colours. By kind: a bell tower (church), a flag (hall, townhall), a cloth awning (warung), a chimney
  * (house styles that have one), four sails that turn on the front gable (kincir, the windmill), a pile of logs by the
  * east wall (penggergajian, the sawmill), stacked crates by the door (gudang, the storehouse). Village version 3 adds:
  * burgundy banners and gold finials (mall), two roof turrets with gold cresting and a string of bulbs along the eave that
@@ -145,7 +145,7 @@
       trim.push(box(1 * PX, 5 * PX, 1 * PX, tx, ty + th + 9 * PX, tz, '#c8a030'));
       trim.push(box(3 * PX, 1 * PX, 1 * PX, tx, ty + th + 9.5 * PX, tz, '#c8a030'));
     }
-    if (kind === 'warung' || kind === 'restoran') {
+    if (kind === 'warung') { // the red-and-white striped cloth awning (the Restoran has none)
       var atex = GT3.tex(stripes(pw - 2 * inset, 6, '#d83c3c', '#f8f8f8'));
       var ay = Hw - 2 * PX, awn = new THREE.Mesh(GT3.quad([x0, ay - 5 * PX, z1 + 6 * PX], [x1, ay - 5 * PX, z1 + 6 * PX], [x1, ay, z1 + 0.2 * PX], [x0, ay, z1 + 0.2 * PX]), M({ map: atex, side: THREE.DoubleSide }));
       extras.push(awn);

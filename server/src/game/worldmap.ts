@@ -29,6 +29,7 @@ export interface MonsterSpot { id: string; kind: string; x: number; y: number }
 interface VillageApi {
   generate(seed: number, unlocked?: string[]): Layout; chunkOf(L: Layout, x: number, y: number): Chunk; PROJECTS: Record<string, Project>;
   landmarks(L: Layout): { board: Pos; gamble: Pos; mall: Pos };
+  fishSpot(L: { w: number; h: number; seed: number; tiles: string[] }, x: number, y: number, bucket: number): boolean; fishBucket(totalHours: number): number;
   weather(seed: number, day: number, season: string): Weather; monstersAt(L: Layout, hour: number, counts?: Record<string, number>): MonsterSpot[];
 }
 export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos; ferryOf(L: Layout): { a: Pos; b: Pos; wa: Pos; wb: Pos } | null } }).GTVillage;
@@ -56,6 +57,8 @@ export interface GameMap {
   /** In front of a building with the player's Workbench: the house in the village; the Town Hall or Rumahmu in a Homeland. */
   atWorkbench(p: Pos): boolean;
   checkGather(tile: string, x: number, y: number): void;
+  /** Is there a ripple (a fishing spot) on this water tile now? The previous time bucket counts too, so a spot does not vanish mid-cast. */
+  fishSpot(x: number, y: number, totalHours: number): boolean;
   portal(): Pos;
 }
 
@@ -106,6 +109,7 @@ export class WorldMap implements GameMap, MonsterMap {
     const c = this.chunkAt(x, y);
     if (!c.open) throw new HttpError(409, `${c.name} isn't open yet.`);
   }
+  fishSpot(x: number, y: number, totalHours: number) { const b = Village.fishBucket(totalHours); return Village.fishSpot(this.layout, x, y, b) || Village.fishSpot(this.layout, x, y, b - 1); }
   weather(day: number, season: string): Weather { return Village.weather(this.seed, day, season); }
   monstersAt(hour: number, counts?: Record<string, number>): MonsterSpot[] { return Village.monstersAt(this.layout, hour, counts); }
   /** The village forest (when the public area is not trade-only): boars at trees, bats at rocks, in one named chunk. */
@@ -144,6 +148,7 @@ export class HomelandMap implements GameMap, MonsterMap {
     const c = this.chunkAt(x, y);
     if (!c.open) throw new HttpError(409, `${c.name} isn't open yet.`);
   }
+  fishSpot(x: number, y: number, totalHours: number) { const b = Village.fishBucket(totalHours); return Village.fishSpot(this.layout, x, y, b) || Village.fishSpot(this.layout, x, y, b - 1); }
   portal(): Pos { return this.layout.portal; }
   /** Night monsters: open forest chunks have boars, open rock chunks bats; the centre around the Town Hall is safe. */
   wild(x: number, y: number): string | null { return Homeland.wild(this.layout, x, y); }
