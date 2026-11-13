@@ -243,3 +243,28 @@ test('over HTTP: while settlement runs nothing is checked, and trade sets and co
     assert.equal(s.json.code, 'chain_check', JSON.stringify(s.json));
   } finally { h.close(); }
 });
+
+test('a change to another account during the read does not skip the check; a change to this account reads again', async () => {
+  const c = fake({ fish: 3 });
+  c.delay = 20;
+  const { cc } = make(c, { fish: 5 });
+  // another player's spend while my read is out: my mismatch is still caught
+  const p = cc.verify(A, ['fish'], 'sell');
+  cc.invalidate('someone.else');
+  await refuses(p);
+  // my own balances change during the first read: the check reads again instead of passing
+  const c2 = fake({ fish: 3 });
+  c2.delay = 20;
+  const { cc: cc2 } = make(c2, { fish: 5 });
+  const p2 = cc2.verify(A, ['fish'], 'sell');
+  setTimeout(() => cc2.invalidate(A), 5);
+  await refuses(p2);
+  assert.equal(c2.reads, 2, 'read again after this account changed');
+  // it keeps changing on every read: strict refuses
+  const c3 = fake({ fish: 9 });
+  c3.delay = 20;
+  const { cc: cc3 } = make(c3, { fish: 5 }, { mode: 'strict' });
+  const p3 = cc3.verify(A, ['fish'], 'sell');
+  const iv = setInterval(() => cc3.invalidate(A), 5);
+  await refuses(p3).finally(() => clearInterval(iv));
+});

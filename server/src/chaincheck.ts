@@ -38,7 +38,10 @@ export class ChainCheck {
   readonly mismatches: Mismatch[] = [];
   /** `${account}|${token}` -> chain balance and when it was read. */
   private cache = new Map<string, { at: number; v: number }>();
-  private epoch = 0;
+  /** Bumped per account when its cached reads are dropped (a spend, a settlement); `all` for everyone. */
+  private epochs = new Map<string, number>();
+  private epochAll = 0;
+  private epochOf(account: string) { return this.epochAll * 1e6 + (this.epochs.get(account) ?? 0); }
   /** Number of reads sent to the chain (for tests and the admin status). */
   reads = 0;
 
@@ -49,9 +52,9 @@ export class ChainCheck {
 
   /** Drops cached reads for an account (no argument: for everyone). A read still in flight is not cached. */
   invalidate(account?: string | string[]) {
-    this.epoch++;
-    if (account === undefined) { this.cache.clear(); return; }
+    if (account === undefined) { this.epochAll++; this.cache.clear(); return; }
     const set = new Set(Array.isArray(account) ? account : [account]);
+    for (const a of set) this.epochs.set(a, (this.epochs.get(a) ?? 0) + 1);
     for (const k of this.cache.keys()) if (set.has(k.slice(0, k.indexOf('|')))) this.cache.delete(k);
   }
 
@@ -77,8 +80,10 @@ export class ChainCheck {
     const want = [...new Set(tokens)];
     const t = this.now(), ttl = this.d.ttlMs;
     const stale = want.filter((tok) => { const c = this.cache.get(`${account}|${tok}`); return !c || t - c.at >= ttl; });
-    const epoch = this.epoch;
-    if (stale.length) {
+    // This account's settled balances may change while a read is out (its own spend, a settlement): then the read may be
+    // from the other side of that change, so read again once. Other players' activity does not count (per-account epoch).
+    for (let attempt = 0; stale.length; attempt++) {
+      const epoch = this.epochOf(account);
       let got: number[];
       try { got = await this.read(account, stale); } catch (e) {
         const why = String((e as Error)?.message ?? e);
@@ -86,9 +91,13 @@ export class ChainCheck {
         this.warn(`chain check: ${account} ${action}: cannot read the chain (${why}); allowed (lenient)`);
         return;
       }
-      // a settlement started, or settled balances changed, while the read was out: this read may be from the other side of it
-      if (this.epoch !== epoch || this.d.settling?.() || this.d.holding?.(account)) return;
-      stale.forEach((tok, i) => this.cache.set(`${account}|${tok}`, { at: this.now(), v: got[i] }));
+      if (this.d.settling?.() || this.d.holding?.(account)) return; // settlement or a relay now in flight: books and chain legitimately differ
+      if (this.epochOf(account) === epoch) { stale.forEach((tok, i) => this.cache.set(`${account}|${tok}`, { at: this.now(), v: got[i] })); break; }
+      if (attempt >= 1) {
+        if (this.d.mode === 'strict') { this.warn(`chain check: ${account} ${action}: balances kept changing during the read; refused (strict)`); throw new HttpError(409, CHAIN_CHECK_BUSY, 'chain_check'); }
+        this.warn(`chain check: ${account} ${action}: balances kept changing during the read; allowed (lenient)`);
+        return;
+      }
     }
     for (const tok of want) {
       const db = this.d.settled(account, tok), chain = this.cache.get(`${account}|${tok}`)!.v;
