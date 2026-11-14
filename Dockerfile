@@ -23,9 +23,10 @@ ENV NODE_ENV=production \
     TRUST_PROXY=1
 # no VOLUME line: Railway refuses it; the host mounts its own persistent volume at /data
 EXPOSE 3000
-USER node
+# The host mounts its volume at /data owned by root: start as root only to hand /data to the node user, then run the
+# server as node (setpriv, util-linux in the base image), so the game never runs as root.
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
 
-CMD ["node", "server/src/main.ts"]
+CMD ["sh", "-c", "chown -R node:node /data && exec setpriv --reuid=node --regid=node --init-groups node server/src/main.ts"]
