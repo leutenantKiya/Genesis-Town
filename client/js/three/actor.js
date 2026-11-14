@@ -114,7 +114,7 @@
         if (on === lying) return;
         lying = on;
         if (on) { if (!lieMat) lieMat = GT3.mat({ map: mat.map, alphaTest: 0.5, side: THREE.DoubleSide }); lieMat.map = mat.map; card.material = lieMat; card.receiveShadow = false; }
-        else { card.material = mat; card.receiveShadow = true; pivot.position.set(0, 0, 0); }
+        else { card.material = mat; card.receiveShadow = true; pivot.position.set(0, 0, 0); card.rotation.z = 0; card.position.y = h / 2 - 1 * PX; }
       },
       lying: function () { return lying; },
       // turn to the camera and lean back by its pitch, pivoting at the feet: from the high game camera an upright card
@@ -123,13 +123,12 @@
         var dx = camera.position.x - group.position.x, dz = camera.position.z - group.position.z;
         pivot.rotation.order = 'YXZ';
         pivot.rotation.y = Math.atan2(dx, dz);
-        if (lying) { // propped up on the pillow, its feet at the camera's side: tipped most of the way back but still turned
-          // towards the camera (a flat card reads as a sliver from a low camera); the pivot moves back so the body sits on the bed
-          var yw = pivot.rotation.y, camP = Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));
-          var lean = camP + (Math.PI / 2 - camP) * 0.45;
-          pivot.rotation.x = -lean;
-          var back = Math.sin(lean) * h / 2;
-          pivot.position.set(Math.sin(yw) * back, lieY, Math.cos(yw) * back);
+        if (lying) { // lying down seen from the camera: the card faces the camera like a standing one but turned a quarter on
+          // its side (head to the left), its middle at the bed top, so it reads as asleep from any camera height or angle
+          pivot.rotation.x = -Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));
+          card.rotation.z = Math.PI / 2;
+          card.position.y = 0;
+          pivot.position.set(0, lieY + w / 2 - 2 * PX, 0);
           return;
         }
         pivot.rotation.x = -Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));
