@@ -337,8 +337,8 @@
     var box = cell(title, meta);
     if (desc) box.appendChild($('p', 'hl-p', desc));
     if (step) box.appendChild(costRow(step.cost, step.secs));
-    if (why) box.appendChild($('p', 'hl-why', why));
     if (label) acts(box).appendChild(btn(label, onClick, primary === false ? '' : 'primary', !canDo || isBusy()));
+    if (why) box.appendChild($('p', 'hl-why', why)); // under the cost and button row, so those two stay side by side
     return box;
   }
 

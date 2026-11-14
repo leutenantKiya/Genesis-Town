@@ -462,7 +462,8 @@
     else partyHost.appendChild($('p', 'chain-dim', $t('Masuk dulu.')));
     var dc = $('div', 'gt-set-card gt-set-pane');
     dispHost = $('div', 'gt-set-scroll'); dispHost.appendChild(displayBody()); dc.appendChild(dispHost);
-    var panes = { cust: cust, party: pc, disp: dc }, list = [['cust', '👕 ' + $t('Kustomisasi')], ['party', '👥 ' + $t('Party')], ['disp', '🎛️ ' + $t('Tampilan & suara')]];
+    var ac = $('div', 'gt-set-card gt-set-pane'); ac.appendChild(achievementsBody());
+    var panes = { cust: cust, ach: ac, party: pc, disp: dc }, list = [['cust', '👕 ' + $t('Kustomisasi')], ['ach', '🏆 ' + $t('Pencapaian')], ['party', '👥 ' + $t('Party')], ['disp', '🎛️ ' + $t('Tampilan & suara')]];
     // Simulasi and Admin fill their tab the first time it is opened (they load from the server and measure their charts)
     var lazy = {};
     if (window.GT_SIM && GT_SIM.embed) { list.push(['sim', '📊 ' + $t('Simulasi')]); panes.sim = $('div', 'gt-set-card gt-set-pane gt-set-wide'); lazy.sim = function (h) { GT_SIM.embed(h); }; }
@@ -515,6 +516,32 @@
   }
 
   // every display, sound and key setting (the right-hand box of the window)
+  // Pencapaian: the missions already finished, newest reward first, as a record of what the player has done; what is
+  // done but not yet claimed sits on top with a way to claim it, and the rest is a count with a way to the missions.
+  function achievementsBody() {
+    var wrap = $('div', 'gt-ach'), C = window.GT_CHAIN, ms = C && C.state && C.state.st && C.state.st.missions;
+    if (!ms || !ms.list) { wrap.appendChild($('p', 'gt-cs-note', $t('Masuk dulu.'))); return wrap; }
+    var got = ms.list.filter(function (m) { return m.claimed; }), ready = ms.list.filter(function (m) { return m.done && !m.claimed; }), open = ms.list.length - got.length - ready.length;
+    wrap.appendChild($('p', 'gt-ach-sum', $t('{0} dari {1} pencapaian', [got.length, ms.list.length])));
+    function goMissions() { if (modal && modal.isOpen()) modal.close('go'); C.open('missions'); }
+    if (ready.length) {
+      var r = $('div', 'gt-ach-ready'); r.appendChild($('span', null, '🎁 ' + $t('{0} hadiah menunggu diambil', [ready.length])));
+      var b = $('button', 'mbtn primary', $t('Ambil')); b.type = 'button'; b.addEventListener('click', goMissions); r.appendChild(b);
+      wrap.appendChild(r);
+    }
+    if (!got.length) wrap.appendChild($('p', 'gt-cs-note', $t('Belum ada. Selesaikan misi untuk mengisi daftar ini.')));
+    got.forEach(function (m) {
+      var row = $('div', 'gt-ach-row');
+      row.appendChild($('span', 'gt-ach-ic', '🏆'));
+      var t = $('div', 'gt-ach-t'); t.appendChild($('b', null, m.name)); t.appendChild($('div', 'gt-cs-note', m.hint)); row.appendChild(t);
+      wrap.appendChild(row);
+    });
+    if (open > 0) {
+      var more = $('button', 'mbtn', $t('{0} misi lagi', [open])); more.type = 'button'; more.addEventListener('click', goMissions);
+      wrap.appendChild(more);
+    }
+    return wrap;
+  }
   function displayBody() {
     var wrap = $('div', 'gt-settings');
     // language first: shown in both languages so it can always be found (switching reloads the page)

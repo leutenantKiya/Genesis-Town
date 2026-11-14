@@ -91,3 +91,25 @@ html.gt-reduced-motion *{animation:none!important;transition:none!important}
 /* chrome kept quiet so the scene leads */
 #regen,.hud .seedc{display:none!important}
 .hud .cell:has(#role){display:none}
+/* Settings, readable: each setting is one row (its name left, the choices right), text in the full ink and a size up,
+   the profile figures a size up, and Save a normal button at the end instead of a bar across the window */
+.gt-set-pane .gt-settings{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr);column-gap:16px;row-gap:14px;align-items:center}
+.gt-set-pane .gt-settings > h3{margin:0;font-size:calc(15px*var(--ts));font-weight:700}
+.gt-set-pane .gt-settings > :not(h3):not(h3 + *){grid-column:1 / -1}
+.gt-set-pane .gt-settings > h3 + *{margin:0}
+.gt-set-pane p,.gt-set-pane .mnote,.gt-set-pane .chain-dim{color:var(--paper-ink);font-size:calc(15px*var(--ts));line-height:1.55}
+.gt-set-prow{font-size:calc(15px*var(--ts));padding:2px 0}
+.gt-set-pk{opacity:1;color:var(--paper-dim)}
+.gt-set-link{font-size:calc(14px*var(--ts));padding:8px 10px}
+.gt-set-tab{font-size:calc(15px*var(--ts))}
+.gt-set-save{align-self:flex-end;min-width:160px;min-height:44px;padding:0 28px;font-size:calc(16px*var(--ts))}
+html.gt-phone .gt-set-pane .gt-settings{grid-template-columns:1fr;row-gap:8px}
+html.gt-phone .gt-set-save{align-self:stretch}
+/* Pencapaian (achievements) in the profile */
+.gt-ach{display:flex;flex-direction:column;gap:8px}
+.gt-ach-sum{font-size:calc(16px*var(--ts));font-weight:700;margin:0}
+.gt-ach-ready{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:var(--paper);border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl)}
+.gt-ach-row{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--paper-3)}
+.gt-ach-ic{font-size:calc(20px*var(--ts));line-height:1.2}
+.gt-ach-t b{font-size:calc(15px*var(--ts))}
+.gt-ach .mbtn{align-self:flex-start}

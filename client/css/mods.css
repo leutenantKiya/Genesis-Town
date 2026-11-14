@@ -188,3 +188,42 @@ html.gt-phone .tr-acts .mbtn{min-height:44px;flex:1}
 /* icons in place of words: menu options and slot actions (an emoji before the label), cost chips (the item's pixel icon) */
 .mopt-ic{display:inline-block;margin-right:6px;line-height:1}
 .hl-chip .hl-ic{width:16px;height:16px;margin-left:4px;vertical-align:-3px;image-rendering:pixelated}
+/* the live trade window: two sides of 9 tiles (3 x 3); my empty tiles add coin or an item through a small picker */
+.tr-win{position:relative}
+.tr-side{background:var(--paper-2);box-shadow:inset 0 var(--line) 0 var(--paper-hi);border-radius:var(--r-win);padding:10px}
+.tr-side-h{font-weight:700;font-size:calc(15px*var(--ts));margin-bottom:8px;overflow-wrap:anywhere}
+.tr-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tr-tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1;min-height:56px;padding:4px;border:var(--line) dashed var(--paper-dim);border-radius:var(--r-win);background:var(--paper);color:var(--paper-ink);font:inherit;cursor:pointer}
+.tr-tile.full{border-style:solid;border-color:var(--paper-ink);background:var(--paper-2)}
+.tr-tile:disabled{cursor:default;opacity:.55}
+.tr-tile.add:hover,.tr-tile.full:hover{background:var(--paper-3)}
+.tr-tile canvas{width:32px;height:32px;image-rendering:pixelated}
+.tr-tile-n{position:absolute;right:5px;bottom:3px;font-family:var(--font-data);font-weight:700;font-size:calc(14px*var(--ts))}
+.tr-tile-name{font-size:calc(12px*var(--ts));margin-top:2px}
+.tr-plus{font-size:calc(26px*var(--ts));line-height:1;color:var(--paper-dim)}
+.tr-pick{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25);border-radius:var(--r-win)}
+.tr-pick-box{width:min(320px,94%);padding:12px;background:var(--paper);border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);box-shadow:0 4px 0 var(--shade)}
+.tr-pick-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:calc(16px*var(--ts))}
+.tr-pick-x{min-width:36px;padding:0}
+.tr-pick-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tr-pick-kind{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);background:var(--paper-2);font:inherit;font-size:calc(15px*var(--ts));color:var(--paper-ink);cursor:pointer}
+.tr-pick-kind:hover{background:var(--paper-3)}
+.tr-pick-kind:disabled{opacity:.45;cursor:default}
+.tr-pick-kind canvas{width:32px;height:32px;image-rendering:pixelated}
+.tr-pick-items{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tr-pick-amt{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.tr-pick-amt canvas{width:32px;height:32px;image-rendering:pixelated}
+.tr-pick-amt .tr-num{width:72px}
+.tr-pick-acts{display:flex;gap:6px;margin-top:10px}
+.tr-pick-items .tr-tile-n{top:3px;bottom:auto}
+/* the Town Hall, tighter: less padding between and inside the blocks, and a block's cost and its button share one row */
+.hl-hall .hl-cell{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:center;padding:8px 10px;margin:0 0 6px}
+.hl-hall .hl-cell > *{grid-column:1 / -1}
+.hl-hall .hl-cell > .hl-cost{margin:0 0 6px}
+.hl-hall .hl-cell > .hl-cost:has(+ .hl-acts > :only-child){grid-column:1;margin:0}
+.hl-hall .hl-cell > .hl-cost + .hl-acts:has(> :only-child){grid-column:2;margin:0}
+.hl-hall .hl-cell-h{margin-bottom:2px}
+.hl-hall .hl-p{margin:0 0 6px;line-height:1.45}
+.hl-hall .hl-why{margin:4px 0 0}
+.hl-hall .hl-stats{margin-bottom:6px}
+html.gt-phone .hl-hall .hl-cell > .hl-cost:has(+ .hl-acts > :only-child),html.gt-phone .hl-hall .hl-cell > .hl-cost + .hl-acts:has(> :only-child){grid-column:1 / -1;margin-top:6px}

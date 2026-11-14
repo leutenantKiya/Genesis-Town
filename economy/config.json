@@ -213,7 +213,7 @@
     { "id": "jembatan-timur", "name": "Bridge to Far Bank Hamlet", "chunk": "seberang", "need": { "wood": 60, "ore": 20, "coin": 300 } },
     { "id": "pos-ronda", "name": "Watch Post in the North Forest", "chunk": "pos-ronda", "need": { "wood": 40, "ore": 10, "coin": 150 }, "retired": "Monsters now live in each player's Homeland, so the village forest no longer needs guarding." }
   ],
-  "trade": { "expireSecs": 120, "maxLines": 4, "inviteSecs": 60, "sessionIdleSecs": 300, "countdownMs": 3000 },
+  "trade": { "expireSecs": 120, "maxLines": 9, "inviteSecs": 60, "sessionIdleSecs": 300, "countdownMs": 3000 },
   "guest": { "max": 5, "idleSecs": 30, "helloPerMinute": 6, "perIp": 1, "maxMinutes": 30 },
   "party": { "max": 4, "inviteSecs": 120, "maxPendingInvites": 5 },
   "coop": { "partyRoleDefault": "visitor", "guestGatherPerHostDay": 40, "guestLeavesCharges": 1, "guestPlotsPerHost": 2, "assistEnergy": 10, "assistSecs": 15, "assistMaxShare": 0.5 },

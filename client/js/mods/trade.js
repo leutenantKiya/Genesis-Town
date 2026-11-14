@@ -32,12 +32,6 @@
     h.appendChild($('span', 'tr-cell-t', title)); if (meta != null) h.appendChild($('span', 'tr-meta', meta));
     c.appendChild(h); return c;
   }
-  function linesList(lines) {
-    var box = $('div', 'tr-lines'), k = Object.keys(lines || {});
-    if (!k.length) box.appendChild($('div', 'chain-dim', $t('tidak ada')));
-    k.forEach(function (t) { var r = $('div', 'tr-line-r'); r.appendChild($('span', 'tr-qty', String(lines[t]))); r.appendChild($('span', null, iname(t))); box.appendChild(r); });
-    return box;
-  }
   function standPos() { return C.standPos ? C.standPos() : { x: GT.player.x, y: GT.player.y }; }
   function post(path, body) {
     body = body || {}; body.pos = standPos();
@@ -90,16 +84,11 @@
     if (refresh && C.refresh) C.refresh(true);
   }
 
-  /* my side: a coin box and up to maxKinds-1 item rows, every edit is sent after 400 ms */
+  /* my side: up to 9 tiles (coin is one of them), every edit is sent after 400 ms */
   function currentLines() {
     var out = {};
-    if (!ui) return out;
-    var c = Math.floor(Number(ui.coin.value));
-    if (c >= 1) out.coin = Math.min(c, have('coin'));
-    ui.rows.forEach(function (r) {
-      var q = Math.floor(Number(r.num.value));
-      if (q >= 1) out[r.sel.value] = Math.min(q, have(r.sel.value));
-    });
+    if (!ui || !ui.lines) return out;
+    ui.order.forEach(function (t) { var q = Math.floor(ui.lines[t] || 0); if (q >= 1) out[t] = Math.min(q, have(t)); });
     return out;
   }
   function changed() {
@@ -118,53 +107,123 @@
       .then(function () { sending = null; });
     return sending;
   }
-  function addRow(token, qty) {
-    if (ui.rows.length >= maxKinds() - 1) return;
-    var tokens = Object.keys(items()).filter(function (t) { return t !== 'coin' && (have(t) > 0 || t === token); });
-    if (!tokens.length) { GT.toast($t('Tasmu kosong.')); return; }
-    var row = $('div', 'tr-line'), sel = $('select', 'tr-sel'), num = $('input', 'tr-num');
-    tokens.forEach(function (t) { var o = $('option', null, iname(t) + ' (' + have(t) + ')'); o.value = t; sel.appendChild(o); });
-    if (token) sel.value = token;
-    num.type = 'number'; num.min = '1'; num.step = '1'; num.value = String(qty || 1);
-    sel.setAttribute('aria-label', $t('barang')); num.setAttribute('aria-label', $t('jumlah'));
-    var del = $('button', 'mbtn tr-del', 'x'); del.type = 'button'; del.setAttribute('aria-label', $t('Hapus baris'));
-    var r = { sel: sel, num: num, row: row };
-    del.addEventListener('click', function () { ui.list.removeChild(row); ui.rows.splice(ui.rows.indexOf(r), 1); ui.add.style.display = ""; changed(); });
-    [sel, num].forEach(function (e) { e.addEventListener('input', changed); e.addEventListener('change', changed); });
-    num.addEventListener('keydown', function (e) { e.stopPropagation(); });
-    num.addEventListener('keyup', function (e) { e.stopPropagation(); });
-    row.appendChild(sel); row.appendChild(num); row.appendChild(del);
-    ui.rows.push(r); ui.list.appendChild(row);
-    if (ui.rows.length >= maxKinds() - 1) ui.add.style.display = "none";
-    if (!token) changed();
+  /* the tiles: 9 a side in a 3 x 3 grid; mine show + where empty, a tile opens the picker */
+  var TILES = 9;
+  function tileIcon(t) {
+    if (t === 'coin' || !window.GT_ITEMS) { var c = $('span', 'gt-card-coin'); return c; }
+    return GT_ITEMS.icon(t, 32);
   }
+  function tileGrid(lines, order, mine) {
+    var g = $('div', 'tr-tiles');
+    for (var i = 0; i < TILES; i++) {
+      var t = order[i], q = t ? lines[t] : 0, tile = $('button', 'tr-tile' + (t ? ' full' : mine ? ' add' : ''));
+      tile.type = 'button';
+      if (t) {
+        tile.appendChild(tileIcon(t));
+        tile.appendChild($('span', 'tr-tile-n', String(q)));
+        tile.title = q + ' ' + iname(t);
+        tile.setAttribute('aria-label', q + ' ' + iname(t));
+      } else if (mine) { tile.appendChild($('span', 'tr-plus', '+')); tile.setAttribute('aria-label', $t('Tambah ke tawaranmu')); }
+      else tile.disabled = true;
+      if (mine) (function (tok) { tile.addEventListener('click', function () { sfx('ui_click', { vol: 0.5 }); openPicker(tok); }); })(t);
+      else tile.tabIndex = -1;
+      g.appendChild(tile);
+    }
+    return g;
+  }
+  function renderMine() {
+    if (!ui || !ui.mineGrid) return;
+    var g = tileGrid(ui.lines, ui.order, true);
+    ui.mineGrid.parentNode.replaceChild(g, ui.mineGrid); ui.mineGrid = g;
+  }
+  function setLine(t, q) {
+    q = Math.max(0, Math.min(have(t), Math.floor(q)));
+    if (q > 0) { if (ui.order.indexOf(t) < 0) ui.order.push(t); ui.lines[t] = q; }
+    else { delete ui.lines[t]; ui.order = ui.order.filter(function (x) { return x !== t; }); }
+    renderMine(); changed();
+  }
+  // the small window over the trade window: Coin or an item, then how many with - / +
+  function openPicker(token) {
+    closePicker();
+    var pk = $('div', 'tr-pick'), box = $('div', 'tr-pick-box');
+    pk.appendChild(box); ui.win.appendChild(pk); ui.pick = pk;
+    pk.addEventListener('click', function (e) { if (e.target === pk) closePicker(); });
+    function head(title) {
+      box.textContent = '';
+      var h = $('div', 'tr-pick-h'); h.appendChild($('b', null, title));
+      var x = $('button', 'mbtn tr-pick-x', '×'); x.type = 'button'; x.setAttribute('aria-label', $t('Tutup'));
+      x.addEventListener('click', closePicker); h.appendChild(x); box.appendChild(h);
+    }
+    function amount(t) { // how many of t to offer
+      head(iname(t));
+      var max = have(t), q = Math.max(1, Math.min(max, (ui.lines[t] || 1)));
+      var top = $('div', 'tr-pick-amt'); top.appendChild(tileIcon(t));
+      var n = $('input', 'tr-num'); n.type = 'number'; n.min = '1'; n.max = String(max); n.step = '1'; n.value = String(q); n.setAttribute('aria-label', $t('jumlah'));
+      n.addEventListener('keydown', function (e) { e.stopPropagation(); }); n.addEventListener('keyup', function (e) { e.stopPropagation(); });
+      function set(v) { q = Math.max(1, Math.min(max, Math.floor(Number(v) || 1))); n.value = String(q); }
+      var minus = $('button', 'mbtn', '−'), plus = $('button', 'mbtn', '+'), all = $('button', 'mbtn', $t('Semua'));
+      [minus, plus, all].forEach(function (b) { b.type = 'button'; });
+      minus.addEventListener('click', function () { set(q - (t === 'coin' ? 10 : 1)); });
+      plus.addEventListener('click', function () { set(q + (t === 'coin' ? 10 : 1)); });
+      all.addEventListener('click', function () { set(max); });
+      n.addEventListener('change', function () { set(n.value); });
+      top.appendChild(minus); top.appendChild(n); top.appendChild(plus); top.appendChild(all);
+      box.appendChild(top);
+      box.appendChild($('div', 'chain-dim', $t('Kamu punya {0}', [max])));
+      var acts = $('div', 'tr-pick-acts');
+      var ok = $('button', 'mbtn primary', ui.lines[t] ? $t('Ubah') : $t('Taruh')); ok.type = 'button';
+      ok.addEventListener('click', function () { set(n.value); setLine(t, q); closePicker(); });
+      acts.appendChild(ok);
+      if (ui.lines[t]) { var rm = $('button', 'mbtn', $t('Hapus')); rm.type = 'button'; rm.addEventListener('click', function () { setLine(t, 0); closePicker(); }); acts.appendChild(rm); }
+      box.appendChild(acts);
+      setTimeout(function () { n.focus(); n.select(); }, 30);
+    }
+    function items() { // pick an item by its icon
+      head($t('Pilih barang'));
+      var g = $('div', 'tr-pick-items'), list = Object.keys(S().cfg.econ.items).filter(function (t) { return t !== 'coin' && have(t) > 0 && ui.order.indexOf(t) < 0; });
+      if (!list.length) box.appendChild($('p', 'chain-dim', $t('Tidak ada barang lain di tasmu.')));
+      list.forEach(function (t) {
+        var b = $('button', 'tr-tile full'); b.type = 'button'; b.title = iname(t);
+        b.appendChild(tileIcon(t)); b.appendChild($('span', 'tr-tile-n', String(have(t)))); b.appendChild($('span', 'tr-tile-name', iname(t)));
+        b.addEventListener('click', function () { amount(t); });
+        g.appendChild(b);
+      });
+      box.appendChild(g);
+    }
+    if (token) { amount(token); return; }
+    head($t('Tambah ke tawaranmu'));
+    var two = $('div', 'tr-pick-two');
+    var coinB = $('button', 'tr-pick-kind'); coinB.type = 'button'; coinB.appendChild(tileIcon('coin')); coinB.appendChild($('span', null, $t('Koin')));
+    coinB.disabled = have('coin') < 1 || ui.order.indexOf('coin') >= 0;
+    coinB.addEventListener('click', function () { amount('coin'); });
+    var itB = $('button', 'tr-pick-kind'); itB.type = 'button';
+    if (window.GT_ITEMS) itB.appendChild(GT_ITEMS.icon('bread', 32)); itB.appendChild($('span', null, $t('Barang')));
+    itB.addEventListener('click', items);
+    two.appendChild(coinB); two.appendChild(itB); box.appendChild(two);
+  }
+  function closePicker() { if (ui && ui.pick) { ui.pick.remove(); ui.pick = null; } }
 
   function tick(el, ok) { el.textContent = ok ? '✓ ' + $t('Siap') : $t('Belum siap'); el.className = 'tr-tick' + (ok ? ' ok' : ''); }
 
   function buildWin(s) {
     var body = $('div', 'tr-win');
-    ui = { rows: [] };
+    ui = { win: body };
     if (s.status === 'invite') {
       body.appendChild($('p', null, $t('Menunggu {0} membuka jendela dagang…', [otherName(s)])));
       body.appendChild($('p', 'chain-dim', $t('Ajakan berlaku 1 menit.')));
     } else {
+      var me = s.self || { name: $t('Kamu'), tag: '' };
+      ui.lines = {}; ui.order = [];
+      Object.keys(s.mine || {}).forEach(function (t) { ui.lines[t] = s.mine[t]; ui.order.push(t); });
       var cols = $('div', 'tr-cols');
-      var mine = cell($t('Kamu beri')), theirs = cell($t('{0} beri', [s.other.name]));
-      var cf = $('label', 'tr-f'); cf.appendChild($('span', null, $t('Koin') + ' (' + have('coin') + ')'));
-      ui.coin = $('input', 'tr-num'); ui.coin.type = 'number'; ui.coin.min = '0'; ui.coin.step = '1'; ui.coin.value = s.mine.coin ? String(s.mine.coin) : '';
-      ui.coin.setAttribute('aria-label', $t('Koin'));
-      ui.coin.addEventListener('input', changed); ui.coin.addEventListener('change', changed);
-      ui.coin.addEventListener('keydown', function (e) { e.stopPropagation(); }); ui.coin.addEventListener('keyup', function (e) { e.stopPropagation(); });
-      cf.appendChild(ui.coin); mine.appendChild(cf);
-      ui.list = $('div', 'tr-editor'); mine.appendChild(ui.list);
-      ui.add = $('button', 'mbtn tr-add', $t('+ barang')); ui.add.type = 'button';
-      ui.add.addEventListener('click', function () { addRow(); });
-      mine.appendChild(ui.add);
+      var mine = $('div', 'tr-side'), theirs = $('div', 'tr-side');
+      mine.appendChild($('div', 'tr-side-h', $t('Kamu') + ' · ' + me.name + (me.tag ? '#' + me.tag : '')));
+      theirs.appendChild($('div', 'tr-side-h', otherName(s)));
+      ui.mineGrid = tileGrid(ui.lines, ui.order, true); mine.appendChild(ui.mineGrid);
+      ui.theirGrid = tileGrid(s.theirs || {}, Object.keys(s.theirs || {}), false); theirs.appendChild(ui.theirGrid);
       ui.myTick = $('div'); mine.appendChild(ui.myTick);
-      ui.theirs = $('div'); theirs.appendChild(ui.theirs);
       ui.theirTick = $('div'); theirs.appendChild(ui.theirTick);
       cols.appendChild(mine); cols.appendChild(theirs); body.appendChild(cols);
-      Object.keys(s.mine).forEach(function (t) { if (t !== 'coin') addRow(t, s.mine[t]); });
     }
     ui.note = $('div', 'tr-note'); ui.count = $('div', 'tr-count');
     body.appendChild(ui.note); body.appendChild(ui.count);
@@ -234,8 +293,9 @@
     sess = s;
     showWin(s);
     if (!ui) return;
-    if (ui.theirs) {
-      ui.theirs.textContent = ''; ui.theirs.appendChild(linesList(s.theirs));
+    if (ui.theirGrid) {
+      var tg = tileGrid(s.theirs || {}, Object.keys(s.theirs || {}), false);
+      ui.theirGrid.parentNode.replaceChild(tg, ui.theirGrid); ui.theirGrid = tg;
       tick(ui.myTick, s.my_ok); tick(ui.theirTick, s.their_ok);
       if (ui.ready) ui.ready.textContent = s.my_ok ? $t('Siap ✓') : $t('Siap');
     }
