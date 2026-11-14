@@ -123,7 +123,7 @@
         tile.appendChild($('span', 'tr-tile-n', String(q)));
         tile.title = q + ' ' + iname(t);
         tile.setAttribute('aria-label', q + ' ' + iname(t));
-      } else if (mine) { tile.appendChild($('span', 'tr-plus', '+')); tile.setAttribute('aria-label', $t('Tambah ke tawaranmu')); }
+      } else if (mine) { var pi = $('i', 'uic uic-plus uic-32'); pi.setAttribute('aria-hidden', 'true'); tile.appendChild(pi); tile.setAttribute('aria-label', $t('Tambah ke tawaranmu')); }
       else tile.disabled = true;
       if (mine) (function (tok) { tile.addEventListener('click', function () { sfx('ui_click', { vol: 0.5 }); openPicker(tok); }); })(t);
       else tile.tabIndex = -1;
@@ -163,6 +163,7 @@
       function set(v) { q = Math.max(1, Math.min(max, Math.floor(Number(v) || 1))); n.value = String(q); }
       var minus = $('button', 'mbtn', '−'), plus = $('button', 'mbtn', '+'), all = $('button', 'mbtn', $t('Semua'));
       [minus, plus, all].forEach(function (b) { b.type = 'button'; });
+      [[minus, 'minus', $t('Kurangi')], [plus, 'plus', $t('Tambah')]].forEach(function (p) { p[0].textContent = ''; var pi = $('i', 'uic uic-' + p[1]); pi.setAttribute('aria-hidden', 'true'); p[0].appendChild(pi); p[0].setAttribute('aria-label', p[2]); });
       minus.addEventListener('click', function () { set(q - (t === 'coin' ? 10 : 1)); });
       plus.addEventListener('click', function () { set(q + (t === 'coin' ? 10 : 1)); });
       all.addEventListener('click', function () { set(max); });

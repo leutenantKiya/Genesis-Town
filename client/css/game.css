@@ -363,3 +363,10 @@ html.gt-phone .gt-cs-stage{min-height:150px}
   .mbox{animation:none}
   .hud,.hud .loc .val,.mhead,.btn,.mbtn,.mx,.choice,.mseg span,.gt-cs,.gt-cs-sw,.gt-cs-go,#btnA,#btnE{transition:none}
 }
+
+/* the owner's pixel UI icons (icons/ui/<name>-32.png): <i class="uic uic-NAME" aria-hidden="true"> beside a text label, 16px; add uic-32 for 32px */
+.uic{display:inline-block;width:16px;height:16px;flex:none;vertical-align:-3px;margin-right:6px;background:center/contain no-repeat;image-rendering:pixelated}
+.gt-qty .uic,.tr-pick-amt .uic,.tr-tile .uic{margin:0;vertical-align:middle}
+.uic.uic-32{width:32px;height:32px;vertical-align:middle}
+.uic-bag{background-image:url(../icons/ui/bag-32.png)}.uic-market{background-image:url(../icons/ui/market-32.png)}.uic-map{background-image:url(../icons/ui/map-32.png)}.uic-missions{background-image:url(../icons/ui/missions-32.png)}.uic-settings{background-image:url(../icons/ui/settings-32.png)}.uic-trophy{background-image:url(../icons/ui/trophy-32.png)}.uic-casino{background-image:url(../icons/ui/casino-32.png)}.uic-mail{background-image:url(../icons/ui/mail-32.png)}.uic-pickaxe{background-image:url(../icons/ui/pickaxe-32.png)}.uic-guild{background-image:url(../icons/ui/guild-32.png)}.uic-ledger{background-image:url(../icons/ui/ledger-32.png)}.uic-rest{background-image:url(../icons/ui/rest-32.png)}.uic-plus{background-image:url(../icons/ui/plus-32.png)}.uic-minus{background-image:url(../icons/ui/minus-32.png)}.uic-refresh{background-image:url(../icons/ui/refresh-32.png)}.uic-profile{background-image:url(../icons/ui/profile-32.png)}
+.mtitle .uic{width:32px;height:32px;vertical-align:middle;margin-top:-4px;margin-bottom:-4px}

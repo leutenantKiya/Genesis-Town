@@ -463,7 +463,7 @@
     var dc = $('div', 'gt-set-card gt-set-pane');
     dispHost = $('div', 'gt-set-scroll'); dispHost.appendChild(displayBody()); dc.appendChild(dispHost);
     var ac = $('div', 'gt-set-card gt-set-pane'); ac.appendChild(achievementsBody());
-    var panes = { cust: cust, ach: ac, party: pc, disp: dc }, list = [['cust', '👕 ' + $t('Kustomisasi')], ['ach', '🏆 ' + $t('Pencapaian')], ['party', '👥 ' + $t('Party')], ['disp', '🎛️ ' + $t('Tampilan & suara')]];
+    var panes = { cust: cust, ach: ac, party: pc, disp: dc }, list = [['cust', '👕 ' + $t('Kustomisasi')], ['ach', $t('Pencapaian'), 'trophy'], ['party', $t('Party'), 'guild'], ['disp', '🎛️ ' + $t('Tampilan & suara')]];
     // Simulasi and Admin fill their tab the first time it is opened (they load from the server and measure their charts)
     var lazy = {};
     if (window.GT_SIM && GT_SIM.embed) { list.push(['sim', '📊 ' + $t('Simulasi')]); panes.sim = $('div', 'gt-set-card gt-set-pane gt-set-wide'); lazy.sim = function (h) { GT_SIM.embed(h); }; }
@@ -471,7 +471,7 @@
     if (!panes[setTab]) setTab = 'cust';
     var tabs = $('div', 'gt-set-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', $t('Pengaturan'));
     list.forEach(function (t) {
-      var b = $('button', 'gt-set-tab', t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.tab = t[0];
+      var b = $('button', 'gt-set-tab', t[1]); b.type = 'button'; if (t[2]) { var ti = $('i', 'uic uic-' + t[2]); ti.setAttribute('aria-hidden', 'true'); b.insertBefore(ti, b.firstChild); } b.setAttribute('role', 'tab'); b.dataset.tab = t[0];
       b.addEventListener('click', function () { setTab = t[0]; pick(); });
       tabs.appendChild(b);
     });

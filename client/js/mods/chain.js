@@ -45,6 +45,8 @@
   function item(t) { var e = S.cfg && S.cfg.econ && S.cfg.econ.items[t]; return e ? e.name : t; }
   function button(label, onClick, cls) { var b = $('button', 'mbtn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.addEventListener('click', onClick); return b; }
 
+  function histBtn(fn) { var b = button($t('Riwayat'), fn), i = $('i', 'uic uic-ledger'); i.setAttribute('aria-hidden', 'true'); b.insertBefore(i, b.firstChild); return b; }
+
   /* ------------------------------------------------------------ server API */
   // Every request of a signed-in player is signed with the session key (server/src/reqauth.ts has the format).
   function signHeaders(method, pathQuery, body) {
@@ -622,7 +624,7 @@
     if (!tr) return;
     if (!missionBtn) {
       missionBtn = $('button', 'gt-trbtn gt-trbtn-mission'); missionBtn.type = 'button';
-      missionBtn.appendChild($('span', null, '🎯 ' + $t('Misi'))); missionBadge = $('i', 'gt-trbadge', '!'); missionBadge.hidden = true; missionBtn.appendChild(missionBadge);
+      var mi = $('i', 'uic uic-missions uic-32'); mi.setAttribute('aria-hidden', 'true'); missionBtn.appendChild(mi); missionBtn.appendChild($('span', null, $t('Misi'))); missionBadge = $('i', 'gt-trbadge', '!'); missionBadge.hidden = true; missionBtn.appendChild(missionBadge);
       missionBtn.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) open('missions'); });
       tr.insertBefore(missionBtn, tr.firstChild);
       // the same button in the top bar, where Simulasi used to be (css/phone.css shows it on a computer)
@@ -1321,7 +1323,7 @@
     if (max < 1) { box.appendChild($('p', 'chain-dim', buy ? (it.stock < 1 ? $t('Stok habis.') : $t('Koinmu belum cukup.')) : $t('Kamu tidak punya {0}.', [item(t)]))); return box; }
     var q = Math.max(1, Math.min(max, S.shopQty || 1)); S.shopQty = q;
     var row = $('div', 'gt-qty');
-    function step(label, to, aria) { var b = button(label, function () { S.shopQty = Math.max(1, Math.min(max, to)); redraw(); }); b.setAttribute('aria-label', aria); b.disabled = to < 1 || to > max || to === q; return b; }
+    function step(label, to, aria) { var b = button(label, function () { S.shopQty = Math.max(1, Math.min(max, to)); redraw(); }); b.setAttribute('aria-label', aria); if (label === '+' || label === '−') { b.textContent = ''; var si = $('i', 'uic uic-' + (label === '+' ? 'plus' : 'minus')); si.setAttribute('aria-hidden', 'true'); b.appendChild(si); } b.disabled = to < 1 || to > max || to === q; return b; }
     row.appendChild(step('−', q - 1, $t('Kurangi')));
     row.appendChild($('span', 'gt-qty-n gt-data', String(q)));
     row.appendChild(step('+', q + 1, $t('Tambah')));
@@ -1557,7 +1559,7 @@
     section($t('Bahan'), goodCards(goods.filter(function (t) { return !econItems[t].energy; })));
     section($t('Makanan'), goodCards(goods.filter(function (t) { return econItems[t].energy; })));
     wrap.appendChild(pop);
-    wrap.appendChild(button($t('Riwayat'), function () { open('history'); }));
+    wrap.appendChild(histBtn(function () { open('history'); }));
     return wrap;
   }
   function toolInfo(box, k, t, withActs) {
@@ -1587,7 +1589,7 @@
     if (window.GT_ITEMS && GT_ITEMS.held() !== t) row.appendChild(button($t('Pegang'), function () { GT_ITEMS.hold(t); redraw(); }));
     if (can > 0) row.appendChild(button($t('Jual ke pemain'), function () { askList(t, can); }));
     if (can > 0) row.appendChild(button($t('Kirim'), function () { askSend(t); }));
-    row.appendChild(button($t('Riwayat'), function () { open('history', t); }));
+    row.appendChild(histBtn(function () { open('history', t); }));
     box.appendChild(row);
   }
   var USE = {
