@@ -2,12 +2,13 @@
 // debit (send, list, pledge, buy) must not use what today's off-chain play already spent, nor what so far exists only
 // off-chain. Otherwise the next settlement would hit a negative balance and fail for everyone in that chunk.
 // With `reserve`, the guarded amounts are also held back from off-chain spending while the relay is in flight.
-// Returns the extra accounts to refresh after the relay (the seller of a bought listing).
-import type { Chain } from './chain.ts';
+// Returns the extra accounts to refresh after the relay (the seller of a bought listing). `seen` is told the listing a buy
+// is about to take, so the app can show the purchase once the relay is done.
+import type { Chain, ListingInfo } from './chain.ts';
 import type { Game } from './game/game.ts';
 import { HttpError } from './auth.ts';
 
-export function spendGuard(chain: Chain, game: Game) {
+export function spendGuard(chain: Chain, game: Game, seen?: (sender: string, listing: ListingInfo) => void) {
   return async (sender: string, method: string, args: Record<string, unknown>, reserve = false): Promise<string[]> => {
     const need = new Map<string, number>();
     const add = (t: unknown, n: unknown) => {
@@ -27,6 +28,7 @@ export function spendGuard(chain: Chain, game: Game) {
       if (!l) throw new HttpError(404, 'That stall is gone (sold or withdrawn).');
       add('coin', Number(l.price_each) * Number(args.amount));
       extra.push(l.seller);
+      if (reserve) seen?.(sender, l);
     }
     if (!need.size) return extra;
     await game.settlement.refresh([sender]);

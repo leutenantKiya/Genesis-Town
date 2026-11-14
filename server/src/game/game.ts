@@ -44,6 +44,8 @@ export class Game {
   /** Merchants buying cheap Player Market listings and following their price trend (npc.ts). */
   npc: NpcMarket;
   settlement: Settlement;
+  /** Set by the app (social.deal): a merchant trade happened, for the goods-flying animation. `a` got `aGot` from `b`. */
+  onDeal?: (kind: 'shop', world: string, a: string, b: string, aGot: Record<string, number>, bGot: Record<string, number>) => void;
   /** The shared village map; absent in unit tests and the simulator, which use abstract tile coordinates. */
   map: WorldMap | null = null;
   positions: Positions | null = null;
@@ -441,10 +443,18 @@ export class Game {
       case 'sell': {
         // the coin earned counts toward the daily coin gain cap (same as the contract's settlement check)
         try { this.world.checkGain(account, 'coin', this.market.quote(s('merchant'), s('token'), 'sell', n('qty')).total); } catch (e) { if (e instanceof HttpError && e.status === 409) throw e; }
-        res = this.market.sell(account, s('merchant'), s('token'), n('qty'));
+        const sold = this.market.sell(account, s('merchant'), s('token'), n('qty'));
+        res = sold;
+        this.onDeal?.('shop', wid, account, this.market.account(s('merchant')), { coin: sold.total }, { [s('token')]: n('qty') });
         break;
       }
-      default: if (Number.isInteger(n('qty')) && n('qty') > 0) this.world.checkGain(account, s('token'), n('qty')); res = this.market.buy(account, s('merchant'), s('token'), n('qty')); break;
+      default: {
+        if (Number.isInteger(n('qty')) && n('qty') > 0) this.world.checkGain(account, s('token'), n('qty'));
+        const bought = this.market.buy(account, s('merchant'), s('token'), n('qty'));
+        res = bought;
+        this.onDeal?.('shop', wid, account, this.market.account(s('merchant')), { [s('token')]: n('qty') }, { coin: bought.total });
+        break;
+      }
     }
     this.countMissions(account, a, body, res);
     if (a !== 'farm' && !(a === 'grass' && !Object.keys(res.gained ?? {}).length)) { // an empty search is not worth a Riwayat line

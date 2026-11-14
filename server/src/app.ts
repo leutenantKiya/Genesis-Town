@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { MARKET_FEE_BPS, type Config } from './config.ts';
-import { MockChain, type Chain } from './chain.ts';
+import { MockChain, type Chain, type ListingInfo } from './chain.ts';
 import type { Store } from './db.ts';
 import { register, HttpError, type TokenVerifier } from './auth.ts';
 import { relay, RateLimiter } from './relayer.ts';
@@ -124,7 +124,9 @@ export function createApp(deps: AppDeps) {
   const deviceLimiter = new RateLimiter(3, 20); // new-device key additions per IP (each costs the relayer a NEAR Auth sign call) // merchant questions per account (each may be one NEAR AI call)
   const dialogue = deps.dialogue ?? new Dialogue({ ...deps.cfg.nearai, ...deps.cfg.dialogue });
   const clientRoot = resolve(deps.clientDir);
-  const checkSpend = spendGuard(deps.chain, game);
+  // a Player Market buy: the listing it takes, kept until the relay is done (afterRelay shows the purchase)
+  const buying = new Map<string, ListingInfo>();
+  const checkSpend = spendGuard(deps.chain, game, (sender, l) => { buying.set(`${sender}:${l.id}`, l); if (buying.size > 200) buying.delete(buying.keys().next().value!); });
   // Every off-chain spend is also compared with the chain's balance (chaincheck.ts); settlement and in-flight relays are skipped.
   const chainCheck = new ChainCheck({
     chain: deps.chain, settled: (a, t) => game.gs.settledBalance(a, t), mode: deps.cfg.chainCheck.mode, ttlMs: deps.cfg.chainCheck.ttlMs,
@@ -138,6 +140,9 @@ export function createApp(deps: AppDeps) {
   game.npc.onSale = (listingId, seller, units) => { bazaar.recordSale(listingId, seller, units); readCache.clear(); }; // a merchant bought a named listing
   const social = new Social(deps.store);
   game.trade.onDone = (a, b, world) => social.tradeLine(a, b, world); // a finished swap is a public line for its world
+  // purchases for the goods-flying animation (mods/trade.js): merchant trades, Player Market buys by players and by merchants
+  game.onDeal = (kind, world, a, b, aGot, bGot) => { social.deal(kind, world, a, b, aGot, bGot); };
+  game.npc.onBuy = (merchant, seller, token, units, coin, listingId) => { social.deal('npc', 'public', merchant, seller, { [token]: units }, { coin }, bazaar.isAnonymous(listingId)); };
   const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
   const adminAccounts = new AdminAccounts({ game, store: deps.store, social, admins: () => deps.cfg.adminAccounts });
   const purge = new Purge({ cfg: deps.cfg, chain: deps.chain, store: deps.store, game, social, invalidate: (a) => { chainCheck.invalidate(a); readCache.clear(); } });
@@ -172,6 +177,12 @@ export function createApp(deps: AppDeps) {
     // the player market's two sides: remember Lapak or Pasar Gelap for a new listing; a Lapak sale earns popularity
     if (method === 'list_item') bazaar.recordListing(await deps.chain.listListings(50), sender, args, relayBody.anonymous === true);
     if (method === 'buy_listing' && extra[0]) bazaar.recordSale(Number(args.listing_id), extra[0], Number(args.amount));
+    const l = method === 'buy_listing' ? buying.get(`${sender}:${Number(args.listing_id)}`) : undefined;
+    if (l) {
+      buying.delete(`${sender}:${l.id}`);
+      const units = Number(args.amount);
+      social.deal('pasar', social.seen.get(sender)?.world ?? 'public', sender, l.seller, { [l.token_id]: units }, { coin: Number(l.price_each) * units }, bazaar.isAnonymous(l.id));
+    }
   };
 
   // Homelands: only the owner and invited guests may report, chat or show up there.
@@ -549,7 +560,7 @@ export function createApp(deps: AppDeps) {
         const raw = await readRaw(req);
         const acct = accountOf(req, url, raw);
         if (!presenceLimiter.take(acct)) throw new HttpError(429, 'too many presence reports');
-        const b = parseJson(raw) as { world?: unknown; x?: unknown; y?: unknown; fx?: unknown; fy?: unknown; vx?: unknown; vy?: unknown; dir?: unknown; scene?: unknown; since?: unknown; fish?: unknown; room?: unknown; rx?: unknown; ry?: unknown };
+        const b = parseJson(raw) as { world?: unknown; x?: unknown; y?: unknown; fx?: unknown; fy?: unknown; vx?: unknown; vy?: unknown; dir?: unknown; scene?: unknown; since?: unknown; dealSince?: unknown; fish?: unknown; room?: unknown; rx?: unknown; ry?: unknown };
         game.fixWorld(acct); // a guest uninvited while standing there: back to the public area first
         const w = await checkedWorld(acct, b.world, { x: Number(b.x), y: Number(b.y) });
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
@@ -570,7 +581,7 @@ export function createApp(deps: AppDeps) {
         const tradeOf = (a: string) => { const o = trading.get(a); return o ? { trading: social.nick(o), tradingWith: o } : {}; };
         const players = social.nearby(acct, w).map((s) => ({ ...(s.npc || s.guest ? {} : tradeOf(s.account)), nick: s.nick, tag: s.tag, look: s.look, account: s.account, ...(game.positions?.aboard.has(s.account) ? { aboard: true } : {}), x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), worn: game.extras.worn(s.account), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
-        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w), ...(w === 'public' ? { boat: game.boatView(acct) } : {}), ...tradeOf(acct) });
+        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, deals: social.dealsSince(acct, w, b.dealSince === undefined ? -1 : Math.floor(Number(b.dealSince))), dealLast: social.dealSeq, party: partyWithPlaces(acct, w), ...(w === 'public' ? { boat: game.boatView(acct) } : {}), ...tradeOf(acct) });
       }
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);

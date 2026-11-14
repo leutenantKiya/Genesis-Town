@@ -32,6 +32,8 @@ export class NpcMarket {
   running = false;
   /** Told after a sale to a named seller (app.ts: Lapak popularity). */
   onSale?: (listingId: number, seller: string, units: number) => void;
+  /** Told after every buy (app.ts: the goods-flying animation): merchant account, seller, good, units, coin paid. */
+  onBuy?: (merchant: string, seller: string, token: string, units: number, coin: number, listingId: number) => void;
   constructor(d: NpcDeps) { this.d = d; }
 
   get cfg() { return this.d.econ.npcMarket; }
@@ -133,6 +135,7 @@ export class NpcMarket {
       const name = econ.items[l.token_id].name;
       this.d.history(l.seller, `${market.def(best.id).name} bought ${best.qty} ${name} from your Market listing: +${total - fee} coins`, r.txHash || null, [l.token_id, 'coin']);
       this.onSale?.(l.id, l.seller, best.qty);
+      this.onBuy?.(acct, l.seller, l.token_id, best.qty, total, l.id);
     }
     return bought;
   }

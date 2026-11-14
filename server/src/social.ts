@@ -40,6 +40,12 @@ const ROUGH = ['anjing', 'anjir', 'bangsat', 'bajingan', 'kontol', 'memek', 'nge
   'fuck', 'fucking', 'shit', 'bitch', 'cunt', 'asshole', 'dick', 'pussy'];
 const ROUGH_RE = new RegExp('\\b(' + ROUGH.join('|') + ')\\b', 'gi');
 const DIRS = new Set(['up', 'down', 'left', 'right']);
+/** How long a purchase stays in the deal feed (the goods-flying animation). */
+const DEAL_SECS = 10;
+/** shop: a player bought from or sold to a merchant; pasar: a player bought a Player Market listing; npc: a merchant bought one. */
+export interface Deal { id: number; t: number; kind: 'shop' | 'pasar' | 'npc'; world: string; a: string; b: string; aGot: Record<string, number>; bGot: Record<string, number>; only: boolean }
+/** What a player is sent: `b` (the seller) is null when it is anonymous and the viewer is not them. */
+export interface DealView { id: number; kind: Deal['kind']; a: string; b: string | null; aGot: Record<string, number>; bGot: Record<string, number> }
 /** A fishing report checked for shape only: a known phase and a float within two tiles of the player (the route also
  *  checks that the tile is water on that world's map). Anything else: not fishing. */
 export function fishingOf(f: unknown, x: number, y: number): Fishing | null {
@@ -80,6 +86,10 @@ export class Social {
   mates: (a: string) => string[] = () => [];
   /** When the account joined its current party (ms): party lines older than that are not theirs to read. */
   partyJoinedAt: (a: string) => number = () => 0;
+
+  /** Recent purchases for the goods-flying animation (client mods/trade.js), memory only, a few seconds each. */
+  deals: Deal[] = [];
+  dealSeq = 0;
 
   npcs: Npc[] = [];
   /** Set by the app: a player wrote to a merchant. May throw HttpError (rate limit); the answer comes later through npcSay. */
@@ -282,6 +292,21 @@ export class Social {
     const A = this.nick(a), B = this.nick(b);
     this.chat.push({ id: ++this.seq, t: this.now(), from: A, fromTag: this.tag(a), to: null, toTag: null, text: `${A} traded with ${B}`, sys: 'trade', with: B, fromAcc: a, toAcc: null, world, party: undefined, partyId: null });
     if (this.chat.length > 300) this.chat.splice(0, this.chat.length - 300);
+  }
+  /** A purchase in `world`: `a` got `aGot` from `b`, and `b` got `bGot`. Both sides see it wherever they are, others in
+   *  the same world see it too unless `only` (an anonymous Pasar Gelap seller stays hidden). Returns the deal's id. */
+  deal(kind: Deal['kind'], world: string, a: string, b: string, aGot: Record<string, number>, bGot: Record<string, number>, only = false): number {
+    const d: Deal = { id: ++this.dealSeq, t: this.now(), kind, world, a, b, aGot, bGot, only };
+    this.deals.push(d);
+    if (this.deals.length > 80) this.deals.splice(0, this.deals.length - 80);
+    return d.id;
+  }
+  /** Deals after `since` this player may see in `world` (none on the first poll, since < 0, and none older than DEAL_SECS). */
+  dealsSince(account: string, world: string, since: number): DealView[] {
+    if (!(since >= 0)) return [];
+    const old = this.now() - DEAL_SECS * 1000;
+    return this.deals.filter((d) => d.id > since && d.t >= old && (d.a === account || d.b === account || (!d.only && d.world === world)))
+      .map((d) => ({ id: d.id, kind: d.kind, a: d.a, b: d.only && d.b !== account ? null : d.b, aGot: d.aGot, bGot: d.bGot }));
   }
   /** Lines after `since` that this player may read in `world`: the world's public lines, plus private lines to or from them. */
   since(account: string, world: string, since: number) {

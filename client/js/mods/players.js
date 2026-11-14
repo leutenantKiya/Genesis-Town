@@ -13,7 +13,7 @@
   if (!GT) return;
 
   var others = {};        // account -> { nick, title, x, y (tile), sx, sy, vx, vy, rt (last report), dx, dy, dt (drawn), spd, dir, seen }
-  var meTag = '', me = null, online = 0, last = 0, timer = 0, busy = false, backoff = 0, curWorld = null, named = true; // named: has the server a chosen display name for me
+  var meTag = '', me = null, online = 0, last = 0, dealLast = -1, timer = 0, busy = false, backoff = 0, curWorld = null, named = true; // named: has the server a chosen display name for me
   var lines = [];         // chat lines shown in the box
   var bubbles = {};       // nick (lower) -> { text, t }
   var box = null, list = null, input = null, head = null;
@@ -105,7 +105,7 @@
     if (myLast && gap > 0.05 && gap < 1.5 && p.moving) { vx = clampV((sx - myLast.x) / gap); vy = clampV((sy - myLast.y) / gap); }
     myLast = { x: sx, y: sy, t: t, moving: !!p.moving, dir: p.dir, fish: fishKey };
     nextAt = t + SLOW_MS;
-    var body = { world: w, x: pos.x, y: pos.y, dir: p.dir, scene: out ? 'out' : 'in', since: last };
+    var body = { world: w, x: pos.x, y: pos.y, dir: p.dir, scene: out ? 'out' : 'in', since: last, dealSince: dealLast }; // dealSince: purchases to animate (mods/trade.js)
     if (out) { body.fx = Math.round(sx * 1000) / 1000; body.fy = Math.round(sy * 1000) / 1000; body.vx = Math.round(vx * 100) / 100; body.vy = Math.round(vy * 100) / 100; }
     if (fishNow) body.fish = { phase: fishNow.phase, x: fishNow.x, y: fishNow.y }; // others see me fishing
     if (room) { body.room = room; body.rx = p.x; body.ry = p.y; } // inside a building: players in the same room meet
@@ -121,6 +121,8 @@
       applyPlayers(r.players || []);
       (r.chat || []).forEach(addLine);
       last = r.last || last;
+      if (dealLast < 0) r.deals = []; // the first answer only sets the cursor
+      if (typeof r.dealLast === 'number') dealLast = r.dealLast;
       presenceFns.forEach(function (f) { try { f(r); } catch (e) { /* a listener must not break the loop */ } });
       renderHead();
     }, function () { backoff = Math.min(8, backoff + 1); holdUntil = performance.now() + backoff * STEP_MS; }).then(function () { busy = false; });

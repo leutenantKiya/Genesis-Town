@@ -1241,7 +1241,10 @@
     }
     var sel = S.shopSel && S.shopSel.id === id ? S.shopSel.token : null;
     function pick(token) { S.shopSel = { id: id, token: token }; }
-    function trade(kind, token, qty) { pick(token); if (qty > 0) act({ action: kind, merchant: id, token: token, qty: qty }).then(refreshModal, refreshModal); }
+    function trade(kind, token, qty) {
+      pick(token);
+      if (qty > 0) act({ action: kind, merchant: id, token: token, qty: qty }).then(function (r) { dealFly(kind, m.account, token, qty, r && r.total); refreshModal(); }, refreshModal);
+    }
     var sells = m.items.filter(function (it) { return it.ask != null; });
     if (sells.length) {
       wrap.appendChild($('h4', 'chain-h', $t('Dijual {0}', [m.name])));
@@ -1559,7 +1562,20 @@
   function feePct() { return (S.feeBps != null ? S.feeBps : 500) / 100; }
   function marketCall(method, args, okMsg) {
     GT.toast($t('Mengirim ke chain…'));
-    return signedCall(method, args).then(function () { GT.toast(okMsg); }, function (e) { GT.toast(e.message); });
+    return signedCall(method, args).then(function () { GT.toast(okMsg); return true; }, function (e) { GT.toast(e.message); return false; });
+  }
+  // A Player Market buy: the goods fly from the seller (an anonymous one has no place) and my coins fly to them (mods/trade.js)
+  function buyListing(l, n) {
+    marketCall('buy_listing', { listing_id: l.id, amount: String(n), max_price_each: String(l.price_each) }, $t('Terbeli!')).then(function (ok) {
+      if (ok && window.GT_TRADE && GT_TRADE.deal) { var got = {}; got[l.token_id] = n; GT_TRADE.deal(S.account, l.anonymous ? null : l.seller, got, { coin: +l.price_each * n }); }
+      refreshModal();
+    });
+  }
+  // A merchant trade: what I bought flies from the merchant's stall to me and my coins fly to them; selling is the other way round
+  function dealFly(kind, merchant, token, qty, total) {
+    if (!window.GT_TRADE || !GT_TRADE.deal || !merchant) return;
+    var goods = {}, coin = { coin: +total || 0 }; goods[token] = qty;
+    if (kind === 'buy') GT_TRADE.deal(S.account, merchant, goods, coin); else GT_TRADE.deal(S.account, merchant, coin, goods);
   }
 
   // My seller tag (matches server/src/game/bazaar.ts sellerTag) so I can find my own anonymous listings
@@ -1582,8 +1598,8 @@
     if (isMine(l)) {
       row.appendChild(button($t('Tarik'), function () { marketCall('cancel_listing', { listing_id: l.id }, $t('Barangmu ditarik dan kembali ke tas.')).then(refreshModal); }));
     } else {
-      row.appendChild(button($t('Beli 1'), function () { marketCall('buy_listing', { listing_id: l.id, amount: '1', max_price_each: String(l.price_each) }, $t('Terbeli!')).then(refreshModal); }, 'primary gt-data'));
-      if (+l.amount > 1) row.appendChild(button($t('Beli {0}', [l.amount]), function () { marketCall('buy_listing', { listing_id: l.id, amount: String(l.amount), max_price_each: String(l.price_each) }, $t('Terbeli!')).then(refreshModal); }, 'gt-data'));
+      row.appendChild(button($t('Beli 1'), function () { buyListing(l, 1); }, 'primary gt-data'));
+      if (+l.amount > 1) row.appendChild(button($t('Beli {0}', [l.amount]), function () { buyListing(l, +l.amount); }, 'gt-data'));
     }
     return row;
   }

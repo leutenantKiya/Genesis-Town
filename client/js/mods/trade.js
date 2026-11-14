@@ -4,7 +4,9 @@
  *    /api/trade/open|join|set|ready|close sessions): both put in items and coin, both press Siap, any change clears both, then a 3 s countdown
  *    works in the village and in a Homeland; an invitation pops up with Buka / Tolak
  *  - when a trade completes, the goods each side gave fly across to the other player (arcing icons, a sparkle where they
- *    land, a short sound); both windows read the swapped lines from the finished session (`result`) and play it
+ *    land, a short sound); both windows read the swapped lines from the finished session (`result`) and play it.
+ *    Every purchase plays the same (GT_TRADE.deal): buying from or selling to a merchant, a Player Market buy, and a
+ *    merchant buying a player's listing; the seller and players nearby see it through the presence answer (`deals`)
  *  - Papan Juara board: top sellers today / of all time
  * The board and the luck table stand at fixed plaza tiles from GTVillage.landmarks (same on the server). Only in the public area.
  */
@@ -294,21 +296,50 @@
      (a gold coin for coin), on an arc, staggered a little, with the amount beside it; where each lands there is a
      sparkle. Original art, drawn on the overlay canvas: positions are tiles and go through GT.at every frame, so the
      camera (2D or 2.5D) can move meanwhile. The other player is placed by players.js (GT_PLAYERS.where); when they are
-     not on screen the goods leave and arrive above my head. */
+     not on screen the goods leave and arrive above my head.
+     Every purchase plays the same: a merchant trade, a Player Market buy, a merchant buying a listing (`deal`). Mine
+     play at once from chain.js; the rest come with the presence answer (`deals`, server social.ts), so the seller and
+     anyone nearby see them too. An anonymous seller has no place: their side is the spot above the buyer. */
   var flies = [], sparks = [], iconCache = {}, FLY_MS = 950, STAGGER_MS = 130, SPARK_MS = 520;
   function flyIcon(token) {
     if (token === 'coin' || !window.GT_ITEMS) return null;
     return iconCache[token] || (iconCache[token] = GT_ITEMS.icon(token, 16));
   }
-  function flyStart(s) {
-    var r = s && s.result; if (!r) return;
+  function myAccount() { var s = S(); return s && s.account; }
+  /** Goods moving between two sides: `aGot` flies from b to a, `bGot` from a to b. A side is an account (null: unknown).
+   *  While a window covers the town (a shop, the Pasar) the deal waits, summed with others between the same two sides,
+   *  and flies when the window closes, like a trade does. */
+  var held = [];
+  function deal(a, b, aGot, bGot) {
+    if (GT.isUiOpen && GT.isUiOpen()) {
+      var h = held.filter(function (x) { return x.a === a && x.b === b; })[0];
+      if (!h) { if (held.length >= 8) held.shift(); held.push(h = { a: a, b: b, aGot: {}, bGot: {} }); }
+      [['aGot', aGot], ['bGot', bGot]].forEach(function (p) { Object.keys(p[1] || {}).forEach(function (t) { h[p[0]][t] = (h[p[0]][t] || 0) + p[1][t]; }); });
+      return;
+    }
+    launch(a, b, aGot, bGot);
+  }
+  function launch(a, b, aGot, bGot) {
     var t0 = performance.now(), n = 0;
-    function add(lines, dir) {
-      Object.keys(lines || {}).forEach(function (tok) { flies.push({ token: tok, qty: lines[tok], dir: dir, t0: t0 + n * STAGGER_MS, other: s.other && s.other.account, done: false }); n++; });
+    function add(lines, from, to) {
+      Object.keys(lines || {}).forEach(function (tok) { if (lines[tok] > 0) flies.push({ token: tok, qty: lines[tok], from: from, to: to, t0: t0 + n * STAGGER_MS, done: false }); n++; });
       n = 0; // the two directions leave together
     }
-    add(r.gave, 'out'); add(r.got, 'in');
-    if (flies.length > 24) flies.length = 24;
+    add(bGot, a, b); add(aGot, b, a);
+    if (flies.length > 24) flies.splice(0, flies.length - 24);
+  }
+  function flyStart(s) {
+    var r = s && s.result; if (!r) return;
+    launch(myAccount(), s.other && s.other.account, r.got, r.gave);
+  }
+  /** A deal from the presence answer: mine already played when I made it (shop and Pasar buys). */
+  function onDeals(r) {
+    var me = myAccount();
+    (r.deals || []).forEach(function (d) {
+      if (d.a === me && d.kind !== 'npc') return;
+      if (d.a === me || d.b === me) sfx('trade_done', { vol: 0.5 });
+      deal(d.a, d.b, d.aGot, d.bGot);
+    });
   }
   function spot(o, T) { // the screen point of a player's chest, in drawing units: o = {x, y} in tiles, or null
     if (!o) return null;
@@ -327,18 +358,23 @@
     ctx.fillStyle = '#b8801a'; ctx.fillRect(x, y - 1, 1, 3);
   }
   function drawFly(ctx, camX, camY, T) {
+    if (held.length && !(GT.isUiOpen && GT.isUiOpen())) { var hs = held; held = []; hs.forEach(function (h) { launch(h.a, h.b, h.aGot, h.bGot); }); }
     if (!flies.length && !sparks.length) return;
-    var now = performance.now(), p = GT.player, me = spot({ x: p.x, y: p.y }, T);
+    var now = performance.now(), p = GT.player, me = spot({ x: p.x, y: p.y }, T), mine = myAccount();
     if (!me) return;
+    function at(acct) { return acct && acct === mine ? me : spot(acct && window.GT_PLAYERS && GT_PLAYERS.where ? GT_PLAYERS.where(acct) : null, T); }
     ctx.save();
     ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.font = '7px "Pixelify Sans", sans-serif';
     flies = flies.filter(function (f) {
       var u = (now - f.t0) / FLY_MS;
       if (u < 0) return true;
-      var oth = spot(window.GT_PLAYERS && GT_PLAYERS.where ? GT_PLAYERS.where(f.other) : null, T) || { x: me.x + T * 2, y: me.y - T * 2 };
-      var from = f.dir === 'out' ? me : oth, to = f.dir === 'out' ? oth : me;
+      // a side that is not on screen (or unknown) is the spot up and to the right of the other side
+      var from = at(f.from), to = at(f.to);
+      if (!from && !to) return false;
+      if (!from) from = { x: to.x + T * 2, y: to.y - T * 2 };
+      if (!to) to = { x: from.x + T * 2, y: from.y - T * 2 };
       if (u >= 1) {
-        if (!f.done) { f.done = true; spark(to.x, to.y, now); if (f.dir === 'in') sfx('pickup', { vol: 0.6 }); }
+        if (!f.done) { f.done = true; spark(to.x, to.y, now); if (f.to && f.to === mine) sfx('pickup', { vol: 0.6 }); }
         return false;
       }
       var e = u * u * (3 - 2 * u), arc = Math.sin(Math.PI * e) * (T * 1.6);
@@ -510,7 +546,8 @@
   function init() {
     C = window.GT_CHAIN || null;
     // the player card (mods/players.js) has its own Trade button and calls GT_TRADE.start
-    window.GT_TRADE = { start: startWith, board: boardModal, fly: flyStart };
+    window.GT_TRADE = { start: startWith, board: boardModal, fly: flyStart, deal: deal };
+    if (window.GT_PLAYERS) GT_PLAYERS.onPresence(onDeals);
     window.addEventListener('mousemove', onBoardMove);
     window.addEventListener('click', onBoardClick, true);
   }
