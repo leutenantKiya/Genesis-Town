@@ -1,6 +1,6 @@
 /* settings.css - full-window layout (html.gt-full), settings dialog, context hint, reduced motion */
 html.gt-full body{padding:0}
-html.gt-full #app{max-width:none;height:100vh;display:flex;flex-direction:column}
+html.gt-full #app{max-width:none;height:100vh;height:100dvh;display:flex;flex-direction:column}
 html.gt-full .shell{flex:1;display:flex;flex-direction:column;border-radius:0;border-width:0;padding:6px 10px 8px;min-height:0;background:var(--hud);box-shadow:none}
 html.gt-full .brand,html.gt-full .help{display:none}
 html.gt-full .chain-banner{margin-bottom:4px;padding:2px 8px}

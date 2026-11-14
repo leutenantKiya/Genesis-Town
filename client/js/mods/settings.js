@@ -147,7 +147,7 @@
     root.classList.toggle('gt-phone', phone);
     root.classList.toggle('gt-land', land);
     if (phone) buildTabbar();
-    if (changed) window.dispatchEvent(new Event('resize'));
+    if (changed) { vvLast = ''; queueViewport(); window.dispatchEvent(new Event('resize')); }
     var rm = st.reducedMotion == null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : st.reducedMotion;
     root.classList.toggle('gt-reduced-motion', !!rm);
     applyText();
@@ -156,11 +156,15 @@
   function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
   function fsSupported() { var el = document.documentElement; return !!(el.requestFullscreen || el.webkitRequestFullscreen); }
   function toggleFullscreen() {
+    fsByToggle = false;
     if (fsElement()) {
+      fsEntered = true; // leaving through the button or F is also a choice: no automatic full screen again
+      try { localStorage.setItem('gt.fsLeft', '1'); } catch (e) {}
       if (document.exitFullscreen) document.exitFullscreen();
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
       return;
     }
+    try { localStorage.removeItem('gt.fsLeft'); } catch (e) {} // asking for it again re-arms nothing but is not blocked either
     var el = document.documentElement;
     if (el.requestFullscreen) el.requestFullscreen().catch(function () { GT.toast($t('Browser menolak layar penuh. Coba tekan F11.')); });
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
@@ -171,8 +175,62 @@
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
   // turning the phone (in fullscreen too) swaps portrait and landscape at once
-  window.addEventListener('resize', applyLayout);
+  // While the on-screen keyboard is open (a text field has focus on a touch phone) the layout is not re-decided: a
+  // squeezed portrait window must not flip to the landscape layout. The shell follows the visible height instead (below).
+  function typing() { var a = document.activeElement; return !!(a && (/^(INPUT|TEXTAREA)$/.test(a.tagName) || a.isContentEditable)) && window.matchMedia('(pointer: coarse)').matches; }
+  var baseW = window.innerWidth, baseH = window.innerHeight;
+  function keyboardUp() { // same width as before, a text field focused and the window shorter: the keyboard, not a turned phone
+    var w = window.innerWidth, h = window.innerHeight;
+    return typing() && w === baseW && h < baseH - 100;
+  }
+  window.addEventListener('resize', function () {
+    if (!(keyboardUp() && document.documentElement.classList.contains('gt-phone'))) { baseW = window.innerWidth; baseH = window.innerHeight; applyLayout(); }
+    if (window.visualViewport) queueViewport();
+  });
   window.addEventListener('orientationchange', function () { setTimeout(function () { applyLayout(); window.dispatchEvent(new Event('resize')); }, 120); });
+
+  // The visible area (--vvh, --vvt on <html>, css/phone.css): the phone's shell is exactly as tall as what the browser shows,
+  // so a toolbar that is showing, the address bar sliding away or the keyboard never pushes the controls out of view.
+  // 100dvh is the CSS fallback; visualViewport is the exact figure where it exists (iOS Safari keeps the layout viewport
+  // tall when the keyboard opens and only shrinks the visual one).
+  var vvRaf = 0, vvLast = '';
+  function syncViewport() {
+    vvRaf = 0;
+    var vv = window.visualViewport, root = document.documentElement;
+    if (!vv || !root.classList.contains('gt-phone')) { root.style.removeProperty('--vvh'); root.style.removeProperty('--vvt'); vvLast = ''; return; }
+    var h = Math.round(vv.height), t = Math.max(0, Math.round(vv.offsetTop)), key = h + ':' + t;
+    if (key === vvLast) return;
+    vvLast = key;
+    root.style.setProperty('--vvh', h + 'px'); root.style.setProperty('--vvt', t + 'px');
+    if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
+    window.dispatchEvent(new Event('resize')); // the canvas takes the new height
+  }
+  function queueViewport() { if (!vvRaf) vvRaf = setTimeout(syncViewport, 16); }
+  if (window.visualViewport) { window.visualViewport.addEventListener('resize', queueViewport); window.visualViewport.addEventListener('scroll', queueViewport); }
+  window.addEventListener('orientationchange', function () { setTimeout(queueViewport, 200); });
+  document.addEventListener('focusout', function () { setTimeout(queueViewport, 250); });
+  window.addEventListener('pageshow', queueViewport);
+
+  // Full screen on a phone: the first tap asks the browser to hide its own bars (Android Chrome and others; iPhone Safari
+  // cannot do this for a page, there the dvh layout above and "Add to Home Screen" carry it). Once per visit, only on the
+  // phone layout (so a player who chose Penuh jendela or Kotak is left alone), and never again once the player leaves full
+  // screen on purpose. The installed app is already full screen (manifest.json).
+  var FS_LEFT = 'gt.fsLeft', fsAuto = false;
+  function fsLeftFlag() { try { return localStorage.getItem(FS_LEFT) === '1'; } catch (e) { return false; } }
+  function autoFullscreen(e) {
+    if (fsAuto || fsElement() || e.pointerType === 'mouse') return;
+    if (!wantsPhone() || !fsSupported() || fsLeftFlag() || (window.GT_PWA && GT_PWA.standalone())) return;
+    var el = document.documentElement, r = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen();
+    fsAuto = true;
+    if (r && r.then) r.then(function () { fsEntered = true; }, function () { fsAuto = false; });
+    else fsEntered = true;
+  }
+  var fsEntered = false;
+  document.addEventListener('pointerup', autoFullscreen, true);
+  function noteFsExit() { if (!fsElement() && fsEntered && !fsByToggle) { try { localStorage.setItem(FS_LEFT, '1'); } catch (e) {} } fsEntered = false; fsByToggle = false; }
+  var fsByToggle = false;
+  document.addEventListener('fullscreenchange', noteFsExit);
+  document.addEventListener('webkitfullscreenchange', noteFsExit);
 
   /* ------------------------------------------------------------ phone bottom bar */
   // Each tab presses the existing HUD button, so the bar adds no game logic of its own.
