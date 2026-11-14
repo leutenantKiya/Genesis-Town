@@ -1909,6 +1909,18 @@
     "Uang keluar": "Coin out",
     "Masuk dari": "In from",
     "Keluar ke": "Out to",
-    "Bot warga": "Townsfolk bots"
+    "Bot warga": "Townsfolk bots",
+    "ditarik dari pasar": "withdrawn from the market",
+    "stok habis": "out of stock",
+    "terlalu mahal": "too expensive",
+    "diblokir admin": "blocked by admin",
+    "Batas harga kota": "Town price ceiling",
+    "Warga hanya membeli kalau harga pedagang paling tinggi {0} x harga dasar barang. Naikkan kalau warga tidak belanja karena harga pasar naik; turunkan untuk menahan uang kas kota.": "Townsfolk only buy when a merchant's price is at most {0} x the good's base value. Raise it when they stop shopping because market prices went up; lower it to keep the treasury's coin.",
+    "Isi angka {0} sampai {1}.": "Enter a number from {0} to {1}.",
+    "harga dasar": "base value",
+    "Default ({0})": "Default ({0})",
+    "Dasar": "Base",
+    "Batas": "Ceiling",
+    "Pedagang (harga, stok)": "Merchants (price, stock)"
   });
 })();

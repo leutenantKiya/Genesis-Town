@@ -2,7 +2,8 @@
 //  - GET  /api/admin/bots?days=     the wallet, where its coin came from (treasury handouts, faucet) and went (each
 //                                   merchant, each resident), what every resident may buy from, the latest movements;
 //  - POST /api/admin/bots           {paused: bool} stops or restarts the town's shopping, {resident, merchants: [ids] |
-//                                   null} sets which merchants that resident may buy from (null = all);
+//                                   null} sets which merchants that resident may buy from (null = all), {maxPriceMult:
+//                                   number | null} sets the town's price ceiling (x a good's base value; null = the config's);
 //  - GET  /api/admin/trace?account=&days=   where any account's coin came from and went to, by counterpart: the other
 //                                   side of each ledger row (see `other` below), so a coin can be followed hop by hop.
 // Only the game's books (the ledger) are read: on-chain moves (Pasar listings, gifts, shares) are not in it.
@@ -10,7 +11,7 @@ import { HttpError } from './auth.ts';
 import type { Game } from './game/game.ts';
 import type { Social } from './social.ts';
 
-const MAX_DAYS = 60, RECENT = 40, TOP = 40, SCAN = 20_000;
+const MAX_DAYS = 60, RECENT = 40, TOP = 40, SCAN = 20_000, MULT_MIN = 1, MULT_MAX = 5;
 type Flow = { account: string | null; name: string; kind: string; amount: number; count: number };
 
 export class AdminBots {
@@ -69,12 +70,40 @@ export class AdminBots {
       merchants: market.ids().map((id) => ({ id, name: market.def(id).name, shop: market.def(id).shop, account: market.account(id), open: market.isOpen(id), coin: byMerchant[id]?.coin ?? 0, units: byMerchant[id]?.units ?? 0 })),
       residents: res.walkers.map((x) => ({ id: x.id, name: x.name, look: x.look, account: res.account(x.id), allow: ctl.allow[x.id] ?? null, ...per[x.id] })),
       recent: rows.slice(0, RECENT).map((r) => ({ seq: r.seq, day: r.day, at: r.created_at, kind: r.kind, coin: r.delta, ...label(r) })),
+      price: this.price(),
+    };
+  }
+
+  /** The town's price ceiling and, for each good the town needs, every merchant's ask against it: does the town buy now? */
+  price() {
+    const { market, econ, gs } = this.d.game, mult = market.priceMult();
+    return {
+      mult, default: econ.town.maxPriceMult, min: MULT_MIN, max: MULT_MAX,
+      goods: Object.keys(econ.town.dailyUnits).map((token) => {
+        const base = econ.items[token].base, ceiling = Math.floor(mult * base), withdrawn = market.trend.withdrawn(token);
+        const offers = market.ids().filter((id) => market.def(id).sells.includes(token)).map((id) => {
+          const ask = market.row(id, token).ask, stock = gs.balance(market.account(id), token), open = market.isOpen(id);
+          const why = !open ? 'closed' : withdrawn ? 'withdrawn' : stock < 1 ? 'empty' : ask > mult * base ? 'expensive' : !this.res.canBuyFrom(id) ? 'blocked' : null;
+          return { id, name: market.def(id).name, ask, stock, why };
+        });
+        return { token, name: econ.items[token].name, base, ceiling, buys: offers.some((o) => !o.why), offers };
+      }),
     };
   }
 
   /** Admin controls: pause the shopping, or set one resident's merchants (null = all). */
   control(body: Record<string, unknown>) {
     const { res } = this, { market } = this.d.game, ctl = res.controls();
+    if ('maxPriceMult' in body) {
+      const v = body.maxPriceMult;
+      if (v === null) this.gs.setMeta('town.maxPriceMult', '');
+      else {
+        const n = Number(v);
+        if (typeof v !== 'number' || !Number.isFinite(n) || n < MULT_MIN || n > MULT_MAX) throw new HttpError(400, `maxPriceMult must be between ${MULT_MIN} and ${MULT_MAX}.`);
+        this.gs.setMeta('town.maxPriceMult', String(Math.round(n * 100) / 100));
+      }
+      return this.status(1);
+    }
     if (typeof body.paused === 'boolean') ctl.paused = body.paused;
     else if (typeof body.resident === 'string') {
       const id = body.resident;
@@ -85,7 +114,7 @@ export class AdminBots {
         if (pick.some((m) => !ids.includes(m))) throw new HttpError(400, 'Unknown merchant.');
         if (pick.length === ids.length) delete ctl.allow[id]; else ctl.allow[id] = pick;
       } else throw new HttpError(400, 'merchants must be a list of merchant ids or null');
-    } else throw new HttpError(400, 'Send {paused} or {resident, merchants}.');
+    } else throw new HttpError(400, 'Send {paused}, {resident, merchants} or {maxPriceMult}.');
     res.setControls(ctl);
     return this.status(1);
   }

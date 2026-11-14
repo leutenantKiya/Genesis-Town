@@ -24,7 +24,7 @@
   var ui = {};
   var AC = { q: '', rows: null, total: 0, wallet: null, t: 0 }; // the Akun tab
   var SG = { rows: [], t: 0 }; // name suggestions under the "Kirim koin" search
-  var BT = { days: 1, data: null, busy: false }, TR = { account: '', days: 1, data: null, path: [] }; // the Bot warga tab
+  var BT = { days: 1, data: null, seq: 0 }, TR = { account: '', days: 1, data: null, path: [] }; // the Bot warga tab
   function whoName(w) { return (w.nick || w.name || w.account) + (w.tag ? '#' + w.tag : ''); }
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -382,18 +382,18 @@
     handout_mint: $t('Koin baru (faucet)'), town_buy: $t('Permintaan kota (koin baru)'), starter: $t('Paket awal'), admin_grant: $t('Kiriman admin'),
     fee: $t('Biaya kerajinan'), mission: $t('Hadiah misi'), hire: $t('Sewa pekerja'), build: $t('Bangunan'), cosmetic: $t('Kosmetik') };
   function kindWord(k) { return KINDS[k] || (/^p2p/.test(k) ? $t('Tukar antar pemain') : k); }
+  // every load is numbered: a save right after a 5 s refresh still reloads, and only the newest answer is drawn
   function botsLoad() {
-    if (BT.busy) return;
-    BT.busy = true;
-    C.api('/admin/bots?days=' + BT.days).then(function (r) { BT.data = r; BT.busy = false; renderBots(); }, function (e) { BT.busy = false; fail(e); });
+    var n = ++BT.seq;
+    C.api('/admin/bots?days=' + BT.days).then(function (r) { if (n === BT.seq) { BT.data = r; renderBots(); } }, function (e) { if (n === BT.seq) fail(e); });
   }
   function botsSet(body) { post('/admin/bots', body).then(function () { botsLoad(); }, fail); }
   function trace(account, push) {
     if (!account) return;
     if (push !== false && TR.account && TR.account !== account) TR.path.push(TR.account);
-    TR.account = account; TR.data = { loading: true }; renderTrace();
-    C.api('/admin/trace?account=' + encodeURIComponent(account) + '&days=' + TR.days).then(function (r) { if (TR.account === account) { TR.data = r; renderTrace(); } },
-      function (e) { TR.data = null; fail(e); renderTrace(); });
+    TR.account = account; TR.data = { loading: true }; renderTrace(true);
+    C.api('/admin/trace?account=' + encodeURIComponent(account) + '&days=' + TR.days).then(function (r) { if (TR.account === account) { TR.data = r; renderTrace(true); } },
+      function (e) { TR.data = null; fail(e); renderTrace(true); });
   }
   function daysPick(cur, fn) {
     var row = $('div', 'adm-chips');
@@ -411,11 +411,49 @@
   function buildBots() {
     var v = $('div');
     ui.botsTop = $('div', 'adm-card'); v.appendChild(ui.botsTop);
+    ui.botsPrice = $('div', 'adm-card'); v.appendChild(ui.botsPrice);
     ui.botsPeople = $('div', 'adm-card'); v.appendChild(ui.botsPeople);
     ui.botsShops = $('div', 'adm-card'); v.appendChild(ui.botsShops);
     ui.botsRecent = $('div', 'adm-card'); v.appendChild(ui.botsRecent);
     ui.trace = $('div', 'adm-card'); v.appendChild(ui.trace);
     return v;
+  }
+  // the town's price ceiling: a multiple of each good's base value; under it the townsfolk buy, above it they wait
+  var WHY = { closed: $t('tutup'), withdrawn: $t('ditarik dari pasar'), empty: $t('stok habis'), expensive: $t('terlalu mahal'), blocked: $t('diblokir admin') };
+  // the 5 s refresh must not rebuild a field the admin is typing in
+  function typingIn(el) { var a = document.activeElement; return !!(el && a && a.tagName === 'INPUT' && el.contains(a)); }
+  function renderPrice(d) {
+    var el = ui.botsPrice; if (typingIn(el)) return;
+    el.textContent = '';
+    var p = d.price; if (!p) return;
+    el.appendChild($('div', 'chain-h', $t('Batas harga kota')));
+    el.appendChild($('p', 'chain-dim', $t('Warga hanya membeli kalau harga pedagang paling tinggi {0} x harga dasar barang. Naikkan kalau warga tidak belanja karena harga pasar naik; turunkan untuk menahan uang kas kota.', [p.mult])));
+    var f = $('div', 'chain-field adm-find'), inp = $('input');
+    inp.type = 'number'; inp.min = String(p.min); inp.max = String(p.max); inp.step = '0.1'; inp.value = String(p.mult); inp.setAttribute('aria-label', $t('Batas harga kota'));
+    var save = function () {
+      var n = Number(inp.value);
+      if (!(n >= p.min && n <= p.max)) { GT.toast($t('Isi angka {0} sampai {1}.', [p.min, p.max])); return; }
+      inp.blur(); botsSet({ maxPriceMult: n }); // blurred: the reload may redraw the card
+    };
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); });
+    f.appendChild(inp); f.appendChild($('span', 'chain-dim', '× ' + $t('harga dasar')));
+    f.appendChild(btn($t('Simpan'), save, 'primary'));
+    if (p.mult !== p.default) f.appendChild(btn($t('Default ({0})', [p.default]), function () { botsSet({ maxPriceMult: null }); }));
+    el.appendChild(f);
+    var tb = $('div', 'adm-ptable');
+    [$t('Barang'), $t('Dasar'), $t('Batas'), $t('Pedagang (harga, stok)')].forEach(function (h) { tb.appendChild($('b', 'chain-dim', h)); });
+    p.goods.forEach(function (g) {
+      tb.appendChild($('span', g.buys ? 'adm-in' : 'adm-out', (g.buys ? '✓ ' : '✕ ') + g.name));
+      tb.appendChild($('span', 'gt-data', num(g.base)));
+      tb.appendChild($('span', 'gt-data', num(g.ceiling)));
+      var cell = $('span');
+      g.offers.forEach(function (o, i) {
+        if (i) cell.appendChild(document.createTextNode(' · '));
+        cell.appendChild($('span', o.why ? 'chain-dim' : 'adm-in', o.name + ' ' + num(o.ask) + ' (' + num(o.stock) + ')' + (o.why ? ' ' + WHY[o.why] : '')));
+      });
+      tb.appendChild(cell);
+    });
+    el.appendChild(tb);
   }
   function renderBots() {
     if (!ui.botsTop) return;
@@ -438,6 +476,7 @@
     row.appendChild(btn($t('Lacak dompet'), function () { TR.path = []; trace(d.wallet.account, false); }));
     ui.botsTop.appendChild(row);
     if (d.truncated) ui.botsTop.appendChild($('p', 'chain-dim', $t('Hanya {0} baris terbaru yang dihitung.', [num(d.scanned)])));
+    renderPrice(d);
 
     // each resident: what they spent, the last buy, and the merchants they may buy from (a chip toggles one)
     ui.botsPeople.appendChild($('div', 'chain-h', $t('Warga dan lawan transaksinya')));
@@ -506,8 +545,8 @@
     });
     return box;
   }
-  function renderTrace() {
-    if (!ui.trace) return;
+  function renderTrace(force) {
+    if (!ui.trace || (!force && typingIn(ui.trace))) return;
     ui.trace.textContent = '';
     ui.trace.appendChild($('div', 'chain-h', $t('Lacak uang')));
     ui.trace.appendChild($('p', 'chain-dim', $t('Ke mana uang sebuah akun pergi dan dari mana datangnya, dikelompokkan per lawan transaksi. Klik baris untuk melacak akun itu. Hanya buku game: Pasar, hadiah, dan saham on-chain tidak termasuk.')));

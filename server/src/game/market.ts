@@ -191,10 +191,14 @@ export class Market {
     return Math.max(0, allowed - this.gs.newCoin(day));
   }
 
+  /** The town's price ceiling as a multiple of a good's base value: the admin's setting (meta `town.maxPriceMult`,
+   *  adminbots.ts) or the config's `town.maxPriceMult`. */
+  priceMult(): number { const v = Number(this.gs.meta('town.maxPriceMult')); return Number.isFinite(v) && v > 0 ? v : this.econ.town.maxPriceMult; }
+
   /** Town buys its hourly share of daily demand from the cheapest open merchant (new coin, within the faucet). */
   townDemand() {
     const t = this.clock.time();
-    const tw = this.econ.town;
+    const tw = this.econ.town, mult = this.priceMult();
     for (const [token, perDay] of Object.entries(tw.dailyUnits)) {
       const key = `town.acc.${token}`;
       let acc = Number(this.gs.meta(key) ?? 0) + (perDay * (this.econ.seasons[t.season]?.demand[token] ?? 1)) / this.econ.time.hoursPerDay;
@@ -204,7 +208,7 @@ export class Market {
           .filter((id) => this.isOpen(id) && this.def(id).sells.includes(token) && !this.trend.withdrawn(token) && this.gs.balance(this.account(id), token) >= 1)
           .filter((id) => !this.residents?.ready || this.residents.canBuyFrom(id)) // the admin's controls on the townsfolk (adminbots.ts)
           .map((id) => ({ id, ask: this.row(id, token).ask }))
-          .filter((o) => o.ask <= tw.maxPriceMult * base)
+          .filter((o) => o.ask <= mult * base)
           .sort((a, b) => a.ask - b.ask);
         const best = offers[0];
         if (!best) break;

@@ -73,6 +73,32 @@ test('the admin watches the wallet, pauses the shopping and picks the merchants 
   assert.throws(() => bots.control({}), /paused/);
 });
 
+test('the admin sets the town price ceiling: too low and the town stops buying, null goes back to the config', async () => {
+  const { game, clock, bots } = await world();
+  const def = game.econ.town.maxPriceMult;
+  assert.equal(bots.status(1).price.mult, def);
+  bots.control({ maxPriceMult: 1 });
+  assert.equal(game.market.priceMult(), 1);
+  const p = bots.status(1).price;
+  assert.equal(p.mult, 1);
+  for (const g of p.goods) {
+    assert.equal(g.ceiling, Math.floor(g.base));
+    for (const o of g.offers) if (o.ask > g.base && o.stock >= 1) assert.equal(o.why, 'expensive');
+  }
+  // every ask is above its base value: at x1 nothing is bought
+  const priced = p.goods.every((g) => g.offers.every((o) => o.ask > g.base || o.stock < 1));
+  const n0 = buys(game).length;
+  for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
+  if (priced) assert.equal(buys(game).length, n0, 'nothing under the ceiling, nothing bought');
+  bots.control({ maxPriceMult: 5 });
+  await hours(game, clock, () => buys(game).length > n0);
+  assert.ok(buys(game).length > n0, 'a high ceiling buys again');
+  bots.control({ maxPriceMult: null });
+  assert.equal(game.market.priceMult(), def);
+  assert.throws(() => bots.control({ maxPriceMult: 0.5 }), /between 1 and 5/);
+  assert.throws(() => bots.control({ maxPriceMult: '2' }), /between 1 and 5/);
+});
+
 test('trace follows the coin: wallet -> merchants, treasury -> wallet, merchant <- wallet', async () => {
   const { game, clock, bots } = await world();
   for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }

@@ -373,6 +373,8 @@ html.gt-phone:not(.gt-land) .gt-tool-grid{grid-template-columns:minmax(0,1fr)}
 .adm-bar{grid-column:1 / -1;height:4px;background:var(--paper-2);border-radius:2px;overflow:hidden}.adm-bar i{display:block;height:100%;background:#f08a24}
 .adm-mv{display:grid;grid-template-columns:3.5em minmax(0,1fr) auto;gap:8px;padding:3px 0;border-bottom:1px dashed var(--paper-dim)}
 .adm-in{color:var(--good,#2f7d32)}.adm-out{color:#b05a10}
+.adm-ptable{display:grid;grid-template-columns:auto auto auto minmax(0,1fr);gap:4px 12px;margin:8px 0;align-items:baseline}
+.adm-ptable span.gt-data{text-align:right}
 .adm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .adm-stat{background:var(--paper);border-radius:var(--r-ctl);padding:6px 10px}
 .adm-num{font-size:calc(20px*var(--ts));font-weight:700}
