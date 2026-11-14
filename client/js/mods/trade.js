@@ -423,8 +423,10 @@
     var V = window.GT_VIEW3D;
     if (v3 && V && V.toScreen) {
       // 2.5D: the board's own box (a tile wide, about 1.4 tiles tall) projected by the camera, in overlay units
-      var k = ctx.getTransform().a || 1, cx = m.board.x + 0.5, cz = m.board.y + 0.5, xs = [], ys = [];
-      [[-0.5, 0], [0.5, 0], [-0.5, 1.4], [0.5, 1.4]].forEach(function (q) { var p = V.toScreen(cx + q[0], cz, q[1]); xs.push(p.x / k); ys.push(p.y / k); });
+      // camera px -> overlay units: the same factor GT.at uses (its tile point is toScreen(tile centre) scaled, minus 6, 12)
+      var cx = m.board.x + 0.5, cz = m.board.y + 0.5, p0 = V.toScreen(cx, cz, 0), xs = [], ys = [];
+      var k = p0.x ? (a.x + 6) / p0.x : 1, ky = p0.y ? (a.y + 12) / p0.y : k;
+      [[-0.5, 0], [0.5, 0], [-0.5, 1.4], [0.5, 1.4]].forEach(function (q) { var p = V.toScreen(cx + q[0], cz, q[1]); xs.push(p.x * k); ys.push(p.y * ky); });
       x = Math.min.apply(null, xs) - 2; y = Math.min.apply(null, ys) - 2; w = Math.max.apply(null, xs) - x + 2; h = Math.max.apply(null, ys) - y + 2;
     }
     ctx.save();
