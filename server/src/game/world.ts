@@ -151,7 +151,8 @@ export class World {
     return { toast: `You found a wheat seed! +1 ${this.name(g.token)}`, gained: { [g.token]: 1 } };
   }
 
-  craft(account: string, recipeId: string): ActionResult {
+  /** Crafts one item. The coin fee goes to the town treasury `town` (it funds the townsfolk's handouts, residents.ts). */
+  craft(account: string, recipeId: string, town?: string): ActionResult {
     const r = this.econ.recipes[recipeId];
     if (!r) throw new HttpError(400, 'Unknown recipe.');
     for (const [t, n] of Object.entries(r.inputs)) this.need(account, t, n);
@@ -165,7 +166,10 @@ export class World {
     const day = this.clock.time().settleDay;
     for (const [t, n] of Object.entries(r.inputs)) this.gs.add(day, account, t, -n, 'craft', recipeId);
     this.gs.add(day, account, r.output, 1, 'craft', recipeId);
-    if (r.fee > 0) this.gs.add(day, account, 'coin', -r.fee, 'fee', recipeId);
+    if (r.fee > 0) {
+      this.gs.add(day, account, 'coin', -r.fee, 'fee', recipeId);
+      if (town) this.gs.add(day, town, 'coin', r.fee, 'fee', `${recipeId}:${account}`);
+    }
     if (p) this.gs.savePlayer(p);
     const cost = r.energy ? `−${r.energy} energy` : `cost ${r.fee} coins`;
     return { toast: `+1 ${this.name(r.output)} (${cost})`, gained: { [r.output]: 1 } };

@@ -96,7 +96,7 @@ test('chat needs a name and shows up in presence polls of the same world only', 
     const poll2 = await r.post(P2, '/api/presence', at);
     assert.equal(poll2.status, 200);
     assert.deepEqual(poll2.json.players.filter((p: any) => !p.npc).map((p: any) => p.nick), ['Ayu']);
-    const npcs = poll2.json.players.filter((p: any) => p.npc);
+    const npcs = poll2.json.players.filter((p: any) => p.npc && !p.resident); // the merchants (the townsfolk walk: residents.test.ts)
     assert.deepEqual(npcs.map((p: any) => [p.nick, p.tag, p.dir]), [['Sarah', 'NPC', 'down'], ['Ben', 'NPC', 'down'], ['Wendy', 'NPC', 'down'], ['Jack', 'NPC', 'down']]);
     // a private question to a merchant is answered (local line without an AI key) as a private line to the asker only
     assert.equal((await r.post(P2, '/api/chat', { world: 'public', text: '/msg Sarah harga ikan?' })).status, 200);

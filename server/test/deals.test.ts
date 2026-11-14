@@ -98,10 +98,12 @@ test('the presence answer carries deals: a bystander nearby sees a merchant trad
       const ts = String(Date.now()), kp = keys.get(a)!;
       const sig = kp.sign(new TextEncoder().encode(requestMessage('POST', path, ts, body))).signature;
       const res = await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-account-id': a, 'x-gt-key': kp.getPublicKey().toString(), 'x-gt-ts': ts, 'x-gt-sig': Buffer.from(sig).toString('base64') }, body });
-      return (await res.json()) as { deals: Array<Record<string, unknown>>; dealLast: number };
+      return (await res.json()) as { deals: Array<Record<string, unknown>>; dealLast: number; players: Array<Record<string, unknown>> };
     };
     const first = await poll(C);
     assert.deepEqual(first.deals, [], 'no cursor yet: nothing old is replayed');
+    const folk = first.players.filter((p) => p.resident);
+    assert.ok(folk.length > 0 && folk.every((p) => p.npc === true && /\.residents$/.test(String(p.account)) && typeof p.fx === 'number'), 'the townsfolk walked by the server are in the answer');
     game.onDeal!('shop', 'public', A, SARI, { fish: 2 }, { coin: 30 });
     game.npc.onBuy!(SARI, A, 'wood', 3, 21, 999);
     const next = await poll(C, first.dealLast);

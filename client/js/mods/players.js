@@ -53,6 +53,7 @@
       // the server picks a guest's look: draw it on our side too, so the guest sees what everyone else sees
       if (window.GT_CHARSCREEN && r.look != null) window.GT_CHARSCREEN.setMine(r.me, '', r.look, false);
       applyPlayers(r.players || []);
+      hideTownsfolk(r.players || []);
       renderHead();
     }, function (e) {
       if (e && e.status === 404) guestId = ''; // expired: say hello again
@@ -77,7 +78,7 @@
         else if (!moved) { o.vx = 0; o.vy = 0; }
       }
       o.sx = sx; o.sy = sy; o.rt = now; o.x = q.x; o.y = q.y; o.age = ((q.age || 0) + rtt / 2) / 1000;
-      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; if (q.fish && !q.npc && (!o.fish || o.fish.phase !== q.fish.phase)) { var fp = q.fish.phase; var fs = fp === 'cast' ? 'cast' : fp === 'bite' ? 'bite' : fp === 'reel' ? 'reel' : ''; if (fs) sfx(fs, { vol: 0.6, x: q.x, y: q.y }); } // another player's rod
+      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.resident = !!q.resident; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; if (q.fish && !q.npc && (!o.fish || o.fish.phase !== q.fish.phase)) { var fp = q.fish.phase; var fs = fp === 'cast' ? 'cast' : fp === 'bite' ? 'bite' : fp === 'reel' ? 'reel' : ''; if (fs) sfx(fs, { vol: 0.6, x: q.x, y: q.y }); } // another player's rod
       o.worn = q.worn || null; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.trading = q.trading || null; o.tradingWith = q.tradingWith || null; o.seen = now;
     });
     Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
@@ -127,6 +128,13 @@
       renderHead();
     }, function () { backoff = Math.min(8, backoff + 1); holdUntil = performance.now() + backoff * STEP_MS; }).then(function () { busy = false; });
   }
+  // The server walks the townsfolk now (residents, the same for everyone), so the village's own wandering folk step aside.
+  // Again on every answer: the night curfew (mods/curfew.js) shows them at 06:00.
+  function hideTownsfolk(list) {
+    if (!list.some(function (q) { return q.resident; }) || !GT.getScene) return;
+    var sc = GT.getScene('out');
+    (sc && sc.npcs || []).forEach(function (n) { if (/^out:\d+$/.test(n.key || '') && !n.hidden) GT.npcHide(n, true); });
+  }
   function clampV(v) { return Math.max(-8, Math.min(8, v)); }
   // Move the drawn figure once per frame: toward the reported spot pushed on by the walking speed, quickly but never in
   // a jump (a far jump, a portal or a respawn, is a snap)
@@ -163,7 +171,7 @@
     var now = performance.now();
     Object.keys(others).forEach(function (a) {
       var o = others[a];
-      if (o.npc || !here(o)) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag
+      if ((o.npc && !o.resident) || !here(o)) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag (the townsfolk walk, so they are drawn here)
       var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
       var moving = o.spd > 0.4, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
       var look = o.look != null ? o.look : pal(o.nick || a), W = window.GT_WORN, worn = o.worn;
@@ -451,6 +459,13 @@
   }
   function card(o) {
     var body = el('div', 'gt-pcard');
+    if (o.resident) { // a townsperson walked by the server: shops for the town from the residents' shared wallet
+      body.appendChild(portrait(o));
+      body.appendChild(el('p', 'gt-pcard-title', $t('Warga desa')));
+      body.appendChild(el('p', 'chain-dim', $t('Belanja roti, ikan bakar, kayu, dan alat untuk kota dari dompet bersama warga. Dompet itu hidup dari bansos kas kota.')));
+      GT.modal({ title: o.nick + '#NPC', body: body, actions: [{ label: $t('Tutup'), primary: true, close: true }] });
+      return;
+    }
     if (o.npc) {
       body.appendChild(el('p', 'gt-pcard-title', o.title || $t('Pedagang')));
       body.appendChild(el('p', 'chain-dim', $t('Pedagang desa. Tanyakan harga lewat obrolan, atau lihat dagangannya.')));

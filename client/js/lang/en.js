@@ -1856,5 +1856,7 @@
     "Pemburu": "Hunter",
     "Koki": "Cook",
     "Lelah {0}%": "Tired {0}%",
+    "Warga desa": "Townsperson",
+    "Belanja roti, ikan bakar, kayu, dan alat untuk kota dari dompet bersama warga. Dompet itu hidup dari bansos kas kota.": "Buys bread, grilled fish, wood and tools for the town from the townsfolk's shared wallet. That wallet lives on handouts from the town treasury.",
   });
 })();

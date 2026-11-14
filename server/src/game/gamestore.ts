@@ -182,9 +182,9 @@ export class GameStore {
     return (this.db.prepare("SELECT COUNT(DISTINCT account) AS n FROM ledger WHERE day = ? AND account LIKE '%.players.%'").get(day) as { n: number }).n;
   }
 
-  /** New coin created today (town purchases and shipping), for the off-chain faucet check. */
+  /** New coin created today (town purchases, the townsfolk's handouts beyond the treasury, and shipping), for the off-chain faucet check. */
   newCoin(day: number): number {
-    return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND token = 'coin' AND kind IN ('town_buy', 'ship_pay')").get(day) as { s: number }).s;
+    return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND token = 'coin' AND kind IN ('town_buy', 'handout_mint', 'ship_pay')").get(day) as { s: number }).s;
   }
 
   /* ------------------------------------------------------------ players */

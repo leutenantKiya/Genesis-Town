@@ -20,6 +20,7 @@ import { leaderboard } from './leaderboard.ts';
 import { Extras } from './extras.ts';
 import { Chips } from './chips.ts';
 import { NpcMarket } from './npc.ts';
+import { Residents } from './residents.ts';
 import { returnConsignedGoods } from './consign-return.ts';
 
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
@@ -45,9 +46,11 @@ export class Game {
   npc: NpcMarket;
   settlement: Settlement;
   /** Set by the app (social.deal): a merchant trade happened, for the goods-flying animation. `a` got `aGot` from `b`. */
-  onDeal?: (kind: 'shop', world: string, a: string, b: string, aGot: Record<string, number>, bGot: Record<string, number>) => void;
+  onDeal?: (kind: 'shop' | 'town', world: string, a: string, b: string, aGot: Record<string, number>, bGot: Record<string, number>) => void;
   /** The shared village map; absent in unit tests and the simulator, which use abstract tile coordinates. */
   map: WorldMap | null = null;
+  /** The townsfolk and their shared wallet (residents.ts). */
+  residents: Residents;
   positions: Positions | null = null;
   monsters: Monsters | null = null;
   homelands: Homelands;
@@ -113,6 +116,12 @@ export class Game {
       // night monsters live in Homelands (and in the village forest only when the public area is not trade-only)
       if (this.econ.monsters) this.monsters = new Monsters(this.econ, this.gs, this.clock, this.world, this.map, o.rng ?? Math.random);
     }
+    // the townsfolk: one shared wallet does the town's shopping, five residents walk it to the stalls
+    this.residents = new Residents({
+      econ: this.econ, gs: this.gs, market: this.market, chain, map: this.map, parent: o.merchantParent, town: o.town, now: this.now,
+      onDeal: (r, m, got, paid) => this.onDeal?.('town', 'public', r, m, got, paid), log: (l) => console.warn(l),
+    });
+    this.market.residents = this.residents;
   }
 
   /** Today's weather on the shared map (the same for every player). */
@@ -239,6 +248,7 @@ export class Game {
     await this.settlement.refreshShops();
     await this.syncProjects();
     if (!this.gs.meta('clock.hour')) this.gs.setMeta('clock.hour', String(this.clock.hours()));
+    if (await this.residents.ensure()) await this.settlement.refresh([this.residents.wallet]);
   }
 
   /** Runs missed game hours (prices, merchant crafting, town demand), then any due settlement. */
@@ -267,9 +277,10 @@ export class Game {
   start(intervalMs = 2000) {
     this.timer = setInterval(() => { this.step().catch((e) => console.error('game step:', e)); }, intervalMs);
     this.timer.unref?.();
+    this.residents.start();
   }
 
-  stop() { if (this.timer) clearInterval(this.timer); }
+  stop() { if (this.timer) clearInterval(this.timer); this.residents.stop(); }
 
   onNewPlayer(account: string) { this.world.starter(account, this.town); this.extras.ensureTools(account); this.homelands.ensure(account); }
 
@@ -367,7 +378,7 @@ export class Game {
         break;
       }
       case 'flee': res = this.need(this.monsters).flee(account); break;
-      case 'craft': res = this.world.craft(account, s('recipe')); break;
+      case 'craft': res = this.world.craft(account, s('recipe'), this.town); break;
       case 'eat': res = this.world.eat(account, s('token')); break;
       case 'sleep': res = this.world.sleep(account, s('op'), pos); break;
       case 'farm': {

@@ -6,6 +6,7 @@ import type { GameStore, MarketRow } from './gamestore.ts';
 import type { Clock } from './clock.ts';
 import { HttpError } from '../auth.ts';
 import { Trend } from './trend.ts';
+import type { Residents } from './residents.ts';
 
 export interface MerchantView {
   id: string; account: string; name: string; shop: string; open: boolean; cash: number; rent: number;
@@ -21,6 +22,9 @@ export class Market {
   closed = new Set<string>(); // merchant accounts whose shop is closed on chain
   /** What players ask on the Player Market: scales the base values below and can pull a good off the merchants' shelves. */
   trend: Trend;
+
+  /** The townsfolk's shared wallet (residents.ts): once registered on chain it pays for the town's shopping. */
+  residents?: Residents;
 
   constructor(econ: Econ, gs: GameStore, clock: Clock, parent: string, town: string) {
     this.econ = econ;
@@ -172,6 +176,7 @@ export class Market {
         for (const [t, n] of Object.entries(r.inputs)) this.gs.add(day, acct, t, -n, 'm_craft', out);
         this.gs.add(day, acct, out, 1, 'm_craft', out);
         this.gs.add(day, acct, 'coin', -this.econ.craft.merchantFee, 'fee', out);
+        this.gs.add(day, this.town, 'coin', this.econ.craft.merchantFee, 'fee', `${out}:${id}`); // the fee goes to the town treasury
       }
     }
   }
@@ -201,10 +206,19 @@ export class Market {
           .filter((o) => o.ask <= tw.maxPriceMult * base)
           .sort((a, b) => a.ask - b.ask);
         const best = offers[0];
-        if (!best || this.faucetLeft(t.settleDay) < best.ask) break;
+        if (!best) break;
         const acct = this.account(best.id);
-        this.gs.add(t.settleDay, acct, token, -1, 'town_buy', String(best.ask));
-        this.gs.add(t.settleDay, acct, 'coin', best.ask, 'town_buy', token);
+        if (this.residents?.ready) {
+          // the townsfolk's shared wallet pays (residents.ts): coin moves wallet -> merchant, nothing new is made here
+          const rid = this.residents.pay(t.settleDay, best.id, token, best.ask);
+          if (rid === null) break;
+          this.gs.add(t.settleDay, acct, token, -1, 'resident_sale', rid);
+          this.gs.add(t.settleDay, acct, 'coin', best.ask, 'resident_sale', `${rid}:${token}`);
+        } else {
+          if (this.faucetLeft(t.settleDay) < best.ask) break;
+          this.gs.add(t.settleDay, acct, token, -1, 'town_buy', String(best.ask));
+          this.gs.add(t.settleDay, acct, 'coin', best.ask, 'town_buy', token);
+        }
         const row = this.row(best.id, token);
         row.sold += 1;
         this.gs.saveMarket(row);

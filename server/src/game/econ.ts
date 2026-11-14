@@ -78,6 +78,8 @@ export interface Econ {
   personalities: Record<string, Personality>;
   pricing: PricingConfig & { dailyBuyCapPerTarget: number; quoteValidMs: number };
   town: { dailyUnits: Record<string, number>; maxPriceMult: number; faucetW0: number; moneyCap0: number; activePlayerDivisor: number; maxK: number; shippingBoxMult: number };
+  /** The townsfolk who do the town's shopping from one shared wallet that lives on handouts (residents.ts). */
+  residents: { enabled: boolean; wallet: string; names: string[]; looks: number[]; target: number; treasuryReserve: number; speed: number; queueMax: number };
   /** rent: the daily rent (also the pricing yardstick for "thin cash"); chargeRent false: merchants pay nothing and never close. */
   shops: { rent: number; chargeRent?: boolean; storageFeePerUnit: number; dividendShare: number; initialShares: number; minSharePrice: number };
   fees: { marketPct: number };

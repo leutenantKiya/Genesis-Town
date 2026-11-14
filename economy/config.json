@@ -110,6 +110,16 @@
     "maxK": 6,
     "shippingBoxMult": 0.7
   },
+  "residents": {
+    "enabled": true,
+    "wallet": "warga",
+    "names": ["Dewi", "Agus", "Rina", "Bayu", "Intan"],
+    "looks": [1, 6, 7, 0, 5],
+    "target": 600,
+    "treasuryReserve": 2000,
+    "speed": 2.4,
+    "queueMax": 8
+  },
   "shops": {
     "rent": 40,
     "chargeRent": false,

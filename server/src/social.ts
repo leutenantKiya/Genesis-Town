@@ -13,7 +13,7 @@ export interface Guest extends Seen { id: string; pub: string; ip: string; since
 /** What a player is busy with, for the others to draw: fishing, with the phase and the float's water tile. */
 export interface Fishing { phase: 'cast' | 'wait' | 'bite' | 'reel'; x: number; y: number }
 const FISH_PHASES = new Set(['cast', 'wait', 'bite', 'reel']);
-export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; fx?: number; fy?: number; vx?: number; vy?: number; fish?: Fishing; room?: string; rx?: number; ry?: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; party?: boolean; guest?: boolean }
+export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; fx?: number; fy?: number; vx?: number; vy?: number; fish?: Fishing; room?: string; rx?: number; ry?: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; resident?: boolean; party?: boolean; guest?: boolean }
 /** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
 export interface Npc { id: string; account: string; name: string; look: number; x: number; y: number; title: string }
 export const NPC_TAG = 'NPC';
@@ -42,8 +42,9 @@ const ROUGH_RE = new RegExp('\\b(' + ROUGH.join('|') + ')\\b', 'gi');
 const DIRS = new Set(['up', 'down', 'left', 'right']);
 /** How long a purchase stays in the deal feed (the goods-flying animation). */
 const DEAL_SECS = 10;
-/** shop: a player bought from or sold to a merchant; pasar: a player bought a Player Market listing; npc: a merchant bought one. */
-export interface Deal { id: number; t: number; kind: 'shop' | 'pasar' | 'npc'; world: string; a: string; b: string; aGot: Record<string, number>; bGot: Record<string, number>; only: boolean }
+/** shop: a player bought from or sold to a merchant; pasar: a player bought a Player Market listing; npc: a merchant bought one;
+ *  town: a resident bought for the town (residents.ts). */
+export interface Deal { id: number; t: number; kind: 'shop' | 'pasar' | 'npc' | 'town'; world: string; a: string; b: string; aGot: Record<string, number>; bGot: Record<string, number>; only: boolean }
 /** What a player is sent: `b` (the seller) is null when it is anonymous and the viewer is not them. */
 export interface DealView { id: number; kind: Deal['kind']; a: string; b: string | null; aGot: Record<string, number>; bGot: Record<string, number> }
 /** A fishing report checked for shape only: a known phase and a float within two tiles of the player (the route also
@@ -92,6 +93,8 @@ export class Social {
   dealSeq = 0;
 
   npcs: Npc[] = [];
+  /** Set by the app (game.residents): the townsfolk walking the village right now, the same for everyone. */
+  residents: () => Array<{ account: string; name: string; look: number; x: number; y: number; fx: number; fy: number; vx: number; vy: number; dir: string }> = () => [];
   /** Set by the app: a player wrote to a merchant. May throw HttpError (rate limit); the answer comes later through npcSay. */
   onNpcMsg?: (npc: Npc, fromAccount: string, text: string) => void;
 
@@ -175,6 +178,10 @@ export class Social {
       for (const n of this.npcs) {
         if (me && (Math.abs(n.x - me.x) > radius || Math.abs(n.y - me.y) > radius)) continue;
         out.push({ account: n.account, world, nick: n.name, tag: NPC_TAG, look: n.look, x: n.x, y: n.y, dir: 'down', scene: 'out', t: now, npc: true, title: n.title, merchant: n.id });
+      }
+      for (const r of this.residents()) {
+        if (me && (Math.abs(r.x - me.x) > radius || Math.abs(r.y - me.y) > radius)) continue;
+        out.push({ account: r.account, world, nick: r.name, tag: NPC_TAG, look: r.look, x: r.x, y: r.y, fx: r.fx, fy: r.fy, vx: r.vx, vy: r.vy, dir: r.dir, scene: 'out', t: now, npc: true, resident: true });
       }
     }
     for (const s of this.seen.values()) {

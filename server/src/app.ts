@@ -142,6 +142,7 @@ export function createApp(deps: AppDeps) {
   game.trade.onDone = (a, b, world) => social.tradeLine(a, b, world); // a finished swap is a public line for its world
   // purchases for the goods-flying animation (mods/trade.js): merchant trades, Player Market buys by players and by merchants
   game.onDeal = (kind, world, a, b, aGot, bGot) => { social.deal(kind, world, a, b, aGot, bGot); };
+  if (game.map) social.residents = () => game.residents.view(); // the townsfolk, walked by the server
   game.npc.onBuy = (merchant, seller, token, units, coin, listingId) => { social.deal('npc', 'public', merchant, seller, { [token]: units }, { coin }, bazaar.isAnonymous(listingId)); };
   const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
   const adminAccounts = new AdminAccounts({ game, store: deps.store, social, admins: () => deps.cfg.adminAccounts });
@@ -552,7 +553,7 @@ export function createApp(deps: AppDeps) {
         if (!guestPresenceLimiter.take(ip)) throw new HttpError(429, 'too many presence reports');
         const b = await readJson(req) as { guest?: unknown; x?: unknown; y?: unknown; dir?: unknown };
         const g = social.guestReport(b.guest, ip, b, game.map ? (x, y) => game.map!.walkable(x, y) : undefined);
-        const players = social.nearby(g.id, 'public').map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)) }) }));
+        const players = social.nearby(g.id, 'public').map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? (s.resident ? { npc: true, resident: true } : { npc: true, merchant: s.merchant, title: s.title }) : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)) }) }));
         return send(res, 200, { me: g.nick, look: g.look, guest: true, online: social.online() + social.guests.size, world: 'public', players, chat: [], last: 0, boat: game.boatView() });
       }
       if (req.method === 'POST' && p === '/api/presence') {
@@ -579,7 +580,7 @@ export function createApp(deps: AppDeps) {
         if (onTile) social.report(acct, w, b);
         const trading = game.trade.tradingPairs(); // who is in an open trade right now: everyone in the world sees "A <-> B"
         const tradeOf = (a: string) => { const o = trading.get(a); return o ? { trading: social.nick(o), tradingWith: o } : {}; };
-        const players = social.nearby(acct, w).map((s) => ({ ...(s.npc || s.guest ? {} : tradeOf(s.account)), nick: s.nick, tag: s.tag, look: s.look, account: s.account, ...(game.positions?.aboard.has(s.account) ? { aboard: true } : {}), x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), worn: game.extras.worn(s.account), ...(s.party ? { party: true } : {}) }) }));
+        const players = social.nearby(acct, w).map((s) => ({ ...(s.npc || s.guest ? {} : tradeOf(s.account)), nick: s.nick, tag: s.tag, look: s.look, account: s.account, ...(game.positions?.aboard.has(s.account) ? { aboard: true } : {}), x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? (s.resident ? { npc: true, resident: true } : { npc: true, merchant: s.merchant, title: s.title }) : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), worn: game.extras.worn(s.account), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
         return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, deals: social.dealsSince(acct, w, b.dealSince === undefined ? -1 : Math.floor(Number(b.dealSince))), dealLast: social.dealSeq, party: partyWithPlaces(acct, w), ...(w === 'public' ? { boat: game.boatView(acct) } : {}), ...tradeOf(acct) });
       }

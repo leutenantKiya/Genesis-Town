@@ -185,7 +185,8 @@ test('selling to a merchant moves items and coin, prices react with a reason, da
 });
 
 test('town demand creates new coin only within the faucet', async () => {
-  const { game, clock } = await world();
+  const { game, clock, econ } = await world();
+  econ.residents.treasuryReserve = 1e9; // an empty treasury: the townsfolk's handouts come from the faucet
   for (let h = 0; h < 24; h++) { clock.advanceHours(1); await game.step(); }
   const day = game.clock.time().settleDay;
   const made = game.gs.newCoin(day) + game.gs.newCoin(day - 1);

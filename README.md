@@ -1,6 +1,15 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Townsfolk with a wallet** (2026-11-14): five townsfolk (Dewi, Agus, Rina, Bayu, Intan) are walked by the server,
+>   the same for every player, and do the town's shopping from one shared keyless wallet, `warga.genesistown.testnet`
+>   (registered by the settler like a player). Every buy is booked under the resident who made it; the buyer walks to
+>   that stall and the goods fly. The wallet lives on handouts: topped up from the town treasury above a 2,000-coin
+>   reserve, and only then from the coin faucet. Crafting fees (players' 3-coin Alat fee, merchants' 2 coins) now go to
+>   the town treasury instead of being burned, so they fund those handouts. The village's own client-side wanderers step
+>   aside while the server's townsfolk are there. Code: `server/src/game/residents.ts`, config `residents`,
+>   `docs/economy.md` §3a. The Player Market fee is still burned by the contract *(to the treasury: planned, needs a
+>   contract upgrade)*.
 > - **Every purchase flies** (2026-11-14): buying from or selling to a merchant, buying a Player Market listing and a
 >   merchant buying a player's listing all play the live trade's animation (goods and coin arc between the two sides,
 >   with a sparkle where they land; `GT_TRADE.deal` in `client/js/mods/trade.js`). Your own purchases play at once;

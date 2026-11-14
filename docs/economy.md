@@ -79,7 +79,7 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 | --- | --- | --- |
 | Gathering | raw items, minted by the server's `minter` key | node charges (4 per node, 2-hour respawn), per-account rate limit on the server, per-account and per-item daily mint cap in the contract |
 | Crafting | output item, minted by the contract itself when inputs are burned | inputs are burned first, so crafting never creates value from nothing |
-| **Town demand** | **new `coin` paid to a merchant when the town buys a finished good** | **the only coin faucet. Daily cap in the contract, throttled by the total coin supply (see below)** |
+| **Town demand** | **the townsfolk's wallet pays a merchant when the town buys a finished good; the wallet's handouts come from the treasury first and only then as new `coin` (§3a)** | **the only coin faucet. Daily cap in the contract, throttled by the total coin supply (see below)** |
 | Starter kit | 100 coins + 1 Alat + 3 Roti + 3 Gandum (seed) per new player | comes from the treasury's existing coins (a transfer, not a mint). When the treasury runs low, new players get items only |
 
 ### Sinks (things leave the game)
@@ -88,7 +88,7 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 | --- | --- | --- |
 | Shop rent | merchant `coin` | R = 40 per merchant per game day, while the shop is open |
 | Storage (gudang) fee | merchant `coin` | 0.5 per unit held above target stock per day, paid with the rent |
-| Crafting cost | simple recipes (bread, meal) cost the player energy (5 / 8); complex ones (tool) cost 3 `coin`; merchants pay a flat 2 `coin` per craft | see `recipes` and `craft` in config |
+| Crafting cost | simple recipes (bread, meal) cost the player energy (5 / 8); complex ones (tool) cost 3 `coin`; merchants pay a flat 2 `coin` per craft. Since 2026-11-14 the coin is not burned: it goes to the town treasury, which funds the townsfolk's handouts (§3a) | see `recipes` and `craft` in config |
 | Player-market fee | seller `coin` | 5% of each player-market sale |
 | Shipping box | items sold to the town at 70% of base price | counted inside the town faucet `W_day` (it is town demand, at a worse price) |
 | Food | `bread`, `meal` | eaten by players, and bought (then burned) by the town |
@@ -99,10 +99,40 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 | Rare bots, furniture, hospital, cosmetics | player `coin` and raw items | Pemburu 400 and Koki 350 coin; Kasur, Hiburan, Rumah Pekerja, Rumah Sakit, Penggergajian, Kincir Angin and Gudang builds and upgrades cost wood, ore and coin; cosmetics 80-300 coin. Coin goes to the town treasury, items are burned |
 | Restoran | `fish`, `wood` (cook), `bread`, `meal` (stock) | the pantry consumes them to feed contractors; no new item tokens, the Restoran makes no meals by itself |
 
+### 3a. The townsfolk and their handouts (2026-11-14)
+
+The town's shopping is done by five townsfolk the server walks around the village (`server/src/game/residents.ts`,
+config `residents`), the same for every player. They share **one keyless wallet**, `warga.<merchant parent>`
+(`warga.genesistown.testnet` on testnet: no NEAR account and no key anywhere, registered once by the settler like a
+player). Every unit of town demand is paid from that wallet to the merchant (ledger `resident_buy` on the wallet,
+`resident_sale` on the merchant, ref = which resident bought). The buyer then walks to that stall and the goods fly
+(the walk is shown only; the money moved when the town bought).
+
+The wallet lives on **handouts**: when it cannot pay, it is topped up to `residents.target` (600)
+
+1. from the **town treasury**, only what it holds above `residents.treasuryReserve` (2,000), so starter kits and
+   mission rewards keep coming (ledger `handout`, a transfer);
+2. then from the **coin faucet** for the rest (ledger `handout_mint`): new coin, inside the same `W_day` the contract
+   checks. This is now the only new money in the town's shopping.
+
+```mermaid
+flowchart LR
+  P["Players"] -->|"craft fees"| K["Town treasury"]
+  M["Merchants"] -->|"craft fees"| K
+  K -->|"handout, above the reserve"| W["Townsfolk wallet<br/>5 residents, each buy booked by name"]
+  F["Coin faucet<br/>W_day, Mcap"] -.->|"only when the treasury cannot"| W
+  W -->|"bread, meals, wood, tools"| M
+  M -->|"pays players for goods"| P
+```
+
+Until the wallet is registered on chain the town buys the old way (new coin straight to the merchant), because the
+contract skips settlement rows of an unregistered account. The Player Market fee (5%) is still burned by the contract.
+
 ### The faucet throttle (why money supply stays bounded)
 
 Town demand per game day at base prices is about 1,035 coins: 30 Roti, 15 Ikan Bakar, 3 Alat and 20 Kayu. The town
-only buys when a merchant's ask is at most 1.5 × base. The coin it pays is newly minted, but the contract limits it:
+only buys when a merchant's ask is at most 1.5 × base. The coin it pays comes from the townsfolk's wallet (§3a); the
+part of their handouts the treasury cannot cover is newly minted, and the contract limits it:
 
 ```
 W_day      = W0 · k · (1 − M / Mcap)           # max new coins the town may pay today
