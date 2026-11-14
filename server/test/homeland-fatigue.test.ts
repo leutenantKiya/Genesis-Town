@@ -181,7 +181,7 @@ test('pemburu forages and doubles in winter', async () => {
   assert.deepEqual(r.gained, { fish: 2, wood: 1 });
   assert.equal(gs.balance(P, 'fish'), 2);
   w.build(P);
-  fails(() => w.forage(P, w.doorOf(P, 'restoran-c')), 409, 'Stand in front of the Town Hall.');
+  fails(() => w.forage(P, w.doorOf(P, 'restoran-c')), 409, "The Hunter isn't carrying anything."); // the Town Hall's work needs no walk to its door
   w.adv(100 * ms);
   assert.equal(sum(P), 6); // capacity
   assert.equal(H.view(Q).forage, null);

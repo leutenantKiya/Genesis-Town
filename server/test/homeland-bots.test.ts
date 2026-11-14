@@ -98,8 +98,6 @@ test('hire outside own homeland answers 409', async () => {
   w.gs.add(1, P, 'coin', -w.gs.balance(P, 'coin'), 'test');
   w.give(P, 'coin', 500);
   fails(() => w.hire(P, 'builder', w.game.map!.layout.spawn, 'public'), 409, /Homeland/);
-  const L = w.hl(P).layout, far = [...Array(L.h * L.w).keys()].map((i) => ({ x: i % L.w, y: Math.floor(i / L.w) })).find((p) => w.hl(P).walkable(p.x, p.y) && Math.abs(p.x - L.spawn.x) + Math.abs(p.y - L.spawn.y) === 3)!;
-  fails(() => w.hire(P, 'builder', far), 409, /Town Hall/); // not at the Town Hall
   fails(() => w.hire(P, 'builder', w.hall(Q), w.wid(Q)), 409, /not invited/); // somebody else's Homeland
   w.game.homelands.setInvites(Q, [P]);
   fails(() => w.hire(P, 'builder', w.hall(Q), w.wid(Q)), 409, /isn't your Homeland/); // a guest cannot hire either

@@ -176,13 +176,26 @@
   // Each tab presses the existing HUD button, so the bar adds no game logic of its own.
   var tabbar = null;
   function press(id) { var b = document.getElementById(id); if (b) b.click(); }
-  // Account shortcuts at the foot of the Settings panel's left column (the old Settings list is gone: the panel is the
-  // settings). Each one closes the panel first, then opens its own window.
+  // Your profile under the character: title, Town Hall level, coin and missions (GET /api/player for the title and level)
+  function profileBox() {
+    var box = $('div', 'gt-set-prof'), C = window.GT_CHAIN, S = C && C.state;
+    if (!S || !S.account) { box.appendChild($('p', 'chain-dim', $t('Masuk dulu.'))); return box; }
+    function row(k, v) { var r = $('div', 'gt-set-prow'); r.appendChild($('span', 'gt-set-pk', k)); var b = $('b', null, v); r.appendChild(b); box.appendChild(r); return b; }
+    var title = row($t('Gelar'), '…'), th = row($t('Balai Kota'), '…');
+    var cb = S.st && S.st.bag && S.st.bag.coin; row($t('Koin'), String(cb ? cb.settled + cb.today : 0));
+    var ms = S.st && S.st.missions && S.st.missions.list;
+    if (ms) row($t('Misi'), $t('{0} dari {1} selesai', [ms.filter(function (m) { return m.claimed; }).length, ms.length]));
+    var CS = window.GT_CHARSCREEN, mine = CS && CS._mine ? CS._mine() : null;
+    if (mine && mine.name && C.api) C.api('/player?name=' + encodeURIComponent(mine.name + (mine.tag ? '#' + mine.tag : ''))).then(function (p) {
+      title.textContent = p.title || '-';
+      th.textContent = p.th != null ? $t('level {0}', [p.th]) : $t('Belum punya Homeland');
+    }, function () { title.textContent = '-'; th.textContent = '-'; });
+    else { title.textContent = '-'; th.textContent = '-'; }
+    return box;
+  }
+  // Account shortcuts at the foot of the Settings panel's left column. Each one closes the panel first, then acts.
   function shortcuts() {
     var row = $('div', 'gt-set-links'), opts = [];
-    if (GT.openProfile) opts.push(['🪪', $t('Profil'), function () { GT.openProfile(); }]);
-    if (window.GT_SIM) opts.push(['📊', $t('Simulasi 1 minggu'), function () { GT_SIM.open(); }]);
-    if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push(['🛡️', $t('Admin'), function () { GT_ADMIN.open(); }]);
     if (document.getElementById('devbtn')) opts.push(['🛠️', 'Dev', function () { press('devbtn'); }]);
     if (window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account) opts.push(['🚪', $t('Keluar (ganti akun)'), function () { GT_CHAIN.signOut(); }]);
     opts.forEach(function (o) {
@@ -423,7 +436,7 @@
       }, 300);
       stage.addEventListener('click', function () { tick += 4; }); // a tap makes the character look around
     }
-    left.appendChild(nameRow); left.appendChild(nameMsg); left.appendChild(stage); left.appendChild(shortcuts());
+    left.appendChild(nameRow); left.appendChild(nameMsg); left.appendChild(stage); left.appendChild(profileBox()); left.appendChild(shortcuts());
     wrap.appendChild(left);
 
     // right: one tab at a time (Kustomisasi, Party, Tampilan & suara) in a card of fixed height, then Simpan
@@ -445,9 +458,14 @@
     else partyHost.appendChild($('p', 'chain-dim', $t('Masuk dulu.')));
     var dc = $('div', 'gt-set-card gt-set-pane');
     dispHost = $('div', 'gt-set-scroll'); dispHost.appendChild(displayBody()); dc.appendChild(dispHost);
-    var panes = { cust: cust, party: pc, disp: dc };
+    var panes = { cust: cust, party: pc, disp: dc }, list = [['cust', '👕 ' + $t('Kustomisasi')], ['party', '👥 ' + $t('Party')], ['disp', '🎛️ ' + $t('Tampilan & suara')]];
+    // Simulasi and Admin fill their tab the first time it is opened (they load from the server and measure their charts)
+    var lazy = {};
+    if (window.GT_SIM && GT_SIM.embed) { list.push(['sim', '📊 ' + $t('Simulasi')]); panes.sim = $('div', 'gt-set-card gt-set-pane gt-set-wide'); lazy.sim = function (h) { GT_SIM.embed(h); }; }
+    if (window.GT_ADMIN && GT_ADMIN.embed && GT_ADMIN.isAdmin()) { list.push(['admin', '🛡️ ' + $t('Admin')]); panes.admin = $('div', 'gt-set-card gt-set-pane gt-set-wide'); lazy.admin = function (h) { GT_ADMIN.embed(h); }; }
+    if (!panes[setTab]) setTab = 'cust';
     var tabs = $('div', 'gt-set-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', $t('Pengaturan'));
-    [['cust', '👕 ' + $t('Kustomisasi')], ['party', '👥 ' + $t('Party')], ['disp', '🎛️ ' + $t('Tampilan & suara')]].forEach(function (t) {
+    list.forEach(function (t) {
       var b = $('button', 'gt-set-tab', t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.tab = t[0];
       b.addEventListener('click', function () { setTab = t[0]; pick(); });
       tabs.appendChild(b);
@@ -455,9 +473,10 @@
     function pick() {
       Array.prototype.forEach.call(tabs.children, function (b) { var on = b.dataset.tab === setTab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
       Object.keys(panes).forEach(function (k) { panes[k].hidden = k !== setTab; });
+      if (lazy[setTab]) { var f = lazy[setTab]; lazy[setTab] = null; f(panes[setTab]); }
     }
     right.appendChild(tabs);
-    right.appendChild(cust); right.appendChild(pc); right.appendChild(dc);
+    Object.keys(panes).forEach(function (k) { right.appendChild(panes[k]); });
     pick();
 
     var sv = $('button', 'mbtn primary gt-set-save', $t('Simpan')); sv.type = 'button';

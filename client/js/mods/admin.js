@@ -310,6 +310,17 @@
     timer = setInterval(function () { if (panel && panel.isOpen()) load(); else clearInterval(timer); }, 5000);
   }
 
+  // The same panel inside another window (the Admin tab of Settings); it reloads every 5 s while that tab is on screen.
+  function embed(host) {
+    if (!isAdmin()) return;
+    F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
+    PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' };
+    ui = {};
+    host.appendChild(build()); renderAll(); load();
+    clearInterval(timer);
+    timer = setInterval(function () { if (!host.isConnected) clearInterval(timer); else if (!host.closest('[hidden]')) load(); }, 5000);
+  }
+
   // The page /admin is the game page: once signed in, an admin gets the window and anyone else a short note.
   function watchPage() {
     var tries = 0, t = setInterval(function () {
@@ -324,7 +335,7 @@
 
   function init() {
     C = window.GT_CHAIN || null;
-    window.GT_ADMIN = { open: open, isAdmin: isAdmin };
+    window.GT_ADMIN = { open: open, embed: embed, isAdmin: isAdmin };
     if (wantPage) watchPage();
   }
   GT.register({ id: 'admin', init: init });

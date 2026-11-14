@@ -196,7 +196,19 @@
     load();
   }
 
-  window.GT_SIM = { open: open, _state: st };
+  // The same panel inside another window (the Simulation tab of Settings), live while that window is open.
+  function embed(host) {
+    st.playing = false; clearTimeout(st.timer);
+    host.appendChild(build());
+    st.modal = { isOpen: function () { return host.isConnected; }, body: host };
+    els.play.onclick = function () {
+      if (st.res && st.upto >= st.res.frames.length) { st.upto = 1; }
+      st.playing = !st.playing || st.upto <= 1; els.play.textContent = st.playing ? $t('Jeda') : $t('Putar'); if (st.playing) tick();
+    };
+    load();
+  }
+
+  window.GT_SIM = { open: open, embed: embed, _state: st };
   GT.register({
     id: 'sim',
     init: function () {

@@ -112,7 +112,6 @@ export const EXACT: Record<string, string> = {
  "The Workbench is in your house.": "Meja Kerja ada di rumahmu.",
  "The Shipping Box is at your house.": "Kotak Kirim ada di rumahmu.",
  "Stand near that lot.": "Berdiri di dekat lahan itu.",
- "Stand in front of the Town Hall.": "Berdiri di depan Balai Kota.",
  "Build the Restaurant first.": "Bangun Restoran dulu.",
  "Stand near the Restaurant door.": "Berdiri di dekat pintu Restoran.",
  "Stand near the building.": "Berdiri di dekat bangunannya.",

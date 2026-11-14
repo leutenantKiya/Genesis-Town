@@ -289,15 +289,15 @@ export class Game {
       if (a === 'ship' && !w.map.atOwnHouse(pos)) far('The Shipping Box is at your house.');
       if ((a === 'build' || a === 'assist') && w.map instanceof HomelandMap) {
         const kind = a === 'build' ? s('kind') : this.gs.homelandJobs(w.row!.account).find((j) => j.target === s('target'))?.kind ?? '';
+        // a lot's own work happens at the lot; the Town Hall's (level, new island, street lights) from anywhere in your
+        // Homeland, since the Upgrade button opens the Town Hall window wherever you stand
         if (kind === 'build' || kind === 'furniture' || kind === 'upgrade') { if (!w.map.nearLot(pos, s('target').split(':')[0])) far('Stand near that lot.'); }
-        else if (kind !== '' && !w.map.atOwnHouse(pos)) far('Stand in front of the Town Hall.'); // no such job: assist answers itself
       }
       if (a === 'cook' || a === 'stock') {
         const lot = this.homelands.restoranLot(account);
         if (!lot) far('Build the Restaurant first.');
         else if (!(w.map instanceof HomelandMap) || !w.map.nearLot(pos, lot)) far('Stand near the Restaurant door.');
       }
-      if ((a === 'hire' || a === 'forage' || a === 'dress') && !w.map.atOwnHouse(pos)) far('Stand in front of the Town Hall.');
       if (a === 'collect' && w.map instanceof HomelandMap && !w.map.nearLot(pos, s('lot'))) far('Stand near the building.');
     }
     let res: { toast: string; tags?: string[]; world?: string; arrive?: Pos; gained?: Record<string, number> };

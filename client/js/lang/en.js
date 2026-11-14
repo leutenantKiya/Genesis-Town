@@ -431,6 +431,8 @@
     "Akun: {0}": "Account: {0}",
     "Semua riwayat": "All history",
     "Keluar (ganti akun)": "Sign out (switch account)",
+    "Gelar": "Title",
+    "{0} dari {1} selesai": "{0} of {1} done",
     "Mentah, tidak bisa dimakan. Masak jadi Ikan Bakar di Meja Kerja (Ikan + Kayu), atau jual.": "Raw, can't be eaten. Cook it into Grilled Fish at the Workbench (Fish + Wood), or sell it.",
     "Bahan Ikan Bakar dan Beliung, dan dibutuhkan proyek desa.": "An ingredient for Grilled Fish and Pickaxes, and needed by village projects.",
     "Bahan Beliung, dan dibutuhkan proyek desa.": "An ingredient for Pickaxes, and needed by village projects.",
