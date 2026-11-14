@@ -136,6 +136,7 @@ test('a failing settlement is retried with backoff (30 s, doubling) and logged o
 
 test('dividends are planned before settling and paid once, even after a crash or a failed payment', async () => {
   const { game, chain, clock } = await world(['p1.players.test']);
+  game.econ.shops.chargeRent = false; // this test is about dividends: rent would cut the profit it plants
   const day = game.clock.time().settleDay;
   game.gs.add(day, 'wati.gt.test', 'coin', 500, 'trade');
   game.gs.add(day, TOWN, 'coin', -500, 'test');

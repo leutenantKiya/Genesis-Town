@@ -244,6 +244,12 @@ export class GameStore {
   sumKind(day: number, account: string, token: string, kind: string): number {
     return (this.db.prepare('SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND account = ? AND token = ? AND kind = ? AND delta > 0').get(day, account, token, kind) as { s: number }).s;
   }
+  /** Coin a merchant received on a ledger day from selling: players buying (`trade`), the townsfolk and town demand
+   *  (`resident_sale`, `town_buy`) and the tool stall (`tool_shop`). Rent refunds, restores, dividends, admin grants and
+   *  investor contributions are other kinds and not counted. Debit rows (the merchant buying) are not sales. */
+  salesOn(day: number, merchant: string): number {
+    return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND account = ? AND token = 'coin' AND delta > 0 AND kind IN ('trade', 'resident_sale', 'town_buy', 'tool_shop')").get(day, merchant) as { s: number }).s;
+  }
   boughtToday(merchant: string, token: string, day: number): number {
     return (this.db.prepare("SELECT COALESCE(SUM(delta), 0) AS s FROM ledger WHERE day = ? AND account = ? AND token = ? AND kind = 'trade' AND delta > 0").get(day, merchant, token) as { s: number }).s;
   }

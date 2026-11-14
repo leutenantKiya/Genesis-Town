@@ -186,6 +186,12 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     });
   }
 
+  // rent paid per merchant and day, and the townsfolk's meals and fires, read back from the ledger
+  const rentRows = store.db.prepare("SELECT account a, day d, -SUM(delta) s FROM ledger WHERE kind = 'rent' AND delta < 0 AND token = 'coin' GROUP BY account, day").all() as Array<{ a: string; d: number; s: number }>;
+  const rentPaid: Record<string, number[]> = {};
+  for (const r of rentRows) (rentPaid[r.a.split('.')[0]] ??= []).push(r.s);
+  const kindCount = (k: string) => (store.db.prepare('SELECT COUNT(*) c FROM ledger WHERE kind = ?').get(k) as { c: number }).c;
+
   const priceRange: Record<string, { min: number; max: number; base: number }> = {};
   for (const f of frames) for (const [t, v] of Object.entries(f.prices)) {
     const r = priceRange[t] ?? { min: Infinity, max: -Infinity, base: econ.items[t].base };
@@ -201,7 +207,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     options: o, frames, events,
     summary: {
       moneyStart: ms[0], moneyEnd: ms[ms.length - 1], moneyMax: Math.max(...ms), moneyCap: econ.town.moneyCap0 * k,
-      priceRange,
+      priceRange, rentPaid, residentEat: kindCount('resident_eat'), residentBurn: kindCount('resident_burn'), rentStreakEnd: game.market.rentStreak(),
       bankruptcies: events.filter((e) => e.kind === 'closed').length,
       recoveries: events.filter((e) => e.kind === 'reopened').length,
       settlements: events.filter((e) => e.kind === 'settled').length,

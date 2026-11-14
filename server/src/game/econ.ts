@@ -96,8 +96,28 @@ export interface Econ {
     craft?: { enabled: boolean; marginPct: number; perHour: number; fillPct: number };
     /** Fishing, chopping, harvesting and mining scarce raw goods (residents.gather); the admin's saved settings override it. */
     gather?: { enabled: boolean; goods: string[]; perHour: number; dailyMax: number; minPricePct: number; fillPct: number; keepMax: number } };
-  /** rent: the daily rent (also the pricing yardstick for "thin cash"); chargeRent false: merchants pay nothing and never close. */
-  shops: { rent: number; chargeRent?: boolean; storageFeePerUnit: number; dividendShare: number; initialShares: number; minSharePrice: number };
+  shops: {
+    /** the old flat daily rent: only a pricing yardstick for "thin cash" now (what a shop really owes is rentBase + ramp + sales part + storage) */
+    rent: number;
+    /** false: merchants pay nothing and never close */
+    chargeRent?: boolean;
+    /** fixed part of the daily rent, in coin */
+    rentBase?: number;
+    /** percent of the coin a merchant received from selling that game day, added to its rent (rounded down) */
+    rentSalesPct?: number;
+    /** game days with rent charged and no shop closing before the ramp starts */
+    rentRampAfterDays?: number;
+    /** coin added to the base for each further day without a closing */
+    rentRampPerDay?: number;
+    /** the most the ramp may add, in coin */
+    rentRampMax?: number;
+    /** coin per unit held above target stock, per day */
+    storageFeePerUnit: number;
+    /** share of a shop's positive daily coin change paid out as dividends */
+    dividendShare: number;
+    initialShares: number;
+    minSharePrice: number;
+  };
   fees: { marketPct: number };
   starter: Record<string, number>;
   caps: { dailyGainPerItem: number; dailySends: number; maxSendAmount: number };

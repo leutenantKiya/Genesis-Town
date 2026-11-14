@@ -130,7 +130,12 @@
   },
   "shops": {
     "rent": 40,
-    "chargeRent": false,
+    "chargeRent": true,
+    "rentBase": 15,
+    "rentSalesPct": 8,
+    "rentRampAfterDays": 7,
+    "rentRampPerDay": 2,
+    "rentRampMax": 60,
     "storageFeePerUnit": 0.5,
     "dividendShare": 0.4,
     "initialShares": 1000,

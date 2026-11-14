@@ -1,6 +1,9 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Dynamic shop rent** (2026-11-15): a merchant owes 15 + a ramp (after 7 days without a closing, +2 a day up to 60)
+>   + 8% of the day's sales + the storage fee, paid to the town treasury; one that cannot pay closes, and players can
+>   pledge to reopen it for shares. The shop window and the merchant's chat show today's rent. See `docs/sim-report-rent.md`.
 > - **Icons, logo, phones and the action picker** (2026-11-15): the HUD buttons, phone tab bar, window titles,
 >   steppers and History buttons use the new pixel-art icon set (`client/icons/ui/`), and the official island logo is on
 >   the loading screen and the installed app icons. A small panel beside the character lists what F can do at a spot
@@ -379,7 +382,7 @@ burns, rent), so anyone can verify them, while staying invisible in the normal l
   minutes) one settlement transaction writes everyone's net change on chain, with a hash of the day's published ledger.
   Player-to-player trades and shop shares are on-chain immediately. See [docs/onchain-offchain.md](docs/onchain-offchain.md).
 - Seasons (7 game days each) change what the land yields and what the town buys.
-- A merchant that can't pay its daily rent closes. Players invest coins to reopen it and receive shares that pay 40%
+- A merchant that can't pay its daily rent (15 + a share of its sales + storage) closes. Players invest coins to reopen it and receive shares that pay 40%
   of the shop's daily profit as dividends.
 
 Design docs: [game loop](docs/game-loop.md) · [economy](docs/economy.md) · [world](docs/world.md) · [architecture](docs/architecture.md) ·
@@ -471,7 +474,7 @@ take things from other players.
 
 ### When shops fail: quiet days and the village relief fund
 
-A shop pays its 40-coin rent only on days when someone plays (no customers, no rent), and merchants only craft on
+A shop pays its rent (dynamic, see docs/economy.md) only on days when someone plays (no customers, no rent), and merchants only craft on
 those days, so a quiet town keeps its shops. If every shop is closed anyway, nobody can sell for coin, so the town
 treasury pledges the coin part of each restoration board on chain at the next settlement (the town gets shares like
 any contributor); players still bring the goods. First run on testnet, 2026-11-03, all four boards:

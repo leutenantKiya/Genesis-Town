@@ -9,7 +9,9 @@ import { Trend } from './trend.ts';
 import type { Residents } from './residents.ts';
 
 export interface MerchantView {
-  id: string; account: string; name: string; shop: string; open: boolean; cash: number; rent: number;
+  id: string; account: string; name: string; shop: string; open: boolean; cash: number;
+  /** What this shop owes in rent today if the day ended now (base + ramp + share of sales + storage); 0 when rent is off. */
+  rent: number;
   items: Array<{ token: string; name: string; stock: number; target: number; ask: number | null; bid: number | null; mid: number; changePct: number; reason: string }>;
 }
 
@@ -276,12 +278,37 @@ export class Market {
     }
   }
 
+  /** Coin merchant `id` received from selling on ledger day `day` (see GameStore.salesOn for the kinds). */
+  salesOn(day: number, id: string): number { return this.gs.salesOn(day, this.account(id)); }
+
+  /** Days with rent charged and no closing so far (meta `shops.rentStreak`; idle days never count). */
+  rentStreak(): number { return Number(this.gs.meta('shops.rentStreak') ?? 0); }
+
+  /** The safety-net ramp added to the base: nothing until `rentRampAfterDays` charged days passed without a closing,
+   *  then `rentRampPerDay` more for every further day, up to `rentRampMax`. */
+  rentRamp(): number {
+    const s = this.econ.shops, over = this.rentStreak() - (s.rentRampAfterDays ?? 7);
+    return over > 0 ? Math.min(s.rentRampMax ?? 60, over * (s.rentRampPerDay ?? 2)) : 0;
+  }
+
+  /** What merchant `id` owes for ledger day `day`: base + ramp + a share of that day's sales + storage (units above the
+   *  target stock). `cash` is its coin as of that day; the shop closes when cash < due. */
+  rentDue(day: number, id: string) {
+    const s = this.econ.shops, acct = this.account(id), d = this.def(id);
+    const base = s.rentBase ?? s.rent, ramp = this.rentRamp(), sales = this.salesOn(day, id);
+    const salesPart = Math.floor(sales * (s.rentSalesPct ?? 0) / 100);
+    let over = 0;
+    for (const token of this.tokens(d)) over += Math.max(0, this.gs.balanceThrough(acct, token, day) - (d.target[token] ?? 0));
+    const storage = Math.floor(over * (s.storageFeePerUnit ?? 0));
+    return { base, ramp, sales, salesPct: s.rentSalesPct ?? 0, salesPart, storage, due: base + ramp + salesPart + storage, cash: this.gs.balanceThrough(acct, 'coin', day) };
+  }
+
   view(id: string): MerchantView {
     const d = this.def(id);
     const acct = this.account(id);
     return {
       id, account: acct, name: d.name, shop: d.shop, open: this.isOpen(id),
-      cash: this.gs.balance(acct, 'coin'), rent: this.econ.shops.chargeRent === false ? 0 : this.econ.shops.rent,
+      cash: this.gs.balance(acct, 'coin'), rent: this.econ.shops.chargeRent === false ? 0 : this.rentDue(this.clock.time().settleDay, id).due,
       items: this.tokens(d).map((token) => {
         const r = this.row(id, token);
         return {

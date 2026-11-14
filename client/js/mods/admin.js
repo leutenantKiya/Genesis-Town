@@ -875,6 +875,9 @@
       b.appendChild(bar(m.coin, top));
       b.addEventListener('click', function () { TR.path = []; trace(m.account, false); });
       ui.botsShops.appendChild(b);
+      var rt = m.rentToday; // rent owed today against cash: red when the shop could not pay
+      if (rt) ui.botsShops.appendChild($('div', 'chain-dim' + (rt.cash < rt.due ? ' adm-out' : ''),
+        $t('Sewa hari ini {0} (dasar {1} + tanjakan {2} + {3}% dari penjualan {4} + gudang {5}), kas {6}', [num(rt.due), num(rt.base), num(rt.ramp), num(rt.salesPct), num(rt.sales), num(rt.storage), num(rt.cash)])));
     });
 
     ui.botsRecent.appendChild($('div', 'chain-h', $t('Gerakan terakhir')));

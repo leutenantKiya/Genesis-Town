@@ -144,21 +144,30 @@ export class Settlement {
     // Rent plus storage (gudang) fees: 0.5 coin per unit held above target stock, burned. Each open shop pays what
     // it can; a shop that cannot pay in full is closed after settlement (the contract re-checks coin < rent).
     // No players that day means no customers: shops pay no rent and nobody closes, so a quiet town keeps its shops.
+    // The rent is dynamic (market.rentDue): base + ramp + a share of the day's sales + storage. It moves to the town
+    // treasury (merchant -pay, town +pay, kind 'rent'), so it nets to zero and is not new coin for the faucet.
     const toClose: string[] = [];
     const idle = gs.activeAccounts(day) === 0;
-    for (const id of idle ? [] : market.ids()) {
-      if (!market.isOpen(id)) continue;
-      const acct = market.account(id);
-      const d = econ.merchants[id];
-      const cash = gs.balanceThrough(acct, 'coin', day);
-      let over = 0;
-      for (const token of market.tokens(d)) over += Math.max(0, gs.balanceThrough(acct, token, day) - (d.target[token] ?? 0));
-      const storage = Math.floor(over * (econ.shops.storageFeePerUnit ?? 0));
-      if (econ.shops.chargeRent === false) continue; // the town's merchants work rent free: nothing charged, never closed
-      const due = econ.shops.rent + storage;
-      const pay = Math.min(due, cash);
-      if (pay > 0) gs.add(day, acct, 'coin', -pay, 'rent', storage ? `rent ${econ.shops.rent} + storage ${storage}` : null);
-      if (cash < due) toClose.push(acct);
+    const charge = !idle && econ.shops.chargeRent !== false; // the town's merchants may work rent free: nothing charged, never closed
+    if (charge) {
+      // the ramp is computed before today's closings are known, so every shop sees the same ramp
+      const ramp = market.rentRamp();
+      if (gs.meta('shops.rentStart') === undefined) gs.setMeta('shops.rentStart', String(day));
+      for (const id of market.ids()) {
+        if (!market.isOpen(id)) continue;
+        const acct = market.account(id), o = market.rentDue(day, id);
+        // never below what it holds right now: day-after trades are already in the ledger, and an overdraft stalls settlement
+        const pay = Math.min(o.due, o.cash, Math.max(0, gs.balance(acct, 'coin')));
+        if (pay > 0) {
+          const ref = `base ${o.base} + ramp ${ramp} + sales ${o.sales} x ${o.salesPct}% = ${o.salesPart} + storage ${o.storage}`;
+          gs.add(day, acct, 'coin', -pay, 'rent', ref);
+          gs.add(day, this.d.town, 'coin', pay, 'rent', `${ref} (${id})`);
+        }
+        if (o.cash < o.due) toClose.push(acct);
+      }
+      // a closing resets the ramp; a charged day without one brings it a day closer (idle days are not counted)
+      if (toClose.length) { gs.setMeta('shops.lastCloseDay', String(day)); gs.setMeta('shops.rentStreak', '0'); }
+      else gs.setMeta('shops.rentStreak', String(market.rentStreak() + 1));
     }
     gs.setMeta(`settle.close.${day}`, JSON.stringify(toClose));
     gs.setMeta(`settle.prepared.${day}`, '1');

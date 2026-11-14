@@ -86,8 +86,8 @@ can plan. They are config values in `economy/config.json`, used by both live pla
 
 | Sink | What is burned | Amount |
 | --- | --- | --- |
-| Shop rent | merchant `coin` | R = 40 per merchant per game day, while the shop is open |
-| Storage (gudang) fee | merchant `coin` | 0.5 per unit held above target stock per day, paid with the rent |
+| Shop rent (dynamic since 2026-11-15) | merchant `coin`, moved to the town treasury (two `rent` ledger rows, so it is not burned and not new coin) | per game day: `rentBase` 15 + ramp + 8% of that day's sales (`rentSalesPct`) + storage fee, while the shop is open. Ramp: after 7 charged days without any closing, +2 a day, at most 60, back to 0 after a closing (`shops.rentStreak`) |
+| Storage (gudang) fee | merchant `coin`, part of the rent | 0.5 per unit held above target stock per day |
 | Crafting cost | simple recipes (bread, meal) cost the player energy (5 / 8); complex ones (tool) cost 3 `coin`; merchants pay a flat 2 `coin` per craft. Since 2026-11-14 the coin is not burned: it goes to the town treasury, which funds the townsfolk's handouts (§3a) | see `recipes` and `craft` in config |
 | Player-market fee | seller `coin` | 5% of each player-market sale |
 | Shipping box | items sold to the town at 70% of base price | counted inside the town faucet `W_day` (it is town demand, at a worse price) |
@@ -149,7 +149,7 @@ sinks pull the actual level below the cap.
 **M\* = Mcap · (1 − S / (W0·k))**.
 
 Worked example with 10 active players: k = 2, so the faucet ceiling is 2,400 coins/day and Mcap = 50,000. The daily
-sinks add up to about S = 370 coins: rent 4 × 40 = 160, crafting fees about 160 (10 players × 8 crafts × 2), and
+sinks add up to about S = 370 coins (rent now returns to the town treasury, so it only drains players and shops, not the town; the old flat rent was 4 × 40 = 160), crafting fees about 160 (10 players × 8 crafts × 2), and
 market fees about 50. That gives M\* ≈ 50,000 × (1 − 370/2,400) ≈ **42,300 coins**, about 4,200 per active player.
 With fewer players, k and Mcap shrink with them.
 
@@ -202,8 +202,12 @@ recent buys B ≈ 30, recent sales S ≈ 4.
 
 **Daily settlement** runs at 06:00 game time. It is one contract call per game day by the server; it is idempotent
 and keyed by day number.
-1. Each open merchant pays rent R = 40, which is burned. A merchant with cash `C < R` cannot pay and **closes**: no
-   quotes, the town skips it, and rent is no longer charged. The shop door shows TUTUP.
+1. Each open merchant owes rent R for the day: `R = rentBase + ramp + floor(sales x rentSalesPct / 100) + storage`
+   (15, 0-60, 8%, 0.5 per unit over target; `Market.rentDue`). It pays `min(R, cash)` to the town treasury. A merchant with cash
+   `C < R` cannot pay in full and **closes**: no quotes, the town skips it, and rent is no longer charged. The shop door
+   shows TUTUP. The contract only closes a shop whose on-chain coin is under 40, and a shop that cannot pay hands over all
+   it has, so it ends at 0. A day without players charges nobody. `shops.rent` (40) stays only as the pricing yardstick
+   for "thin cash".
 2. Each merchant's profit for the day is computed in the contract from its own coin flows:
    `P = sales income − purchase spend − rent − crafting fees`. If P > 0, 40% of P is paid out as dividends to
    shareholders, pro rata. Payouts accrue to each shareholder's claimable balance, which they collect with
@@ -233,7 +237,7 @@ Contributions are on-chain pledges held in the contract. Item contributions are 
 When every line is met, the pledges turn into shares at the share price fixed when the shop closed, the goods join
 the shop's stock, and the shop reopens. A pledge withdrawn before completion is returned.
 
-**Shop health in the UI.** Shown on the notice board, the shop dialog and Profile: cash, days of rent covered (C / R),
+**Shop health in the UI.** Shown on the notice board, the shop dialog and Profile: cash, days of rent covered (C / R, with R today's dynamic rent from `/api/market`),
 7-day profit, status, and your share percentage.
 
 **Expected first bankruptcy (confirmed by the simulator).** Joko is generous: he never bids under 90% of base value,
@@ -276,7 +280,11 @@ move merchant prices, and every wash trade burns 5%.
 
 - Prices come only from state: stock, recent flows and cash. When players change what they gather, prices change.
 - Merchants close and reopen on their own, and the shareholders who saved them earn on their recovery, which in turn
-  changes who has coins to spend.
+  changes who has coins to spend. The rent is dynamic: a base plus a share of each day's sales, so a shop that sells
+  little pays little and a busy one more; a poor shop (Joko, Budi) closes now and then, a rich one (Sari, Wati) rarely. After 7
+  charged days without any closing a ramp (+2 a day, max 60) pushes the rent up, and a closing resets it. Rent goes to
+  the town treasury, which funds the townsfolk. Numbers in `economy/config.json` `shops`; measured in
+  `docs/sim-report-rent.md`.
 - Town demand scales with how many players are active (k). The money cap scales with it, so a busier town has a
   bigger economy and an empty town shrinks back without anyone resetting it.
 - The townsfolk have no admin controls (since 2026-11-15; `/api/admin/bots` is read-only). Their numbers follow the

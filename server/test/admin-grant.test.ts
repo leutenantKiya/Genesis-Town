@@ -20,6 +20,7 @@ const NOW = 1_800_000_000_000;
 async function harness(opts: { admin?: boolean; treasury?: bigint; limits?: { maxPerGrant: number; maxPerDay: number }; clientDir?: string } = {}) {
   const econ = loadEcon();
   if (opts.limits) econ.adminGrant = opts.limits;
+  econ.shops.chargeRent = false; // these tests are about grants: a rent payment to the town would move its balance
   const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: TOWN, MERCHANT_PARENT_ACCOUNT_ID: 'gt.test', ...(opts.admin === false ? {} : { ADMIN_ACCOUNTS: ADM }) } as NodeJS.ProcessEnv);
   const chain = new MockChain();
   chain.contractId = cfg.gameContractId;

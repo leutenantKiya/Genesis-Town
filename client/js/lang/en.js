@@ -1894,6 +1894,7 @@
     "Diizinkan: klik untuk melarang": "Allowed: click to block",
     "Dilarang: klik untuk mengizinkan": "Blocked: click to allow",
     "Uang warga ke pedagang": "Townsfolk coin to merchants",
+    "Sewa hari ini {0} (dasar {1} + tanjakan {2} + {3}% dari penjualan {4} + gudang {5}), kas {6}": "Rent today {0} (base {1} + ramp {2} + {3}% of sales {4} + storage {5}), cash {6}",
     "tutup": "closed",
     "Gerakan terakhir": "Latest movements",
     "Belum ada gerakan di periode ini.": "No movements in this period yet.",

@@ -42,7 +42,7 @@ export function facts(m: MerchantView, personality: string): string {
   });
   return [
     `You are ${m.name}, owner of ${m.shop} in Genesis Town. Personality: ${PERSONA[personality] ?? personality}.`,
-    `The shop is ${m.open ? 'OPEN' : 'CLOSED (bankrupt, waiting for a recovery board)'}; cash ${m.cash} coins; rent ${m.rent}/day.`,
+    `The shop is ${m.open ? 'OPEN' : 'CLOSED (bankrupt, waiting for a recovery board)'}; cash ${m.cash} coins; rent due today ${m.rent} coins (it grows with the day's sales).`,
     'Current prices:',
     ...rows,
   ].join('\n');

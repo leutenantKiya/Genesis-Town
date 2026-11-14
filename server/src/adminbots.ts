@@ -103,7 +103,10 @@ export class AdminBots {
         treasuryFree: Math.max(0, Math.min(gs.settledBalance(this.d.game.town, 'coin'), gs.balance(this.d.game.town, 'coin')) - res.settings().treasuryReserve) },
       enabled: res.cfg.enabled, paused: ctl.paused, from, scanned: rows.length, truncated: rows.length >= SCAN,
       inflow, spent: Object.values(byMerchant).reduce((s, m) => s + m.coin, 0),
-      merchants: market.ids().map((id) => ({ id, name: market.def(id).name, shop: market.def(id).shop, account: market.account(id), open: market.isOpen(id), coin: byMerchant[id]?.coin ?? 0, units: byMerchant[id]?.units ?? 0 })),
+      merchants: market.ids().map((id) => ({ id, name: market.def(id).name, shop: market.def(id).shop, account: market.account(id), open: market.isOpen(id), coin: byMerchant[id]?.coin ?? 0, units: byMerchant[id]?.units ?? 0,
+        // what it would owe for today's game day (read only): base + ramp + share of today's sales + storage, against its cash
+        rentToday: market.isOpen(id) ? market.rentDue(this.d.game.clock.time().settleDay, id) : null })),
+      rentRampDays: market.rentStreak(), rentLastClose: this.gs.meta('shops.lastCloseDay') ?? null,
       residents: res.walkers.map((x) => ({ id: x.id, name: x.name, look: x.look, role: x.role, account: res.account(x.id), allow: ctl.allow[x.id] ?? null, ...per[x.id], trade: perTrade[x.id], tools: res.tools()[x.id] ?? {}, plan: plan.per[x.id] })),
       queueOpen: plan.open, now: this.d.game.now(),
       toolDefs: Object.fromEntries(Object.entries(this.d.game.econ.tools ?? {}).map(([k, t]) => [k, { name: t.name, durability: t.durability, price: this.d.game.econ.toolShop?.price?.[k] ?? null }])),
