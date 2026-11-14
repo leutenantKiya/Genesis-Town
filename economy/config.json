@@ -51,7 +51,7 @@
   "merchants": {
     "sari": {
       "name": "Sarah", "shop": "Sarah's Fish Stall", "personality": "fair",
-      "buys": ["fish", "wood"], "sells": ["fish", "meal"],
+      "buys": ["fish", "wood"], "sells": ["fish", "meal", "wood"],
       "target": { "fish": 20, "wood": 10, "meal": 8 },
       "crafts": ["meal"],
       "startCash": 600, "startStock": { "fish": 20, "wood": 10, "meal": 8 },
@@ -59,7 +59,7 @@
     },
     "budi": {
       "name": "Ben", "shop": "Ben's Workshop", "personality": "fair",
-      "buys": ["ore", "wood"], "sells": ["tool"],
+      "buys": ["ore", "wood"], "sells": ["tool", "ore", "wood"],
       "target": { "ore": 15, "wood": 10, "tool": 4 },
       "crafts": ["tool"],
       "startCash": 600, "startStock": { "ore": 15, "wood": 10, "tool": 4 },
@@ -75,7 +75,7 @@
     },
     "joko": {
       "name": "Jack", "shop": "Jack's General Store", "personality": "generous",
-      "buys": ["wood", "wheat", "fish"], "sells": ["wood", "bread"],
+      "buys": ["wood", "wheat", "fish"], "sells": ["wood", "bread", "wheat", "fish"],
       "target": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },
       "crafts": [],
       "startCash": 350, "startStock": { "wood": 25, "wheat": 15, "fish": 10, "bread": 6 },

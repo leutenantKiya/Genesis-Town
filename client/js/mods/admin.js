@@ -565,7 +565,6 @@
       });
     });
     el.appendChild(tb);
-    el.appendChild($('p', 'chain-dim', $t('Bahan alat (bijih) tidak dijual pedagang, jadi alat hanya dibuat kalau dompet warga punya bijih.')));
   }
   // the townsfolk's shared bag: one wallet for all five (adminbots.ts inventory())
   function renderInv(d) {
@@ -615,6 +614,7 @@
       case 'too_costly': return $t('Biaya buat {0} (dengan selisih {1}) tidak lebih murah dari harga jual {2} di {3}', [num(x.cost), num(x.need), num(x.ask), x.to]);
       case 'shop_broke': return $t('Uang {0} tidak cukup membayar biaya buat', [x.to]);
       case 'await_gather': return $t('Menunggu warga mengumpulkan {0}', [x.input]);
+      case 'no_tool': return $t('Semua {0} sudah rusak dan tidak bisa membeli baru di {1} (harga {2})', [x.tool, x.from || '?', num(x.price)]);
       case 'not_picked': return $t('Tidak dipilih admin');
       case 'cheap': return $t('Harga {0} di {1} masih di bawah {2}: biar pemain yang mengumpulkan', [num(x.ask), x.from, num(x.need)]);
       case 'day_max': return $t('Sudah {0} hari ini (batas harian)', [num(x.today)]);
@@ -668,10 +668,11 @@
     el.textContent = '';
     var s = d.settings.gather, L = d.limits, gs = d.gather || { caught: {}, sold: 0, soldUnits: 0, soldBy: {} };
     el.appendChild($('div', 'chain-h', $t('Memancing & mengumpulkan')));
-    el.appendChild($('p', 'chain-dim', $t('Kalau bahan langka atau mahal (tidak ada stok, atau harga termurah minimal % dari harga dasar), warga memancing ikan, menebang kayu, memanen gandum, atau menambang bijih. Hasilnya dipakai dulu untuk memasak dan crafting, sisanya dijual ke pedagang yang menjual bahan itu, jadi harganya turun. Bijih tidak dijual siapa pun, jadi disimpan untuk membuat beliung.')));
+    el.appendChild($('p', 'chain-dim', $t('Kalau bahan langka atau mahal (tidak ada stok, atau harga termurah minimal % dari harga dasar), warga memancing ikan, menebang kayu, memanen gandum, atau menambang bijih. Tiap warga memakai alatnya sendiri (pancing, kapak, cangkul, beliung); tiap hasil mengurangi ketahanannya, dan alat yang rusak diganti dengan membeli baru di Ben, tidak diperbaiki. Hasilnya dipakai dulu untuk memasak dan crafting, sisanya dijual ke pedagang yang menjual bahan itu, jadi harganya turun.')));
     var g = $('div', 'adm-grid');
     g.appendChild(stat($t('Didapat'), Object.keys(gs.caught).map(function (k) { return num(gs.caught[k]) + ' ' + k; }).join(', ') || '0'));
     g.appendChild(stat($t('Dijual ke rak'), num(gs.sold) + ' ' + $t('koin'), num(gs.soldUnits) + 'x'));
+    g.appendChild(stat($t('Alat baru di Ben'), num(gs.toolsSpent || 0) + ' ' + $t('koin'), num(gs.toolsBought || 0) + 'x'));
     el.appendChild(g);
     var form = $('div', 'adm-form'), fields = {}, picked = s.goods.slice();
     var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!s.enabled;
@@ -750,6 +751,7 @@
       if (r.last) t.appendChild($('div', 'chain-dim', $t('Terakhir: {0} dari {1}, {2} koin ({3} lalu)', [r.last.token, mname[r.last.merchant] || r.last.merchant, num(r.last.coin), ago(r.last.at)])));
       if (r.trade && r.trade.units) t.appendChild($('div', 'chain-dim', $t('Dagang: beli {0}, jual {1} koin', [num(r.trade.bought), num(r.trade.sold)])));
       if (d.meals && d.meals.perDay) { var ateN = d.meals.today[r.id] || 0; t.appendChild($('div', ateN < d.meals.due ? 'adm-out' : 'chain-dim', $t('Makan hari ini: {0} dari {1}', [ateN, d.meals.perDay]) + (ateN < d.meals.due ? ' \u00b7 ' + $t('lapar') : ''))); }
+      if (d.toolDefs && r.tools) { var tl = Object.keys(r.tools).map(function (k) { var def = d.toolDefs[k] || { name: k, durability: 0 }; return def.name + ' ' + num(r.tools[k]) + '/' + num(def.durability); }); if (tl.length) t.appendChild($('div', 'chain-dim', $t('Alat: {0}', [tl.join(' \u00b7 ')]))); }
       if (r.trade && r.trade.crafted) t.appendChild($('div', 'chain-dim', $t('Crafting: {0} barang ke rak pedagang', [num(r.trade.crafted)])));
       hd.appendChild(t); box.appendChild(hd);
       var chips = $('div', 'adm-chips'), allow = r.allow;
@@ -787,6 +789,7 @@
       var line = $('div', 'adm-mv');
       line.appendChild($('span', 'chain-dim', ago(x.at)));
       line.appendChild($('span', null, x.kind === 'resident_buy' ? $t('{0} beli {1} dari {2}', [x.who, x.token, x.to])
+        : x.kind === 'tool_shop' && x.tool ? $t('{0} beli {1} baru di {2}', [x.who || '?', x.token, x.to || '?'])
         : x.kind === 'trade' && x.token && x.gather ? $t('{0} jual {1} hasil tangkapan ke {2}', [x.who || '?', x.token, x.to])
         : x.kind === 'trade' && x.token && x.meal ? $t('{0} beli {1} dari {2} untuk makan', [x.who || '?', x.token, x.to])
         : x.kind === 'trade' && x.token && x.craft ? (x.coin < 0 ? $t('{0} beli {1} dari {2} untuk crafting', [x.who || '?', x.token, x.to]) : $t('{0} jual {1} hasil craft ke {2}', [x.who || '?', x.token, x.to]))

@@ -59,7 +59,7 @@ export class AdminBots {
     const trade = { bought: 0, boughtUnits: 0, sold: 0, soldUnits: 0 }, perTrade: Record<string, { bought: number; sold: number; units: number; crafted: number }> = {};
     for (const x of res.walkers) perTrade[x.id] = { bought: 0, sold: 0, units: 0, crafted: 0 };
     const craft = { inputs: 0, fees: 0, sold: 0, soldUnits: 0, byGood: {} as Record<string, number> }, meals = { coin: 0, bought: 0 };
-    const gathered = { sold: 0, soldUnits: 0, soldBy: {} as Record<string, number> };
+    const gathered = { sold: 0, soldUnits: 0, soldBy: {} as Record<string, number>, toolsSpent: 0, toolsBought: 0 };
     for (const r of rows) {
       const tc = r.kind === 'trade' ? TRADE_REF.exec(r.ref ?? '') : null;
       if (tc && tc[6] === '-e') { meals.coin -= r.delta; meals.bought += Number(tc[3]); continue; } // food bought to eat
@@ -72,6 +72,7 @@ export class AdminBots {
         continue;
       }
       if (r.kind === 'fee' && r.delta < 0) { craft.fees -= r.delta; continue; } // the wallet pays fees only for crafting
+      if (r.kind === 'tool_shop' && r.delta < 0) { gathered.toolsSpent -= r.delta; gathered.toolsBought += 1; continue; } // a new tool at Ben's
       if (r.kind === 'trade') {
         const t = TRADE_REF.exec(r.ref ?? ''), units = t ? Number(t[3]) : 1, pt = t && t[5] ? perTrade[t[5]] : undefined;
         if (r.delta < 0) { trade.bought -= r.delta; trade.boughtUnits += units; if (pt) pt.bought -= r.delta; }
@@ -90,6 +91,7 @@ export class AdminBots {
     const label = (r: { kind: string; ref: string | null }) => {
       if (r.kind === 'resident_buy' && r.ref) { const [rid, mid, token] = r.ref.split(':'); return { who: res.walkers.find((x) => x.id === rid)?.name ?? rid, to: market.ids().includes(mid) ? market.def(mid).name : mid, token }; }
       if (r.kind === 'trade') { const t = TRADE_REF.exec(r.ref ?? ''); if (t) return { who: res.walkers.find((x) => x.id === t[5])?.name ?? t[5] ?? null, to: market.ids().includes(t[1]) ? market.def(t[1]).name : t[1], token: t[2], craft: t[6] === '-c', meal: t[6] === '-e', gather: t[6] === '-g' }; }
+      if (r.kind === 'tool_shop' && r.ref) { const [k, rid] = r.ref.replace(/^buy:/, '').split('#'); const ts = this.d.game.econ.toolShop; return { who: res.walkers.find((x) => x.id === rid)?.name ?? rid ?? null, to: ts && market.ids().includes(ts.merchant) ? market.def(ts.merchant).name : null, token: this.d.game.econ.tools[k]?.name ?? k, tool: true }; }
       if (r.kind === 'handout') return { who: null, to: 'Town treasury', token: null };
       if (r.kind === 'handout_mint') return { who: null, to: 'Faucet (new coin)', token: null };
       return { who: null, to: r.ref, token: null };
@@ -101,7 +103,8 @@ export class AdminBots {
       enabled: res.cfg.enabled, paused: ctl.paused, from, scanned: rows.length, truncated: rows.length >= SCAN,
       inflow, spent: Object.values(byMerchant).reduce((s, m) => s + m.coin, 0),
       merchants: market.ids().map((id) => ({ id, name: market.def(id).name, shop: market.def(id).shop, account: market.account(id), open: market.isOpen(id), coin: byMerchant[id]?.coin ?? 0, units: byMerchant[id]?.units ?? 0 })),
-      residents: res.walkers.map((x) => ({ id: x.id, name: x.name, look: x.look, account: res.account(x.id), allow: ctl.allow[x.id] ?? null, ...per[x.id], trade: perTrade[x.id] })),
+      residents: res.walkers.map((x) => ({ id: x.id, name: x.name, look: x.look, account: res.account(x.id), allow: ctl.allow[x.id] ?? null, ...per[x.id], trade: perTrade[x.id], tools: res.tools()[x.id] ?? {} })),
+      toolDefs: Object.fromEntries(Object.entries(this.d.game.econ.tools ?? {}).map(([k, t]) => [k, { name: t.name, durability: t.durability, price: this.d.game.econ.toolShop?.price?.[k] ?? null }])),
       settings: res.settings(), limits: LIMITS, trade: { ...trade, profit: trade.sold - trade.bought, holding: this.holding() },
       craft: { ...craft, profit: craft.sold - craft.inputs - craft.fees, shelves: this.shelves() },
       meals: this.mealsView(from, meals),
@@ -233,6 +236,15 @@ export class AdminBots {
       if (seller && seller.unit < (base * g.minPricePct) / 100) return { ...out, code: 'cheap' };
       if ((out.today as number) >= g.dailyMax) return { ...out, code: 'day_max', max: g.dailyMax };
       if ((out.spare as number) >= g.keepMax) return { ...out, code: 'bag_full', max: g.keepMax };
+      // the tool it takes: some resident's own still has a use, or a new one can be bought at Ben's
+      const tool = res.toolFor(good);
+      if (tool) {
+        const tl = res.tools(), def = econ.tools[tool], ts = econ.toolShop, price = ts?.price?.[tool] ?? 0;
+        const uses = res.walkers.reduce((n, x) => n + Math.max(0, tl[x.id]?.[tool] ?? 0), 0);
+        Object.assign(out, { tool: def.name, uses, price, owners: res.walkers.filter((x) => (tl[x.id]?.[tool] ?? 0) >= 1).length });
+        const canBuy = !!ts && market.isOpen(ts.merchant) && Math.max(coin, Math.min(set.target, coin + free)) >= price;
+        if (uses < 1 && !canBuy) return { ...out, code: 'no_tool', from: ts ? name(ts.merchant) : null };
+      }
       return { ...out, code: 'ok' };
     });
     return { general, wallet: coin, treasuryFree: free, minWallet: set.trade.minWallet, buy, sell, craft, gather };

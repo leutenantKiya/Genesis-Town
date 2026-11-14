@@ -61,7 +61,9 @@ export interface TradeSettings { enabled: boolean; marginPct: number; perHour: n
 export interface CraftSettings { enabled: boolean; marginPct: number; perHour: number; fillPct: number }
 export interface GatherSettings { enabled: boolean; goods: string[]; perHour: number; dailyMax: number; minPricePct: number; fillPct: number; keepMax: number }
 export interface ResidentSettings { target: number; treasuryReserve: number; meals: number; trade: TradeSettings; craft: CraftSettings; gather: GatherSettings }
-const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock', MEALS_KEY = 'residents.meals';
+const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock', MEALS_KEY = 'residents.meals', TOOLS_KEY = 'residents.tools';
+/** The raw good each tool's use gathers (economy/config.json `tools[*].use`). */
+const USE_GOOD: Record<string, string> = { water: 'fish', tree: 'wood', rock: 'ore', farm: 'wheat' };
 
 const DIRS: Array<[number, number, string]> = [[1, 0, 'right'], [-1, 0, 'left'], [0, 1, 'down'], [0, -1, 'up']];
 
@@ -354,31 +356,67 @@ export class Residents {
     return market.ids().filter((id) => market.isOpen(id) && market.def(id).sells.includes(good) && !market.trend.withdrawn(good) && gs.balance(market.account(id), good) >= 1)
       .map((id) => ({ id, unit: market.quote(id, good, 'buy', 1).unit })).sort((a, b) => a.unit - b.unit)[0] ?? null;
   }
+  /** The tool a raw good needs (rod, axe, pickaxe, hoe), or null. */
+  toolFor(good: string): string | null {
+    const tools = this.d.econ.tools ?? {};
+    return Object.keys(tools).find((k) => USE_GOOD[tools[k].use] === good) ?? null;
+  }
+  /** Each resident's own tools and the uses left on them (meta `residents.tools`: resident -> tool -> uses). */
+  tools(): Record<string, Record<string, number>> {
+    try { const t = JSON.parse(this.d.gs.meta(TOOLS_KEY) ?? '{}'); return t && typeof t === 'object' ? t : {}; } catch { return {}; }
+  }
+  private setTools(t: Record<string, Record<string, number>>) { this.d.gs.setMeta(TOOLS_KEY, JSON.stringify(t)); }
+  /** A resident buys a brand-new tool at Ben's tool stall (economy/config.json `toolShop`): a broken tool is replaced,
+   *  never repaired. Paid from the bag (an allowance from the treasury when short, never new coin), the coin to the stall's
+   *  merchant (kind `tool_shop`, ref `buy:<tool>#<resident>`). False when the stall is closed or the money is not there. */
+  private buyTool(day: number, w: Walker, kind: string, tools: Record<string, Record<string, number>>): boolean {
+    const { econ, market, gs } = this.d, ts = econ.toolShop, price = ts?.price?.[kind], def = econ.tools?.[kind];
+    if (!ts || !def || !(price >= 1) || !market.ids().includes(ts.merchant) || !market.isOpen(ts.merchant)) return false;
+    if (gs.balance(this.wallet, 'coin') < price) this.handout(day, false);
+    if (gs.balance(this.wallet, 'coin') < price) return false;
+    const ref = `buy:${kind}#${w.id}`, shop = market.account(ts.merchant);
+    gs.add(day, this.wallet, 'coin', -price, 'tool_shop', ref);
+    gs.add(day, shop, 'coin', price, 'tool_shop', ref);
+    (tools[w.id] ??= {})[kind] = def.durability;
+    this.walkTo(ts.merchant, 'tool', price, false);
+    return true;
+  }
+
   /** Units of `good` the townsfolk gathered on `day`. */
   gatheredOn(day: number, good: string): number { return this.d.gs.sumKind(day, this.wallet, good, 'resident_gather'); }
 
   /** One hour of gathering (game.step, before crafting): for each raw good the admin picked (fish, wood, wheat, ore) that
    *  is scarce or dear (no merchant has it, or the cheapest costs at least `minPricePct` % of its base value), the
    *  residents fish, chop, harvest or mine up to `perHour` units, at most `dailyMax` a game day, and never keep more than
-   *  `keepMax` spare in the bag. The catch first feeds crafting and cooking (own goods count at their base value), the
+   *  `keepMax` spare in the bag. Each unit wears one use of the gathering resident's own tool (rod, axe, pickaxe, hoe); a
+   *  broken or missing tool is bought new at Ben's tool stall. The catch first feeds crafting and cooking (own goods count at their base value), the
    *  rest goes to the shelves (stockShelves). Ledger kind `resident_gather`, ref `<good>#<resident>`. */
   gather(day: number): number {
     const set = this.settings(), s = set.gather, c = this.controls();
     if (!this.ready || !s.enabled || c.paused || s.perHour < 1 || !this.walkers.length) return 0;
-    const { gs, econ } = this.d, held = this.stock();
+    const { gs, econ } = this.d, held = this.stock(), tools = this.tools();
     let done = 0;
     for (const good of s.goods) {
       if (econ.items[good]?.kind !== 'raw') continue;
       const spare = gs.balance(this.wallet, good) - (held[good]?.qty ?? 0);
       const ask = this.cheapestAsk(good);
       if (ask && ask.unit < (econ.items[good].base * s.minPricePct) / 100) continue; // cheap enough: leave it to players
-      const n = Math.min(s.perHour, s.dailyMax - this.gatheredOn(day, good), s.keepMax - spare);
+      const n = Math.min(s.perHour, s.dailyMax - this.gatheredOn(day, good), s.keepMax - spare), tool = this.toolFor(good);
       for (let i = 0; i < n; i++) {
-        const w = this.walkers[this.nextJob++ % this.walkers.length];
+        // the next resident whose own tool still has a use; when every one is worn out, the next resident buys a new one
+        let w = this.walkers[this.nextJob % this.walkers.length];
+        if (tool) {
+          const ready = this.walkers.map((_, k) => this.walkers[(this.nextJob + k) % this.walkers.length]).find((x) => (tools[x.id]?.[tool] ?? 0) >= 1);
+          if (ready) w = ready;
+          else if (!this.buyTool(day, w, tool, tools)) break; // a broken tool is replaced at Ben's, never repaired
+          tools[w.id][tool] -= 1;
+        }
+        this.nextJob = this.walkers.indexOf(w) + 1;
         gs.add(day, this.wallet, good, 1, 'resident_gather', `${good}#${w.id}`);
         done++;
       }
     }
+    this.setTools(tools);
     return done;
   }
 

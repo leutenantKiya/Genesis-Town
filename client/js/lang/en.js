@@ -2046,6 +2046,11 @@
     "per bahan": "each good",
     "Mengumpulkan berjalan": "Gathering on",
     "Mengumpulkan mati": "Gathering off",
-    "{0} jual {1} hasil tangkapan ke {2}": "{0} sold gathered {1} to {2}"
+    "{0} jual {1} hasil tangkapan ke {2}": "{0} sold gathered {1} to {2}",
+    "Semua {0} sudah rusak dan tidak bisa membeli baru di {1} (harga {2})": "Every {0} is broken and a new one cannot be bought at {1} (price {2})",
+    "Kalau bahan langka atau mahal (tidak ada stok, atau harga termurah minimal % dari harga dasar), warga memancing ikan, menebang kayu, memanen gandum, atau menambang bijih. Tiap warga memakai alatnya sendiri (pancing, kapak, cangkul, beliung); tiap hasil mengurangi ketahanannya, dan alat yang rusak diganti dengan membeli baru di Ben, tidak diperbaiki. Hasilnya dipakai dulu untuk memasak dan crafting, sisanya dijual ke pedagang yang menjual bahan itu, jadi harganya turun.": "When a raw good is scarce or dear (no stock, or the cheapest price is at least a % of its base value), the townsfolk fish, chop wood, harvest wheat or mine ore. Each uses their own tool (rod, axe, hoe, pickaxe); every unit wears it down, and a broken tool is replaced by buying a new one at Ben's, never repaired. The catch goes to cooking and crafting first, the rest is sold to the merchant that sells it, so its price comes down.",
+    "Alat baru di Ben": "New tools at Ben's",
+    "Alat: {0}": "Tools: {0}",
+    "{0} beli {1} baru di {2}": "{0} bought a new {1} at {2}"
   });
 })();
