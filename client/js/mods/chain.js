@@ -341,20 +341,25 @@
       GT.modal({ title: $t('Masuk'), body: $t('Login belum aktif di alamat ini: NEAR Auth hanya menerima alamat yang sudah didaftarkan. Kamu tetap bisa melihat-lihat desa sebagai tamu.'), actions: [{ label: $t('Oke'), primary: true }] });
       return;
     }
-    return nearLogin();
+    // two ways in, both NEAR Auth by redirect: Google goes straight to Google's sign-in (Auth0 connection google-oauth2),
+    // email goes to NEAR Auth's own page (email code)
+    GT.modal({ title: $t('Masuk'), body: $t('Pilih cara masuk. Masuk dengan Google dan masuk dengan email membuat akun yang berbeda, jadi pakai cara yang sama setiap kali.'), actions: [
+      { label: $t('Masuk dengan Google'), primary: true, onClick: function (h) { h.close('action'); nearLogin('google-oauth2'); return true; } },
+      { label: $t('Masuk dengan email'), onClick: function (h) { h.close('action'); nearLogin(); return true; } }
+    ] });
   }
 
   // NEAR Auth by redirect (see authReturn at the top): the page leaves for Auth0's sign-in page and comes back here.
   // Approving a second device (approveDevice, newDevice) still opens NEAR Auth's window: it signs a key addition and
   // must come back to the same page state.
-  function nearLogin() {
+  function nearLogin(connection) {
     if (S.busy) return;
     if (!window.NearLib) { GT.toast($t('Pustaka NEAR belum dimuat (jalankan build klien).')); return; }
     S.busy = true;
     var ring = busyRing();
     try { sessionStorage.setItem(SS_RETURN, location.pathname + location.search + location.hash); } catch (e) { /* storage blocked: back to / */ }
     // redirect_uri must be one of the app's Allowed Callback URLs in Auth0 (the bare origin is)
-    nearProvider().client.loginWithRedirect({ authorizationParams: { redirect_uri: location.origin, prompt: lsGet(LS_FORCE) === '1' ? 'login' : undefined } })
+    nearProvider().client.loginWithRedirect({ authorizationParams: { redirect_uri: location.origin, prompt: lsGet(LS_FORCE) === '1' ? 'login' : undefined, connection: connection || undefined } })
       .catch(function (e) { S.busy = false; ring(); GT.toast($t('Gagal masuk: {0}', [e && e.message || e])); });
   }
 

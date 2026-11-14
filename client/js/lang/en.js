@@ -2083,6 +2083,9 @@
     "Jadwal: {0}": "Schedule: {0}",
     "Kayu dibakar hari ini: {0} dari {1}": "Wood burnt today: {0} of {1}",
     "{0} beli {1} dari {2} untuk dibakar": "{0} bought {1} from {2} to burn",
-    "Pegang {0} dulu (tombol {1} di hotbar).": "Hold the {0} first (key {1} on the hotbar)."
+    "Pegang {0} dulu (tombol {1} di hotbar).": "Hold the {0} first (key {1} on the hotbar).",
+    "Pilih cara masuk. Masuk dengan Google dan masuk dengan email membuat akun yang berbeda, jadi pakai cara yang sama setiap kali.": "Choose how to sign in. Signing in with Google and signing in with email make different accounts, so use the same way every time.",
+    "Masuk dengan Google": "Sign in with Google",
+    "Masuk dengan email": "Sign in with email"
   });
 })();
