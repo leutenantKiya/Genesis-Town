@@ -137,11 +137,14 @@ html:not(.gt-phone) #acts > #gt-upbtn:not([hidden]){display:inline-block!importa
 @media (prefers-reduced-motion:reduce){.gt-tab{transition:none}}
 html.gt-phone .btn,html.gt-phone .mbtn{min-height:44px}
 /* icons beside the words: the HUD buttons (desktop) and the phone's tab bar; screen readers keep the words */
-#acts > #chainbtn::before{content:"🎒"}#acts > #pasarbtn::before{content:"🏪"}#acts > #mapbtn::before{content:"🗺️"}
-#acts > #gt-misbtn::before{content:"🎯"}#acts > #gt-morebtn::before{content:"⚙️"}#acts > #gt-upbtn::before{content:"🏛️"}
-#acts > #chainbtn::before,#acts > #pasarbtn::before,#acts > #mapbtn::before,#acts > #gt-misbtn::before,#acts > #gt-morebtn::before,#acts > #gt-upbtn::before{margin-right:6px;font-size:1.05em;line-height:1}
-#tab-bag::before{content:"🎒"}#tab-market::before{content:"🏪"}#tab-map::before{content:"🗺️"}#tab-chat::before{content:"💬"}#tab-more::before{content:"⚙️"}
-.gt-tab::before{display:block;font-size:20px;line-height:1.1;margin-bottom:2px}
+#acts > #chainbtn::before,#acts > #pasarbtn::before,#acts > #mapbtn::before,#acts > #gt-misbtn::before,#acts > #gt-morebtn::before,#acts > #profbtn::before,
+.gt-tab::before{content:"";display:inline-block;width:32px;height:32px;background:var(--ic) center/contain no-repeat;image-rendering:pixelated;vertical-align:middle}
+#acts > #chainbtn::before,#acts > #pasarbtn::before,#acts > #mapbtn::before,#acts > #gt-misbtn::before,#acts > #gt-morebtn::before,#acts > #profbtn::before{margin:-4px 6px -4px -4px}
+#acts > #gt-upbtn::before{content:"🏛️";margin-right:6px;font-size:1.05em;line-height:1}
+#acts > #chainbtn{--ic:url(../icons/ui/bag-32.png)}#acts > #pasarbtn{--ic:url(../icons/ui/market-32.png)}#acts > #mapbtn{--ic:url(../icons/ui/map-32.png)}
+#acts > #gt-misbtn{--ic:url(../icons/ui/missions-32.png)}#acts > #gt-morebtn{--ic:url(../icons/ui/settings-32.png)}#acts > #profbtn{--ic:url(../icons/ui/profile-32.png)}
+#tab-bag{--ic:url(../icons/ui/bag-32.png)}#tab-market{--ic:url(../icons/ui/market-32.png)}#tab-map{--ic:url(../icons/ui/map-32.png)}#tab-chat{--ic:url(../icons/ui/mail-32.png)}#tab-more{--ic:url(../icons/ui/settings-32.png)}
+.gt-tab::before{display:block;margin:0 auto 2px}
 #acts > #btnSosial::before{content:"💬";margin-right:6px;font-size:1.05em;line-height:1}
 
 /* ------------------------------------------------------------------ phone held sideways (html.gt-land)

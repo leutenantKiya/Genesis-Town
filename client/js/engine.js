@@ -1540,6 +1540,7 @@ function modal(o){
   var over = el('div', 'mover'), box = el('div', 'mbox' + (o.wide ? ' wide' : ''));
   box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.tabIndex = -1;
   var head = el('div', 'mhead'), title = el('h2', 'mtitle', o.title || '');
+  if (o.icon) title.insertBefore(el('i', 'uic uic-' + o.icon), title.firstChild); // decorative pixel icon before the title text (css/game.css .uic)
   title.id = 'mt' + h.id; box.setAttribute('aria-labelledby', title.id);
   head.appendChild(title);
   if (o.closable !== false){

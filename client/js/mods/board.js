@@ -34,7 +34,7 @@
       if (r.me && r.me.rank > 10) body.appendChild(el('p', 'tr-me', $t('Kamu: peringkat {0} · {1} barang · {2} koin', [r.me.rank, r.me.sold_qty, r.me.coin])));
       else if (!r.me) body.appendChild(el('p', 'chain-dim', $t('Kamu belum berjualan{0}', [period === 'day' ? $t(' hari ini.') : '.'])));
       show({
-        title: '🏆 ' + $t('Papan Juara · {0}', [period === 'day' ? $t('hari ini') : $t('sepanjang masa')]), body: body, wide: true,
+        icon: 'trophy', title: $t('Papan Juara · {0}', [period === 'day' ? $t('hari ini') : $t('sepanjang masa')]), body: body, wide: true,
         actions: [{ label: period === 'day' ? $t('Sepanjang masa') : $t('Hari ini'), onClick: function () { leaderboard(period === 'day' ? 'all' : 'day'); return true; } }, { label: $t('Tutup'), close: true }]
       });
     }, function (e) { GT.toast((e && e.message) || $t('Gagal memuat.')); });

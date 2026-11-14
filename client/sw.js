@@ -1,6 +1,6 @@
 /* Service worker: makes the game installable and keeps the app shell available offline.
  * Network-first for everything, so game code is never stale while online. /api/* is never touched. */
-var CACHE = 'gt-shell-v114';
+var CACHE = 'gt-shell-v115';
 var SHELL = [
   '/', '/manifest.json',
   '/css/theme.css', '/css/game.css', '/css/chain.css', '/css/settings.css', '/css/sim.css', '/css/mods.css', '/css/phone.css',
@@ -8,7 +8,7 @@ var SHELL = [
   '/js/mods/casino.js', '/js/mods/thief.js', '/js/mods/police.js', '/js/mods/combat.js', '/js/mods/curfew.js',
   '/js/mods/gossip.js', '/js/mods/agent.js', '/js/mods/social.js', '/js/mods/ferry.js', '/js/mods/actionpick.js', '/js/mods/ride.js', '/js/mods/interior.js', '/js/mods/settings.js',
   '/vendor/env.js', '/vendor/near.js', '/js/mods/chain.js', '/js/mods/homeland.js', '/js/mods/fishing.js', '/js/mods/actfx.js', '/js/mods/players.js', '/js/mods/party.js', '/js/mods/admin.js', '/js/mods/trade.js', '/js/mods/hotbar.js', '/js/mods/mouse.js', '/js/mods/sim.js', '/js/mods/view3d.js', '/js/mods/concert.js', '/js/mods/sfx.js', '/js/mods/music.js', '/js/mods/charhover.js', '/js/mods/mall.js', '/js/mods/board.js',
-  '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'
+  '/icons/logo.png', '/icons/ui/bag-32.png', '/icons/ui/market-32.png', '/icons/ui/map-32.png', '/icons/ui/missions-32.png', '/icons/ui/settings-32.png', '/icons/ui/trophy-32.png', '/icons/ui/casino-32.png', '/icons/ui/mail-32.png', '/icons/ui/pickaxe-32.png', '/icons/ui/guild-32.png', '/icons/ui/ledger-32.png', '/icons/ui/rest-32.png', '/icons/ui/plus-32.png', '/icons/ui/minus-32.png', '/icons/ui/refresh-32.png', '/icons/ui/profile-32.png', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png', '/icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', function (e) {
