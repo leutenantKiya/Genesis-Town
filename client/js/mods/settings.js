@@ -181,7 +181,7 @@
   function shortcuts() {
     var row = $('div', 'gt-set-links'), opts = [];
     if (GT.openProfile) opts.push(['🪪', $t('Profil'), function () { GT.openProfile(); }]);
-    if (document.getElementById('simbtn')) opts.push(['📊', $t('Simulasi 1 minggu'), function () { press('simbtn'); }]);
+    if (window.GT_SIM) opts.push(['📊', $t('Simulasi 1 minggu'), function () { GT_SIM.open(); }]);
     if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push(['🛡️', $t('Admin'), function () { GT_ADMIN.open(); }]);
     if (document.getElementById('devbtn')) opts.push(['🛠️', 'Dev', function () { press('devbtn'); }]);
     if (window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account) opts.push(['🚪', $t('Keluar (ganti akun)'), function () { GT_CHAIN.signOut(); }]);
@@ -389,7 +389,7 @@
   // "Kustomisasi" (the wardrobe), below it "Party" and "Tampilan & suara" (every setting) side by side, and Simpan.
   // Settings apply the moment they are changed; Simpan saves a new name, then confirms and closes.
   var NAME_RE = /^[A-Za-z0-9 _-]{3,16}$/;
-  var dispHost = null, partyHost = null, idleT = 0, draftName = null, nameMsg = null;
+  var dispHost = null, partyHost = null, idleT = 0, draftName = null, nameMsg = null, setTab = 'cust';
 
   function signedIn() { var c = window.GT_CHAIN, s = c && c.state; return !!(s && s.account && s.mode !== 'offline' && s.mode !== 'loading'); }
   function openMall() { if (modal) modal.close('mall'); if (window.GT_MALL) setTimeout(function () { GT_MALL.open(); }, 0); }
@@ -426,10 +426,9 @@
     left.appendChild(nameRow); left.appendChild(nameMsg); left.appendChild(stage); left.appendChild(shortcuts());
     wrap.appendChild(left);
 
-    // right
+    // right: one tab at a time (Kustomisasi, Party, Tampilan & suara) in a card of fixed height, then Simpan
     var right = $('div', 'gt-set-right');
-    var cust = $('div', 'gt-set-card');
-    cust.appendChild($('h3', 'gt-set-h', $t('Kustomisasi')));
+    var cust = $('div', 'gt-set-card gt-set-pane');
     cust.appendChild($('p', 'gt-cs-note', $t('Tampilan tubuh dipilih sekali saat karakter dibuat. Ganti gayamu dengan pakaian dari Genesis Mall.')));
     var ward = $('div', 'gt-cs-wardrobe');
     function wardPaint() {
@@ -439,17 +438,27 @@
     }
     wardPaint();
     cust.appendChild(ward);
-    right.appendChild(cust);
 
-    var pair = $('div', 'gt-set-pair');
-    var pc = $('div', 'gt-set-card'); pc.appendChild($('h3', 'gt-set-h', $t('Party')));
+    var pc = $('div', 'gt-set-card gt-set-pane');
     partyHost = $('div', 'gt-set-scroll gt-set-party'); pc.appendChild(partyHost);
     if (window.GT_PARTY && GT_PARTY.embed) GT_PARTY.embed(partyHost, function () { if (modal && modal.isOpen()) modal.close('go'); });
     else partyHost.appendChild($('p', 'chain-dim', $t('Masuk dulu.')));
-    var dc = $('div', 'gt-set-card'); dc.appendChild($('h3', 'gt-set-h', $t('Tampilan & suara')));
+    var dc = $('div', 'gt-set-card gt-set-pane');
     dispHost = $('div', 'gt-set-scroll'); dispHost.appendChild(displayBody()); dc.appendChild(dispHost);
-    pair.appendChild(pc); pair.appendChild(dc);
-    right.appendChild(pair);
+    var panes = { cust: cust, party: pc, disp: dc };
+    var tabs = $('div', 'gt-set-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', $t('Pengaturan'));
+    [['cust', '👕 ' + $t('Kustomisasi')], ['party', '👥 ' + $t('Party')], ['disp', '🎛️ ' + $t('Tampilan & suara')]].forEach(function (t) {
+      var b = $('button', 'gt-set-tab', t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.tab = t[0];
+      b.addEventListener('click', function () { setTab = t[0]; pick(); });
+      tabs.appendChild(b);
+    });
+    function pick() {
+      Array.prototype.forEach.call(tabs.children, function (b) { var on = b.dataset.tab === setTab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+      Object.keys(panes).forEach(function (k) { panes[k].hidden = k !== setTab; });
+    }
+    right.appendChild(tabs);
+    right.appendChild(cust); right.appendChild(pc); right.appendChild(dc);
+    pick();
 
     var sv = $('button', 'mbtn primary gt-set-save', $t('Simpan')); sv.type = 'button';
     sv.addEventListener('click', saveAll);

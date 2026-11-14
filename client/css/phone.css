@@ -123,11 +123,12 @@ html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:
 /* Desktop and tablet HUD (not phone): four places in view plus Lainnya, in the order players need them */
 html:not(.gt-phone) #acts > button{display:none!important}
 html:not(.gt-phone) #acts > #chainbtn,html:not(.gt-phone) #acts > #pasarbtn,html:not(.gt-phone) #acts > #mapbtn,
-html:not(.gt-phone) #acts > #simbtn,html:not(.gt-phone) #acts > #gt-morebtn{display:inline-block!important}
+html:not(.gt-phone) #acts > #gt-misbtn:not([hidden]),html:not(.gt-phone) #acts > #gt-morebtn{display:inline-block!important}
+#acts > #gt-misbtn[hidden]{display:none!important}
 /* the Homeland's Upgrade button: first, and only while you stand in your own Homeland (homeland.js sets hidden) */
 html:not(.gt-phone) #acts > #gt-upbtn:not([hidden]){display:inline-block!important;order:0}
 #acts > #gt-upbtn[hidden]{display:none!important}
-#acts > #chainbtn{order:1}#acts > #pasarbtn{order:2}#acts > #mapbtn{order:3}#acts > #simbtn{order:4}#acts > #gt-morebtn{order:5}
+#acts > #chainbtn{order:1}#acts > #pasarbtn{order:2}#acts > #mapbtn{order:3}#acts > #gt-misbtn{order:4;position:relative}#acts > #gt-morebtn{order:5}
 #acts > #chainbtn{background:var(--accent);color:var(--accent-ink)}
 #acts > #chainbtn:hover{background:var(--accent-hi)}
 
@@ -135,8 +136,8 @@ html:not(.gt-phone) #acts > #gt-upbtn:not([hidden]){display:inline-block!importa
 html.gt-phone .btn,html.gt-phone .mbtn{min-height:44px}
 /* icons beside the words: the HUD buttons (desktop) and the phone's tab bar; screen readers keep the words */
 #acts > #chainbtn::before{content:"🎒"}#acts > #pasarbtn::before{content:"🏪"}#acts > #mapbtn::before{content:"🗺️"}
-#acts > #simbtn::before{content:"📊"}#acts > #gt-morebtn::before{content:"⚙️"}#acts > #gt-upbtn::before{content:"🏛️"}
-#acts > #chainbtn::before,#acts > #pasarbtn::before,#acts > #mapbtn::before,#acts > #simbtn::before,#acts > #gt-morebtn::before,#acts > #gt-upbtn::before{margin-right:6px;font-size:1.05em;line-height:1}
+#acts > #gt-misbtn::before{content:"🎯"}#acts > #gt-morebtn::before{content:"⚙️"}#acts > #gt-upbtn::before{content:"🏛️"}
+#acts > #chainbtn::before,#acts > #pasarbtn::before,#acts > #mapbtn::before,#acts > #gt-misbtn::before,#acts > #gt-morebtn::before,#acts > #gt-upbtn::before{margin-right:6px;font-size:1.05em;line-height:1}
 #tab-bag::before{content:"🎒"}#tab-market::before{content:"🏪"}#tab-map::before{content:"🗺️"}#tab-chat::before{content:"💬"}#tab-more::before{content:"⚙️"}
 .gt-tab::before{display:block;font-size:20px;line-height:1.1;margin-bottom:2px}
 #acts > #btnSosial::before{content:"💬";margin-right:6px;font-size:1.05em;line-height:1}
@@ -219,12 +220,12 @@ html.gt-land .gt-cs-name,html.gt-land .gt-cs-tag{font-size:calc(17px*var(--ts))}
 html.gt-land .gt-cs-go{min-height:44px;padding:6px;font-size:calc(18px*var(--ts))}
 
 /* the Settings window (mods/settings.js): columns stack on a phone held upright (everything reachable by scrolling the window), a phone on its side keeps the name and preview as a slim column */
-html.gt-phone:not(.gt-land) .gt-set,html.gt-phone:not(.gt-land) .gt-set-pair{grid-template-columns:minmax(0,1fr)}
+html.gt-phone:not(.gt-land) .gt-set{grid-template-columns:minmax(0,1fr)}
+html.gt-phone .gt-set-pane{height:auto;min-height:240px;overflow:visible}
 html.gt-phone:not(.gt-land) .gt-set-scroll{max-height:none;overflow:visible;padding-right:0}
 html.gt-phone:not(.gt-land) .gt-set-left .gt-cs-stage{min-height:200px}
 html.gt-land #mroot .mbox.gt-set-box{width:min(820px,100%)}
 html.gt-land .gt-set{grid-template-columns:minmax(140px,190px) minmax(0,1fr);gap:8px}
-html.gt-land .gt-set-pair{grid-template-columns:minmax(0,1fr)}
 html.gt-land .gt-set-scroll{max-height:none;overflow:visible;padding-right:0}
 html.gt-land .gt-set-left .gt-cs-stage{min-height:0}
 html.gt-land .gt-set .gt-cs-prev{width:96px!important;height:120px!important}

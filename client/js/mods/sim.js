@@ -200,7 +200,6 @@
   GT.register({
     id: 'sim',
     init: function () {
-      GT.addHudButton({ id: 'simbtn', label: $t('Simulasi'), onClick: open, secondary: false });
       GT.addDevSection($t('Simulasi ekonomi'), function (sec) { sec.appendChild(btn($t('Simulasi 1 minggu'), open, 'primary')); });
     }
   });

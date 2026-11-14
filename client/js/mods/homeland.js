@@ -988,6 +988,7 @@
     var L = layoutOf(), sc = GT.scene;
     if (!inOwnHome() || !L || !L.chunks || !sc || sc.kind !== 'out' || !GT.screenToTile) return null;
     var t = GT.screenToTile(cx, cy); if (!t || t.x < 0 || t.y < 0 || t.x >= L.w || t.y >= L.h) return null;
+    if (L.tiles && L.tiles[t.y * L.w + t.x] === 'void') return null; // the sky between islands is not the island
     var CHs = L.chunk || 16, n = Math.round(L.w / CHs), c = L.chunks[Math.floor(t.y / CHs) * n + Math.floor(t.x / CHs)];
     return c && c.open === false ? c : null;
   }
@@ -1027,22 +1028,36 @@
     });
     return h;
   }
-  // the hovered island: a pulsing outline and a soft wash over its tiles (projected tile by tile, so it follows the 2.5D camera)
+  // the hovered island: a pulsing outline along its shore and a soft wash over its land (every tile of the chunk that is not
+  // open sky), projected corner by corner so it follows the 2.5D camera
   function drawHoverChunk(ctx, T) {
     if (!hoverChunk || !inOwnHome() || GT.isUiOpen()) return;
     var L = layoutOf(), c = null; (L && L.chunks || []).forEach(function (q) { if (q.id === hoverChunk) c = q; });
     if (!c || c.open !== false) { hoverChunk = null; return; }
     var CHs = L.chunk || 16, x0 = c.cx * CHs, y0 = c.cy * CHs, x1 = x0 + CHs, y1 = y0 + CHs, v3 = GT.view3dOn && GT.view3dOn();
     function pt(X, Y) { var a = v3 ? GT.at(X - 0.5, Y - 0.5) : GT.at(X, Y); return v3 ? { x: a.x + 6, y: a.y + 12 } : a; }
-    var pts = [], k;
-    for (k = x0; k < x1; k++) pts.push(pt(k, y0)); for (k = y0; k < y1; k++) pts.push(pt(x1, k));
-    for (k = x1; k > x0; k--) pts.push(pt(k, y1)); for (k = y1; k > y0; k--) pts.push(pt(x0, k));
+    var tiles = L.tiles, W = L.w;
+    function land(X, Y) { return X >= x0 && X < x1 && Y >= y0 && Y < y1 && (!tiles || tiles[Y * W + X] !== 'void'); }
+    var X, Y, P = {};
+    function P_(a, b) { var k = a + ',' + b; return P[k] || (P[k] = pt(a, b)); }
     var pulse = 0.5 + 0.5 * Math.sin(Date.now() / 260);
     ctx.save();
-    ctx.beginPath(); pts.forEach(function (q, i) { if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }); ctx.closePath();
+    ctx.beginPath(); // the wash: every land tile as one quad (same winding, so they join into one shape)
+    for (Y = y0; Y < y1; Y++) for (X = x0; X < x1; X++) if (land(X, Y)) {
+      var a = P_(X, Y), b = P_(X + 1, Y), c2 = P_(X + 1, Y + 1), d = P_(X, Y + 1);
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c2.x, c2.y); ctx.lineTo(d.x, d.y); ctx.closePath();
+    }
     ctx.fillStyle = 'rgba(255,236,150,' + (0.1 + 0.1 * pulse).toFixed(3) + ')'; ctx.fill();
+    ctx.beginPath(); // the outline: each land tile's edge that faces sky or another chunk
+    function seg(ax, ay, bx, by) { var p = P_(ax, ay), q = P_(bx, by); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }
+    for (Y = y0; Y < y1; Y++) for (X = x0; X < x1; X++) if (land(X, Y)) {
+      if (!land(X, Y - 1)) seg(X, Y, X + 1, Y);
+      if (!land(X + 1, Y)) seg(X + 1, Y, X + 1, Y + 1);
+      if (!land(X, Y + 1)) seg(X, Y + 1, X + 1, Y + 1);
+      if (!land(X - 1, Y)) seg(X, Y, X, Y + 1);
+    }
     ctx.shadowColor = 'rgba(255,224,120,.9)'; ctx.shadowBlur = 6 + 6 * pulse;
-    ctx.strokeStyle = 'rgba(255,240,170,' + (0.75 + 0.25 * pulse).toFixed(2) + ')'; ctx.lineWidth = Math.max(1, T / 8); ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,240,170,' + (0.75 + 0.25 * pulse).toFixed(2) + ')'; ctx.lineWidth = Math.max(1, T / 8); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
     ctx.restore();
     var cc = GT.at(x0 + CHs / 2, y0 + CHs / 2);
     if (window.GT_THEME && GT_THEME.label) GT_THEME.label(ctx, '🔒 ' + $t('Klik untuk membuka pulau'), cc.x + (v3 ? 0 : 0), cc.y, { tone: 'paper', size: 7, bold: true });

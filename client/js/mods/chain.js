@@ -588,7 +588,7 @@
   /* ---- missions from the server (state.missions): counted there, claimed once ---- */
   // The Mission button at the top right: always one tap to the list; a "!" when a reward waits or the current mission is
   // new to this player (opening the list marks it seen)
-  var missionBtn = null, missionBadge = null;
+  var missionBtn = null, missionBadge = null, missionHud = null, missionHudBadge = null;
   function msSeenKey() { return 'gt.chain.msSeen.' + (S.account || 'guest'); }
   function topRight() {
     var tr = document.getElementById('gt-tr'), screen = document.getElementById('screen');
@@ -599,16 +599,19 @@
     var tr = topRight();
     if (!tr) return;
     if (!missionBtn) {
-      missionBtn = $('button', 'gt-trbtn'); missionBtn.type = 'button';
+      missionBtn = $('button', 'gt-trbtn gt-trbtn-mission'); missionBtn.type = 'button';
       missionBtn.appendChild($('span', null, '🎯 ' + $t('Misi'))); missionBadge = $('i', 'gt-trbadge', '!'); missionBadge.hidden = true; missionBtn.appendChild(missionBadge);
       missionBtn.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) open('missions'); });
       tr.insertBefore(missionBtn, tr.firstChild);
+      // the same button in the top bar, where Simulasi used to be (css/phone.css shows it on a computer)
+      missionHud = GT.addHudButton({ id: 'gt-misbtn', label: $t('Misi'), secondary: false, onClick: function () { open('missions'); } });
+      if (missionHud) { missionHudBadge = $('i', 'gt-trbadge', '!'); missionHudBadge.hidden = true; missionHud.appendChild(missionHudBadge); }
     }
     var show = !!(S.account && ms && ms.list && S.mode !== 'offline' && S.mode !== 'loading');
-    missionBtn.hidden = !show;
+    missionBtn.hidden = !show; if (missionHud) missionHud.hidden = !show;
     if (!show) return;
     var fresh = !!claimable || !!(ms.current && lsGet(msSeenKey()) !== ms.current);
-    missionBadge.hidden = !fresh;
+    missionBadge.hidden = !fresh; if (missionHudBadge) missionHudBadge.hidden = !fresh;
     missionBtn.setAttribute('aria-label', fresh ? $t('Misi, ada yang baru') : $t('Misi'));
   }
   function missionOf(id) { var l = S.st && S.st.missions && S.st.missions.list; if (!l) return null; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; }

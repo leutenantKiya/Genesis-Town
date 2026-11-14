@@ -380,6 +380,8 @@ html.gt-titlecard .gt-tr,html.gt-fishing .gt-tr,html.gt-fighting .gt-tr{display:
 .gt-trbtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .gt-trbtn[hidden]{display:none}
 .gt-trbtn-players{display:none}
+/* on a computer the Mission button lives in the top bar (#gt-misbtn); the corner keeps it on a phone */
+html:not(.gt-phone) .gt-trbtn-mission{display:none}
 html.gt-phone .gt-trbtn-players{display:block;min-width:44px;min-height:44px}
 html.gt-phone .gt-trbtn{min-height:44px}
 .gt-trbadge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#e04040;color:#fff;font:700 12px/18px var(--font);font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--hud)}
