@@ -176,19 +176,21 @@
   // Each tab presses the existing HUD button, so the bar adds no game logic of its own.
   var tabbar = null;
   function press(id) { var b = document.getElementById(id); if (b) b.click(); }
-  function moreSheet() {
-    var opts = [];
-    if (document.getElementById('simbtn')) opts.push({ icon: '📊', label: $t('Simulasi 1 minggu'), onPick: function () { press('simbtn'); } });
-    opts.push({ icon: '🎛️', label: $t('Tampilan, suara & tombol'), onPick: openSettings });
-    if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push({ icon: '🛡️', label: $t('Admin'), onPick: function () { GT_ADMIN.open(); } });
-    opts.push({ icon: '👥', label: $t('Party'), onPick: function () { if (window.GT_PARTY) GT_PARTY.open(); } });
-    if (window.GT_CHARSCREEN) opts.push({ icon: '👕', label: $t('Ubah karakter'), onPick: function () { GT_CHARSCREEN.open(true); } });
-    if (GT.openProfile) opts.push({ icon: '🪪', label: $t('Profil'), onPick: function () { GT.openProfile(); } });
-    if (GT.interact) opts.push({ icon: '✉️', label: $t('Pesan ke NPC di depanmu'), onPick: function () { GT.interact('message'); } });
-    if (document.getElementById('devbtn')) opts.push({ icon: '🛠️', label: 'Dev', onPick: function () { press('devbtn'); } });
-    // signing out lives here, with the other account settings (it used to sit at the foot of the Bag)
-    if (window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account) opts.push({ icon: '🚪', label: $t('Keluar (ganti akun)'), onPick: function () { GT_CHAIN.signOut(); } });
-    GT.menu($t('Pengaturan'), opts);
+  // Account shortcuts at the foot of the Settings panel's left column (the old Settings list is gone: the panel is the
+  // settings). Each one closes the panel first, then opens its own window.
+  function shortcuts() {
+    var row = $('div', 'gt-set-links'), opts = [];
+    if (GT.openProfile) opts.push(['🪪', $t('Profil'), function () { GT.openProfile(); }]);
+    if (document.getElementById('simbtn')) opts.push(['📊', $t('Simulasi 1 minggu'), function () { press('simbtn'); }]);
+    if (window.GT_ADMIN && GT_ADMIN.isAdmin()) opts.push(['🛡️', $t('Admin'), function () { GT_ADMIN.open(); }]);
+    if (document.getElementById('devbtn')) opts.push(['🛠️', 'Dev', function () { press('devbtn'); }]);
+    if (window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account) opts.push(['🚪', $t('Keluar (ganti akun)'), function () { GT_CHAIN.signOut(); }]);
+    opts.forEach(function (o) {
+      var b = $('button', 'mbtn gt-set-link', o[0] + ' ' + o[1]); b.type = 'button';
+      b.addEventListener('click', function () { if (modal && modal.isOpen()) modal.close('go'); o[2](); });
+      row.appendChild(b);
+    });
+    return row;
   }
   function buildTabbar() {
     if (tabbar) return;
@@ -199,7 +201,7 @@
      ['tab-market', $t('Pasar'), function () { press('pasarbtn'); }],
      ['tab-map', $t('Peta'), function () { press('mapbtn'); }],
      ['tab-chat', $t('Chat'), function () { if (window.GT_PLAYERS) GT_PLAYERS.openChat(''); }],
-     ['tab-more', $t('Menu'), moreSheet, $t('Pengaturan')]].forEach(function (t) {
+     ['tab-more', $t('Menu'), openSettings, $t('Pengaturan')]].forEach(function (t) {
       var b = $('button', 'gt-tab', t[1]); b.type = 'button'; b.id = t[0];
       if (t[3]) b.setAttribute('aria-label', t[3]); // a short word on the tab, the full name for screen readers
       b.addEventListener('click', function (e) { e.currentTarget.blur(); if (!GT.isUiOpen()) t[2](); });
@@ -421,7 +423,7 @@
       }, 300);
       stage.addEventListener('click', function () { tick += 4; }); // a tap makes the character look around
     }
-    left.appendChild(nameRow); left.appendChild(nameMsg); left.appendChild(stage);
+    left.appendChild(nameRow); left.appendChild(nameMsg); left.appendChild(stage); left.appendChild(shortcuts());
     wrap.appendChild(left);
 
     // right
@@ -708,10 +710,9 @@
     onFrame: function () { actTick(); joyTick(); },
     init: function () {
       buildActBtn(); buildJoy();
-      GT.addHudButton({ id: 'setbtn', label: $t('Atur'), onClick: openSettings, secondary: false });
-      // A calmer HUD: Tas, Pasar, Peta and Simulasi stay in view; everything else lives in Lainnya
+      // A calmer HUD: Tas, Pasar, Peta and Simulasi stay in view; the gear opens the Settings panel straight away
       // (css/phone.css hides the rest). Their keyboard shortcuts still work.
-      GT.addHudButton({ id: 'gt-morebtn', label: $t('Pengaturan'), onClick: moreSheet, secondary: false });
+      GT.addHudButton({ id: 'gt-morebtn', label: $t('Pengaturan'), onClick: openSettings, secondary: false });
       renderHelp();
       applyLayout();
       buildTop();

@@ -61,7 +61,7 @@
   }
 
   /* ---------------------------------------------------------------- the screen */
-  // force: the player asked for it (Lainnya > Ubah karakter). Otherwise a named account skips the screen and goes
+  // force: the player asked for it (no menu opens it now). Otherwise a named account skips the screen and goes
   // straight to the Homeland, so the name is asked only once; the server (/api/name named:true) is the memory.
   var skipping = false;
   function open(force) {

@@ -56,6 +56,8 @@ html.gt-reduced-motion .gt-top,html.gt-reduced-motion .gt-top-tab,html.gt-reduce
 .gt-set-left{display:flex;flex-direction:column;gap:8px}
 .gt-set-left .gt-cs-stage{flex:1;min-height:240px}
 .gt-set-left .gt-cs-msg{min-height:0}
+.gt-set-links{display:flex;flex-wrap:wrap;gap:6px}
+.gt-set-link{flex:1 1 auto;font-size:calc(13px*var(--ts));padding:6px 8px}
 .gt-set-left .gt-cs-msg:empty{display:none}
 .mbox .gt-set .gt-cs-name{flex:1;width:0;min-width:0;padding:6px 8px;font-size:calc(18px*var(--ts))}
 .gt-set .gt-cs-tag{font-size:calc(18px*var(--ts))}
