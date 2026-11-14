@@ -40,7 +40,7 @@
     var src = frame(pal, dir, step).image, c = GT3.canvas(CW, CH), g = c.getContext('2d');
     var d = src.getContext('2d').getImageData(0, 0, CW, CH).data, out = g.createImageData(CW, CH), o = out.data;
     var col = lv > 1 ? [255, 226, 110, 255] : [255, 240, 190, 150];
-    function solid(x, y) { return x >= 0 && y >= 0 && x < CW && y < CH && d[(y * CW + x) * 4 + 3] > 0; }
+    function solid(x, y) { return x >= 0 && y >= 0 && x < CW && y < CH && d[(y * CW + x) * 4 + 3] >= 128; } // what alphaTest 0.5 draws
     for (var y = 0; y < CH; y++) for (var x = 0; x < CW; x++) {
       if (solid(x, y) || !(solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) continue;
       var i = (y * CW + x) * 4; o[i] = col[0]; o[i + 1] = col[1]; o[i + 2] = col[2]; o[i + 3] = col[3];
@@ -114,7 +114,7 @@
         if (on === lying) return;
         lying = on;
         if (on) { if (!lieMat) lieMat = GT3.mat({ map: mat.map, alphaTest: 0.5, side: THREE.DoubleSide }); lieMat.map = mat.map; card.material = lieMat; card.receiveShadow = false; }
-        else { card.material = mat; card.receiveShadow = true; pivot.position.set(0, 0, 0); card.rotation.z = 0; card.position.y = h / 2 - 1 * PX; }
+        else { card.material = mat; card.receiveShadow = true; pivot.position.set(0, 0, 0); }
       },
       lying: function () { return lying; },
       // turn to the camera and lean back by its pitch, pivoting at the feet: from the high game camera an upright card
@@ -123,16 +123,10 @@
         var dx = camera.position.x - group.position.x, dz = camera.position.z - group.position.z;
         pivot.rotation.order = 'YXZ';
         pivot.rotation.y = Math.atan2(dx, dz);
-        if (lying) { // lying down seen from the camera: the card faces the camera like a standing one but turned a quarter on
-          // its side (head to the left), its middle at the bed top, so it reads as asleep from any camera height or angle
-          pivot.rotation.x = -Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));
-          card.rotation.z = Math.PI / 2;
-          card.position.y = 0;
-          // the card is wider than the figure (room for capes and pets): turned on its side the figure is only the middle
-          // 12 px tall, so its middle goes 6 px above the bed top
-          // and a little towards the camera, so the wall the bed stands against never cuts into it
-          var yw2 = pivot.rotation.y;
-          pivot.position.set(Math.sin(yw2) * 0.3, lieY + 6 * PX, Math.cos(yw2) * 0.3);
+        if (lying) { // flat, its feet at the camera's side; the pivot moves back so the body, not the feet, sits on the bed's middle
+          var yw = pivot.rotation.y;
+          pivot.rotation.x = -Math.PI / 2;
+          pivot.position.set(Math.sin(yw) * h / 2, lieY, Math.cos(yw) * h / 2);
           return;
         }
         pivot.rotation.x = -Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));

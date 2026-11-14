@@ -154,10 +154,55 @@
     var t = performance.now() / 1000, moving = aboard || (boat && boat.by);
     drawBoat(ctx, P.x * T - camX, P.y * T - camY + Math.round(Math.sin(t * (moving ? 3 : 1.6)) * (moving ? 0.8 : 0.6)), T);
   }
+  /* ---- the boat's outline: it glows while the pointer is on it or you stand where you can board, and a click boards ---- */
+  var box = null, mouse = { x: -1, y: -1 }, hover = false, cursorMine = false, view = { w: 1, h: 1 };
+  function boatBox(ctx, T, v3) {
+    var P = FERRY.pos; if (!P) return null;
+    var a = GT.at(P.x, P.y), V = window.GT_VIEW3D;
+    if (v3 && V && V.toScreen) { // the hull's footprint and gunwale projected by the camera, in overlay units (the factor GT.at uses)
+      var p0 = V.toScreen(P.x + 0.5, P.y + 0.5, 0), k = p0.x ? (a.x + 6) / p0.x : 1, ky = p0.y ? (a.y + 12) / p0.y : k, xs = [], ys = [];
+      [[-0.15, -0.05], [1.15, -0.05], [-0.15, 1.05], [1.15, 1.05]].forEach(function (q) { [0, 0.45].forEach(function (lift) { var p = V.toScreen(P.x + q[0], P.y + q[1], lift); xs.push(p.x * k); ys.push(p.y * ky); }); });
+      return { x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys), x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys) };
+    }
+    return { x0: a.x, y0: a.y + 1, x1: a.x + T, y1: a.y + 11 * T / 12 };
+  }
+  function overBoat(cx, cy) {
+    var cv = document.getElementById('cv'); if (!cv || !box) return false;
+    var rc = cv.getBoundingClientRect(); if (!rc.width) return false;
+    var ux = (cx - rc.left) / rc.width * view.w, uy = (cy - rc.top) / rc.height * view.h;
+    return ux >= box.x0 && ux <= box.x1 && uy >= box.y0 && uy <= box.y1;
+  }
+  function drawOutline(ctx, T) {
+    var pulse = 0.5 + 0.5 * Math.sin(Date.now() / 260), near = landing() && !otherSteers();
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,224,120,' + (near ? 0.9 : 0.5) + ')'; ctx.shadowBlur = 4 + 6 * pulse;
+    ctx.strokeStyle = 'rgba(255,240,170,' + ((near ? 0.75 : 0.45) + 0.25 * pulse).toFixed(2) + ')'; ctx.lineWidth = Math.max(1, T / 10); ctx.lineJoin = 'round';
+    ctx.strokeRect(box.x0 - 1, box.y0 - 1, box.x1 - box.x0 + 2, box.y1 - box.y0 + 2);
+    ctx.restore();
+  }
+  function onBoatClick(e) {
+    if (e.button !== 0 || !e.target || e.target.id !== 'cv' || aboard || GT.isUiOpen() || !ferry()) return;
+    if (window.GT_VIEW3D && GT_VIEW3D.tookClick && GT_VIEW3D.tookClick()) return;
+    if (!overBoat(e.clientX, e.clientY)) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    if (otherSteers()) { GT.toast($t('Perahu sedang dipakai {0}.', [boat.name || '?'])); return; }
+    if (!landing()) { GT.toast($t('Dekati perahu dulu, lalu naik.')); return; }
+    row();
+  }
+  window.addEventListener('mousemove', function (e) { mouse.x = e.clientX; mouse.y = e.clientY; });
+  window.addEventListener('click', onBoatClick, true);
+
   function onDraw(ctx, camX, camY, T) {
     var P = FERRY.pos;
-    if (!P || !ferry()) return;
+    if (!P || !ferry()) { box = null; return; }
     var v3 = GT.view3dOn && GT.view3dOn(), p = GT.player;
+    view.w = ctx.canvas.width / (ctx.getTransform().a || 1); view.h = ctx.canvas.height / (ctx.getTransform().d || 1);
+    box = aboard ? null : boatBox(ctx, T, v3);
+    var on = !!box && !GT.isUiOpen() && (overBoat(mouse.x, mouse.y) || (landing() && !otherSteers()));
+    hover = on;
+    var over = !!box && !GT.isUiOpen() && overBoat(mouse.x, mouse.y), cv = document.getElementById('cv');
+    if (over !== cursorMine && cv) { cursorMine = over; cv.style.cursor = over ? 'pointer' : ''; } // only the cursor this mod set is put back
+    if (on) drawOutline(ctx, T);
     if (aboard) { // the hint over the boat: where you can step off
       if (!window.GT_THEME || !GT_THEME.label || !shores().length) return;
       var pb = GT.at(p.x, p.y);

@@ -29,7 +29,7 @@
         else if (s >= 2) { g.fillStyle = tip; g.fillRect(bx - 1, CH - hk + 1, 1, 1); g.fillRect(bx + 1, CH - hk + 1, 1, 1); }
       });
       var t = GT3.tex(c); t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
-      texCache.push(new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
+      texCache.push(GT3.mat({ map: t, alphaTest: 0.5, side: THREE.DoubleSide })); // lit like the rest of the world (dark at night)
     }
     return texCache;
   }

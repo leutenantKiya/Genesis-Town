@@ -81,7 +81,7 @@
       if (W && worn) W.front(g, OX, OY, worn, dir, 0);
     } catch (e) { return null; }
     var src = g.getImageData(0, 0, 32, 40).data, out = g.createImageData(32, 40), px = out.data;
-    function solid(x, y) { return x >= 0 && y >= 0 && x < 32 && y < 40 && src[(y * 32 + x) * 4 + 3] > 0; }
+    function solid(x, y) { return x >= 0 && y >= 0 && x < 32 && y < 40 && src[(y * 32 + x) * 4 + 3] >= 128; }
     for (var y = 0; y < 40; y++) for (var x = 0; x < 32; x++) {
       if (solid(x, y) || !(solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) continue;
       var i = (y * 32 + x) * 4; px[i] = 255; px[i + 1] = lv > 1 ? 226 : 240; px[i + 2] = lv > 1 ? 110 : 190; px[i + 3] = 255;
