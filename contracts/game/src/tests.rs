@@ -242,6 +242,37 @@ fn healthy_shop_cannot_be_closed() {
 }
 
 #[test]
+fn owner_reopens_a_closed_shop_and_pledgers_keep_their_shares() {
+    let mut c = setup();
+    bankrupt_budi(&mut c);
+    ctx(alice(), 0);
+    c.restore_contribute(budi(), vec![line("coin", 100)]);
+    ctx(owner(), 0);
+    c.owner_reopen_shop(budi());
+    let shop = c.get_shop(budi());
+    assert!(shop.open);
+    assert_eq!(bal(&c, budi(), "coin"), 130, "30 left + 100 pledged");
+    assert_eq!(c.get_holding(budi(), alice()).shares.0, 100 * 1000 / 210);
+}
+
+#[test]
+#[should_panic(expected = "shop is open")]
+fn owner_cannot_reopen_an_open_shop() {
+    let mut c = setup();
+    ctx(owner(), 0);
+    c.owner_reopen_shop(budi());
+}
+
+#[test]
+#[should_panic]
+fn only_the_owner_reopens_a_shop() {
+    let mut c = setup();
+    bankrupt_budi(&mut c);
+    ctx(alice(), 0);
+    c.owner_reopen_shop(budi());
+}
+
+#[test]
 fn restoration_pledges_reopen_the_shop_and_issue_shares() {
     let mut c = setup();
     bankrupt_budi(&mut c);

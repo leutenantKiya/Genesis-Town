@@ -14,6 +14,7 @@ cargo-near.
 | `register_merchant(account_id, name, restore, start)` | owner | shop + restoration board + opening stock; town owns initial shares |
 | `close_shop(merchant)` | settler | only if the merchant's coin is below the daily rent (checked on chain) |
 | `restore_contribute(merchant, contribution)`, `restore_withdraw(merchant)` | player, **no deposit** | pledge to / withdraw from a closed shop's board; completing it reopens the shop and issues shares |
+| `owner_reopen_shop(merchant)` | owner | reopens a closed shop without a complete board; pledges already made move to the merchant and become shares (the game now runs its merchants rent free, `shops.chargeRent: false`) |
 | `pay_dividend(merchant, day, amount)` | settler | once per merchant and day; moves profit into the dividend pool |
 | `claim_dividends(merchant)` | shareholder, **no deposit** | pulls accumulated dividends |
 | `send_item(receiver_id, token_id, amount)` | player, **no deposit** | items only (never `coin`, never to a merchant), capped per call and per day |

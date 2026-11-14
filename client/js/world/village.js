@@ -474,6 +474,11 @@
         return;
       }
     })();
+    // the island in the south-east corner is cut off by a wide band of water: the top rows of the 'danau' chunk are lake, so the mainland's
+    // shore and the island's north tip are 4+ tiles apart (no random numbers used; reserved tiles, i.e. roads and buildings, stay)
+    for (y = 2 * CH; y < 2 * CH + 4; y++) for (x = 1; x < W - 1; x++) {
+      if (!res[I(x, y)] && chunkAtR(x, y).id === 'danau') tiles[I(x, y)] = 'water';
+    }
     // sandy spots along the river banks (fishing places)
     for (y = 2; y < H - 2; y++) {
       [river[y].x0 - 1, river[y].x1 + 1].forEach(function (bx) { if (!res[I(bx, y)] && SOFT[tiles[I(bx, y)]] && hash3(bx, y, ns + 5) < 0.45) tiles[I(bx, y)] = 'sand'; });
@@ -720,6 +725,29 @@
     return L._ferry;
   }
 
+  /* Where the ferry boat may sail: the open water tiles that join the two boat spots of ferryOf (4-connected). Shared by the browser
+     (what the boat can steer into) and the server (the positions a player aboard may report). */
+  function boatWater(L, x, y) {
+    if (L._boatw === undefined) {
+      var f = ferryOf(L), w = L.w, h = L.h, m = null;
+      if (f) {
+        m = new Uint8Array(w * h);
+        var q = [f.wa.x, f.wa.y, f.wb.x, f.wb.y], head = 0, d;
+        m[f.wa.y * w + f.wa.x] = 1; m[f.wb.y * w + f.wb.x] = 1;
+        while (head < q.length) {
+          var cx = q[head++], cy = q[head++];
+          for (d = 0; d < 4; d++) {
+            var nx = cx + (d === 0 ? 1 : d === 1 ? -1 : 0), ny = cy + (d === 2 ? 1 : d === 3 ? -1 : 0), ni = ny * w + nx;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h || m[ni] || L.tiles[ni] !== 'water' || !chunkOf(L, nx, ny).open) continue;
+            m[ni] = 1; q.push(nx, ny);
+          }
+        }
+      }
+      L._boatw = m;
+    }
+    return !!L._boatw && x >= 0 && y >= 0 && x < L.w && y < L.h && L._boatw[y * L.w + x] === 1;
+  }
+
   /* Fishing spots (the ripples on the water): a water tile next to walkable land is a spot when a hash of the world's seed, its position
      and the time bucket says so (about one in six). The bucket is FISH_HOURS game hours long, so a spot stays put for a while and then the
      fish move on. Works on any layout with w, h, seed and tiles (the public village and every Homeland); the browser draws the ripples
@@ -751,6 +779,6 @@
     return { board: pz ? { x: pz.x1, y: pz.y0 + 3 } : { x: s[s.length - 1].x + 1, y: y }, gamble: { x: s[0].x - 2, y: y }, mall: mb ? { x: mb.dx, y: mb.dy } : { x: s[s.length - 1].x + 3, y: y } };
   }
 
-  var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf, ferryOf: ferryOf, fishSpot: fishSpot, fishBucket: fishBucket };
+  var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf, ferryOf: ferryOf, boatWater: boatWater, fishSpot: fishSpot, fishBucket: fishBucket };
   root.GTVillage = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

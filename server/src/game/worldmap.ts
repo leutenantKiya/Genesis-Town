@@ -27,12 +27,12 @@ const dist = (a: Pos, b: Pos) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 export interface Weather { kind: string; label: string; wet: boolean }
 export interface MonsterSpot { id: string; kind: string; x: number; y: number }
 interface VillageApi {
-  generate(seed: number, unlocked?: string[]): Layout; chunkOf(L: Layout, x: number, y: number): Chunk; PROJECTS: Record<string, Project>;
+  generate(seed: number, unlocked?: string[]): Layout; CHUNKS: Array<{ id: string }>; chunkOf(L: Layout, x: number, y: number): Chunk; PROJECTS: Record<string, Project>;
   landmarks(L: Layout): { board: Pos; gamble: Pos; mall: Pos };
   fishSpot(L: { w: number; h: number; seed: number; tiles: string[] }, x: number, y: number, bucket: number): boolean; fishBucket(totalHours: number): number;
   weather(seed: number, day: number, season: string): Weather; monstersAt(L: Layout, hour: number, counts?: Record<string, number>): MonsterSpot[];
 }
-export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos; ferryOf(L: Layout): { a: Pos; b: Pos; wa: Pos; wb: Pos } | null } }).GTVillage;
+export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos; ferryOf(L: Layout): { a: Pos; b: Pos; wa: Pos; wb: Pos } | null; boatWater(L: Layout, x: number, y: number): boolean } }).GTVillage;
 
 /** A player's Homeland (client/js/world/homeland.js): the same generator the browser runs. */
 export interface HomelandProgress { open: string[]; th: number; built: Array<{ kind: string; lot: string }>; gen?: number; light?: number }
@@ -173,16 +173,23 @@ export class Positions {
   last = new Map<string, Pos & { t: number }>();
   /** Which world each player is in (absent = the public island). */
   worlds = new Map<string, string>();
+  /** Players aboard the ferry boat (public village only): their reports must be water tiles the boat can sail on. */
+  aboard = new Set<string>();
   map: WorldMap;
   constructor(map: WorldMap) { this.map = map; }
   worldOf(account: string): string { return this.worlds.get(account) ?? 'public'; }
   /** Moves a player to another world at a tile the server chose. */
   setWorld(account: string, world: string, at: Pos, now: number) {
+    this.aboard.delete(account);
     if (world === 'public') this.worlds.delete(account); else this.worlds.set(account, world);
     this.last.set(account, { ...at, t: now });
   }
   /** Back to the public island with no remembered position (the next report starts fresh). */
-  reset(account: string) { this.worlds.delete(account); this.last.delete(account); }
+  reset(account: string) { this.worlds.delete(account); this.last.delete(account); this.aboard.delete(account); }
+  /** Steps onto the ferry boat at `at` (a water tile the server chose). */
+  board(account: string, at: Pos, now: number) { this.aboard.add(account); this.last.set(account, { ...at, t: now }); }
+  /** Steps off the boat onto the land tile `at`. */
+  land(account: string, at: Pos, now: number) { this.aboard.delete(account); this.last.set(account, { ...at, t: now }); }
   /** `world` is the world the client says it is in, `map` that world's map (the caller already checked access to it). */
   /** The last position this check accepted for the player (what presence shows, never the raw report). */
   lastOf(account: string): Pos | null { const l = this.last.get(account); return l ? { x: l.x, y: l.y } : null; }
@@ -192,12 +199,14 @@ export class Positions {
     if (!r || !Number.isInteger(p.x) || !Number.isInteger(p.y)) throw new HttpError(400, 'player position missing');
     if (world !== this.worldOf(account)) {
       const pub = this.map.layout.spawn;
-      if (world === 'public' && p.x === pub.x && p.y === pub.y) { this.worlds.delete(account); this.last.delete(account); }
+      if (world === 'public' && p.x === pub.x && p.y === pub.y) { this.worlds.delete(account); this.last.delete(account); this.aboard.delete(account); }
       // a reload (or Start) puts the client on its own Homeland spawn: always believed, wherever the server had the player
       else if (home && world === home.world && p.x === home.spawn.x && p.y === home.spawn.y) { this.worlds.set(account, world); this.last.delete(account); }
       else throw new HttpError(409, 'Change worlds through the portal.');
     }
-    if (!map.walkable(p.x, p.y)) throw new HttpError(409, 'Invalid position.');
+    const sp0 = map.layout.spawn;
+    if (this.aboard.has(account) && p.x === sp0.x && p.y === sp0.y) this.aboard.delete(account); // a page reload puts the client back on the spawn
+    if (this.aboard.has(account) ? !Village.boatWater(this.map.layout, p.x, p.y) : !map.walkable(p.x, p.y)) throw new HttpError(409, 'Invalid position.');
     const prev = this.last.get(account);
     const sp = map.layout.spawn;
     if (prev && !(p.x === sp.x && p.y === sp.y)) {

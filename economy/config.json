@@ -111,6 +111,7 @@
   },
   "shops": {
     "rent": 40,
+    "chargeRent": false,
     "storageFeePerUnit": 0.5,
     "dividendShare": 0.4,
     "initialShares": 1000,

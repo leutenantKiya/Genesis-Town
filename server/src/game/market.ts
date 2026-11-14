@@ -219,7 +219,7 @@ export class Market {
     const acct = this.account(id);
     return {
       id, account: acct, name: d.name, shop: d.shop, open: this.isOpen(id),
-      cash: this.gs.balance(acct, 'coin'), rent: this.econ.shops.rent,
+      cash: this.gs.balance(acct, 'coin'), rent: this.econ.shops.chargeRent === false ? 0 : this.econ.shops.rent,
       items: this.tokens(d).map((token) => {
         const r = this.row(id, token);
         return {

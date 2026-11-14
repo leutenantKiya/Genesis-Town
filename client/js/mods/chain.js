@@ -1193,7 +1193,7 @@
     if (!m) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
     var head = $('div', 'gt-shop-head');
     head.appendChild($('span', null, $t('Koinmu {0}', [have('coin')])));
-    head.appendChild($('span', 'chain-dim', $t('Kas {0} {1} · sewa {2}/hari', [m.name, m.cash, m.rent])));
+    head.appendChild($('span', 'chain-dim', m.rent ? $t('Kas {0} {1} · sewa {2}/hari', [m.name, m.cash, m.rent]) : $t('Kas {0} {1}', [m.name, m.cash])));
     wrap.appendChild(head);
     if (!m.open) return restoreBody(id, m, wrap);
     var sel = S.shopSel && S.shopSel.id === id ? S.shopSel.token : null;

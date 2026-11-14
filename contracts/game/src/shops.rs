@@ -199,6 +199,15 @@ impl Contract {
         events::gt_shop(merchant.as_str(), "closed", 0);
     }
 
+    /// Owner: reopens a closed shop without a complete board (the town now runs its merchants rent free). What players
+    /// already pledged moves to the merchant and becomes their shares, exactly as a completed board would.
+    pub fn owner_reopen_shop(&mut self, merchant: AccountId) {
+        self.require_owner();
+        let shop = self.shop(&merchant);
+        require!(!shop.open, "shop is open");
+        self.reopen(&merchant, shop);
+    }
+
     /// Player: pledges coin and goods to a closed shop's restoration board, from the settled balance. Each line only
     /// accepts what is still missing. Completing the board reopens the shop and issues shares.
     pub fn restore_contribute(&mut self, merchant: AccountId, contribution: Vec<RestoreLine>) {

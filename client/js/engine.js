@@ -1278,8 +1278,10 @@ function npcAtTile(x, y, sc){
   return null;
 }
 function playerAt(x, y){ return (P.x === x && P.y === y) || (P.moving && P.fx === x && P.fy === y); }
+var boatWalk = null; // the ferry (mods/ferry.js): fn(x, y) -> may the boat enter that tile; while set the player can enter only those tiles
 function canEnterPlayer(x, y){
   var m = scene.map;
+  if (boatWalk) return inb(m,x,y) && !!boatWalk(x, y);
   // Hackathon change: the player may walk through other characters, so nobody can block a path.
   return inb(m,x,y) && m.walk[y*m.w + x] === 1 && !(m.staff && m.staff.has(y*m.w + x));
 }
@@ -2859,6 +2861,15 @@ var GT = {
   snap: function(v){ return ovK ? Math.round(v * ovK) / ovK : Math.round(v); },
   setPlayerHidden: function(on){ playerHidden = !!on; },
   /** setSail(x, y): the player's picture and the camera sit at that tile position (fractions allowed) while a ferry ride runs; setSail(null) ends it. Game state is untouched. */
+  /** setBoatWalk(fn, x, y): the player rides the ferry boat. fn(x, y) says which tiles the boat may enter (only those: land is closed) and the player is put
+   *  on tile (x, y), a boat tile. setBoatWalk(null, x, y) steps off onto the land tile (x, y). */
+  setBoatWalk: function(fn, x, y){
+    boatWalk = typeof fn === 'function' ? fn : null;
+    x = Math.round(x); y = Math.round(y);
+    P.x = P.fx = x; P.y = P.fy = y; P.cx = null; P.moving = false; P.t = 0; hudDirty = true;
+  },
+  /** landAt(x, y): is that tile ordinary walkable ground (the boat's landing check; ignores a boat ride in progress). */
+  landAt: function(x, y){ var m = scene.map; return inb(m,x,y) && m.walk[y*m.w + x] === 1 && !(m.staff && m.staff.has(y*m.w + x)); },
   setSail: function(x, y){ sailPos = x == null ? null : { x:+x, y:+y }; },
   // where the player's feet are on #screen (CSS px) and how big one art pixel of their sprite is there, in 2D and 2.5D,
   // so an effect drawn over the view (the character screen's throw) can land exactly on the real sprite

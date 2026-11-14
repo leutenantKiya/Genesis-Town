@@ -83,12 +83,11 @@ test('house gives one bed, kasur adds beds', async () => {
   fails(() => H.start(P, 'build', 'rumah-zz', 1), 409, 'That lot does not exist.');
 });
 
-test('furniture jobs are timed with fatigue and need the player at the house', async () => {
+test('furniture jobs are timed with fatigue and can be started from the Town Hall', async () => {
   const w = await setup();
   const { H } = w;
   w.give(P, 'wood', 100); w.give(P, 'coin', 200);
   w.house(P);
-  fails(() => w.act(P, { action: 'build', kind: 'furniture', target: 'rumah-c:kasur' }, w.hall(P)), 409, /near that lot/);
   assert.equal(w.gs.balance(P, 'wood'), 100);
   w.prime(P, { 0: 50 });
   const t0 = w.now();

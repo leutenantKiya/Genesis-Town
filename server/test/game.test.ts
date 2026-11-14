@@ -225,6 +225,7 @@ test('settlement writes net deltas on chain in chunks, matches off-chain balance
 
 test('a merchant that cannot pay rent closes; a restoration board reopens it and issues shares', async () => {
   const { game, chain } = await world();
+  game.econ.shops.chargeRent = true; // the rent mechanism itself (the live config runs the merchants rent free)
   // Drain Budi: players sell him lots of ore (he is cash-blind, "generous").
   const day = game.clock.time().settleDay;
   game.gs.add(day, P, 'ore', 150, 'test');
@@ -403,6 +404,7 @@ test('positions: actions happen where the player stands, and nobody jumps across
 
 test('a day with no players costs the shops no rent, and nobody closes', async () => {
   const { game, chain } = await world();
+  game.econ.shops.chargeRent = true; // the rent mechanism itself (the live config runs the merchants rent free)
   await game.devSettle(); // the day with the starter kits (players were active): rent as usual
   assert.ok(game.gs.dayRows(game.settlement.settledThrough()).some((r) => r.kind === 'rent'));
   // drain every shop below rent; then a whole day passes with nobody playing
@@ -415,6 +417,7 @@ test('a day with no players costs the shops no rent, and nobody closes', async (
 
 test('when every shop is closed, the village relief fund pledges the coin part of each board', async () => {
   const { game, chain } = await world();
+  game.econ.shops.chargeRent = true; // the rent mechanism itself (the live config runs the merchants rent free)
   chain.townAccount = TOWN;
   const day = game.clock.time().settleDay;
   // every merchant below rent, nothing to sell to the town

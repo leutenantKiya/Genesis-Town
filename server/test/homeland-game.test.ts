@@ -72,13 +72,14 @@ test('the public area allows gathering (publicGather) but not farming or monster
   fails(() => w.game.act(P, { action: 'gather', tile: 'tree', x: pos.x + 1, y: pos.y, pos }), 409, 'The public area is for trading only.');
 });
 
-test('ship in a Homeland is refused; build needs standing at the door', async () => {
+test("ship in a Homeland is refused; building is the owner's from anywhere in their Homeland", async () => {
   const w = await world();
   const home = w.hl(P), wid = `HL-${w.game.homelands.ensure(P).id}`;
   const sp = home.layout.spawn;
   w.game.reportPosition(P, sp, wid);
   fails(() => w.game.act(P, { action: 'ship', token: 'bread', qty: 1, world: wid, pos: sp }), 409, 'The Shipping Box is only in the public area.');
-  fails(() => w.game.act(P, { action: 'build', kind: 'build', target: 'kolam-c', world: wid, pos: sp }), 409, /near that lot/);
+  // the owner may start a lot from anywhere in their Homeland (it answers about cost, not about where they stand)
+  assert.throws(() => w.game.act(P, { action: 'build', kind: 'build', target: 'kolam-c', world: wid, pos: sp }), (e: any) => !/near that lot/.test(String(e.message)));
   fails(() => w.game.act(P, { action: 'build', kind: 'th', target: 'th', world: 'public', pos: w.game.map!.layout.spawn }), 409, /Homeland/);
 });
 

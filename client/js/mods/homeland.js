@@ -277,7 +277,12 @@
     var ae = document.activeElement; // do not wipe a name being typed into the invite field, or a role list open for a pick
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT') && win.h.el && win.h.el.contains(ae)) return;
     var tabId = ae && ae.classList && ae.classList.contains('hl-tab') ? ae.id : null; // keep a keyboard user on their tab
+    // the Town Hall redraws every second for its clocks: keep where the player scrolled to (the pane and the window body)
+    var root = win.h.el || document, pane = root.querySelector('.hl-pane'), mb = root.querySelector('.mbody');
+    var paneTop = pane ? pane.scrollTop : 0, bodyTop = mb ? mb.scrollTop : 0;
     win.h.setBody(bodyFor(win));
+    pane = root.querySelector('.hl-pane'); mb = root.querySelector('.mbody');
+    if (pane) pane.scrollTop = paneTop; if (mb) mb.scrollTop = bodyTop;
     if (tabId) { var t = document.getElementById(tabId); if (t) t.focus(); }
   }
   function busyJob() { var v = V(); return v && v.builders && v.builders.busy >= v.builders.total; }
@@ -992,18 +997,25 @@
     var CHs = L.chunk || 16, n = Math.round(L.w / CHs), c = L.chunks[Math.floor(t.y / CHs) * n + Math.floor(t.x / CHs)];
     return c && c.open === false ? c : null;
   }
+  // an empty building lot (the bare squares) under a screen point, in your own Homeland
+  function emptyLotAt(cx, cy) {
+    if (!inOwnHome() || !GT.scene || GT.scene.kind !== 'out' || !GT.screenToTile) return null;
+    var t = GT.screenToTile(cx, cy); return t ? withinLot(t) : null;
+  }
   function onHoverMove(e) {
     var now = performance.now(); if (now - hoverT < 50) return; hoverT = now;
     if (GT.isUiOpen()) { hoverChunk = null; return; }
     var c = lockedChunkAt(e.clientX, e.clientY); hoverChunk = c ? c.id : null;
-    var cv = document.getElementById('cv'); if (cv) cv.style.cursor = c ? 'pointer' : '';
+    var cv = document.getElementById('cv'); if (cv) cv.style.cursor = c || (e.target === cv && emptyLotAt(e.clientX, e.clientY)) ? 'pointer' : '';
   }
   function onUnlockClick(e) {
     if (e.button !== 0 || GT.isUiOpen() || !e.target || e.target.id !== 'cv') return;
     if (window.GT_VIEW3D && GT_VIEW3D.tookClick && GT_VIEW3D.tookClick()) return; // the end of a drag-to-walk, not a click
-    var c = lockedChunkAt(e.clientX, e.clientY); if (!c) return;
-    e.stopImmediatePropagation(); e.preventDefault();
-    unlockModal(c.id);
+    var c = lockedChunkAt(e.clientX, e.clientY);
+    if (c) { e.stopImmediatePropagation(); e.preventDefault(); unlockModal(c.id); return; }
+    // a click on an empty lot opens what can be built there (the owner builds from anywhere in their Homeland)
+    var l = emptyLotAt(e.clientX, e.clientY);
+    if (l && loggedIn()) { e.stopImmediatePropagation(); e.preventDefault(); openWin('lot', $t('Lahan {0}', [KIND_NAME[l.kind] || '']), l.id); }
   }
   // "Buka pulau": the existing chunk-opening build act with its cost and time; the Town Hall level and neighbour rules show as reasons
   function unlockModal(id) {

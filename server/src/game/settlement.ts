@@ -154,6 +154,7 @@ export class Settlement {
       let over = 0;
       for (const token of market.tokens(d)) over += Math.max(0, gs.balanceThrough(acct, token, day) - (d.target[token] ?? 0));
       const storage = Math.floor(over * (econ.shops.storageFeePerUnit ?? 0));
+      if (econ.shops.chargeRent === false) continue; // the town's merchants work rent free: nothing charged, never closed
       const due = econ.shops.rent + storage;
       const pay = Math.min(due, cash);
       if (pay > 0) gs.add(day, acct, 'coin', -pay, 'rent', storage ? `rent ${econ.shops.rent} + storage ${storage}` : null);

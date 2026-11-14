@@ -170,16 +170,27 @@ export class Game {
     return { toast: target.row ? (target.row.account === account ? 'Arrived at your Homeland.' : 'Arrived at your friend\'s Homeland.') : 'Arrived in the public area.', world: to, arrive };
   }
 
-  /** The ferry to the island in the village's bottom-right corner: from beside one boat to the other shore. */
-  private boat(account: string, wid: string, pos: Pos): { toast: string; world: string; arrive: Pos } {
+  /** The ferry boat to the island in the village's bottom-right corner, steered by the player. op 'board': from beside a landing, step into
+   *  the boat on the water tile there; while aboard the player's reports are water tiles the boat can reach (Positions). op 'land' {x, y}: step
+   *  off onto a walkable tile right next to where the boat is. Nothing else works aboard, and the boat moves at walking speed like anyone. */
+  private boat(account: string, wid: string, pos: Pos, op: string, to: Pos): { toast: string; world: string; arrive: Pos; aboard: boolean } {
     if (!this.map || !this.positions || wid !== 'public') throw new HttpError(409, 'The boat is in the public village.');
     const f = Village.ferryOf(this.map.layout);
     if (!f) throw new HttpError(409, 'There is no boat here.');
-    const near = (p: Pos) => Math.abs(pos.x - p.x) + Math.abs(pos.y - p.y) <= 1;
-    const arrive = near(f.a) ? f.b : near(f.b) ? f.a : null;
-    if (!arrive) throw new HttpError(409, 'Stand next to the boat.');
-    this.positions.setWorld(account, 'public', arrive, this.now());
-    return { toast: arrive === f.b ? 'You row across to the island.' : 'You row back to the mainland.', world: 'public', arrive };
+    const dist = (p: Pos, q: Pos) => Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
+    if (this.positions.aboard.has(account)) {
+      if (op !== 'land') throw new HttpError(409, 'You are already in the boat.');
+      if (!Number.isInteger(to.x) || !Number.isInteger(to.y)) throw new HttpError(400, 'Where to land?');
+      if (dist(pos, to) !== 1) throw new HttpError(409, 'Steer the boat next to the shore first.');
+      if (!this.map.walkable(to.x, to.y)) throw new HttpError(409, 'You cannot step off there.');
+      this.positions.land(account, to, this.now());
+      return { toast: 'You step ashore.', world: 'public', arrive: to, aboard: false };
+    }
+    if (op !== 'board') throw new HttpError(409, 'You are not in the boat.');
+    const at = dist(pos, f.a) <= 1 ? f.wa : dist(pos, f.b) <= 1 ? f.wb : null;
+    if (!at) throw new HttpError(409, 'Stand next to the boat.');
+    this.positions.board(account, at, this.now());
+    return { toast: 'You climb into the boat.', world: 'public', arrive: at, aboard: true };
   }
 
   /** Dev tool (mock chain only): moves coin that already exists from the town treasury to a player's settled balance. */
@@ -282,12 +293,14 @@ export class Game {
       // no `home` here: an action never changes worlds (only `travel` and the presence poll of a reload do)
       pos = this.positions.report(account, body.pos, this.now(), wid, w.map);
       const far = (msg: string) => { throw new HttpError(409, msg); };
+      if (a !== 'boat' && wid === 'public' && this.positions.aboard.has(account)) far('Step off the boat first.');
       if ((a === 'gather' || a === 'grass') && Math.abs(pos.x - n('x', -1)) + Math.abs(pos.y - n('y', -1)) !== 1) far('Too far. Stand right next to it.');
       if ((a === 'sell' || a === 'buy' || a === 'toolshop') && !w.map.nearStall(pos)) far('Buying and selling happens at the merchants\' stalls in the market.');
       if (a === 'farm' && !w.map.nearPlot(pos, n('plot', -1))) far('Stand next to your garden plot.');
       if (a === 'craft' && !w.map.atWorkbench(pos)) far(w.row ? 'The Workbench is in your Town Hall and in your house.' : 'The Workbench is in your house.');
       if (a === 'ship' && !w.map.atOwnHouse(pos)) far('The Shipping Box is at your house.');
-      if ((a === 'build' || a === 'assist') && w.map instanceof HomelandMap) {
+      // the owner builds anywhere in their own Homeland (lots open by click); a guest builder still stands at the lot
+      if ((a === 'assist' || (a === 'build' && w.row!.account !== account)) && w.map instanceof HomelandMap) {
         const kind = a === 'build' ? s('kind') : this.gs.homelandJobs(w.row!.account).find((j) => j.target === s('target'))?.kind ?? '';
         // a lot's own work happens at the lot; the Town Hall's (level, new island, street lights) from anywhere in your
         // Homeland, since the Upgrade button opens the Town Hall window wherever you stand
@@ -300,7 +313,7 @@ export class Game {
       }
       if (a === 'collect' && w.map instanceof HomelandMap && !w.map.nearLot(pos, s('lot'))) far('Stand near the building.');
     }
-    let res: { toast: string; tags?: string[]; world?: string; arrive?: Pos; gained?: Record<string, number> };
+    let res: { toast: string; tags?: string[]; world?: string; arrive?: Pos; aboard?: boolean; gained?: Record<string, number> };
     switch (a) {
       case 'gather': {
         w.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
@@ -354,7 +367,7 @@ export class Game {
         break;
       }
       case 'travel': res = this.travel(account, wid, w.map, s('to'), pos ?? { x: -9, y: -9 }); break;
-      case 'boat': res = this.boat(account, wid, pos ?? { x: -9, y: -9 }); break;
+      case 'boat': res = this.boat(account, wid, pos ?? { x: -9, y: -9 }, s('op') || 'board', { x: n('x', NaN), y: n('y', NaN) }); break;
       case 'mall': {
         // op 'wear' changes what you wear, anywhere; buying (op 'buy' {id}) and worker gear (bot + cosmetic) happen at the Mall in the market
         if (s('op') === 'wear') { res = this.extras.wearItem(account, body.slot, body.id ?? null); break; }

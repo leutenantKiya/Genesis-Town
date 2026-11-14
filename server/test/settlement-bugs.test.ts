@@ -205,6 +205,7 @@ test('an empty day between two busy days is skipped, and the busy day after it s
 test('close_shop reporting ok:false (shop already closed, as testnet now returns it) does not block the day', async () => {
   const p = 'c.players.test';
   const { game, chain } = await world([p]);
+  game.econ.shops.chargeRent = true; // the rent mechanism itself (the live config runs the merchants rent free)
   const day = game.clock.time().settleDay - 1;
   game.gs.add(day, p, 'wood', 1, 'gather');
   game.gs.add(day, 'wati.gt.test', 'coin', -100000, 'test'); // cannot pay the rent: planned to close
