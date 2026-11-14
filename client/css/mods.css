@@ -227,3 +227,22 @@ html.gt-phone .tr-acts .mbtn{min-height:44px;flex:1}
 .hl-hall .hl-why{margin:4px 0 0}
 .hl-hall .hl-stats{margin-bottom:6px}
 html.gt-phone .hl-hall .hl-cell > .hl-cost:has(+ .hl-acts > :only-child),html.gt-phone .hl-hall .hl-cell > .hl-cost + .hl-acts:has(> :only-child){grid-column:1 / -1;margin-top:6px}
+
+/* interaction picker (mods/actionpick.js): a small panel beside the player, never above. Rows are thumb sized (44px) on
+   touch screens; everything is scoped to .gt-pick so the phone layout work elsewhere is untouched. */
+.gt-pick{position:absolute;z-index:7;display:flex;flex-direction:column;gap:3px;padding:3px;line-height:1.2;
+  background:color-mix(in srgb,var(--hud) 88%,transparent);border:1px solid var(--glass-line,rgba(255,255,255,.28));border-radius:var(--r-ctl);
+  box-shadow:0 2px 8px var(--glass-shade,rgba(0,0,0,.35));font-family:var(--font);font-size:calc(15px*var(--ts));max-width:calc(100% - 8px)}
+.gt-pick[hidden]{display:none}
+.gt-pick-row{display:flex;align-items:center;gap:8px;min-height:32px;padding:3px 10px;border:0;border-radius:var(--r-ctl);cursor:pointer;
+  background:transparent;color:var(--glass-ink,#fff);font:inherit;text-align:left;white-space:nowrap;touch-action:manipulation}
+.gt-pick-row.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.gt-pick-row:hover:not(.on){background:rgba(255,255,255,.14)}
+.gt-pick-ico{font-size:1.15em;line-height:1}
+.gt-pick-key{margin-left:auto;padding:0 5px;min-width:18px;text-align:center;border:1px solid currentColor;border-radius:3px;font:inherit;font-size:.85em;font-weight:700}
+.gt-pick-row:not(.on) .gt-pick-key{display:none}
+.gt-pick-row.on .gt-pick-lbl{margin-right:6px}
+@media (pointer:coarse){.gt-pick-row{min-height:44px;padding:4px 12px}}
+html.gt-phone .gt-pick-row{min-height:44px;padding:4px 12px}
+html.gt-fishing .gt-pick,html.gt-fighting .gt-pick{display:none!important}
+#map.on ~ .gt-pick,#dlg.on ~ .gt-pick{display:none!important}
