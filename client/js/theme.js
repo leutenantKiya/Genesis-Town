@@ -30,7 +30,7 @@
   };
   // in 2.5D an overlay unit spans several screen pixels: anchor labels on whole screen pixels so they glide with the camera
   function snap(v) { return window.GT && GT.snap ? GT.snap(v) : Math.round(v); }
-  function font(size, bold) { return (bold ? '600 ' : '') + (size || 7) + 'px "Pixelify Sans", sans-serif'; }
+  function font(size, bold) { return (bold ? '600 ' : '') + (size || 7) + 'px "Rubik", "Pixelify Sans", sans-serif'; }
 
   function label(ctx, text, x, y, o) {
     o = o || {};
@@ -56,7 +56,7 @@
     ctx.save();
     var k = window.GT_THEME.scale || 1;
     if (k !== 1) { ctx.translate(snap(x), snap(y)); ctx.scale(k, k); x = 0; y = 0; }
-    ctx.font = (size || 8) + 'px "Press Start 2P", monospace';
+    ctx.font = (size || 8) + 'px "Rubik", "Press Start 2P", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillStyle = get('outline') || '#0b0c16';
     [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(function (d) { ctx.fillText(str, Math.round(x) + d[0], Math.round(y) + d[1]); });

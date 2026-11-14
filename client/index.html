@@ -14,11 +14,13 @@
 <meta name="apple-mobile-web-app-title" content="Genesis Town">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&display=swap">
+<!-- digits only (text=0123456789): the pixel fonts' 2 and 7 are hard to read, so every number uses Rubik and letters fall through to the pixel font -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&text=0123456789&display=swap">
 <style>
 /* the boot screen (inline: it shows before the stylesheets arrive) */
 /* the iris: a hole that grows from the middle of the screen opens the boot screen onto the game (--gt-hole animates) */
 @property --gt-hole{syntax:'<length-percentage>';inherits:false;initial-value:0%}
-#gt-boot{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 35%,#24305a 0%,#121733 55%,#0a0c1c 100%);color:#f4ecd8;font-family:"Pixelify Sans",system-ui,sans-serif;
+#gt-boot{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 35%,#24305a 0%,#121733 55%,#0a0c1c 100%);color:#f4ecd8;font-family:"Rubik","Pixelify Sans",system-ui,sans-serif;
   --gt-hole:0%;-webkit-mask:radial-gradient(circle at 50% 42%,transparent var(--gt-hole),#000 calc(var(--gt-hole) + 2px));mask:radial-gradient(circle at 50% 42%,transparent var(--gt-hole),#000 calc(var(--gt-hole) + 2px));
   transition:--gt-hole 1.05s cubic-bezier(.76,0,.24,1) .18s,opacity .4s ease .85s,visibility 0s linear 1.3s}
 #gt-boot.out{--gt-hole:160%;opacity:0;visibility:hidden}
@@ -35,7 +37,7 @@
 @keyframes gt-boot-bob{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-2px) rotate(-.6deg)}50%{transform:translateY(-3.2px) rotate(0)}75%{transform:translateY(-1.4px) rotate(.6deg)}}
 @keyframes gt-boot-cloud{from{transform:translateX(-12px)}to{transform:translateX(62px)}}
 @keyframes gt-boot-drip{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(6px);opacity:0}}
-.gt-boot__logo{margin:4px 0 0;font:600 clamp(28px,6vw,44px)/1 "Pixelify Sans",system-ui,sans-serif;letter-spacing:.02em;color:#ffe9a8;text-shadow:0 3px 0 #b8742e,0 6px 0 rgba(0,0,0,.35)}
+.gt-boot__logo{margin:4px 0 0;font:600 clamp(28px,6vw,44px)/1 "Rubik","Pixelify Sans",system-ui,sans-serif;letter-spacing:.02em;color:#ffe9a8;text-shadow:0 3px 0 #b8742e,0 6px 0 rgba(0,0,0,.35)}
 .gt-boot__bar{width:100%;height:16px;padding:3px;border:3px solid #f4ecd8;background:#1a1f3c;box-shadow:0 4px 0 rgba(0,0,0,.4)}
 .gt-boot__bar i{position:relative;display:block;height:100%;width:0;overflow:hidden;background:repeating-linear-gradient(90deg,#00ec97 0 10px,#00b877 10px 12px)}
 .gt-boot__bar i::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.55) 50%,transparent 100%);transform:translateX(-100%);animation:gt-boot-shine 1.8s cubic-bezier(.45,0,.55,1) infinite}

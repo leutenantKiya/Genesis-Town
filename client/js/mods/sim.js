@@ -10,7 +10,7 @@
   // series colours are theme tokens (resolved at draw time, so they follow the season); the swatch class in mods.css uses the same token
   var MER = [{ id: 'sari', name: $t('Sari'), c: 'link' }, { id: 'budi', name: $t('Budi'), c: 'warn-ink' }, { id: 'wati', name: $t('Wati'), c: 'good' }, { id: 'joko', name: $t('Joko'), c: 'paper-dim' }];
   function T(n) { return window.GT_THEME ? GT_THEME.get(n) : ''; }
-  var FONT = '12px "Pixelify Sans", sans-serif';
+  var FONT = '12px "Rubik", "Pixelify Sans", sans-serif';
   var st = { res: null, upto: 0, playing: false, speed: 1, timer: 0, modal: null, players: 25, hover: {} };
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }

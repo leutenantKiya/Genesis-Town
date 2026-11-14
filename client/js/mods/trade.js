@@ -364,7 +364,7 @@
     if (!me) return;
     function at(acct) { return acct && acct === mine ? me : spot(acct && window.GT_PLAYERS && GT_PLAYERS.where ? GT_PLAYERS.where(acct) : null, T); }
     ctx.save();
-    ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.font = '7px "Pixelify Sans", sans-serif';
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.font = '7px "Rubik", "Pixelify Sans", sans-serif';
     flies = flies.filter(function (f) {
       var u = (now - f.t0) / FLY_MS;
       if (u < 0) return true;
@@ -495,7 +495,7 @@
   // cover an earlier one (neighbouring doors) is lifted a row, so no two signs overlap.
   function sign(ctx, txt, cx, bottom, placed) {
     var k = (window.GT_THEME && GT_THEME.scale) || 1, w = 0;
-    ctx.save(); ctx.font = '600 6px "Pixelify Sans", sans-serif'; w = (Math.ceil(ctx.measureText(txt).width) + 4) * k; ctx.restore();
+    ctx.save(); ctx.font = '600 6px "Rubik", "Pixelify Sans", sans-serif'; w = (Math.ceil(ctx.measureText(txt).width) + 4) * k; ctx.restore();
     var h = 9 * k, y = bottom;
     for (var n = 0; n < 4; n++) {
       var hit = placed.some(function (r) { return Math.abs(r.x - cx) < (r.w + w) / 2 && Math.abs(r.y - y) < h; });

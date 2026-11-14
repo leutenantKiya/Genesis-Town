@@ -47,9 +47,9 @@
   --t-open:180ms;
 
   /* Type */
-  --font:'Pixelify Sans','Press Start 2P',ui-sans-serif,system-ui,sans-serif;       /* everything people read */
+  --font:'Rubik','Pixelify Sans','Press Start 2P',ui-sans-serif,system-ui,sans-serif;       /* everything people read; Rubik is loaded for the digits 0-9 only (index.html), so numbers stay readable */
   --font-data:ui-monospace,'SF Mono',Menlo,Consolas,'Roboto Mono',monospace;        /* numbers and ids people must read exactly: tags, prices, quantities, timers, IPs */
-  --font-display:'Press Start 2P',ui-monospace,Menlo,Consolas,monospace;            /* titles and big counters, 16px or 24px only */
+  --font-display:'Rubik','Press Start 2P',ui-monospace,Menlo,Consolas,monospace;            /* titles and big counters, 16px or 24px only */
   --ts:1;                   /* the player's text size (Pengaturan) */
 
   /* Season: spring is the default */

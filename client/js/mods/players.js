@@ -253,7 +253,7 @@
   function fitBubble(ctx, k, now) {
     var b = bubbles[k];
     if (!b || now - b.t > 6000) return null;
-    ctx.font = '7px "Pixelify Sans", sans-serif';
+    ctx.font = '7px "Rubik", "Pixelify Sans", sans-serif';
     var text = b.text;
     if (ctx.measureText(text).width > 96) { while (text.length > 1 && ctx.measureText(text + '…').width > 96) text = text.slice(0, -1); text += '…'; }
     return text;
@@ -289,7 +289,7 @@
       var at = GT.at(cx, curY(o, now)); // in 2.5D this follows the head at any camera turn
       var x = GT.snap(at.x + T / 2), y = GT.snap(at.y - 3); // every tag starts right above its owner's head
       var small = o.guest || !!guestId, sz = small ? 5 : 7; // a guest's own tag is small and dim; a guest sees everyone's tags small
-      ctx.font = sz + 'px "Pixelify Sans", sans-serif';
+      ctx.font = sz + 'px "Rubik", "Pixelify Sans", sans-serif';
       var text = o.guest ? $t('Tamu') : o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
       if (o.trading && !o.npc && !o.guest) text = o.nick + ' \u21c4 ' + o.trading; // in an open trade: everyone in the world sees with whom
       tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.resident ? 'bot' : o.npc ? 'accent' : o.trading ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag), worn: o.worn || null, acct: a });
@@ -321,7 +321,7 @@
     bubs.sort(function (p, q) { return (p.mine ? 1 : 0) - (q.mine ? 1 : 0) || q.y - p.y; }); // my own bubble is drawn last, on top
     var bp = placed.slice(); // bubbles also keep clear of every name tag
     bubs.forEach(function (b) {
-      ctx.font = '7px "Pixelify Sans", sans-serif';
+      ctx.font = '7px "Rubik", "Pixelify Sans", sans-serif';
       var w = Math.ceil(ctx.measureText(b.text).width) + 6;
       b.w = w;
       for (var n = 0; n < 6; n++) { if (!bp.some(function (q) { return q !== b.tag && Math.abs(q.x - b.x) < (q.w + w) / 2 + 1 && Math.abs(q.y - b.y) < 12; })) break; b.y -= 11; }
@@ -363,7 +363,7 @@
       ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill();
       ctx.fillStyle = TH.get('good') || '#2f7d4a'; ctx.beginPath(); ctx.moveTo(4.5, 0); ctx.lineTo(-3, -3.5); ctx.lineTo(-3, 3.5); ctx.closePath(); ctx.fill();
       ctx.restore();
-      ctx.textAlign = ex > W / 2 ? 'right' : 'left'; ctx.textBaseline = 'bottom'; ctx.font = '7px "Pixelify Sans", sans-serif';
+      ctx.textAlign = ex > W / 2 ? 'right' : 'left'; ctx.textBaseline = 'bottom'; ctx.font = '7px "Rubik", "Pixelify Sans", sans-serif';
       TH.label(ctx, o.nick, Math.max(24, Math.min(W - 24, ex)), Math.max(18, Math.min(H - 4, ey - 8)), { tone: 'party' });
       ctx.textAlign = 'center';
     });
