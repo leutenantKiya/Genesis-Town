@@ -150,7 +150,6 @@
     if (t === 'tv') { sfx('ui_click'); news(); return true; }
     if (t === 'fridge') { sfx('eat'); float('🧃'); GT.toast($t('Segelas jus jeruk dingin. Segar!')); return true; }
     if (t === 'plant') { water(ctx); return true; }
-    if (t === 'table') { sfx('eat'); float('🍌'); GT.toast($t('Kamu makan sepotong pisang goreng. Enak!')); return true; }
     if (t === 'chest' && ctx.scene.house) { chest(ctx); return true; }
     return false;
   }
@@ -158,7 +157,7 @@
   // A small "icon + verb" label over the furniture you face, so you can see what it does before pressing Space / F.
   var VERB = {
     bed: ['😴', 'Tidur'], bookshelf: ['📚', 'Baca'], tv: ['📺', 'Nonton'], fridge: ['🧃', 'Minum'], plant: ['💧', 'Siram'],
-    table: ['🍌', 'Makan'], chair: ['🪑', 'Duduk'], chest: ['📦', 'Buka']
+    table: ['🔨', 'Crafting'], chair: ['🪑', 'Duduk'], chest: ['📦', 'Buka']
   };
   // the icon + verb of the new spots, only while their hook exists
   function spotVerb(sc, t) {

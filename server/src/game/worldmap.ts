@@ -30,6 +30,7 @@ interface VillageApi {
   generate(seed: number, unlocked?: string[]): Layout; CHUNKS: Array<{ id: string }>; chunkOf(L: Layout, x: number, y: number): Chunk; PROJECTS: Record<string, Project>;
   landmarks(L: Layout): { board: Pos; gamble: Pos; mall: Pos };
   fishSpot(L: { w: number; h: number; seed: number; tiles: string[] }, x: number, y: number, bucket: number): boolean; fishBucket(totalHours: number): number;
+  fishShore(L: { w: number; h: number; tiles: string[] }, x: number, y: number): boolean;
   weather(seed: number, day: number, season: string): Weather; monstersAt(L: Layout, hour: number, counts?: Record<string, number>): MonsterSpot[];
 }
 export const Village = (globalThis as unknown as { GTVillage: VillageApi & { dockOf(L: Layout): Pos; ferryOf(L: Layout): { a: Pos; b: Pos; wa: Pos; wb: Pos } | null; boatWater(L: Layout, x: number, y: number): boolean } }).GTVillage;

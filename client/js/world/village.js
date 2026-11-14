@@ -763,17 +763,20 @@
      from it and the server refuses to fish anywhere else. */
   var FISH_HOURS = 6, FISH_CHANCE = 0.17;
   function fishBucket(totalHours) { return Math.floor((+totalHours || 0) / FISH_HOURS); }
-  function fishSpot(L, x, y, bucket) {
+  /** A water tile next to walkable land: where a fish spot can be (and where it moves to after a catch, game.ts moveRipple). */
+  function fishShore(L, x, y) {
     var w = L.w, h = L.h;
     if (x < 0 || y < 0 || x >= w || y >= h || L.tiles[y * w + x] !== 'water') return false;
-    var near = false;
-    for (var d = 0; d < 4 && !near; d++) {
+    for (var d = 0; d < 4; d++) {
       var nx = x + (d === 0 ? 1 : d === 1 ? -1 : 0), ny = y + (d === 2 ? 1 : d === 3 ? -1 : 0);
       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
       var t = L.tiles[ny * w + nx];
-      near = !SOLID[t] && t !== 'void';
+      if (!SOLID[t] && t !== 'void') return true;
     }
-    return near && hash3(x, y, ((L.seed | 0) ^ Math.imul(bucket | 0, 2654435761)) | 0) < FISH_CHANCE;
+    return false;
+  }
+  function fishSpot(L, x, y, bucket) {
+    return fishShore(L, x, y) && hash3(x, y, ((L.seed | 0) ^ Math.imul(bucket | 0, 2654435761)) | 0) < FISH_CHANCE;
   }
 
   // Fixed public-area spots next to the market, derived only from market.stalls (no RNG, no tile changed): the Papan Juara
@@ -788,6 +791,6 @@
     return { board: pz ? { x: pz.x1, y: pz.y0 + 3 } : { x: s[s.length - 1].x + 1, y: y }, gamble: { x: s[0].x - 2, y: y }, mall: mb ? { x: mb.dx, y: mb.dy } : { x: s[s.length - 1].x + 3, y: y } };
   }
 
-  var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf, ferryOf: ferryOf, boatWater: boatWater, fishSpot: fishSpot, fishBucket: fishBucket };
+  var api = { VERSION: VERSION, landmarks: landmarks, W: W, H: H, CHUNK: CH, CHUNKS: CHUNKS, PROJECTS: PROJECTS, generate: generate, chunkOf: chunkOf, makeR: makeR, weather: weather, monstersAt: monstersAt, dockOf: dockOf, ferryOf: ferryOf, boatWater: boatWater, fishSpot: fishSpot, fishShore: fishShore, fishBucket: fishBucket };
   root.GTVillage = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

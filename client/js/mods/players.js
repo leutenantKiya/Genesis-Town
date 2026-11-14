@@ -83,7 +83,7 @@
       o.sx = sx; o.sy = sy; o.rt = now; o.x = q.x; o.y = q.y; o.age = ((q.age || 0) + rtt / 2) / 1000;
       o.route = q.route || null; if (q.trail) addTrail(o, q.trail); else o.buf = null;
       o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.resident = !!q.resident; o.guest = !!q.guest; o.merchant = q.merchant; o.sdir = q.dir; if (!o.dir || !(o.route || o.buf)) o.dir = q.dir; if (q.fish && !q.npc && (!o.fish || o.fish.phase !== q.fish.phase)) { var fp = q.fish.phase; var fs = fp === 'cast' ? 'cast' : fp === 'bite' ? 'bite' : fp === 'reel' ? 'reel' : ''; if (fs) sfx(fs, { vol: 0.6, x: q.x, y: q.y }); } // another player's rod
-      o.worn = q.worn || null; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.trading = q.trading || null; o.tradingWith = q.tradingWith || null; o.seen = now;
+      o.worn = q.worn || null; o.aboard = !!q.aboard; o.act = q.act || null; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.trading = q.trading || null; o.tradingWith = q.tradingWith || null; o.seen = now;
     });
     Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
   }
@@ -225,10 +225,27 @@
   function anglers() {
     if (!GT.scene || GT.scene.kind !== 'out') return [];
     var now = performance.now(), out = [];
-    Object.keys(others).forEach(function (a) { var o = others[a], f = !o.npc && fishOf(o, now); if (f) out.push({ x: curX(o, now), y: curY(o, now), dir: o.dir, fish: f }); });
+    Object.keys(others).forEach(function (a) { var o = others[a], f = (!o.npc || o.resident) && fishOf(o, now); if (f) out.push({ x: curX(o, now), y: curY(o, now), dir: o.dir, fish: f }); });
     return out;
   }
   // a player is drawn where I am: outdoors the ones outdoors, inside a building the ones in the same room
+  // A townsperson working on the spot (presence `act`, residents.ts): they face the tile and the work shows like a player's,
+  // the axe or pickaxe swinging (actfx swingAt), the hoe turning the soil, a pan, a meal or a fire. Fishing is the rod (anglers).
+  var WORK = { chop: 1100, mine: 1100, hoe: 1200, cook: 1600, eat: 1500, burn: 1300 };
+  var WORK_ICON = { cook: '🍳', eat: '🍞', burn: '🔥' };
+  function work(o, x, y, now) {
+    var a = o.act, FX = window.GT_FX;
+    if (!a || !FX || !WORK[a.kind]) return;
+    var dx = a.x - x, dy = a.y - y;
+    if (Math.abs(dx) + Math.abs(dy) > 0.5) o.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    if (o.workAt && now < o.workAt) return;
+    o.workAt = now + WORK[a.kind];
+    var tile = { x: a.x, y: a.y };
+    if ((a.kind === 'chop' || a.kind === 'mine') && GT.view3dOn && GT.view3dOn() && FX.float) FX.float(tile, a.kind === 'chop' ? '🪓' : '⛏️', '#ffffff'); // 2.5D: the swing is 2D only
+    else if ((a.kind === 'chop' || a.kind === 'mine') && FX.swingAt) FX.swingAt(a.kind, { x: x, y: y }, tile);
+    else if (a.kind === 'hoe' && FX.rustle) FX.rustle(tile, false);
+    else if (WORK_ICON[a.kind] && FX.float) FX.float(a.kind === 'burn' ? tile : { x: Math.round(x), y: Math.round(y) }, WORK_ICON[a.kind], '#ffffff');
+  }
   function here(o) { var sc = GT.scene; if (!sc) return false; return sc.kind === 'out' ? !o.room : !!o.room && o.room === String(sc.key); }
   function onEntities(ents, ctx, camX, camY, T) {
     if (!GT.scene) return;
@@ -237,7 +254,9 @@
       var o = others[a];
       if ((o.npc && !o.resident) || !here(o)) return; // merchants are already drawn (and clickable) as stall NPCs by chain.js; here they only get a name tag (the townsfolk walk, so they are drawn here)
       var x = curX(o, now), y = curY(o, now), px = x * T, py = y * T;
-      var moving = o.spd > 0.4, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
+      if (o.resident && GT.scene.kind === 'out') work(o, x, y, now);
+      var rowing = !!(window.GT_FERRY && GT_FERRY.by && GT_FERRY.by === a) || !!o.aboard; // in the boat: sitting, no walking legs
+      var moving = o.spd > 0.4 && !rowing, step = moving ? (Math.floor(now / 160) % 2 ? 1 : 2) : 0;
       var look = o.look != null ? o.look : pal(o.nick || a), W = window.GT_WORN, worn = o.worn;
       // px/py/pal/dir/step/id: the 2.5D view (mods/view3d.js) draws the same player as a 3D card; what they wear rides in the high bits of pal
       ents.push({ py: py, px: px, pal: W && worn ? W.pal(look, worn) : look, dir: o.dir, step: step, id: 'player:' + a, fish: fishOf(o, now), draw: function () {

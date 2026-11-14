@@ -251,6 +251,6 @@
   // SLOTS for the shop, bag and market grids: tokens only (the free tools are not in the bag)
   // the Pickaxe item (token 'tool', an optional ingredient of a new Pickaxe) is bought and sold but has no slot: holding it picks the Pickaxe tool
   function slotOf(id) { return id === 'tool' ? 'pickaxe' : id; }
-  window.GT_ITEMS = { icon: icon, SLOTS: ['tool'].concat(SLOTS.filter(function (id) { return !FREE[id]; })), holding: function (id) { return SLOTS[held] === slotOf(id) && !!bar && bar.style.display !== 'none'; }, hold: function (id) { var i = SLOTS.indexOf(slotOf(id)); if (i >= 0) setHeld(i); }, held: function () { var h = SLOTS[held]; return h === 'pickaxe' ? 'tool' : h; } };
+  window.GT_ITEMS = { icon: icon, SLOTS: ['tool'].concat(SLOTS.filter(function (id) { return !FREE[id]; })), holding: function (id) { return SLOTS[held] === slotOf(id) && !!bar && bar.style.display !== 'none'; }, hold: function (id) { var i = SLOTS.indexOf(slotOf(id)); if (i >= 0) setHeld(i); }, held: function () { var h = SLOTS[held]; return h === 'pickaxe' ? 'tool' : h; }, shown: function () { return !!bar && bar.style.display !== 'none'; }, key: function (id) { return (SLOTS.indexOf(slotOf(id)) + 1) % 10; } };
   GT.register({ id: 'hotbar', init: init, onKey: onKey });
 })();

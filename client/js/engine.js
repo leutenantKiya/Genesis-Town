@@ -2265,6 +2265,7 @@ function smoothAt(){
 }
 function charStep(o){
   if (!o.moving) return 0;
+  if (o === P && boatWalk) return 0; // rowing the ferry: sitting in the boat, no walking legs
   return o.flip ? 1 : 2;
 }
 /* 2.5D view (mods/view3d.js): outdoors it draws the world in three.js under this canvas. The engine still owns every

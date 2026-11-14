@@ -34,6 +34,12 @@
     fx.push({ kind: kind, t: 0, tile: { x: tile.x, y: tile.y }, from: { x: p.x, y: p.y }, dir: dirTo(tile), hit: hit !== false, parts: null });
   }
   function chop(tile) { swing('chop', tile, true); }
+  // someone else's swing (a townsperson chopping or mining, players.js): from where they stand, quieter, 2D only
+  function swingAt(kind, from, tile) {
+    var dx = tile.x - from.x, dy = tile.y - from.y, dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    try { if (window.GT_SFX) GT_SFX.play('swing', { vol: 0.35, x: tile.x, y: tile.y }); } catch (e) { /* sound never blocks */ }
+    fx.push({ kind: kind, t: 0, tile: { x: tile.x, y: tile.y }, from: { x: from.x, y: from.y }, dir: dir, hit: true, parts: null, other: true });
+  }
   function mine(tile) { swing('mine', tile, true); }
   function strike(tile, hit) { swing('strike', tile, hit); }
   // callers pass hex colours; the three they use map to tokens (gold, dim, warning), anything else passes through
@@ -201,8 +207,8 @@
     ctx.restore();
   }
 
-  window.GT_FX = { chop: chop, mine: mine, strike: strike, float: float, flash: flash, rustle: rustle, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; },
+  window.GT_FX = { chop: chop, swingAt: swingAt, mine: mine, strike: strike, float: float, flash: flash, rustle: rustle, poof: poof, shake: shake, _active: function () { return fx.length + texts.length; },
     // the swings in progress and their timing, for the 2.5D view's 3D axe (view3d.js)
-    swings: function () { return fx; }, DUR: DUR, HIT: HIT };
+    swings: function () { return fx.filter(function (e) { return !e.other; }); }, DUR: DUR, HIT: HIT };
   GT.register({ id: 'actfx', onFrame: onFrame, init: function (g) { g.register({ id: 'actfx-draw', onDraw: onDraw }); } }); // drawn last, over signs and tags
 })();

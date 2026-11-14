@@ -27,14 +27,29 @@
 
   /** The ripple spots: the shared generator in world/village.js (about one in six shore water tiles of this world, moving on every few game
       hours); the server refuses a cast anywhere else. */
+  // The spots that moved after a catch (server game.ts moveRipple, sent with presence as `ripples`): a fished spot stops
+  // rippling and one nearby starts, the same for everyone in that world.
+  var moved = null, rippleHooked = false;
+  function hookRipples() {
+    if (rippleHooked || !window.GT_PLAYERS || !GT_PLAYERS.onPresence) return;
+    rippleHooked = true;
+    GT_PLAYERS.onPresence(function (r) {
+      if (!r || !r.world) return;
+      var R = r.ripples, set = function (a) { var o = {}; (a || []).forEach(function (k) { o[k] = 1; }); return o; };
+      moved = R ? { world: r.world, b: R.b, gone: set(R.gone), extra: set(R.extra) } : null;
+    });
+  }
   function isSpot(x, y) {
     var sc = GT.scene, L = GT.world && GT.world.layout, V = window.GTVillage;
     if (!sc || sc.kind !== 'out' || !L || !V || !V.fishSpot || empty(x, y)) return false;
-    return V.fishSpot(L, x, y, V.fishBucket(hours()));
+    var b = V.fishBucket(hours()), k = x + ',' + y, w = (GT.worldId && GT.worldId()) || 'public';
+    if (moved && moved.b === b && moved.world === w) { if (moved.gone[k]) return false; if (moved.extra[k]) return true; }
+    return V.fishSpot(L, x, y, b);
   }
 
   /* ---------------------------------------------------------------- drawing */
   function onDrawGround(ctx, camX, camY, T) {
+    hookRipples();
     var sc = GT.scene, m = sc && sc.map;
     if (!m || sc.kind !== 'out') return;
     var vw = ctx.canvas.width, vh = ctx.canvas.height, t = performance.now() / 1000;

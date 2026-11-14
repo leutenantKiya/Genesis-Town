@@ -616,6 +616,8 @@
       case 'await_gather': return $t('Menunggu warga mengumpulkan {0}', [x.input]);
       case 'no_tool': return $t('Semua {0} sudah rusak dan tidak bisa membeli baru di {1} (harga {2})', [x.tool, x.from || '?', num(x.price)]);
       case 'not_picked': return $t('Tidak dipilih admin');
+      case 'no_crew': return $t('Tidak ada warga laki-laki untuk mengumpulkan');
+      case 'no_role': return x.role === 'cook' ? $t('Tidak ada warga perempuan (juru masak) yang boleh ke pedagang itu') : $t('Tidak ada warga laki-laki yang boleh ke pedagang itu');
       case 'cheap': return $t('Harga {0} di {1} masih di bawah {2}: biar pemain yang mengumpulkan', [num(x.ask), x.from, num(x.need)]);
       case 'day_max': return $t('Sudah {0} hari ini (batas harian)', [num(x.today)]);
       case 'bag_full': return $t('Tas sudah berisi {0} (batas simpan)', [num(x.spare)]);
@@ -661,7 +663,35 @@
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); });
     f.appendChild($('span', null, $t('Makan per hari'))); f.appendChild(inp); f.appendChild(btn($t('Simpan'), save, 'primary'));
     el.appendChild(f);
+    // firewood: every resident burns wood each evening, bought from a merchant every time
+    var fw = d.fire; if (!fw || !L.burnWood) return;
+    el.appendChild($('div', 'chain-h', $t('Kayu bakar')));
+    el.appendChild($('p', 'chain-dim', $t('Setiap warga membakar {0} kayu per hari game (mulai 18:00). Kayunya selalu dibeli dari pedagang yang paling murah, jadi kayu laku setiap hari; kayu di tas dipakai hanya kalau tidak ada yang menjual atau uangnya tidak cukup.', [fw.perDay])));
+    var g2 = $('div', 'adm-grid');
+    g2.appendChild(stat($t('Dibeli untuk dibakar'), num(fw.coin) + ' ' + $t('koin'), num(fw.bought) + 'x'));
+    var cold = Object.keys(fw.cold || {}).reduce(function (n, k) { return n + fw.cold[k]; }, 0);
+    g2.appendChild(stat($t('Api hari ini'), Object.keys(fw.today).reduce(function (n, k) { return n + fw.today[k]; }, 0) + ' / ' + (fw.perDay * Object.keys(fw.today).length), cold ? $t('{0} kali kedinginan', [num(cold)]) : ''));
+    el.appendChild(g2);
+    var f2 = $('div', 'chain-field adm-find'), inp2 = $('input');
+    inp2.type = 'number'; inp2.min = String(L.burnWood[0]); inp2.max = String(L.burnWood[1]); inp2.step = '1'; inp2.value = String(fw.perDay); inp2.setAttribute('aria-label', $t('Kayu dibakar per hari'));
+    var save2 = function () { var n = Number(inp2.value); if (inp2.value === '' || !(n >= L.burnWood[0] && n <= L.burnWood[1])) { GT.toast($t('Angka di luar batas: {0}', ['burnWood'])); return; } inp2.blur(); botsSet({ settings: { burnWood: n } }, $t('Pengaturan warga disimpan.')); };
+    inp2.addEventListener('keydown', function (e) { if (e.key === 'Enter') save2(); });
+    f2.appendChild($('span', null, $t('Kayu dibakar per hari'))); f2.appendChild(inp2); f2.appendChild(btn($t('Simpan'), save2, 'primary'));
+    el.appendChild(f2);
   }
+  // one step of a resident (residents.plan via adminbots.planView): what it is, in words
+  function stepText(st) {
+    if (!st) return '-';
+    var k = st.kind, to = k.indexOf('to_') === 0, base = to ? k.slice(3) : k;
+    var WORDS = { fish: $t('memancing'), chop: $t('menebang pohon'), mine: $t('menambang batu'), hoe: $t('mencangkul ladang'), cook: $t('memasak di meja'), eat: $t('makan'), burn: $t('membakar kayu') };
+    if (base === 'buy') return (to ? $t('Jalan ke {0}: ', [st.merchant || '?']) : '') + $t('beli {0} ({1} koin)', [st.token || '?', num(st.coin || 0)]);
+    if (base === 'sell') return (to ? $t('Jalan ke {0}: ', [st.merchant || '?']) : '') + $t('jual {0} ({1} koin)', [st.token || '?', num(st.coin || 0)]);
+    if (base === 'stroll') return $t('Jalan-jalan');
+    if (base === 'rest') return $t('Istirahat');
+    var w = WORDS[base] || base;
+    return to ? $t('Jalan untuk {0}', [w]) : w.charAt(0).toUpperCase() + w.slice(1) + (st.until && d0 ? ' · ' + $t('{0} dtk lagi', [Math.max(0, Math.round((st.until - d0) / 1000))]) : '');
+  }
+  var d0 = 0; // the server's clock of the last status (for "seconds left")
   // fishing, chopping, harvesting and mining: settings (saved on the server), the goods picked, and what was caught and sold
   function renderGather(d) {
     var el = ui.botsGather; if (!el || typingIn(el) || !d.settings || !d.settings.gather || !d.why) return;
@@ -746,10 +776,20 @@
     d.residents.forEach(function (r) {
       var box = $('div', 'adm-bot'), hd = $('div', 'adm-who'), t = $('div', 'adm-who-t');
       hd.appendChild(lookCanvas(r.look));
-      t.appendChild($('div', 'adm-who-n', r.name));
+      t.appendChild($('div', 'adm-who-n', r.name + (r.role ? ' · ' + (r.role === 'cook' ? $t('Juru masak') : $t('Pengumpul')) : '')));
+      if (r.plan) {
+        d0 = d.now || 0;
+        t.appendChild($('div', null, $t('Sekarang: {0}', [stepText(r.plan.doing)])));
+        if (r.plan.next && r.plan.next.length) t.appendChild($('div', 'chain-dim', $t('Berikutnya: {0}', [r.plan.next.slice(0, 4).map(function (x, i) { return (i + 1) + ') ' + stepText(x); }).join(' \u00b7 ') + (r.plan.next.length > 4 ? ' \u00b7 +' + (r.plan.next.length - 4) : '')])));
+        var soon = [];
+        if (r.plan.nextMeal != null) soon.push($t('makan jam {0}:00', [('0' + r.plan.nextMeal).slice(-2)]));
+        if (r.plan.nextFire != null) soon.push($t('bakar kayu jam {0}:00', [('0' + r.plan.nextFire).slice(-2)]));
+        if (soon.length) t.appendChild($('div', 'chain-dim', $t('Jadwal: {0}', [soon.join(', ')])));
+      }
       t.appendChild($('div', 'chain-dim', $t('{0} koin untuk {1} barang', [num(r.spent), num(r.units)])));
       if (r.last) t.appendChild($('div', 'chain-dim', $t('Terakhir: {0} dari {1}, {2} koin ({3} lalu)', [r.last.token, mname[r.last.merchant] || r.last.merchant, num(r.last.coin), ago(r.last.at)])));
       if (r.trade && r.trade.units) t.appendChild($('div', 'chain-dim', $t('Dagang: beli {0}, jual {1} koin', [num(r.trade.bought), num(r.trade.sold)])));
+      if (d.fire && d.fire.perDay) { var fN = d.fire.today[r.id] || 0; t.appendChild($('div', fN < d.fire.due ? 'adm-out' : 'chain-dim', $t('Kayu dibakar hari ini: {0} dari {1}', [fN, d.fire.perDay]))); }
       if (d.meals && d.meals.perDay) { var ateN = d.meals.today[r.id] || 0; t.appendChild($('div', ateN < d.meals.due ? 'adm-out' : 'chain-dim', $t('Makan hari ini: {0} dari {1}', [ateN, d.meals.perDay]) + (ateN < d.meals.due ? ' \u00b7 ' + $t('lapar') : ''))); }
       if (d.toolDefs && r.tools) { var tl = Object.keys(r.tools).map(function (k) { var def = d.toolDefs[k] || { name: k, durability: 0 }; return def.name + ' ' + num(r.tools[k]) + '/' + num(def.durability); }); if (tl.length) t.appendChild($('div', 'chain-dim', $t('Alat: {0}', [tl.join(' \u00b7 ')]))); }
       if (r.trade && r.trade.crafted) t.appendChild($('div', 'chain-dim', $t('Crafting: {0} barang ke rak pedagang', [num(r.trade.crafted)])));
@@ -792,6 +832,7 @@
         : x.kind === 'tool_shop' && x.tool ? $t('{0} beli {1} baru di {2}', [x.who || '?', x.token, x.to || '?'])
         : x.kind === 'trade' && x.token && x.gather ? $t('{0} jual {1} hasil tangkapan ke {2}', [x.who || '?', x.token, x.to])
         : x.kind === 'trade' && x.token && x.meal ? $t('{0} beli {1} dari {2} untuk makan', [x.who || '?', x.token, x.to])
+        : x.kind === 'trade' && x.token && x.burn ? $t('{0} beli {1} dari {2} untuk dibakar', [x.who || '?', x.token, x.to])
         : x.kind === 'trade' && x.token && x.craft ? (x.coin < 0 ? $t('{0} beli {1} dari {2} untuk crafting', [x.who || '?', x.token, x.to]) : $t('{0} jual {1} hasil craft ke {2}', [x.who || '?', x.token, x.to]))
         : x.kind === 'trade' && x.token ? (x.coin < 0 ? $t('{0} beli {1} dari {2} untuk dijual', [x.who || '?', x.token, x.to]) : $t('{0} jual {1} ke {2}', [x.who || '?', x.token, x.to]))
         : kindWord(x.kind) + (x.to ? ' · ' + x.to : '')));

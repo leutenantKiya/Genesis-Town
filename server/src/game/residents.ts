@@ -22,6 +22,11 @@
 // mine it, cook and craft with it first, and put the rest on the shelf of the merchant that sells it (settings `gather`).
 // Meals (eat(), hourly): each resident eats `meals` foods (bread or grilled fish) a game day from the shared bag, buying
 // the cheapest when the bag has none (settings `meals`, today's count in meta `residents.meals`).
+// Firewood (burn(), hourly): each resident burns `burnWood` wood a game day in the evening, bought from a merchant every
+// time (the bag's own wood only when nobody sells any), so wood has a buyer every day (meta `residents.burn`).
+// Roles (config `roles`, one per name): the women ('cook') make the food (bread, grilled fish) and the men ('gather')
+// fish, chop, mine and hoe, and make the tools. Every job is shown: the resident walks to the tree, rock, ripple, field or
+// table and works there for a few seconds (presence `act`, and `fish` for the rod), so other players can watch.
 import type { Chain } from '../chain.ts';
 import type { Econ } from './econ.ts';
 import type { GameStore } from './gamestore.ts';
@@ -31,6 +36,9 @@ import type { Pos, WorldMap } from './worldmap.ts';
 export interface ResidentsDeps {
   econ: Econ; gs: GameStore; market: Market; chain: Chain; map: WorldMap | null; parent: string; town: string;
   now: () => number;
+  /** Is (x, y) a fishing spot now (the ripples, game.ts fishSpotAt), and the catch there moves it (moveRipple). */
+  fishSpot?: (x: number, y: number) => boolean;
+  fished?: (x: number, y: number) => void;
   /** A finished walk to a stall: the goods fly (app.ts -> social.deal). */
   onDeal?: (resident: string, merchant: string, got: Record<string, number>, paid: Record<string, number>) => void;
   log?: (line: string) => void;
@@ -41,13 +49,22 @@ export interface ResidentView {
   /** The walk being followed: tiles from the current one on as a flat [x, y, x, y, ...], started at server time `t0`
    *  (ms) at `sp` tiles a second. Clients place the resident from it every frame (players.js), so everyone sees the same. */
   route: { pts: number[]; t0: number; sp: number };
+  /** Work on the spot (chop, mine, hoe, cook, eat, burn) at tile x, y; a fishing resident sends `fish` like a player. */
+  act?: { kind: string; x: number; y: number };
+  fish?: { phase: 'cast' | 'wait' | 'bite' | 'reel'; x: number; y: number };
 }
 /** A new walk starts this long after it is chosen, so every client has it before the resident sets off (presence polls
  *  every 0.22-0.9 s): nobody sees a resident jump ahead to catch up with a walk it learned late. */
 const ROUTE_LEAD_MS = 1200;
 
+export type Role = 'cook' | 'gather';
+interface Act { kind: string; x: number; y: number; ms: number }
 interface Walker {
   id: string; name: string; look: number;
+  /** cook: makes the food; gather: fishes, chops, mines, hoes and makes tools. */
+  role: Role;
+  /** The work being done on the spot, from `start` for `ms`. */
+  act: (Act & { start: number }) | null;
   /** The route being walked (tiles), started at `t0`; a single point while standing. */
   path: Pos[]; t0: number; dir: string;
   /** Standing until this time (ms). */
@@ -55,13 +72,20 @@ interface Walker {
   /** The purchase this walk ends in. */
   job: Job | null;
 }
-interface Job { merchant: string; token: string; ask: number; to: Pos; sell?: boolean }
+/** A walk: to a stall to buy or sell (merchant = its account), or (act) to a spot to work there. `who`: only that resident takes it. */
+interface Job { merchant: string; token: string; ask: number; to: Pos; sell?: boolean; who?: string; act?: Act }
+/** One step a resident is doing or will do (admin: the townsfolk's next steps). */
+export interface Step { kind: string; merchant?: string; token?: string; coin?: number; until?: number }
 export interface ResidentControls { paused: boolean; allow: Record<string, string[]> }
 export interface TradeSettings { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number }
 export interface CraftSettings { enabled: boolean; marginPct: number; perHour: number; fillPct: number }
 export interface GatherSettings { enabled: boolean; goods: string[]; perHour: number; dailyMax: number; minPricePct: number; fillPct: number; keepMax: number }
-export interface ResidentSettings { target: number; treasuryReserve: number; meals: number; trade: TradeSettings; craft: CraftSettings; gather: GatherSettings }
-const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock', MEALS_KEY = 'residents.meals', TOOLS_KEY = 'residents.tools';
+export interface ResidentSettings { target: number; treasuryReserve: number; meals: number; burnWood: number; trade: TradeSettings; craft: CraftSettings; gather: GatherSettings }
+const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock', MEALS_KEY = 'residents.meals', TOOLS_KEY = 'residents.tools', BURN_KEY = 'residents.burn';
+/** How long each kind of work is shown on the spot (ms). */
+const ACT_MS: Record<string, number> = { fish: 7000, chop: 5000, mine: 5000, hoe: 4500, cook: 5000, eat: 3000, burn: 4000 };
+/** The work that gathers each raw good. */
+const GATHER_ACT: Record<string, string> = { fish: 'fish', wood: 'chop', ore: 'mine', wheat: 'hoe' };
 /** The raw good each tool's use gathers (economy/config.json `tools[*].use`). */
 const USE_GOOD: Record<string, string> = { water: 'fish', tree: 'wood', rock: 'ore', farm: 'wheat' };
 
@@ -79,6 +103,8 @@ export class Residents {
   /** The turn for trading and crafting, apart from the town's shopping turn (`next`). */
   nextJob = 0;
   private spots: Pos[] = [];
+  /** Where each kind of work is done: the target tile and a walkable tile next to it (trees, rocks, shore water, fields, tables). */
+  private nodes: Record<string, Array<{ x: number; y: number; stand: Pos }>> = { chop: [], mine: [], fish: [], hoe: [], cook: [] };
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(d: ResidentsDeps) {
@@ -92,11 +118,25 @@ export class Residents {
       if (L.plaza) for (let y = L.plaza.y0; y <= L.plaza.y1; y += 2) for (let x = L.plaza.x0; x <= L.plaza.x1; x += 2) if (map.walkable(x, y)) this.spots.push({ x, y });
       for (const b of L.buildings) if (b.open && map.walkable(b.dx, b.dy + 1)) this.spots.push({ x: b.dx, y: b.dy + 1 });
       if (!this.spots.length) this.spots.push(L.spawn);
+      // the work spots: each target with a walkable neighbour to stand on
+      const T = (L as unknown as { tiles: string[] }).tiles, W = (L as unknown as { w: number }).w, H = (L as unknown as { h: number }).h;
+      const V = (globalThis as unknown as { GTVillage?: { fishShore(L: unknown, x: number, y: number): boolean } }).GTVillage;
+      const standBy = (x: number, y: number): Pos | null => { for (const [dx, dy] of DIRS) if (map.walkable(x + dx, y + dy)) return { x: x + dx, y: y + dy }; return null; };
+      const plots = new Set(((L as unknown as { farm?: { plots: Pos[] } }).farm?.plots ?? []).map((q) => `${q.x},${q.y}`));
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const t = T[y * W + x];
+        const kind = t === 'tree' ? 'chop' : t === 'rock' ? 'mine' : t === 'table' ? 'cook' : t === 'water' && V?.fishShore(L, x, y) ? 'fish' : plots.has(`${x},${y}`) ? 'hoe' : null;
+        if (!kind) continue;
+        const stand = kind === 'hoe' && map.walkable(x, y + 1) ? { x, y: y + 1 } : standBy(x, y);
+        if (stand) this.nodes[kind].push({ x, y, stand });
+      }
+      if (!this.nodes.hoe.length) for (let y = 0; y < H; y += 3) for (let x = 0; x < W; x += 3) if (T[y * W + x] === 'grass' && map.walkable(x, y) && map.walkable(x, y + 1)) this.nodes.hoe.push({ x, y, stand: { x, y: y + 1 } });
     } else this.spots.push({ x: 0, y: 0 });
     const now = d.now();
     cfg.names.forEach((name, i) => {
       const at = this.spots[(i * 7) % this.spots.length];
-      this.walkers.push({ id: `r${i + 1}`, name, look: cfg.looks[i] ?? i, path: [at], t0: now, dir: 'down', until: now + 1500 * i, job: null });
+      const role: Role = cfg.roles?.[i] === 'cook' ? 'cook' : 'gather';
+      this.walkers.push({ id: `r${i + 1}`, name, look: cfg.looks[i] ?? i, role, act: null, path: [at], t0: now, dir: 'down', until: now + 1500 * i, job: null });
     });
   }
 
@@ -187,7 +227,7 @@ export class Residents {
     const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
     const st: Partial<TradeSettings> = saved.trade ?? {}, sc: Partial<CraftSettings> = saved.craft ?? {}, sg: Partial<GatherSettings> = saved.gather ?? {};
     return {
-      target: num(saved.target, c.target), treasuryReserve: num(saved.treasuryReserve, c.treasuryReserve), meals: num(saved.meals, c.meals ?? 2),
+      target: num(saved.target, c.target), treasuryReserve: num(saved.treasuryReserve, c.treasuryReserve), meals: num(saved.meals, c.meals ?? 2), burnWood: num(saved.burnWood, c.burnWood ?? 1),
       trade: {
         enabled: typeof st.enabled === 'boolean' ? st.enabled : t.enabled, marginPct: num(st.marginPct, t.marginPct),
         perHour: num(st.perHour, t.perHour), holdMax: num(st.holdMax, t.holdMax), minWallet: num(st.minWallet, t.minWallet),
@@ -212,18 +252,40 @@ export class Residents {
   private setStock(s: Record<string, { qty: number; cost: number }>) { this.d.gs.setMeta(STOCK_KEY, JSON.stringify(s)); }
 
   /** The next resident (in turn) who may trade with this merchant, or null. */
-  private pick(merchantId: string, c: ResidentControls): Walker | null {
+  private pick(merchantId: string, c: ResidentControls, role?: Role): Walker | null {
     for (let k = 0; k < this.walkers.length; k++) {
       const w = this.walkers[(this.nextJob + k) % this.walkers.length];
-      if (this.allows(w, merchantId, c)) { this.nextJob += k + 1; return w; }
+      if ((!role || w.role === role) && this.allows(w, merchantId, c)) { this.nextJob += k + 1; return w; }
     }
     return null;
   }
-  private walkTo(merchantId: string, token: string, coin: number, sell: boolean) {
+  /** Who makes `out`: the cooks make food (an item with energy), the gatherers the rest (tools). */
+  roleFor(out: string): Role { return this.d.econ.items[out]?.energy ? 'cook' : 'gather'; }
+  private push(j: Job) {
+    this.queue.push(j);
+    if (this.queue.length > this.cfg.queueMax) this.queue.shift();
+  }
+  private walkTo(merchantId: string, token: string, coin: number, sell: boolean, who?: string) {
     const to = this.d.map ? this.stallFront(merchantId) : null;
     if (!to) return;
-    this.queue.push({ merchant: this.d.market.account(merchantId), token, ask: coin, to, sell });
-    if (this.queue.length > this.cfg.queueMax) this.queue.shift();
+    this.push({ merchant: this.d.market.account(merchantId), token, ask: coin, to, sell, who });
+  }
+  /** Queues `who` walking to a spot for `kind` of work (chop, mine, fish, hoe, cook; eat and burn at a strolling spot)
+   *  near where the resident will be, and working there. Shown only: the goods were already booked. */
+  private workAt(w: Walker, kind: string) {
+    if (!this.d.map) return;
+    const from = w.path[w.path.length - 1];
+    let list = this.nodes[kind] ?? [];
+    if (kind === 'fish' && this.d.fishSpot) { const rip = list.filter((n) => this.d.fishSpot!(n.x, n.y)); if (rip.length) list = rip; }
+    let spot: { x: number; y: number; stand: Pos };
+    if (list.length) {
+      const near = list.map((n) => ({ n, d: Math.abs(n.stand.x - from.x) + Math.abs(n.stand.y - from.y) })).sort((a, b) => a.d - b.d).slice(0, 6);
+      spot = near[Math.floor(Math.random() * near.length)].n;
+    } else {
+      const at = this.spots[Math.floor(Math.random() * this.spots.length)];
+      spot = { x: at.x, y: at.y, stand: at };
+    }
+    this.push({ merchant: '', token: '', ask: 0, to: spot.stand, who: w.id, act: { kind, x: spot.x, y: spot.y, ms: ACT_MS[kind] ?? 4000 } });
   }
 
   /** One hour of trading (game.step, after the town's shopping). Sells what the wallet holds when a merchant pays at
@@ -249,7 +311,7 @@ export class Residents {
       const w = this.pick(bid.id, c); if (!w) return false;
       try { market.sell(this.wallet, bid.id, token, 1, w.id); } catch { return false; }
       held.cost -= avg; held.qty -= 1; if (held.qty < 1) delete stock[token];
-      this.walkTo(bid.id, token, bid.unit, true);
+      this.walkTo(bid.id, token, bid.unit, true, w.id);
       done++;
       return true;
     };
@@ -269,7 +331,7 @@ export class Residents {
         const w = this.pick(ask.id, c); if (!w) break;
         try { market.buy(this.wallet, ask.id, token, 1, w.id); } catch { break; }
         const h = stock[token] ?? (stock[token] = { qty: 0, cost: 0 }); h.qty += 1; h.cost += ask.unit;
-        this.walkTo(ask.id, token, ask.unit, false);
+        this.walkTo(ask.id, token, ask.unit, false, w.id);
         done++;
         if (done < s.perHour) sell(token);
       }
@@ -303,13 +365,13 @@ export class Residents {
     const one = (rid: string, r: Recipe): boolean => {
       const out = r.output, shop = shopFor(out);
       if (!shop) return false;
-      const w = this.pick(shop.id, c); if (!w) return false;
+      const w = this.pick(shop.id, c, this.roleFor(out)); if (!w) return false; // the women cook, the men make tools
       const tag = `${w.id}-c`;
       // a good crafted earlier that never reached a shelf goes first
       if (spare(out) >= 1) {
         if (shop.cash < shop.unit) return false;
         try { market.restock(this.wallet, shop.id, out, 1, tag, shop.upTo); } catch { return false; }
-        this.walkTo(shop.id, out, shop.unit, true);
+        this.walkTo(shop.id, out, shop.unit, true, w.id);
         return true;
       }
       const plan: Array<{ tk: string; own: number; need: number; seller: { id: string; unit: number } | null }> = [];
@@ -333,9 +395,10 @@ export class Residents {
       for (const p of plan) gs.add(day, this.wallet, p.tk, -(p.own + p.need), 'resident_craft', `${rid}#${w.id}`);
       gs.add(day, this.wallet, out, 1, 'resident_craft', `${rid}#${w.id}`);
       if (r.fee > 0) { gs.add(day, this.wallet, 'coin', -r.fee, 'fee', rid); gs.add(day, town, 'coin', r.fee, 'fee', `${rid}:${this.wallet}`); }
-      for (const p of plan) if (p.seller) this.walkTo(p.seller.id, p.tk, p.seller.unit * p.need, false);
+      for (const p of plan) if (p.seller) this.walkTo(p.seller.id, p.tk, p.seller.unit * p.need, false, w.id);
+      this.workAt(w, 'cook'); // at a table: cooking, baking or making the tool
       try { market.restock(this.wallet, shop.id, out, 1, tag, shop.upTo, pay); } catch { return true; } // kept as spare for next hour
-      this.walkTo(shop.id, out, pay, true);
+      this.walkTo(shop.id, out, pay, true, w.id);
       return true;
     };
     // the recipes take turns, one unit each per round, so bread does not use up the hour before meals get a go
@@ -378,10 +441,12 @@ export class Residents {
     gs.add(day, this.wallet, 'coin', -price, 'tool_shop', ref);
     gs.add(day, shop, 'coin', price, 'tool_shop', ref);
     (tools[w.id] ??= {})[kind] = def.durability;
-    this.walkTo(ts.merchant, 'tool', price, false);
+    this.walkTo(ts.merchant, 'tool', price, false, w.id);
     return true;
   }
 
+  /** The residents who gather (the men): fish, chop, mine and hoe. */
+  crew(): Walker[] { return this.walkers.filter((w) => w.role === 'gather'); }
   /** Units of `good` the townsfolk gathered on `day`. */
   gatheredOn(day: number, good: string): number { return this.d.gs.sumKind(day, this.wallet, good, 'resident_gather'); }
 
@@ -392,10 +457,11 @@ export class Residents {
    *  broken or missing tool is bought new at Ben's tool stall. The catch first feeds crafting and cooking (own goods count at their base value), the
    *  rest goes to the shelves (stockShelves). Ledger kind `resident_gather`, ref `<good>#<resident>`. */
   gather(day: number): number {
-    const set = this.settings(), s = set.gather, c = this.controls();
-    if (!this.ready || !s.enabled || c.paused || s.perHour < 1 || !this.walkers.length) return 0;
+    const set = this.settings(), s = set.gather, c = this.controls(), crew = this.crew();
+    if (!this.ready || !s.enabled || c.paused || s.perHour < 1 || !crew.length) return 0;
     const { gs, econ } = this.d, held = this.stock(), tools = this.tools();
     let done = 0;
+    const worked = new Set<string>();
     for (const good of s.goods) {
       if (econ.items[good]?.kind !== 'raw') continue;
       const spare = gs.balance(this.wallet, good) - (held[good]?.qty ?? 0);
@@ -404,15 +470,16 @@ export class Residents {
       const n = Math.min(s.perHour, s.dailyMax - this.gatheredOn(day, good), s.keepMax - spare), tool = this.toolFor(good);
       for (let i = 0; i < n; i++) {
         // the next resident whose own tool still has a use; when every one is worn out, the next resident buys a new one
-        let w = this.walkers[this.nextJob % this.walkers.length];
+        let w = crew[this.nextJob % crew.length];
         if (tool) {
-          const ready = this.walkers.map((_, k) => this.walkers[(this.nextJob + k) % this.walkers.length]).find((x) => (tools[x.id]?.[tool] ?? 0) >= 1);
+          const ready = crew.map((_, k) => crew[(this.nextJob + k) % crew.length]).find((x) => (tools[x.id]?.[tool] ?? 0) >= 1);
           if (ready) w = ready;
           else if (!this.buyTool(day, w, tool, tools)) break; // a broken tool is replaced at Ben's, never repaired
           tools[w.id][tool] -= 1;
         }
-        this.nextJob = this.walkers.indexOf(w) + 1;
+        this.nextJob = crew.indexOf(w) + 1;
         gs.add(day, this.wallet, good, 1, 'resident_gather', `${good}#${w.id}`);
+        if (!worked.has(`${good}:${w.id}`)) { worked.add(`${good}:${w.id}`); this.workAt(w, GATHER_ACT[good] ?? 'hoe'); } // shown once per good and resident an hour
         done++;
       }
     }
@@ -482,16 +549,79 @@ export class Residents {
           if (gs.balance(this.wallet, 'coin') < offer.unit) this.handout(day, false); // from the treasury only
           if (gs.balance(this.wallet, 'coin') < offer.unit) break;
           try { market.buy(this.wallet, offer.id, offer.t, 1, `${w.id}-e`); } catch { break; }
-          this.walkTo(offer.id, offer.t, offer.unit, false);
+          this.walkTo(offer.id, offer.t, offer.unit, false, w.id);
           food = offer.t;
         }
         gs.add(day, this.wallet, food, -1, 'resident_eat', w.id);
+        this.workAt(w, 'eat');
         log.ate[w.id] = (log.ate[w.id] ?? 0) + 1;
         eaten++;
       }
     }
     this.d.gs.setMeta(MEALS_KEY, JSON.stringify(log));
     return eaten;
+  }
+
+  /* ---------------------------------------------------------------- firewood: every resident burns `burnWood` wood a day */
+
+  /** How many fires a resident should have lit by this hour: in the evening, from 18:00 (with 2, at 18:00 and 24:00). */
+  burnDue(hour: number, n = this.settings().burnWood): number {
+    const since = (((hour - 6) % 24) + 24) % 24;
+    let due = 0;
+    for (let k = 0; k < n; k++) if (since >= Math.round(12 + (k * 12) / n)) due++;
+    return due;
+  }
+  /** Today's fires per resident (meta `residents.burn`, reset each game day); `cold`: fires missed for want of wood. */
+  burns(day: number): { day: number; burnt: Record<string, number>; cold: Record<string, number> } {
+    try { const m = JSON.parse(this.d.gs.meta(BURN_KEY) ?? '{}'); if (m && m.day === day && m.burnt && typeof m.burnt === 'object') return { day, burnt: m.burnt, cold: m.cold ?? {} }; } catch { /* a new day */ }
+    return { day, burnt: {}, cold: {} };
+  }
+  /** Each hour (game.step, after meals): every resident who is behind on today's fires buys one wood from the merchant
+   *  that sells it cheapest and burns it (an allowance from the treasury when short, never new coin; tag `<resident>-w`,
+   *  ledger kind `resident_burn`). Bought every time, so wood sells every day; the bag's own wood is burnt only when no
+   *  merchant has any or the wallet cannot pay. A resident with neither stays cold (counted in `cold`). Returns the fires lit. */
+  burn(day: number, hour: number): number {
+    const set = this.settings();
+    if (!this.ready || set.burnWood < 1 || !this.walkers.length) return 0;
+    const { market, gs } = this.d, held = this.stock(), due = this.burnDue(hour, set.burnWood), log = this.burns(day);
+    let burnt = 0;
+    for (const w of this.walkers) {
+      while ((log.burnt[w.id] ?? 0) < due) {
+        const offer = market.ids().filter((id) => market.isOpen(id) && market.def(id).sells.includes('wood') && !market.trend.withdrawn('wood') && gs.balance(market.account(id), 'wood') >= 1)
+          .map((id) => ({ id, unit: market.quote(id, 'wood', 'buy', 1).unit })).sort((a, b) => a.unit - b.unit)[0];
+        let bought = false;
+        if (offer) {
+          if (gs.balance(this.wallet, 'coin') < offer.unit) this.handout(day, false); // from the treasury only
+          if (gs.balance(this.wallet, 'coin') >= offer.unit) {
+            try { market.buy(this.wallet, offer.id, 'wood', 1, `${w.id}-w`); this.walkTo(offer.id, 'wood', offer.unit, false, w.id); bought = true; } catch { bought = false; }
+          }
+        }
+        if (!bought && gs.balance(this.wallet, 'wood') - (held.wood?.qty ?? 0) < 1) { log.cold[w.id] = (log.cold[w.id] ?? 0) + 1; break; }
+        gs.add(day, this.wallet, 'wood', -1, 'resident_burn', w.id);
+        log.burnt[w.id] = (log.burnt[w.id] ?? 0) + 1;
+        this.workAt(w, 'burn');
+        burnt++;
+      }
+    }
+    this.d.gs.setMeta(BURN_KEY, JSON.stringify(log));
+    return burnt;
+  }
+
+  /* ---------------------------------------------------------------- what each resident does now and next (admin) */
+
+  /** Each resident's step now and the walks queued for them, and the queued walks anyone may take. */
+  plan(now = this.d.now()): { per: Record<string, { doing: Step; next: Step[] }>; open: Step[] } {
+    const step = (j: Job): Step => j.act ? { kind: j.act.kind } : { kind: j.sell ? 'sell' : 'buy', merchant: j.merchant, token: j.token, coin: j.ask };
+    const per: Record<string, { doing: Step; next: Step[] }> = {};
+    for (const w of this.walkers) {
+      let doing: Step;
+      if (w.act && now < w.act.start + w.act.ms) doing = { kind: w.act.kind, until: w.act.start + w.act.ms };
+      else if (w.job) doing = w.job.act ? { kind: `to_${w.job.act.kind}` } : { ...step(w.job), kind: `to_${step(w.job).kind}` };
+      else if (now < this.arrival(w)) doing = { kind: 'stroll' };
+      else doing = { kind: 'rest', until: w.until };
+      per[w.id] = { doing, next: this.queue.filter((j) => j.who === w.id).map(step) };
+    }
+    return { per, open: this.queue.filter((j) => !j.who).map(step) };
   }
 
   /* ---------------------------------------------------------------- walking (shown only) */
@@ -507,18 +637,29 @@ export class Residents {
   tick(now: number) {
     if (!this.d.map) return;
     for (const w of this.walkers) {
+      if (w.act && now >= w.act.start + w.act.ms) { // the work is done: a catch moves the ripples on
+        if (w.act.kind === 'fish' && this.d.fishSpot?.(w.act.x, w.act.y)) this.d.fished?.(w.act.x, w.act.y);
+        w.act = null;
+      }
       if (now < this.arrival(w)) continue;
       const end = w.path[w.path.length - 1];
       if (w.path.length > 1) { w.path = [end]; w.t0 = now; }
       if (w.job) {
         const j = w.job; w.job = null;
+        if (j.act) { // at the spot: work there, facing it
+          const dx = j.act.x - end.x, dy = j.act.y - end.y;
+          w.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : dx < 0 ? 'left' : 'down') : dy > 0 ? 'down' : 'up';
+          w.act = { ...j.act, start: now }; w.until = now + j.act.ms + 600;
+          continue;
+        }
         if (j.sell) this.d.onDeal?.(this.account(w.id), j.merchant, { coin: j.ask }, { [j.token]: 1 });
         else this.d.onDeal?.(this.account(w.id), j.merchant, { [j.token]: 1 }, { coin: j.ask });
         w.until = now + 1800; w.dir = 'up';
         continue;
       }
       if (now < w.until) continue;
-      const job = this.queue.shift();
+      const qi = this.queue.findIndex((j) => !j.who || j.who === w.id); // a walk for this resident, or one anyone may take
+      const job = qi >= 0 ? this.queue.splice(qi, 1)[0] : undefined;
       const goal = job ? job.to : this.spots[Math.floor(Math.random() * this.spots.length)];
       const path = this.route(end, goal);
       if (!path) { w.until = now + 3000; continue; }
@@ -540,7 +681,11 @@ export class Residents {
       const pts: number[] = [];
       for (let k = i; k < w.path.length; k++) pts.push(w.path[k].x, w.path[k].y);
       const route = { pts, t0: Math.round(w.t0 + (i / this.cfg.speed) * 1000), sp: this.cfg.speed };
-      return { id: w.id, account: this.account(w.id), name: w.name, look: w.look, x: Math.round(p.x), y: Math.round(p.y), fx: Math.round(p.x * 1000) / 1000, fy: Math.round(p.y * 1000) / 1000, vx: seg ? seg.dx * v : 0, vy: seg ? seg.dy * v : 0, dir, route };
+      const a = w.act && now >= w.act.start && now < w.act.start + w.act.ms ? w.act : null, el = a ? now - a.start : 0;
+      const work = a ? (a.kind === 'fish'
+        ? { fish: { phase: (el < 800 ? 'cast' : el < a.ms - 2200 ? 'wait' : el < a.ms - 1400 ? 'bite' : 'reel') as 'cast' | 'wait' | 'bite' | 'reel', x: a.x, y: a.y } }
+        : { act: { kind: a.kind, x: a.x, y: a.y } }) : {};
+      return { id: w.id, account: this.account(w.id), name: w.name, look: w.look, x: Math.round(p.x), y: Math.round(p.y), fx: Math.round(p.x * 1000) / 1000, fy: Math.round(p.y * 1000) / 1000, vx: seg ? seg.dx * v : 0, vy: seg ? seg.dy * v : 0, dir, route, ...work };
     });
   }
 

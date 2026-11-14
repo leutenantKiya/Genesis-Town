@@ -213,3 +213,23 @@ test('on the production seed the island is isolated: no walk from the spawn, a 3
   assert.ok(Village.boatWater(L, f.wa.x, f.wa.y) && Village.boatWater(L, f.wb.x, f.wb.y));
   assert.ok(route(L, f.wa, f.wb).length >= 3);
 });
+
+test('boarding reaches 2 tiles from the boat (no pixel hunting at the shore), not 3', async () => {
+  const w = await world();
+  const f = Village.ferryOf(w.game.map!.layout)!, L = w.game.map!.layout;
+  // a walkable tile exactly 2 (any direction) from the boat, and one exactly 3
+  let two: XY | null = null, three: XY | null = null;
+  for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+    const p = { x: f.wa.x + dx, y: f.wa.y + dy }, d = Math.max(Math.abs(dx), Math.abs(dy));
+    if (!w.game.map!.walkable(p.x, p.y)) continue;
+    if (d === 2 && !two) two = p;
+    if (d === 3 && !three) three = p;
+  }
+  assert.ok(two && three, `land 2 and 3 tiles from the dock boat (${L.w}x${L.h})`);
+  at(w, Q, three!);
+  fails(() => boat(w, Q, three!, 'board'), 409, /next to the boat/i);
+  at(w, P, two!);
+  const r = boat(w, P, two!, 'board');
+  assert.equal(r.aboard, true, 'boarded from 2 tiles away');
+  assert.deepEqual(r.arrive, f.wa);
+});

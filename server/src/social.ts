@@ -17,7 +17,9 @@ export interface Seen { account: string; world: string; nick: string; tag: strin
   /** The last few outdoor positions with their server time, for clients that draw a little behind (players.js); `tp`: a jump to show at once. */
   trail?: Sample[];
   /** A townsperson's walk (residents.ts ResidentView.route). */
-  route?: { pts: number[]; t0: number; sp: number } }
+  route?: { pts: number[]; t0: number; sp: number };
+  /** What a townsperson is doing on the spot (residents.ts ResidentView.act): chop, mine, hoe, cook, eat, burn, at tile x, y. */
+  act?: { kind: string; x: number; y: number } }
 /** One reported position: server time (ms), where (tiles, smooth), and whether it is a jump (portal, respawn, a long gap). */
 export interface Sample { t: number; x: number; y: number; tp?: true }
 /** Samples kept per player, and for how long: enough for a slow poll (0.9 s) to still get the corners of a walk. */
@@ -104,7 +106,7 @@ export class Social {
 
   npcs: Npc[] = [];
   /** Set by the app (game.residents): the townsfolk walking the village right now, the same for everyone. */
-  residents: () => Array<{ account: string; name: string; look: number; x: number; y: number; fx: number; fy: number; vx: number; vy: number; dir: string; route: { pts: number[]; t0: number; sp: number } }> = () => [];
+  residents: () => Array<{ account: string; name: string; look: number; x: number; y: number; fx: number; fy: number; vx: number; vy: number; dir: string; route: { pts: number[]; t0: number; sp: number }; act?: { kind: string; x: number; y: number }; fish?: Fishing }> = () => [];
   /** Set by the app: a player wrote to a merchant. May throw HttpError (rate limit); the answer comes later through npcSay. */
   onNpcMsg?: (npc: Npc, fromAccount: string, text: string) => void;
 
@@ -201,7 +203,7 @@ export class Social {
       }
       for (const r of this.residents()) {
         if (me && (Math.abs(r.x - me.x) > radius || Math.abs(r.y - me.y) > radius)) continue;
-        out.push({ account: r.account, world, nick: r.name, tag: NPC_TAG, look: r.look, x: r.x, y: r.y, fx: r.fx, fy: r.fy, vx: r.vx, vy: r.vy, dir: r.dir, scene: 'out', t: now, npc: true, resident: true, route: r.route });
+        out.push({ account: r.account, world, nick: r.name, tag: NPC_TAG, look: r.look, x: r.x, y: r.y, fx: r.fx, fy: r.fy, vx: r.vx, vy: r.vy, dir: r.dir, scene: 'out', t: now, npc: true, resident: true, route: r.route, ...(r.act ? { act: r.act } : {}), ...(r.fish ? { fish: r.fish } : {}) });
       }
     }
     for (const s of this.seen.values()) {

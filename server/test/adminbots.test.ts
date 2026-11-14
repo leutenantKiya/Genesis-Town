@@ -121,7 +121,7 @@ test('trace follows the coin: wallet -> merchants, treasury -> wallet, merchant 
 test('the townsfolk buy to sell again at the admin\'s margin, negative allowed, and the settings live in the database', async () => {
   const { game, clock, bots } = await world();
   bots.control({ settings: { gather: { enabled: false } } }); // gathering has its own test below
-  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade' AND ref NOT LIKE '%-c' AND ref NOT LIKE '%-e' AND ref NOT LIKE '%-g'").all(WALLET) as Array<{ delta: number; ref: string }>;
+  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade' AND ref NOT LIKE '%-c' AND ref NOT LIKE '%-e' AND ref NOT LIKE '%-g' AND ref NOT LIKE '%-w'").all(WALLET) as Array<{ delta: number; ref: string }>;
   // off: no trading at all
   bots.control({ settings: { trade: { enabled: false } } });
   for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
@@ -302,12 +302,15 @@ test('the townsfolk fish, chop and mine what is scarce or dear, cook with it, an
 test('a broken tool is replaced with a new one from Ben, never repaired, and no money means no gathering', async () => {
   const { game, clock, bots } = await world();
   bots.control({ settings: { trade: { enabled: false }, craft: { enabled: false }, gather: { enabled: true, goods: ['fish'], perHour: 1, dailyMax: 50, minPricePct: 0, fillPct: 300, keepMax: 50 } } });
-  // r1..r5 each hold a rod with one use left
+  // r1..r5 each hold a rod with one use left; only the men (the gatherers) fish
   game.gs.setMeta('residents.tools', JSON.stringify(Object.fromEntries(game.residents.walkers.map((w) => [w.id, { rod: 1 }]))));
-  for (let h = 0; h < 5; h++) { clock.advanceHours(1); await game.step(); }
+  const crew = game.residents.crew();
+  assert.equal(crew.length, 3, 'Haruto, Sota and Ren gather');
+  for (let h = 0; h < crew.length; h++) { clock.advanceHours(1); await game.step(); }
   const buys = () => game.gs.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'tool_shop'").get(WALLET) as { n: number };
   assert.equal(buys().n, 0, 'the last use of each rod needs no new one');
-  assert.ok(game.residents.walkers.every((w) => game.residents.tools()[w.id].rod === 0), 'every rod is used up');
+  assert.ok(crew.every((w) => game.residents.tools()[w.id].rod === 0), 'every gatherer rod is used up');
+  assert.ok(game.residents.walkers.filter((w) => w.role === 'cook').every((w) => game.residents.tools()[w.id].rod === 1), 'the cooks never fish');
   clock.advanceHours(1); await game.step();
   assert.equal(buys().n, 1, 'a broken rod is replaced by a new one');
   const t = game.residents.tools();
@@ -318,6 +321,7 @@ test('a broken tool is replaced with a new one from Ben, never repaired, and no 
   const coin = game.gs.balance(WALLET, 'coin');
   if (coin > 0) game.gs.add(game.clock.time().settleDay, WALLET, 'coin', -coin, 'test', null);
   bots.control({ settings: { treasuryReserve: 10_000_000 } });
+  for (const w of game.residents.walkers) bots.control({ resident: w.id, merchants: [] }); // no town shopping either (its allowance may print coin)
   const caught0 = (game.gs.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_gather'").get(WALLET) as { n: number }).n;
   clock.advanceHours(1); await game.step();
   assert.equal((game.gs.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_gather'").get(WALLET) as { n: number }).n, caught0, 'no rod, no fish');

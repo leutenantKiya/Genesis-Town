@@ -632,6 +632,14 @@
   var toolNagAt = 0;
   var TILE_TOOL = { tree: 'axe', rock: 'pickaxe', water: 'rod' };
   // true (and a hint, plus the Tools window now and then) when the tool this tile needs is broken
+  // Fishing, mining and chopping need the right tool in hand (the hotbar's held slot): the rod for water, the pickaxe
+  // for rock, the axe for a tree. Without a hotbar (hidden) nothing is asked.
+  function wrongTool(tt) {
+    var k = TILE_TOOL[tt], I = window.GT_ITEMS;
+    if (!k || !I || !I.holding || !I.shown || !I.shown() || I.holding(k)) return false;
+    GT.toast($t('Pegang {0} dulu (tombol {1} di hotbar).', [toolName(k), I.key ? I.key(k) : '?']));
+    return true;
+  }
   function toolBroken(tt) {
     var k = TILE_TOOL[tt], t = k && S.st && S.st.tools && S.st.tools[k];
     if (!t || !t.broken) return false;
@@ -1074,7 +1082,7 @@
     if (npc) return $t('Bicara dengan {0}', [npc.name]);
     var tt = m.tiles[y * m.w + x];
     if (tt === 'stall') { var st1 = stallAt(x, y); if (st1 && st1.merchant) return $t('Belanja di lapak {0}{1}', [st1.merchant.charAt(0).toUpperCase(), st1.merchant.slice(1)]); }
-    if (sc.house && sc.house.own && tt === 'table') return $t('Meja Kerja (crafting)');
+    if (tt === 'table') return $t('Meja Kerja (crafting)'); // every table is a workbench
     if (sc.house && sc.house.own && tt === 'chest') return $t('Kotak Kirim');
     if (sc.house && !sc.house.own && tt === 'chest') return $t('Peti tetangga (terkunci)');
     if (sc.kind !== 'out') return null;
@@ -1811,7 +1819,8 @@
       if (house.kind === 'hall') { open('project'); return true; }
       if (house.kind === 'broker') { open('market'); return true; }
     }
-    if (own && (ctx.tileType === 'table' || ctx.tileType === 'chest')) {
+    // every table (at home, in any building, the village's picnic tables) is a workbench for crafting; none is for eating
+    if (ctx.tileType === 'table' || (own && ctx.tileType === 'chest')) {
       if (S.mode !== 'offline' && !S.account) { GT.toast($t('Masuk dulu (tombol Masuk) untuk memakai {0}', [ctx.tileType === 'table' ? $t('Meja Kerja.') : $t('Kotak Kirim.')])); return true; }
       open(ctx.tileType === 'table' ? 'craft' : 'ship'); return true;
     }
@@ -1826,6 +1835,7 @@
     if (!token) return false;
     if (S.busy) return true;
     var tx = ctx.tile.x, ty = ctx.tile.y, tt = ctx.tileType;
+    if (wrongTool(tt)) return true;
     function gather() {
       if (toolBroken(tt)) return Promise.resolve();
       S.busy = true;

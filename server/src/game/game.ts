@@ -23,6 +23,8 @@ import { NpcMarket } from './npc.ts';
 import { Residents } from './residents.ts';
 import { returnConsignedGoods } from './consign-return.ts';
 
+/** How far from the boat (tiles, any direction) a player can still climb in. */
+const BOARD_REACH = 2;
 export interface GameOptions { merchantParent: string; town: string; chunkSize?: number; now?: () => number; rng?: Rng; econ?: Econ; worldSeed?: number }
 
 const ACTIONS = ['gather', 'craft', 'eat', 'farm', 'ship', 'sell', 'buy', 'fight', 'flee', 'engage', 'travel', 'build', 'collect', 'hire', 'forage', 'cook', 'stock', 'dress', 'assist', 'boat', 'hoe', 'gamble', 'mall', 'repair', 'maketool', 'ride', 'casino', 'mission', 'grass', 'chips', 'toolshop', 'sleep'] as const;
@@ -120,6 +122,7 @@ export class Game {
     this.residents = new Residents({
       econ: this.econ, gs: this.gs, market: this.market, chain, map: this.map, parent: o.merchantParent, town: o.town, now: this.now,
       onDeal: (r, m, got, paid) => this.onDeal?.('town', 'public', r, m, got, paid), log: (l) => console.warn(l),
+      fishSpot: (x, y) => !!this.map && this.fishSpotAt('public', this.map, x, y), fished: (x, y) => { if (this.map) this.moveRipple('public', this.map, x, y); },
     });
     this.market.residents = this.residents;
   }
@@ -188,6 +191,41 @@ export class Game {
     return { x: b.x, y: b.y, by: b.by, name: b.by ? (this.store.nameOf(b.by) ?? b.by.split('.')[0]) : null, mine: !!b.by && b.by === viewer };
   }
 
+  /** Fishing spots that moved after a catch, per world, for the current fish bucket (village.js FISH_HOURS): a spot that was
+   *  fished is `gone` and a shore tile near it ripples instead (`extra`). In memory; a new bucket starts clean. Presence sends
+   *  it (ripplesView) so every client draws the same ripples, and the gather check uses it (fishSpotAt). */
+  private ripples = new Map<string, { b: number; gone: Set<string>; extra: Set<string> }>();
+  private rippleOf(wid: string) {
+    const b = Village.fishBucket(this.clock.time().totalHours);
+    let r = this.ripples.get(wid);
+    if (!r || r.b !== b) { r = { b, gone: new Set(), extra: new Set() }; this.ripples.set(wid, r); }
+    return r;
+  }
+  fishSpotAt(wid: string, map: GameMap, x: number, y: number): boolean {
+    const r = this.rippleOf(wid), k = `${x},${y}`;
+    if (r.gone.has(k)) return false;
+    if (r.extra.has(k)) return true;
+    return map.fishSpot(x, y, this.clock.time().totalHours);
+  }
+  /** After a catch at (x, y): that spot stops rippling and a shore water tile within 10 tiles that is not a spot starts. */
+  moveRipple(wid: string, map: GameMap, x: number, y: number) {
+    for (const [k, v] of this.ripples) if (v.b !== this.rippleOf(wid).b) this.ripples.delete(k); // old buckets
+    const r = this.rippleOf(wid), L = (map as unknown as { layout: { w: number; h: number; tiles: string[] } }).layout, k = `${x},${y}`;
+    r.gone.add(k); r.extra.delete(k);
+    const cand: Array<[number, number]> = [];
+    for (let dy = -10; dy <= 10; dy++) for (let dx = -10; dx <= 10; dx++) {
+      const cx = x + dx, cy = y + dy, ck = `${cx},${cy}`;
+      if ((dx || dy) && Math.abs(dx) + Math.abs(dy) >= 3 && !r.gone.has(ck) && Village.fishShore(L, cx, cy) && !this.fishSpotAt(wid, map, cx, cy)) cand.push([cx, cy]);
+    }
+    if (cand.length) { const [cx, cy] = cand[Math.floor(this.rng() * cand.length)]; r.extra.add(`${cx},${cy}`); }
+  }
+  /** The moved ripples of a world for presence, or null when none moved. */
+  ripplesView(wid: string): { b: number; gone: string[]; extra: string[] } | null {
+    const r = this.ripples.get(wid);
+    if (!r || r.b !== Village.fishBucket(this.clock.time().totalHours) || (!r.gone.size && !r.extra.size)) return null;
+    return { b: r.b, gone: [...r.gone], extra: [...r.extra] };
+  }
+
   /** The ferry boat to the island in the village's bottom-right corner, steered by the player. There is ONE boat, wherever it was left. op 'board':
    *  from a land tile right next to the boat (and nobody else steering it), step in; while aboard the player's reports are water tiles the boat can
    *  reach (Positions) and the boat follows. op 'land' {x, y}: step off onto a walkable tile right next to the boat. Nothing else works aboard, and
@@ -209,7 +247,7 @@ export class Game {
     }
     if (op !== 'board') throw new HttpError(409, 'You are not in the boat.');
     if (boat.by) throw new HttpError(409, `The boat is in use by ${this.store.nameOf(boat.by) ?? boat.by.split('.')[0]}.`);
-    if (dist(pos, boat) !== 1) throw new HttpError(409, 'Stand next to the boat.');
+    if (dist(pos, boat) > BOARD_REACH) throw new HttpError(409, 'Stand next to the boat.'); // up to 2 tiles away: no pixel hunting at the shore
     const at = { x: boat.x, y: boat.y };
     this.positions.board(account, at, this.now());
     return { toast: 'You climb into the boat.', world: 'public', arrive: at, aboard: true };
@@ -268,7 +306,7 @@ export class Game {
         this.residents.gather(this.clock.time().settleDay); // fish, chop, harvest and mine what is scarce or dear
         this.residents.craft(this.clock.time().settleDay); // and craft and cook to stock the shelves, which lowers those prices
         this.residents.stockShelves(this.clock.time().settleDay); // the rest of the catch goes to the shelves
-        { const ct = this.clock.time(); this.residents.eat(ct.settleDay, ct.hour); } // and each eats its meals of the day
+        { const ct = this.clock.time(); this.residents.eat(ct.settleDay, ct.hour); this.residents.burn(ct.settleDay, ct.hour); } // each eats its meals and burns its firewood of the day
       }
       this.gs.setMeta('clock.hour', String(now));
       await this.npc.run();
@@ -348,7 +386,7 @@ export class Game {
       case 'gather': {
         w.map?.checkGather(s('tile'), n('x', -1), n('y', -1));
         // fishing only where the water ripples (the same spots the client draws, from the world's seed and the game time)
-        if (s('tile') === 'water' && w.map && !w.map.fishSpot(n('x', -1), n('y', -1), this.clock.time().totalHours)) throw new HttpError(409, 'No fish here. Cast where the water ripples.');
+        if (s('tile') === 'water' && w.map && !this.fishSpotAt(wid, w.map, n('x', -1), n('y', -1))) throw new HttpError(409, 'No fish here. Cast where the water ripples.');
         // a guest (helper or builder) in someone else's Homeland: a daily share per host and never a node's last charge
         const guest = !!w.row && w.row.account !== account;
         const minLeft = guest ? this.econ.coop.guestLeavesCharges : 0;
@@ -361,6 +399,7 @@ export class Game {
           : home.publicTradeOnly ? null : this.monsters?.maybeEncounter(account, s('tile'), n('x', -1), n('y', -1));
         if (enc) { res = { toast: `${enc.name} blocks your way! Fight or run.` }; break; }
         res = this.world.gather(account, s('tile'), n('x', -1), n('y', -1), w.row ? `${wid}:` : '', w.row && !guest && this.econ.gather.tiles[s('tile')] === 'wood' ? this.homelands.effects(account).woodBonus : 0, minLeft); // Homeland nodes are charged per Homeland
+        if (s('tile') === 'water' && w.map) this.moveRipple(wid, w.map, n('x', -1), n('y', -1)); // the fish there are caught: the ripples move on
         break;
       }
       case 'grass': {

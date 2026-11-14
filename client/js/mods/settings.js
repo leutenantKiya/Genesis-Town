@@ -251,7 +251,7 @@
       case 'tree': return out ? { icon: '🪓', label: $t('Tebang') } : null;
       case 'rock': return out ? { icon: '⛏️', label: $t('Tambang') } : null;
       case 'grass': case 'tallgrass': { var gc = window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account && GT_CHAIN.state.cfg && GT_CHAIN.state.cfg.econ && GT_CHAIN.state.cfg.econ.grass; return out && gc && gc.tiles.indexOf(c.tileType) >= 0 ? { icon: '🌾', label: $t('Cari benih') } : null; } // grass: a small chance of a wheat seed (mods/chain.js searchGrass)
-      case 'table': return out ? null : (sc.house && sc.house.own ? { icon: '🔨', label: $t('Meja') } : { icon: '🍌', label: $t('Makan') });
+      case 'table': return { icon: '🔨', label: $t('Crafting') }; // every table is a workbench (chain.js)
       case 'chest': return out ? null : { icon: '📦', label: $t('Buka') };
       case 'bed': return out ? null : { icon: '😴', label: $t('Tidur') };
       case 'bookshelf': return out ? null : { icon: '📚', label: $t('Baca') };
@@ -282,7 +282,7 @@
         if (lm && at(lm.gamble)) return { icon: '🎲', label: $t('Main') };
         var fe = V.ferryOf && V.ferryOf(L);
         if (fe) {
-          var near = function (q) { return Math.abs(p.x - q.x) + Math.abs(p.y - q.y) <= 1; };
+          var near = function (q) { return Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y)) <= 2; }; // boarding reach (ferry.js REACH)
           var bp = window.GT_FERRY && GT_FERRY.pos ? { x: Math.round(GT_FERRY.pos.x), y: Math.round(GT_FERRY.pos.y) } : fe.wa; // the one boat, wherever it floats
           if ((t.x === bp.x && t.y === bp.y) || near(bp)) return { icon: '⛵', label: $t('Perahu') };
         }

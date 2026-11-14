@@ -26,7 +26,8 @@
     if (world() !== 'public' || !L || !V || !V.ferryOf) return null;
     try { return V.ferryOf(L); } catch (e) { return null; }
   }
-    function near(p, q) { return Math.max(Math.abs(Math.round(p.x) - Math.round(q.x)), Math.abs(Math.round(p.y) - Math.round(q.y))) <= 1; } // the 8 tiles around, like the server
+  var REACH = 2; // boarding works up to 2 tiles from the boat, like the server (game.ts BOARD_REACH)
+  function near(p, q) { return Math.max(Math.abs(Math.round(p.x) - Math.round(q.x)), Math.abs(Math.round(p.y) - Math.round(q.y))) <= REACH; }
   // the tile the boat floats on (where the server has it)
   function tile() { var f = ferry(); return boat ? { x: boat.x, y: boat.y } : f ? { x: f.wa.x, y: f.wa.y } : null; }
   function landing() { var t = tile(), p = GT.player; if (aboard || !t || !p || !GT.scene || GT.scene.kind !== 'out') return false; return near(p, t); }
@@ -99,6 +100,7 @@
       if (!r || r.world !== 'public' || r.boat === undefined) return;
       if (aboard && performance.now() - boardedAt < 3000) return; // my own boarding is newer than this answer
       boat = r.boat ? { x: r.boat.x, y: r.boat.y, by: r.boat.by || null, mine: !!r.boat.mine, name: r.boat.name || '' } : null;
+      FERRY.by = boat && boat.by && !boat.mine ? boat.by : null; // whoever rows it sits still in it (players.js: no walking legs)
     });
   }
 
