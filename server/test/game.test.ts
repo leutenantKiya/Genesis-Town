@@ -267,7 +267,7 @@ test('spend guard: on-chain debits only use items that are on chain and not spen
   const { game, chain } = await world();
   const guard = spendGuard(chain, game);
   // Starter kit is off-chain until the first settlement.
-  await assert.rejects(guard(P, 'list_item', { token_id: 'bread', amount: '1', price_each: '5' }), /on the chain is only 0/);
+  await assert.rejects(guard(P, 'list_item', { token_id: 'bread', amount: '1', price_each: '5' }), /Only 0 .* can be used for this now/);
   await game.devSettle();
   assert.equal(game.gs.settledBalance(P, 'bread'), 3);
   await guard(P, 'list_item', { token_id: 'bread', amount: '3', price_each: '5' });

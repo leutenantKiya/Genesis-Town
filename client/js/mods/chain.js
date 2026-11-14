@@ -85,7 +85,7 @@
     S.legacyShown = true;
     S.account = null; S.st = null; lsSet(LS_ACC, null);
     var body = $('div');
-    body.appendChild($('p', null, $t('Akun ini dibuat dengan NEAR Auth versi lama dan sudah dihentikan. Buat akun baru dengan login yang berbeda (misalnya akun Google lain).')));
+    body.appendChild($('p', null, $t('Akun ini dibuat dengan sistem login lama dan sudah dihentikan. Buat akun baru dengan login yang berbeda (misalnya akun Google lain).')));
     GT.modal({ title: $t('Akun lama'), body: body, actions: [{ label: $t('Oke'), primary: true, onClick: function (h) { S.legacyShown = false; h.close('action'); renderBanner(); renderHud(); return true; } }] });
   }
 
@@ -114,7 +114,7 @@
   // Chain details (account name, "on-chain" labels, explorer links) stay out of the way unless the player turns them
   // on in Riwayat. Everything is still recorded on NEAR either way; this only changes what the screens mention.
   var LS_DETAILS = 'gt.chain.details';
-  function chainUI() { try { return localStorage.getItem(LS_DETAILS) === '1'; } catch (e) { return false; } }
+  function chainUI() { return false; } // the chain stays out of sight for players; LS_DETAILS is no longer offered
   function setChainUI(on) { try { localStorage.setItem(LS_DETAILS, on ? '1' : '0'); } catch (e) { /* storage blocked */ } renderBanner(); }
   function oc() { return chainUI() ? ' (on-chain)' : ''; }
   function renderBanner() {
@@ -168,7 +168,7 @@
     acts.appendChild(button($t('Main sekarang'), function () { login(); }, 'primary'));
     acts.appendChild(button($t('Lihat-lihat dulu'), function () { try { sessionStorage.setItem('gt.title.skip', '1'); } catch (e) { /* storage blocked */ } renderTitle(); }));
     card.appendChild(acts);
-    card.appendChild($('p', 'gt-title-note', $t('Masuk dengan NEAR Auth. Tanpa dompet, tanpa biaya, langsung di browser.')));
+    card.appendChild($('p', 'gt-title-note', $t('Masuk dengan Google atau email, langsung di browser.')));
     titleEl.appendChild(card);
   }
 
@@ -216,14 +216,14 @@
     lsSet(LS_KEY, null);
     var kp = sessionKey();
     var body = $('div');
-    body.appendChild($('p', null, $t('Akunmu ({0}) belum punya kunci game di perangkat ini.', [r.accountId.split('.')[0]])));
-    body.appendChild($('p', null, $t('Setujui satu kali di jendela NEAR Auth, lalu kunci baru ditambahkan ke akunmu di testnet. Kunci ini hanya bisa memanggil kontrak game, tidak bisa memindahkan NEAR. Gas dibayar game.')));
+    body.appendChild($('p', null, $t('Perangkat ini belum disetujui untuk akunmu.')));
+    body.appendChild($('p', null, $t('Setujui satu kali di jendela login, lalu perangkat ini siap dipakai.')));
     return new Promise(function (resolve, reject) {
-      GT.modal({ title: $t('Perangkat baru'), sticky: true, body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui di NEAR Auth'), primary: true, onClick: function (h) {
+      GT.modal({ title: $t('Perangkat baru'), sticky: true, body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui'), primary: true, onClick: function (h) {
         var prov = new L.JsonRpcProvider({ url: S.cfg.rpcUrl }), da;
-        GT.toast($t('Membuka NEAR Auth…'));
+        GT.toast($t('Membuka jendela login…'));
         Promise.all([prov.viewAccessKey({ accountId: r.accountId, publicKey: L.PublicKey.from(r.ownerPublicKey) }), prov.viewBlock({ finality: 'final' })])
-          .catch(function () { throw new Error($t('Kunci NEAR Auth-mu tidak ditemukan di akun ini.')); })
+          .catch(function () { throw new Error($t('Login ini tidak cocok dengan akunmu.')); })
           .then(function (x) {
             da = L.buildDelegateAction({
               senderId: r.accountId, receiverId: r.accountId,
@@ -234,7 +234,7 @@
           })
           .then(function () { return provider.getSignatureRequest(); })
           .then(function (res) {
-            GT.toast($t('Menambahkan kunci ke akunmu…'));
+            GT.toast($t('Menyetujui perangkat…'));
             var sr = res.signatureRequest;
             return api('/auth/add-key', { method: 'POST', body: {
               idToken: idToken,
@@ -293,7 +293,7 @@
     if (!window.NearLib || !fa || S.cfg.devLogin) return false;
     return !fa.origins || fa.origins.indexOf(location.origin) >= 0;
   }
-  function msgNoNearAuth() { return $t('Pasar, hadiah, saham, dan proyek kota di perangkat ini perlu persetujuan NEAR Auth, yang belum aktif di alamat ini. Kamu tetap bisa bermain; untuk hal on-chain, pakai perangkat pertamamu.'); }
+  function msgNoNearAuth() { return $t('Pasar, hadiah, saham, dan proyek kota perlu perangkat ini disetujui, dan itu belum bisa dari alamat ini. Kamu tetap bisa bermain; untuk hal itu, pakai perangkat pertamamu.'); }
   function approveDevice() {
     var usable = nearAuthHere(), ownerPk = lsGet(LS_OWNER);
     var body = $('div');
@@ -302,11 +302,11 @@
       GT.modal({ title: $t('Setujui perangkat ini'), body: body });
       return Promise.reject(new Error($t('Perangkat ini belum disetujui.')));
     }
-    body.appendChild($('p', null, $t('Untuk memakai Pasar, hadiah, saham, atau proyek kota, setujui perangkat ini satu kali dengan NEAR Auth. Bermain biasa tidak perlu persetujuan.')));
+    body.appendChild($('p', null, $t('Untuk memakai Pasar, hadiah, saham, atau proyek kota, setujui perangkat ini satu kali lewat login. Bermain biasa tidak perlu persetujuan.')));
     return new Promise(function (resolve, reject) {
-      GT.modal({ title: $t('Setujui perangkat ini'), sticky: true, body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui dengan NEAR Auth'), primary: true, onClick: function (h) {
+      GT.modal({ title: $t('Setujui perangkat ini'), sticky: true, body: body, onClose: function (why) { if (why !== 'action') reject(new Error($t('Dibatalkan'))); }, actions: [{ label: $t('Setujui perangkat'), primary: true, onClick: function (h) {
         var provider = nearProvider();
-        GT.toast($t('Membuka NEAR Auth…'));
+        GT.toast($t('Membuka jendela login…'));
         provider.login(undefined, true)
           .then(function () { return provider.client.getIdTokenClaims(); })
           .then(function (claims) {
@@ -340,7 +340,7 @@
     if (S.busy) return;
     if (S.cfg && S.cfg.devLogin) return devLogin();
     if (!nearAuthHere()) {
-      GT.modal({ title: $t('Masuk'), body: $t('Login belum aktif di alamat ini: NEAR Auth hanya menerima alamat yang sudah didaftarkan. Kamu tetap bisa melihat-lihat desa sebagai tamu.'), actions: [{ label: $t('Oke'), primary: true }] });
+      GT.modal({ title: $t('Masuk'), body: $t('Login belum aktif di alamat ini. Kamu tetap bisa melihat-lihat desa sebagai tamu.'), actions: [{ label: $t('Oke'), primary: true }] });
       return;
     }
     // two ways in, both NEAR Auth by redirect: Google goes straight to Google's sign-in (Auth0 connection google-oauth2),
@@ -401,7 +401,7 @@
   // must come back to the same page state.
   function nearLogin(connection) {
     if (S.busy) return;
-    if (!window.NearLib) { GT.toast($t('Pustaka NEAR belum dimuat (jalankan build klien).')); return; }
+    if (!window.NearLib) { GT.toast($t('Login belum siap. Muat ulang halaman.')); return; }
     S.busy = true;
     var ring = busyRing();
     try { sessionStorage.setItem(SS_RETURN, location.pathname + location.search + location.hash); } catch (e) { /* storage blocked: back to / */ }
@@ -542,7 +542,7 @@
      by what they actually do (history rows, the Homeland's state, the farm plots) ---- */
   // each step: an icon and a few words on the card, one short hint under them; the full how-to is the card's tooltip
   var GOALS = [
-    { id: 'signin', icon: '🔑', title: $t('Masuk'), hint: $t('Google atau email. Tanpa dompet, tanpa gas.'), text: $t('Tekan Masuk untuk membuat akunmu (Google atau email). Tanpa dompet, tanpa gas.') },
+    { id: 'signin', icon: '🔑', title: $t('Masuk'), hint: $t('Google atau email.'), text: $t('Tekan Masuk untuk membuat akunmu (Google atau email).') },
     { id: 'gather', icon: '🧺', title: $t('Kumpulkan bahan'), hint: $t('Klik kolam, pohon atau batu.'), text: $t('Klik kolam, pohon atau batu (atau hadap lalu tekan F). Hasilnya masuk ke Tas.') },
     { id: 'craft', icon: '🔨', title: $t('Buat sesuatu'), hint: $t('Meja Kerja: 2 Gandum jadi Roti.'), text: $t('Buat sesuatu di Meja Kerja: 2 Gandum jadi Roti, atau Ikan + Kayu jadi Ikan Bakar.') },
     { id: 'sell', icon: '🪙', title: $t('Jual hasilmu'), hint: $t('Ke pedagang di Pasar.'), text: $t('Jalan ke Pasar di timur rumahmu dan jual hasilmu ke Sari, Budi, Wati atau Joko.') },
@@ -993,7 +993,7 @@
           // this device's game key is not on the NEAR account yet (a new device, or an account adopted by a fresh
           // database): the same answer the relayer would give, so signedCall runs the device approval
           if (/does not exist|UNKNOWN_ACCESS_KEY/i.test(String(e && (e.type || '') + ' ' + (e.message || e)))) {
-            var a = new Error($t('Perangkat ini perlu disetujui dengan NEAR Auth dulu.')); a.code = 'approve_device'; throw a;
+            var a = new Error($t('Perangkat ini perlu disetujui dulu.')); a.code = 'approve_device'; throw a;
           }
           throw e;
         });
@@ -1012,7 +1012,7 @@
         return api('/relay', { method: 'POST', body: body });
       });
     }).then(function (r) {
-      if (r && r.status === 'failed') throw new Error($t('Ditolak kontrak: {0}', [r.error || '']));
+      if (r && r.status === 'failed') throw new Error($t('Ditolak: {0}', [r.error || '']));
       return refresh(true).then(function () { return r; });
     });
   }
@@ -1380,7 +1380,7 @@
     var input = $('input'); input.type = 'text'; input.maxLength = 200; input.placeholder = $t('mis. "kenapa harga ikan turun?"');
     body.appendChild(log); body.appendChild(input);
     var prov = S.cfg && S.cfg.dialogue;
-    body.appendChild($('p', 'chain-dim', prov === 'nearai' ? $t('Jawaban dari NEAR AI Cloud (inferensi privat) berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.')
+    body.appendChild($('p', 'chain-dim', prov === 'nearai' ? $t('Jawaban AI berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.')
       : prov === 'anthropic' ? $t('Jawaban dari Claude berdasarkan harga asli toko. Obrolan tidak bisa memindahkan barang atau koin.')
       : $t('Jawaban disusun dari harga asli toko. (AI belum aktif di server ini.)')));
     var waiting = false;
@@ -1601,13 +1601,17 @@
   function askSend(token) {
     var body = $('div');
     body.appendChild($('p', null, $t('Kirim 1 {0} ke pemain lain.{1}', [item(token), chainUI() ? $t(' Langsung on-chain, tanpa dompet, tanpa gas.') : $t(' Langsung sampai.')])));
-    var input = $('input'); input.type = 'text'; input.placeholder = $t('akun penerima (…players…testnet)'); input.maxLength = 64;
+    var input = $('input'); input.type = 'text'; input.placeholder = $t('nama pemain (atau nama#tag)'); input.maxLength = 64;
     body.appendChild(input);
     GT.modal({ title: $t('Kirim {0}', [item(token)]), sticky: true, body: body, actions: [{ label: $t('Kirim'), primary: true, onClick: function (h) {
-      var to = String(input.value || '').trim().toLowerCase();
-      if (!/^[a-z0-9._-]{2,64}$/.test(to)) { GT.toast($t('Nama akun tidak valid')); return false; }
+      var who = String(input.value || '').trim();
+      if (who.length < 2) { GT.toast($t('Tulis nama pemain')); return false; }
       h.close('ok'); GT.toast($t('Mengirim…'));
-      signedCall('send_item', { receiver_id: to, token_id: token, amount: '1' }).then(function () { GT.toast($t('Terkirim!')); }, function (e) { GT.toast($t('Gagal: {0}', [e.message])); });
+      // the name is resolved to the player's account by their card; the account id itself never shows
+      api('/player?name=' + encodeURIComponent(who)).then(function (p) {
+        if (!p.account || p.self) throw new Error($t('Pilih pemain lain'));
+        return signedCall('send_item', { receiver_id: p.account, token_id: token, amount: '1' }).then(function () { GT.toast($t('Terkirim ke {0}!', [p.name])); });
+      }).catch(function (e) { GT.toast($t('Gagal: {0}', [e.message])); });
       return true;
     } }] });
     setTimeout(function () { input.focus(); }, 50);
@@ -1658,7 +1662,7 @@
   function shortAcc(a) { return String(a).split('.')[0]; }
   function feePct() { return (S.feeBps != null ? S.feeBps : 500) / 100; }
   function marketCall(method, args, okMsg) {
-    GT.toast($t('Mengirim ke chain…'));
+    GT.toast($t('Mengirim…'));
     return signedCall(method, args).then(function () { GT.toast(okMsg); return true; }, function (e) { GT.toast(e.message); return false; });
   }
   // A Player Market buy: the goods fly from the seller (an anonymous one has no place) and my coins fly to them (mods/trade.js)
@@ -1808,7 +1812,7 @@
       if (!(pr >= 1 && pr <= 100000)) { GT.toast($t('Harga 1–100000')); return false; }
       h.close('ok');
       S.marketTab = anon ? 'gelap' : 'lapak';
-      GT.toast($t('Mengirim ke chain…'));
+      GT.toast($t('Mengirim…'));
       signedCall('list_item', { token_id: token, amount: String(q), price_each: String(pr) }, { anonymous: anon })
         .then(function () { GT.toast(anon ? $t('Dipasang di Pasar Gelap.') : $t('Dipasang di Lapak.')); open('market'); }, function (e) { GT.toast(e.message); });
       return true;
@@ -1886,21 +1890,14 @@
       var meta = (it.n > 1 && clock(it.first) !== clock(it.d) ? clock(it.first) + '–' + clock(it.d) : clock(it.d)) + (ST_LABEL[h.status] && h.status !== 'mock' ? ' · ' + ST_LABEL[h.status] : '');
       txt.appendChild($('div', 'gt-hist-s', (f.sub ? f.sub + ' · ' : '') + meta));
       row.appendChild(txt);
-      if (h.tx_hash && S.mode === 'testnet') {
+      if (false && h.tx_hash) { // explorer links stay out of the game
         var a = $('a', 'chain-link', $t('Detail ↗')); a.href = S.cfg.explorerTxUrl + encodeURIComponent(h.tx_hash); a.target = '_blank'; a.rel = 'noopener noreferrer';
         a.title = $t('Buka catatan lengkap transaksi ini di browser (NEAR explorer)');
         row.appendChild(a);
       }
       wrap.appendChild(row);
     });
-    if (S.st) wrap.appendChild($('p', 'chain-dim', $t('Kegiatan hari ini disimpan pukul 06:00. Detail ↗ membuka catatan lengkapnya.')));
-    // technical mode (account name, on-chain labels elsewhere in the game) stays available, out of the way
-    var tog = $('label', 'chain-field gt-details');
-    var cb = $('input'); cb.type = 'checkbox'; cb.checked = details;
-    cb.addEventListener('change', function () { setChainUI(cb.checked); redraw(); });
-    tog.appendChild(cb); tog.appendChild($('span', null, $t(' Mode teknis (nama akun dan label on-chain di seluruh game)')));
-    wrap.appendChild(tog);
-    if (details && S.account) wrap.appendChild($('p', 'chain-dim', $t('Akun: {0}', [S.account])));
+    if (S.st) wrap.appendChild($('p', 'chain-dim', $t('Kegiatan hari ini disimpan pukul 06:00.')));
     return wrap;
   }
 

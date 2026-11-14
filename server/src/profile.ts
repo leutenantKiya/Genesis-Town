@@ -15,6 +15,8 @@ export interface PlayerProfile {
   /** In any party. */
   inParty: boolean;
   self: boolean;
+  /** Their account id: the gift window sends to it by name, the id itself is not shown. */
+  account: string;
 }
 
 export const ONLINE_MS = 15_000;
@@ -39,5 +41,6 @@ export function playerProfile(d: { social: Social; game: Game; title: (account: 
     mate: t !== viewer && game.party.same(viewer, t),
     inParty: social.partyOf(t) !== null,
     self: t === viewer,
+    account: t,
   };
 }

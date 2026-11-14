@@ -330,7 +330,7 @@ export class Game {
   /** Off-chain action from the player. Every one is logged in Riwayat as "waiting for settlement". */
   /** An account whose settlement debit the chain could not cover is frozen until the operator lifts it. */
   assertActive(account: string) {
-    if (this.gs.isFrozen(account)) throw new HttpError(403, 'This account is frozen because the on-chain balance does not match the game. Contact the operators.');
+    if (this.gs.isFrozen(account)) throw new HttpError(403, 'This account is frozen because the saved balance does not match the game. Contact the operators.');
   }
 
   act(account: string, body: Record<string, unknown>) {

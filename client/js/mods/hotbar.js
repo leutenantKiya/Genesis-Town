@@ -191,7 +191,7 @@
     var can = c.spendable(id);
     pop.textContent = '';
     pop.appendChild($('b', null, (it.name || econ.name || id) + ' · ' + (it.settled + it.today)));
-    pop.appendChild($('p', null, it.today ? $t('{0} tercatat di NEAR, {1}{2} hari ini (masuk pukul 06:00).', [it.settled, it.today > 0 ? '+' : '', it.today]) : it.settled > 0 ? $t('Semua sudah tercatat di NEAR.') : $t('Belum punya. {0}', [hintFor(id)])));
+    pop.appendChild($('p', null, it.today ? $t('{0} tersimpan, {1}{2} hari ini (masuk pukul 06:00).', [it.settled, it.today > 0 ? '+' : '', it.today]) : it.settled > 0 ? $t('Semua sudah tersimpan.') : $t('Belum punya. {0}', [hintFor(id)])));
     var row = $('div', 'gt-slotpop-acts');
     function act(ic, label, fn, primary) {
       var x = $('button', 'mbtn' + (primary ? ' primary' : '')); x.type = 'button';

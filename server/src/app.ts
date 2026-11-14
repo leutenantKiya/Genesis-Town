@@ -228,7 +228,7 @@ export function createApp(deps: AppDeps) {
    *  codes): a key that is not yet on the NEAR account (signed in on a new device, not approved with NEAR Auth) is refused. */
   function accountOfApproved(req: IncomingMessage, url: URL, raw = ''): string {
     const acct = accountOf(req, url, raw);
-    if (!deps.store.sessionKeyOnchain(String(req.headers['x-gt-key']))) throw new HttpError(409, 'This device must be approved with NEAR Auth first.', 'approve_device');
+    if (!deps.store.sessionKeyOnchain(String(req.headers['x-gt-key']))) throw new HttpError(409, 'This device must be approved first.', 'approve_device');
     return acct;
   }
 

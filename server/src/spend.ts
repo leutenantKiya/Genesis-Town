@@ -37,7 +37,7 @@ export function spendGuard(chain: Chain, game: Game, seen?: (sender: string, lis
       const spendable = game.gs.balance(sender, t);
       const onChain = game.gs.settledBalance(sender, t);
       if (spendable < n) throw new HttpError(409, `Not enough ${name}: need ${n}, have ${spendable}.`);
-      if (onChain < n) throw new HttpError(409, `${name} on the chain is only ${onChain} (need ${n}). Today's results reach the chain at the 06:00 settlement.`);
+      if (onChain < n) throw new HttpError(409, `Only ${onChain} ${name} can be used for this now (need ${n}). Today's results are saved at 06:00.`);
     }
     // Hold the amounts back from off-chain play until the relay is done (the caller releases them).
     if (reserve) game.gs.reserve(sender, need);

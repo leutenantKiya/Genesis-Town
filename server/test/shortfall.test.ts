@@ -14,7 +14,7 @@ import { signedDelegateB64 } from './helpers.ts';
 const TOWN = 'town.gt.test';
 const P = 'p1.players.test';
 const Q = 'p2.players.test';
-const FROZEN = /This account is frozen because the on-chain balance does not match the game\. Contact the operators\./;
+const FROZEN = /This account is frozen because the saved balance does not match the game\. Contact the operators\./;
 
 async function world(opts: { seed?: number; rng?: () => number } = {}) {
   const econ = loadEcon();

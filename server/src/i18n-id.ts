@@ -43,7 +43,7 @@ export const EXACT: Record<string, string> = {
  "Too many open codes. Wait for one to expire.": "Terlalu banyak kode terbuka. Tunggu salah satunya habis.",
  "The merchant is busy serving customers. Try again in a moment.": "Pedagangnya sedang sibuk melayani. Coba sebentar lagi.",
  "You can't go there.": "Kamu tidak boleh ke sana.",
- "This device must be approved with NEAR Auth first.": "Perangkat ini harus disetujui dengan NEAR Auth dulu.",
+ "This device must be approved first.": "Perangkat ini harus disetujui dulu.",
  "Your account was opened on another device.": "Akunmu dibuka di perangkat lain.",
  "You are not in that world.": "Kamu tidak ada di dunia itu.",
  "Unknown world.": "Dunia tidak dikenal.",
@@ -101,7 +101,7 @@ export const EXACT: Record<string, string> = {
  "Arrived at your Homeland.": "Tiba di Homeland-mu.",
  "Arrived at your friend's Homeland.": "Tiba di Homeland temanmu.",
  "Arrived in the public area.": "Tiba di area publik.",
- "This account is frozen because the on-chain balance does not match the game. Contact the operators.": "Akun ini dibekukan karena saldo on-chain tidak cocok dengan permainan. Hubungi pengelola.",
+ "This account is frozen because the saved balance does not match the game. Contact the operators.": "Akun ini dibekukan karena saldo tersimpan tidak cocok dengan permainan. Hubungi pengelola.",
  "The public area is for trading only.": "Area publik hanya untuk berdagang.",
  "The Shipping Box is only in the public area.": "Kotak Kirim hanya ada di area publik.",
  "Build and harvest in your own Homeland.": "Bangun dan panen di Homeland-mu sendiri.",
@@ -440,8 +440,8 @@ export const PATTERNS: Array<[string, string]> = [
   "{0} tidak cukup: perlu {1}, punya {2}."
  ],
  [
-  "{0} on the chain is only {1} (need {2}). Today's results reach the chain at the 06:00 settlement.",
-  "{0} di rantai baru {1} (perlu {2}). Hasil hari ini masuk ke rantai saat penyelesaian 06:00."
+  "Only {0} {1} can be used for this now (need {2}). Today's results are saved at 06:00.",
+  "Baru {0} {1} yang bisa dipakai untuk ini (perlu {2}). Hasil hari ini disimpan pukul 06:00."
  ],
  [
   "No fish here. Cast where the water ripples.",

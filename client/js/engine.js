@@ -874,7 +874,7 @@ function genPublicInterior(b){
     put(8, 3, 'counter', $t('Meja perawat. Obat belum dijual di sini (segera).')); put(9, 3, 'counter', $t('Meja perawat.'));
     put(10, 1, 'shelf', $t('Rak obat dan perban.')); put(1, 6, 'plant');
   } else if (k === 'post'){
-    for (x = 3; x <= 8; x++) put(x, 3, 'counter', $t('Loket pos. Kirim barang ke pemain lain lewat Tas NEAR (on-chain).'));
+    for (x = 3; x <= 8; x++) put(x, 3, 'counter', $t('Loket pos. Kirim barang ke pemain lain lewat Tas.'));
     put(2, 1, 'shelf', $t('Rak paket.')); put(9, 1, 'shelf', $t('Rak paket.')); put(10, 6, 'plant');
   } else if (k === 'broker'){
     put(3, 2, 'table', $t('Meja makelar. Daftar lapak Pasar Pemain ada di sini.')); put(4, 2, 'table', $t('Meja makelar.')); m.board = {x:3, y:2};
