@@ -212,12 +212,12 @@
       if (!amb) return;
       var indoors = window.GT && GT.scene && GT.scene.kind !== 'out', now = ac.currentTime;
       if (amb.kind === 'hujan') {
-        amb.g.gain.setTargetAtTime(indoors ? 0.22 : 0.45, now, 0.7);
+        amb.g.gain.setTargetAtTime(indoors ? 0.06 : 0.14, now, 0.7); // a soft bed under the game, not over it
         amb.lp.frequency.setTargetAtTime(indoors ? 900 : 6000, now, 0.4);
         // a few soft drips in the next half second
         var n = Math.floor(Math.random() * (indoors ? 2 : 4));
         for (var i = 0; i < n; i++) {
-          var o = { pitch: 0.8 + Math.random() * 0.8, vol: indoors ? 0.6 : 1 };
+          var o = { pitch: 0.8 + Math.random() * 0.8, vol: indoors ? 0.25 : 0.4 };
           tone('sine', 2400, 1500, now + Math.random() * 0.5, 0.05, 0.11, o);
         }
       } else amb.g.gain.setTargetAtTime(indoors ? 0.12 : 0.3, now, 0.7);
