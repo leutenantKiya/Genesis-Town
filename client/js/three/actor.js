@@ -128,7 +128,11 @@
           pivot.rotation.x = -Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));
           card.rotation.z = Math.PI / 2;
           card.position.y = 0;
-          pivot.position.set(0, lieY + w / 2 - 2 * PX, 0);
+          // the card is wider than the figure (room for capes and pets): turned on its side the figure is only the middle
+          // 12 px tall, so its middle goes 6 px above the bed top
+          // and a little towards the camera, so the wall the bed stands against never cuts into it
+          var yw2 = pivot.rotation.y;
+          pivot.position.set(Math.sin(yw2) * 0.3, lieY + 6 * PX, Math.cos(yw2) * 0.3);
           return;
         }
         pivot.rotation.x = -Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));
