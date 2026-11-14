@@ -7,6 +7,9 @@
  * amount with the limits shown -> note -> Send -> result inline), and the recent grants.
  * Tab "Akun": every account with a wallet (GET /api/admin/accounts), grouped Admin / Pemain / NPC, filtered by part of a
  * name as you type; a row opens its wallet (GET /api/admin/wallet): each token in the game books and on chain.
+ * Tab "Bot warga": the townsfolk's shared wallet (adminbots.ts): balance, coin in (treasury, faucet) and out (per merchant,
+ * per resident), pause the shopping, the merchants each resident may buy from, and "Lacak uang": any account's coin by
+ * counterpart, a click following it one hop further.
  * Tab "Keamanan": guests online (Kick / Ban IP), banned addresses, frozen accounts, settlement status, and the purge of old
  * NEAR Auth accounts (POST /api/admin/purge-legacy: Dry run -> list with checkboxes -> Delete selected after typing the
  * confirmation word; the server only deletes accounts that are on a fresh dry-run list).
@@ -21,6 +24,7 @@
   var ui = {};
   var AC = { q: '', rows: null, total: 0, wallet: null, t: 0 }; // the Akun tab
   var SG = { rows: [], t: 0 }; // name suggestions under the "Kirim koin" search
+  var BT = { days: 1, data: null, busy: false }, TR = { account: '', days: 1, data: null, path: [] }; // the Bot warga tab
   function whoName(w) { return (w.nick || w.name || w.account) + (w.tag ? '#' + w.tag : ''); }
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -123,6 +127,7 @@
       var hd = $('div', 'adm-wallet-h');
       hd.appendChild($('b', 'gt-data', w.loading ? w.account : whoName(w)));
       if (w.role) hd.appendChild($('span', 'adm-role ' + w.role, roleWord(w.role)));
+      if (!w.loading) hd.appendChild(btn($t('Lacak uang'), function () { tab = 'bots'; TR.path = []; showTab(); trace(w.account, false); if (ui.trace && ui.trace.scrollIntoView) ui.trace.scrollIntoView({ block: 'start' }); }));
       hd.appendChild(btn($t('Tutup'), function () { AC.wallet = null; renderAccounts(); }));
       wc.appendChild(hd);
       wc.appendChild($('div', 'chain-dim adm-sugg-a', w.account));
@@ -371,19 +376,182 @@
     sync(); f.appendChild(inp); f.appendChild(del); b.appendChild(f);
   }
 
+  /* ---------------------------------------------------------------- Bot warga: the townsfolk's wallet (GET/POST /api/admin/bots)
+     and "Lacak uang" (GET /api/admin/trace): where any account's coin came from and went, one hop at a time */
+  var KINDS = { trade: $t('Jual-beli dengan pedagang'), resident_buy: $t('Belanja warga'), resident_sale: $t('Dibeli warga'), handout: $t('Uang saku warga'),
+    handout_mint: $t('Koin baru (faucet)'), town_buy: $t('Permintaan kota (koin baru)'), starter: $t('Paket awal'), admin_grant: $t('Kiriman admin'),
+    fee: $t('Biaya kerajinan'), mission: $t('Hadiah misi'), hire: $t('Sewa pekerja'), build: $t('Bangunan'), cosmetic: $t('Kosmetik') };
+  function kindWord(k) { return KINDS[k] || (/^p2p/.test(k) ? $t('Tukar antar pemain') : k); }
+  function botsLoad() {
+    if (BT.busy) return;
+    BT.busy = true;
+    C.api('/admin/bots?days=' + BT.days).then(function (r) { BT.data = r; BT.busy = false; renderBots(); }, function (e) { BT.busy = false; fail(e); });
+  }
+  function botsSet(body) { post('/admin/bots', body).then(function () { botsLoad(); }, fail); }
+  function trace(account, push) {
+    if (!account) return;
+    if (push !== false && TR.account && TR.account !== account) TR.path.push(TR.account);
+    TR.account = account; TR.data = { loading: true }; renderTrace();
+    C.api('/admin/trace?account=' + encodeURIComponent(account) + '&days=' + TR.days).then(function (r) { if (TR.account === account) { TR.data = r; renderTrace(); } },
+      function (e) { TR.data = null; fail(e); renderTrace(); });
+  }
+  function daysPick(cur, fn) {
+    var row = $('div', 'adm-chips');
+    [[1, $t('Hari ini')], [7, $t('7 hari')], [0, $t('Semua')]].forEach(function (d) {
+      var b = btn(d[1], function () { fn(d[0]); }, 'adm-chip' + (cur === d[0] ? ' on' : '')); b.setAttribute('aria-pressed', cur === d[0] ? 'true' : 'false'); row.appendChild(b);
+    });
+    return row;
+  }
+  function stat(label, value, note) {
+    var c = $('div', 'adm-stat'); c.appendChild($('div', 'chain-dim', label)); c.appendChild($('div', 'adm-num gt-data', value));
+    if (note) c.appendChild($('div', 'chain-dim', note));
+    return c;
+  }
+  function bar(part, top) { var b = $('span', 'adm-bar'), f = $('i'); f.style.width = Math.round(100 * part / Math.max(1, top)) + '%'; b.appendChild(f); return b; }
+  function buildBots() {
+    var v = $('div');
+    ui.botsTop = $('div', 'adm-card'); v.appendChild(ui.botsTop);
+    ui.botsPeople = $('div', 'adm-card'); v.appendChild(ui.botsPeople);
+    ui.botsShops = $('div', 'adm-card'); v.appendChild(ui.botsShops);
+    ui.botsRecent = $('div', 'adm-card'); v.appendChild(ui.botsRecent);
+    ui.trace = $('div', 'adm-card'); v.appendChild(ui.trace);
+    return v;
+  }
+  function renderBots() {
+    if (!ui.botsTop) return;
+    var d = BT.data;
+    [ui.botsTop, ui.botsPeople, ui.botsShops, ui.botsRecent].forEach(function (el) { el.textContent = ''; });
+    ui.botsTop.appendChild($('div', 'chain-h', $t('Dompet warga')));
+    ui.botsTop.appendChild($('p', 'chain-dim', $t('Lima warga kota berbelanja dari satu dompet bersama. Dompet itu diisi dari kas kota (di atas cadangannya), lalu dari faucet koin baru kalau kas tidak cukup.')));
+    if (!d) { ui.botsTop.appendChild($('p', 'chain-dim', $t('Memuat…'))); renderTrace(); return; }
+    ui.botsTop.appendChild(daysPick(BT.days, function (n) { BT.days = n; botsLoad(); }));
+    var g = $('div', 'adm-grid');
+    g.appendChild(stat($t('Saldo dompet'), num(d.wallet.coin) + ' ' + $t('koin'), $t('Di blockchain: {0}', [num(d.wallet.chain)])));
+    g.appendChild(stat($t('Dibelanjakan'), num(d.spent) + ' ' + $t('koin')));
+    g.appendChild(stat($t('Dari kas kota'), num(d.inflow.treasury) + ' ' + $t('koin')));
+    g.appendChild(stat($t('Koin baru (faucet)'), num(d.inflow.faucet) + ' ' + $t('koin')));
+    ui.botsTop.appendChild(g);
+    if (!d.wallet.ready) ui.botsTop.appendChild($('p', 'adm-result bad', $t('Dompet warga belum terdaftar di chain: kota masih membeli dengan koin baru langsung ke pedagang.')));
+    var row = $('div', 'adm-wallet-h');
+    row.appendChild($('b', d.paused ? 'adm-result bad' : 'adm-result ok', d.paused ? $t('Belanja warga dijeda') : $t('Warga berbelanja seperti biasa')));
+    row.appendChild(btn(d.paused ? $t('Lanjutkan belanja') : $t('Jeda belanja'), function () { botsSet({ paused: !d.paused }); }, d.paused ? 'primary' : ''));
+    row.appendChild(btn($t('Lacak dompet'), function () { TR.path = []; trace(d.wallet.account, false); }));
+    ui.botsTop.appendChild(row);
+    if (d.truncated) ui.botsTop.appendChild($('p', 'chain-dim', $t('Hanya {0} baris terbaru yang dihitung.', [num(d.scanned)])));
+
+    // each resident: what they spent, the last buy, and the merchants they may buy from (a chip toggles one)
+    ui.botsPeople.appendChild($('div', 'chain-h', $t('Warga dan lawan transaksinya')));
+    ui.botsPeople.appendChild($('p', 'chain-dim', $t('Klik nama pedagang untuk mengizinkan atau melarang warga itu berbelanja di sana. Kota hanya membeli dari pedagang yang diizinkan untuk minimal satu warga.')));
+    var mname = {}; d.merchants.forEach(function (m) { mname[m.id] = m.name; });
+    d.residents.forEach(function (r) {
+      var box = $('div', 'adm-bot'), hd = $('div', 'adm-who'), t = $('div', 'adm-who-t');
+      hd.appendChild(lookCanvas(r.look));
+      t.appendChild($('div', 'adm-who-n', r.name));
+      t.appendChild($('div', 'chain-dim', $t('{0} koin untuk {1} barang', [num(r.spent), num(r.units)])));
+      if (r.last) t.appendChild($('div', 'chain-dim', $t('Terakhir: {0} dari {1}, {2} koin ({3} lalu)', [r.last.token, mname[r.last.merchant] || r.last.merchant, num(r.last.coin), ago(r.last.at)])));
+      hd.appendChild(t); box.appendChild(hd);
+      var chips = $('div', 'adm-chips'), allow = r.allow;
+      d.merchants.forEach(function (m) {
+        var on = !allow || allow.indexOf(m.id) >= 0, spent = r.byMerchant[m.id] || 0;
+        var b = btn(m.name + (spent ? ' · ' + num(spent) : ''), function () {
+          var cur = allow ? allow.slice() : d.merchants.map(function (x) { return x.id; });
+          var next = on ? cur.filter(function (x) { return x !== m.id; }) : cur.concat([m.id]);
+          if (!next.length) { GT.toast($t('Sisakan minimal satu pedagang, atau pakai Jeda belanja.')); return; }
+          botsSet({ resident: r.id, merchants: next });
+        }, 'adm-chip' + (on ? ' on' : ''));
+        b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.title = on ? $t('Diizinkan: klik untuk melarang') : $t('Dilarang: klik untuk mengizinkan');
+        chips.appendChild(b);
+      });
+      if (allow) chips.appendChild(btn($t('Semua'), function () { botsSet({ resident: r.id, merchants: null }); }));
+      box.appendChild(chips);
+      ui.botsPeople.appendChild(box);
+    });
+
+    // where the wallet's coin went: one bar per merchant (a click traces that merchant)
+    ui.botsShops.appendChild($('div', 'chain-h', $t('Uang warga ke pedagang')));
+    var top = Math.max.apply(null, d.merchants.map(function (m) { return m.coin; }).concat([1]));
+    d.merchants.forEach(function (m) {
+      var b = $('button', 'adm-flow'); b.type = 'button';
+      b.appendChild($('span', 'adm-sugg-n', m.name + ' · ' + m.shop + (m.open ? '' : ' (' + $t('tutup') + ')')));
+      b.appendChild($('span', 'gt-data', num(m.coin) + ' ' + $t('koin') + ' · ' + num(m.units) + 'x'));
+      b.appendChild(bar(m.coin, top));
+      b.addEventListener('click', function () { TR.path = []; trace(m.account, false); });
+      ui.botsShops.appendChild(b);
+    });
+
+    ui.botsRecent.appendChild($('div', 'chain-h', $t('Gerakan terakhir')));
+    if (!d.recent.length) ui.botsRecent.appendChild($('p', 'chain-dim', $t('Belum ada gerakan di periode ini.')));
+    d.recent.forEach(function (x) {
+      var line = $('div', 'adm-mv');
+      line.appendChild($('span', 'chain-dim', ago(x.at)));
+      line.appendChild($('span', null, x.kind === 'resident_buy' ? $t('{0} beli {1} dari {2}', [x.who, x.token, x.to]) : kindWord(x.kind) + (x.to ? ' · ' + x.to : '')));
+      line.appendChild($('span', 'gt-data ' + (x.coin < 0 ? 'adm-out' : 'adm-in'), (x.coin > 0 ? '+' : '') + num(x.coin)));
+      ui.botsRecent.appendChild(line);
+    });
+    renderTrace();
+  }
+  function flowList(title, rows, sign) {
+    var box = $('div');
+    box.appendChild($('div', 'adm-step', title));
+    if (!rows.length) { box.appendChild($('p', 'chain-dim', $t('Tidak ada.'))); return box; }
+    var top = rows[0].amount;
+    rows.forEach(function (f) {
+      var b = $('button', 'adm-flow'); b.type = 'button';
+      b.appendChild($('span', 'adm-sugg-n', f.name));
+      b.appendChild($('span', 'gt-data ' + (sign < 0 ? 'adm-out' : 'adm-in'), (sign < 0 ? '-' : '+') + num(f.amount)));
+      b.appendChild($('span', 'chain-dim adm-sugg-a', kindWord(f.kind) + ' · ' + num(f.count) + 'x' + (f.account ? ' · ' + f.account : '')));
+      b.appendChild(bar(f.amount, top));
+      if (f.account) b.addEventListener('click', function () { trace(f.account); }); else b.disabled = true;
+      box.appendChild(b);
+    });
+    return box;
+  }
+  function renderTrace() {
+    if (!ui.trace) return;
+    ui.trace.textContent = '';
+    ui.trace.appendChild($('div', 'chain-h', $t('Lacak uang')));
+    ui.trace.appendChild($('p', 'chain-dim', $t('Ke mana uang sebuah akun pergi dan dari mana datangnya, dikelompokkan per lawan transaksi. Klik baris untuk melacak akun itu. Hanya buku game: Pasar, hadiah, dan saham on-chain tidak termasuk.')));
+    var f = $('div', 'chain-field adm-find'), inp = $('input');
+    inp.type = 'text'; inp.maxLength = 100; inp.placeholder = $t('ID akun, mis. warga.…'); inp.setAttribute('aria-label', $t('ID akun'));
+    inp.value = TR.account;
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { TR.path = []; trace(inp.value.trim(), false); } });
+    f.appendChild(inp); f.appendChild(btn($t('Lacak'), function () { TR.path = []; trace(inp.value.trim(), false); }, 'primary'));
+    ui.trace.appendChild(f);
+    ui.trace.appendChild(daysPick(TR.days, function (n) { TR.days = n; if (TR.account) trace(TR.account, false); else renderTrace(); }));
+    var t = TR.data;
+    if (!t) return;
+    if (t.loading) { ui.trace.appendChild($('p', 'chain-dim', $t('Memuat…'))); return; }
+    var hd = $('div', 'adm-wallet-h');
+    if (TR.path.length) hd.appendChild(btn('← ' + $t('Kembali'), function () { trace(TR.path.pop(), false); }));
+    hd.appendChild($('b', 'gt-data', t.name));
+    hd.appendChild($('span', 'gt-data', num(t.coin) + ' ' + $t('koin')));
+    ui.trace.appendChild(hd);
+    ui.trace.appendChild($('div', 'chain-dim adm-sugg-a', t.account));
+    if (TR.path.length) ui.trace.appendChild($('div', 'chain-dim', $t('Jejak: {0}', [TR.path.concat([t.account]).map(function (a) { return a.split('.')[0]; }).join(' → ')])));
+    var g = $('div', 'adm-grid');
+    g.appendChild(stat($t('Uang masuk'), '+' + num(t.totalIn)));
+    g.appendChild(stat($t('Uang keluar'), '-' + num(t.totalOut)));
+    ui.trace.appendChild(g);
+    ui.trace.appendChild(flowList($t('Masuk dari'), t.inflow, 1));
+    ui.trace.appendChild(flowList($t('Keluar ke'), t.outflow, -1));
+    if (t.truncated) ui.trace.appendChild($('p', 'chain-dim', $t('Hanya {0} baris terbaru yang dihitung.', [num(t.rows)])));
+  }
+
   /* ---------------------------------------------------------------- the window */
   function showTab() {
     if (!ui.coinView) return;
     ui.coinView.style.display = tab === 'coin' ? '' : 'none';
     ui.safetyView.style.display = tab === 'safety' ? '' : 'none';
     ui.acctView.style.display = tab === 'acct' ? '' : 'none';
+    ui.botsView.style.display = tab === 'bots' ? '' : 'none';
     if (tab === 'acct' && !AC.rows) loadAccounts();
+    if (tab === 'bots' && !BT.data) botsLoad();
     [].forEach.call(ui.tabs.children, function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === tab); b.setAttribute('aria-selected', b.getAttribute('data-tab') === tab ? 'true' : 'false'); });
   }
   function build() {
     var root = $('div', 'adm');
     ui.tabs = $('div', 'gt-mall-tabs'); ui.tabs.setAttribute('role', 'tablist');
-    [['coin', $t('Kas kota')], ['acct', $t('Akun')], ['safety', $t('Keamanan')]].forEach(function (t) {
+    [['coin', $t('Kas kota')], ['acct', $t('Akun')], ['bots', $t('Bot warga')], ['safety', $t('Keamanan')]].forEach(function (t) {
       var b = $('button', 'gt-mall-tab', t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('data-tab', t[0]);
       b.addEventListener('click', function () { tab = t[0]; showTab(); });
       ui.tabs.appendChild(b);
@@ -395,17 +563,19 @@
     ui.grants = $('div', 'adm-card'); ui.coinView.appendChild(ui.grants);
     root.appendChild(ui.coinView);
     ui.acctView = $('div'); ui.acctView.appendChild(buildAccounts()); root.appendChild(ui.acctView);
+    ui.botsView = buildBots(); root.appendChild(ui.botsView);
     ui.safetyView = $('div'); root.appendChild(ui.safetyView);
     ui.safety = $('div', 'adm-card'); ui.safetyView.appendChild(ui.safety);
     ui.purge = $('div', 'adm-card'); ui.safetyView.appendChild(ui.purge);
     return root;
   }
-  function renderAll() { renderTreasury(); renderGrants(); renderSafety(); renderPurge(); syncForm(); showTab(); }
+  function renderAll() { renderTreasury(); renderGrants(); renderSafety(); renderPurge(); renderBots(); syncForm(); showTab(); }
   function load() {
     C.api('/admin/guests').then(function (r) { guests = r.guests || []; renderSafety(); }, fail);
     C.api('/admin/frozen').then(function (r) { frozen = r.frozen || []; renderSafety(); }, function () {});
     C.api('/admin/status').then(function (r) { status = r; renderTreasury(); renderGrants(); renderSafety(); syncForm(); }, function () {});
     C.api('/admin/bans').then(function (r) { bans = r.bans || []; renderSafety(); }, function () {});
+    if (tab === 'bots') botsLoad(); // the trace reloads only on demand
   }
   function open() {
     if (!isAdmin()) return;
@@ -413,7 +583,7 @@
     if (GT.isUiOpen()) return;
     F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
     PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' };
-    ui = {}; AC.rows = null; AC.wallet = null; SG.rows = [];
+    ui = {}; AC.rows = null; AC.wallet = null; SG.rows = []; BT.data = null; TR.data = null; TR.path = [];
     panel = GT.modal({ title: $t('Admin'), wide: true, sticky: true, body: build(), onClose: function () { clearInterval(timer); }, actions: [{ label: $t('Muat ulang'), onClick: function () { load(); return false; } }, { label: $t('Tutup'), close: true }] });
     renderAll(); load();
     clearInterval(timer);
@@ -425,7 +595,7 @@
     if (!isAdmin()) return;
     F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
     PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' };
-    ui = {}; AC.rows = null; AC.wallet = null; SG.rows = [];
+    ui = {}; AC.rows = null; AC.wallet = null; SG.rows = []; BT.data = null; TR.data = null; TR.path = [];
     host.appendChild(build()); renderAll(); load();
     clearInterval(timer);
     timer = setInterval(function () { if (!host.isConnected) clearInterval(timer); else if (!host.closest('[hidden]')) load(); }, 5000);

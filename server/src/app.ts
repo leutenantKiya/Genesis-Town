@@ -16,6 +16,7 @@ import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
 import { AdminGrants } from './admingrant.ts';
 import { AdminAccounts } from './adminaccounts.ts';
+import { AdminBots } from './adminbots.ts';
 import { Purge } from './purge.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
 import { Social, worldIdOk } from './social.ts';
@@ -146,6 +147,7 @@ export function createApp(deps: AppDeps) {
   game.npc.onBuy = (merchant, seller, token, units, coin, listingId) => { social.deal('npc', 'public', merchant, seller, { [token]: units }, { coin }, bazaar.isAnonymous(listingId)); };
   const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
   const adminAccounts = new AdminAccounts({ game, store: deps.store, social, admins: () => deps.cfg.adminAccounts });
+  const adminBots = new AdminBots({ game, social });
   const purge = new Purge({ cfg: deps.cfg, chain: deps.chain, store: deps.store, game, social, invalidate: (a) => { chainCheck.invalidate(a); readCache.clear(); } });
   social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs, perIp: game.econ.guest.perIp, maxMinutes: game.econ.guest.maxMinutes };
   const guestHelloLimiter = new RateLimiter(game.econ.guest.helloPerMinute, 200); // new guests per IP
@@ -484,6 +486,21 @@ export function createApp(deps: AppDeps) {
         const acct = adminOf(req, url);
         if (!adminReadLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
         return send(res, 200, p === '/api/admin/accounts' ? adminAccounts.list(url.searchParams.get('q')) : adminAccounts.wallet(url.searchParams.get('account')));
+      }
+      if (p === '/api/admin/bots' || p === '/api/admin/trace') {
+        // the townsfolk's wallet: watch it, steer whom they buy from, and follow any account's coin (adminbots.ts)
+        if (req.method === 'GET') {
+          const acct = adminOf(req, url);
+          if (!adminReadLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+          return send(res, 200, p === '/api/admin/bots' ? adminBots.status(url.searchParams.get('days')) : adminBots.trace(url.searchParams.get('account'), url.searchParams.get('days')));
+        }
+        if (req.method === 'POST' && p === '/api/admin/bots') {
+          const raw = await readRaw(req);
+          const acct = adminOf(req, url, raw);
+          if (!adminGrantLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+          return send(res, 200, adminBots.control(parseJson(raw)));
+        }
+        throw new HttpError(404, 'no such route');
       }
       if (p === '/api/admin/grant' || p === '/api/admin/resolve') {
         // coin from the town treasury to a player, off-chain like the starter kit (admingrant.ts); ADMIN_ACCOUNTS only

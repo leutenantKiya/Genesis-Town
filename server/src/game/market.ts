@@ -202,6 +202,7 @@ export class Market {
       while (acc >= 1) {
         const offers = this.ids()
           .filter((id) => this.isOpen(id) && this.def(id).sells.includes(token) && !this.trend.withdrawn(token) && this.gs.balance(this.account(id), token) >= 1)
+          .filter((id) => !this.residents?.ready || this.residents.canBuyFrom(id)) // the admin's controls on the townsfolk (adminbots.ts)
           .map((id) => ({ id, ask: this.row(id, token).ask }))
           .filter((o) => o.ask <= tw.maxPriceMult * base)
           .sort((a, b) => a.ask - b.ask);

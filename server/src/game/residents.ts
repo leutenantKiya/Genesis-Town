@@ -10,6 +10,9 @@
 // shown: the buyer then walks to that stall and the goods fly when it arrives (social.ts deals, client mods/trade.js).
 // Until the wallet is registered on chain the town buys as before (new coin straight to the merchant), so settlement
 // never carries rows for an account the contract would skip.
+// Admin controls (adminbots.ts, kept in the meta table so a restart keeps them): `paused` stops the town's shopping, and
+// `allow[resident]` lists the merchants that resident may buy from (missing = all); market.townDemand only picks a
+// merchant some resident may buy from, and pay() books the purchase under such a resident.
 import type { Chain } from '../chain.ts';
 import type { Econ } from './econ.ts';
 import type { GameStore } from './gamestore.ts';
@@ -44,6 +47,8 @@ interface Walker {
   job: Job | null;
 }
 interface Job { merchant: string; token: string; ask: number; to: Pos }
+export interface ResidentControls { paused: boolean; allow: Record<string, string[]> }
+const CTL_KEY = 'residents.ctl';
 
 const DIRS: Array<[number, number, string]> = [[1, 0, 'right'], [-1, 0, 'left'], [0, 1, 'down'], [0, -1, 'up']];
 
@@ -82,6 +87,23 @@ export class Residents {
   /** A resident's account as players see it: not a wallet, only a name on the map. */
   account(id: string) { return `${id}.residents`; }
 
+  /** The admin's controls (adminbots.ts): stored in meta, read on every purchase. */
+  controls(): ResidentControls {
+    try {
+      const c = JSON.parse(this.d.gs.meta(CTL_KEY) ?? '{}') as Partial<ResidentControls>;
+      const allow: Record<string, string[]> = {};
+      if (c.allow && typeof c.allow === 'object') for (const [k, v] of Object.entries(c.allow)) if (Array.isArray(v)) allow[k] = v.map(String);
+      return { paused: c.paused === true, allow };
+    } catch { return { paused: false, allow: {} }; }
+  }
+  setControls(c: ResidentControls) { this.d.gs.setMeta(CTL_KEY, JSON.stringify({ paused: !!c.paused, allow: c.allow })); }
+  private allows(w: Walker, merchantId: string, c: ResidentControls) { const a = c.allow[w.id]; return !a || a.includes(merchantId); }
+  /** Whether the town may buy from this merchant now: not paused, and some resident may buy there. */
+  canBuyFrom(merchantId: string): boolean {
+    const c = this.controls();
+    return !c.paused && (!this.walkers.length || this.walkers.some((w) => this.allows(w, merchantId, c)));
+  }
+
   /** Registers the wallet on chain once (settler). Until that works the town buys the old way. */
   async ensure(): Promise<boolean> {
     if (!this.cfg.enabled) return false;
@@ -100,10 +122,15 @@ export class Residents {
   /** The town buys one `token` from `merchantId` at `ask`: paid from the wallet (handout first if short), booked under
    *  the next resident. Returns the resident's id, or null when even a handout cannot cover it (the town stops for now). */
   pay(day: number, merchantId: string, token: string, ask: number): string | null {
-    const { gs } = this.d;
+    const { gs } = this.d, c = this.controls();
+    if (c.paused) return null;
+    // the next resident (in turn) who may buy from this merchant
+    let w: Walker | null = null, k = 0;
+    for (; k < this.walkers.length; k++) { const cand = this.walkers[(this.next + k) % this.walkers.length]; if (this.allows(cand, merchantId, c)) { w = cand; break; } }
+    if (this.walkers.length && !w) return null;
     if (gs.balance(this.wallet, 'coin') < ask) this.handout(day);
     if (gs.balance(this.wallet, 'coin') < ask) return null;
-    const w = this.walkers.length ? this.walkers[this.next++ % this.walkers.length] : null;
+    this.next += k + 1;
     const rid = w ? w.id : 'r0';
     gs.add(day, this.wallet, 'coin', -ask, 'resident_buy', `${rid}:${merchantId}:${token}`);
     if (w && this.d.map) {

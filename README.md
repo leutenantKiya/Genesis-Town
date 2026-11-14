@@ -9,6 +9,7 @@
 >   once. The townsfolk follow the walk the server planned (`route`, starting 1.2 s after it is chosen so every client
 >   has it first), placed from the server's clock, the same on every screen. Measured with a scripted second player:
 >   no overshoot at the ends of its walk and at most 0.09 tile per frame.
+> - **Townsfolk admin** (2026-11-14): Admin > Bot warga pauses the townsfolk's shopping, sets which merchants each one may buy from, shows the shared wallet's coin in and out, and traces any account's coin by counterpart (`/api/admin/bots`, `/api/admin/trace`, `server/src/adminbots.ts`).
 > - **Townsfolk with a wallet** (2026-11-14): five townsfolk (Haruto, Yui, Sota, Hina, Ren; orange name tags) are walked by the server,
 >   the same for every player, and do the town's shopping from one shared keyless wallet, `warga.genesistown.testnet`
 >   (registered by the settler like a player). Every buy is booked under the resident who made it; the buyer walks to
