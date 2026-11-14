@@ -687,7 +687,7 @@ function fromLayout(L){
       b.invited = b.own; b.iseed = R.int(1, 1073741823); b.hasNpc = R.chance(0.4);
       houses.push(b);
     } else {
-      b.id = lb.lot || lb.kind; b.name = lb.name || HOME_NAMES[lb.kind] || lb.kind; b.owner = b.name; b.invited = HOME_KINDS[lb.kind] ? false : lb.open; // Homeland buildings are never entered: the door opens the mod's menu b.iseed = hashStr(L.seed + ':' + lb.kind);
+      b.id = lb.lot || lb.kind; b.name = lb.name || HOME_NAMES[lb.kind] || lb.kind; b.owner = b.name; b.invited = lb.kind === 'townhall' ? true : HOME_KINDS[lb.kind] ? false : lb.open; b.iseed = hashStr(L.seed + ':' + lb.kind); // the Town Hall is a house you walk into; the other Homeland buildings' doors open the mod's menu
     }
     if (lb.mail != null){ b.mail = lb.mail; m.info.set(lb.mail, b.own ? $t('Kotak surat milikmu. Belum ada surat.') : $t('Kotak surat milik {0}. Isinya kosong.', [b.owner])); }
     m.buildings.push(b);
@@ -2917,7 +2917,7 @@ Object.defineProperties(GT, {
   // the same smooth walk); x / y stay the tile, which is what the server checks
   player: { get: function(){ var l = smoothAt(); return { x:P.x, y:P.y, dir:P.dir, moving:P.moving, sx:l.x, sy:l.y }; } },
   sitting: { get: function(){ return sitSpot ? { x:sitSpot.x, y:sitSpot.y, dir:sitSpot.dir, sleep:!!sitSpot.sleep } : null; } },
-  sleepIn: sleepIn,
+  sleepIn: { value: sleepIn }, // a descriptor: inside defineProperties a bare function would leave GT.sleepIn undefined
   time: { get: function(){ return clockInfo(); } },
   buildings: { get: function(){ return world ? world.buildings : []; } },
   seed: { get: function(){ return seed; } }
