@@ -13,8 +13,10 @@
 
 html.gt-phone,html.gt-phone body{height:100%}
 html.gt-phone body{padding:0;overflow:hidden}
-html.gt-phone #app{max-width:none;height:100vh;height:100dvh;display:flex;flex-direction:column}
-html.gt-phone .shell{flex:1;min-height:0;display:flex!important;flex-direction:column!important;border-radius:0;border-width:0;padding:env(safe-area-inset-top,0px) 0 0;background:var(--hud);box-shadow:none}
+/* exactly the visible area: 100vh is the tall fallback, 100dvh follows the browser bars, --vvh/--vvt come from visualViewport (settings.js) and also follow the keyboard */
+html.gt-phone #app{max-width:none;height:100vh;height:100dvh;height:var(--vvh,100dvh);display:flex;flex-direction:column;position:fixed;left:0;right:0;top:0;top:var(--vvt,0px);overflow:hidden}
+html.gt-phone{overscroll-behavior:none}
+html.gt-phone .shell{flex:1;min-height:0;display:flex!important;flex-direction:column!important;border-radius:0;border-width:0;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) 0 env(safe-area-inset-left,0px);background:var(--hud);box-shadow:none}
 html.gt-phone .brand,html.gt-phone .help,html.gt-phone #acts,html.gt-phone #padmap{display:none!important}
 
 /* status bar: one line for where and when, one for energy and season */
@@ -102,7 +104,7 @@ html.gt-phone .gt-tabbar{display:grid;grid-template-columns:repeat(5,minmax(0,1f
 
 /* windows open as sheets from the bottom, within thumb reach */
 html.gt-phone #mroot .mover{align-items:flex-end;padding:8px 0 0}
-html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:88dvh;border-radius:var(--r-win) var(--r-win) 0 0;border-bottom-width:0;padding-bottom:env(safe-area-inset-bottom,0px)}
+html.gt-phone #mroot .mbox{width:100%;max-width:none;max-height:88vh;max-height:calc(var(--vvh,100dvh)*.88);border-radius:var(--r-win) var(--r-win) 0 0;border-bottom-width:0;padding-bottom:env(safe-area-inset-bottom,0px)}
 
 /* small phones */
 @media (max-width:350px){
@@ -148,7 +150,7 @@ html.gt-phone .btn,html.gt-phone .mbtn{min-height:44px}
    the item bar between them. Notches and the home bar keep their space (safe-area insets). Windows open as a panel in
    the middle instead of a bottom sheet, which would cover the whole short screen. */
 html.gt-land .shell{display:grid!important;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr);
-  align-items:stretch;column-gap:0;padding:0 0 0 env(safe-area-inset-left,0px)} /* stretch: game.css's old landscape rule centres */
+  align-items:stretch;column-gap:0;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)} /* stretch: game.css's old landscape rule centres */
 html.gt-land .gt-top{grid-column:1;grid-row:1;min-width:0}
 html.gt-land .bezel{grid-column:1;grid-row:2}
 html.gt-land .gt-tabbar{grid-column:2;grid-row:1 / span 2}
@@ -162,7 +164,7 @@ html.gt-land .chain-energy{width:48px}
 
 /* the rail: the five places one above the other, icon over a short word */
 html.gt-land .gt-tabbar{display:flex;flex-direction:column;justify-content:center;gap:2px;width:calc(68px + env(safe-area-inset-right,0px));
-  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) 0;border-width:0 0 0 1px}
+  padding:0 env(safe-area-inset-right,0px) 0 0;border-width:0 0 0 1px}
 html.gt-land .gt-tab{flex:1 1 0;min-height:0;max-height:68px;padding:0 2px;font-size:calc(11px*var(--ts))}
 html.gt-land .gt-tab::before{font-size:20px}
 
@@ -183,7 +185,7 @@ html.gt-land.gt-3d .gt-goals{max-width:min(300px,calc(100% - 300px))}
 
 /* windows: a panel in the middle, as tall as the screen allows */
 html.gt-land #mroot .mover{align-items:center;padding:8px calc(8px + env(safe-area-inset-right,0px)) 8px calc(8px + env(safe-area-inset-left,0px))}
-html.gt-land #mroot .mbox{width:min(640px,100%);max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);border-radius:var(--r-win);border-bottom-width:var(--line);padding-bottom:0}
+html.gt-land #mroot .mbox{width:min(640px,100%);max-height:calc(100vh - 16px);max-height:calc(var(--vvh,100dvh) - 16px);border-radius:var(--r-win);border-bottom-width:var(--line);padding-bottom:0}
 
 /* very short (a small phone on its side): smaller thumbs and rail words */
 @media (max-height:340px){
