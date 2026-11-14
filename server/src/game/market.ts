@@ -110,8 +110,9 @@ export class Market {
     return Math.max(0, cap - this.gs.boughtToday(acct, token, day) - this.npcBoughtToday(acct, token, day));
   }
 
-  /** Player sells `qty` of `token` to merchant `id` (off-chain; settled at 06:00). */
-  sell(account: string, id: string, token: string, qty: number) {
+  /** Player sells `qty` of `token` to merchant `id` (off-chain; settled at 06:00). `tag` (a resident's id) is appended to
+   *  the ref as `#tag` so the townsfolk's trades are booked per resident. */
+  sell(account: string, id: string, token: string, qty: number, tag?: string) {
     const d = this.def(id);
     this.checkTrade(id, qty);
     if (!d.buys.includes(token)) throw new HttpError(409, `${d.name} doesn't buy ${this.itemName(token)}.`);
@@ -122,7 +123,7 @@ export class Market {
     if (this.gs.balance(account, token) < qty) throw new HttpError(409, 'You don\'t have enough.');
     const { unit, total } = this.quote(id, token, 'sell', qty);
     if (this.gs.balance(acct, 'coin') < total) throw new HttpError(409, `${d.name} doesn't have enough money.`);
-    const ref = `${id}:${token}:${qty}@${unit}`;
+    const ref = `${id}:${token}:${qty}@${unit}` + (tag ? `#${tag}` : '');
     this.gs.add(t.settleDay, account, token, -qty, 'trade', ref);
     this.gs.add(t.settleDay, account, 'coin', total, 'trade', ref);
     this.gs.add(t.settleDay, acct, token, qty, 'trade', ref);
@@ -133,8 +134,8 @@ export class Market {
     return { toast: `Sold ${qty} ${this.econ.items[token].name} to ${d.name}: +${total} coins`, unit, total };
   }
 
-  /** Player buys `qty` of `token` from merchant `id`. */
-  buy(account: string, id: string, token: string, qty: number) {
+  /** Player buys `qty` of `token` from merchant `id` (`tag`: as in sell). */
+  buy(account: string, id: string, token: string, qty: number, tag?: string) {
     const d = this.def(id);
     this.checkTrade(id, qty);
     if (!d.sells.includes(token)) throw new HttpError(409, `${d.name} doesn't sell ${this.itemName(token)}.`);
@@ -144,7 +145,7 @@ export class Market {
     if (this.gs.balance(acct, token) < qty) throw new HttpError(409, `${d.name} is out of stock.`);
     const { unit, total } = this.quote(id, token, 'buy', qty);
     if (this.gs.balance(account, 'coin') < total) throw new HttpError(409, 'You don\'t have enough coins.');
-    const ref = `${id}:${token}:${qty}@${unit}`;
+    const ref = `${id}:${token}:${qty}@${unit}` + (tag ? `#${tag}` : '');
     this.gs.add(t.settleDay, account, token, qty, 'trade', ref);
     this.gs.add(t.settleDay, account, 'coin', -total, 'trade', ref);
     this.gs.add(t.settleDay, acct, token, -qty, 'trade', ref);

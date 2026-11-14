@@ -118,7 +118,8 @@
     "target": 600,
     "treasuryReserve": 2000,
     "speed": 2.4,
-    "queueMax": 8
+    "queueMax": 8,
+    "trade": { "enabled": true, "marginPct": 5, "perHour": 2, "holdMax": 5, "minWallet": 100 }
   },
   "shops": {
     "rent": 40,

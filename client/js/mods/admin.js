@@ -8,7 +8,8 @@
  * Tab "Akun": every account with a wallet (GET /api/admin/accounts), grouped Admin / Pemain / NPC, filtered by part of a
  * name as you type; a row opens its wallet (GET /api/admin/wallet): each token in the game books and on chain.
  * Tab "Bot warga": the townsfolk's shared wallet (adminbots.ts): balance, coin in (treasury, faucet) and out (per merchant,
- * per resident), pause the shopping, the merchants each resident may buy from, and "Lacak uang": any account's coin by
+ * per resident), the town's price ceiling, buying to sell again at a margin ("Dagang warga", settings saved on the server),
+ * pause the shopping, the merchants each resident may buy from, and "Lacak uang": any account's coin by
  * counterpart, a click following it one hop further.
  * Tab "Keamanan": guests online (Kick / Ban IP), banned addresses, frozen accounts, settlement status, and the purge of old
  * NEAR Auth accounts (POST /api/admin/purge-legacy: Dry run -> list with checkboxes -> Delete selected after typing the
@@ -387,7 +388,7 @@
     var n = ++BT.seq;
     C.api('/admin/bots?days=' + BT.days).then(function (r) { if (n === BT.seq) { BT.data = r; renderBots(); } }, function (e) { if (n === BT.seq) fail(e); });
   }
-  function botsSet(body) { post('/admin/bots', body).then(function () { botsLoad(); }, fail); }
+  function botsSet(body, done) { post('/admin/bots', body).then(function () { if (done) GT.toast(done); botsLoad(); }, fail); }
   function trace(account, push) {
     if (!account) return;
     if (push !== false && TR.account && TR.account !== account) TR.path.push(TR.account);
@@ -412,6 +413,7 @@
     var v = $('div');
     ui.botsTop = $('div', 'adm-card'); v.appendChild(ui.botsTop);
     ui.botsPrice = $('div', 'adm-card'); v.appendChild(ui.botsPrice);
+    ui.botsTrade = $('div', 'adm-card'); v.appendChild(ui.botsTrade);
     ui.botsPeople = $('div', 'adm-card'); v.appendChild(ui.botsPeople);
     ui.botsShops = $('div', 'adm-card'); v.appendChild(ui.botsShops);
     ui.botsRecent = $('div', 'adm-card'); v.appendChild(ui.botsRecent);
@@ -455,6 +457,57 @@
     });
     el.appendChild(tb);
   }
+  // buying to sell again: the settings (saved in the database by the server) and how the trading went
+  function renderTrade(d) {
+    var el = ui.botsTrade; if (!el || typingIn(el) || !d.settings) return;
+    el.textContent = '';
+    var s = d.settings, t = s.trade, L = d.limits, tr = d.trade;
+    el.appendChild($('div', 'chain-h', $t('Dagang warga')));
+    el.appendChild($('p', 'chain-dim', $t('Warga membeli barang dari pedagang lalu menjualnya ke pedagang yang membayar paling tinggi, kalau harga jualnya minimal harga beli + margin. Margin boleh minus (rugi). Semua pengaturan disimpan di database server.')));
+    var g = $('div', 'adm-grid');
+    g.appendChild(stat($t('Beli untuk dijual'), num(tr.bought) + ' ' + $t('koin'), num(tr.boughtUnits) + 'x'));
+    g.appendChild(stat($t('Hasil jual'), num(tr.sold) + ' ' + $t('koin'), num(tr.soldUnits) + 'x'));
+    var pc = stat($t('Selisih'), (tr.profit > 0 ? '+' : '') + num(tr.profit) + ' ' + $t('koin')); pc.classList.add(tr.profit < 0 ? 'adm-out' : 'adm-in'); g.appendChild(pc);
+    el.appendChild(g);
+    var form = $('div', 'adm-form'), fields = {};
+    function field(key, label, val, lim, step, note) {
+      var row = $('label', 'adm-frow'); row.appendChild($('span', null, label));
+      var i = $('input'); i.type = 'number'; i.min = String(lim[0]); i.max = String(lim[1]); i.step = String(step); i.value = String(val);
+      row.appendChild(i); if (note) row.appendChild($('span', 'chain-dim', note));
+      fields[key] = i; form.appendChild(row);
+    }
+    var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!t.enabled;
+    on.appendChild($('span', null, $t('Dagang aktif'))); on.appendChild(cb); form.appendChild(on);
+    field('marginPct', $t('Margin jual'), t.marginPct, L.marginPct, 0.5, $t('% dari harga beli (minus = rugi)'));
+    field('perHour', $t('Transaksi per jam'), t.perHour, L.perHour, 1);
+    field('holdMax', $t('Stok maks per barang'), t.holdMax, L.holdMax, 1);
+    field('minWallet', $t('Sisa dompet minimal'), t.minWallet, L.minWallet, 10, $t('koin, tidak dipakai dagang'));
+    field('target', $t('Isi dompet sampai'), s.target, L.target, 50, $t('koin, saat uang saku diberikan'));
+    field('treasuryReserve', $t('Cadangan kas kota'), s.treasuryReserve, L.treasuryReserve, 100, $t('koin yang tidak boleh dipakai untuk uang saku'));
+    el.appendChild(form);
+    var save = function () {
+      var v = {}, bad = null;
+      Object.keys(fields).forEach(function (k) { var n = Number(fields[k].value); var lim = L[k]; if (fields[k].value === '' || !(n >= lim[0] && n <= lim[1])) bad = bad || k; v[k] = n; });
+      if (bad) { GT.toast($t('Angka di luar batas: {0}', [bad])); return; }
+      if (document.activeElement && el.contains(document.activeElement)) document.activeElement.blur();
+      botsSet({ settings: { target: v.target, treasuryReserve: v.treasuryReserve, trade: { enabled: cb.checked, marginPct: v.marginPct, perHour: v.perHour, holdMax: v.holdMax, minWallet: v.minWallet } } }, $t('Pengaturan warga disimpan.'));
+    };
+    Object.keys(fields).forEach(function (k) { fields[k].addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); }); });
+    var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', t.enabled ? $t('Dagang berjalan, margin {0}%', [t.marginPct]) : $t('Dagang mati'))); acts.appendChild(btn($t('Simpan pengaturan'), save, 'primary'));
+    el.appendChild(acts);
+    el.appendChild($('div', 'adm-step', $t('Barang yang dipegang')));
+    if (!tr.holding.length) { el.appendChild($('p', 'chain-dim', $t('Tidak ada.'))); return; }
+    var tb = $('div', 'adm-ptable');
+    [$t('Barang'), $t('Jumlah'), $t('Harga pokok'), $t('Dijual pada / tawaran terbaik')].forEach(function (h) { tb.appendChild($('b', 'chain-dim', h)); });
+    tr.holding.forEach(function (h) {
+      tb.appendChild($('span', null, h.name));
+      tb.appendChild($('span', 'gt-data', num(h.qty)));
+      tb.appendChild($('span', 'gt-data', num(h.avgCost)));
+      var ok = h.bestBid != null && h.bestBid >= h.sellAt;
+      tb.appendChild($('span', ok ? 'adm-in' : 'chain-dim', '≥ ' + num(h.sellAt) + ' / ' + (h.bestBid == null ? '-' : num(h.bestBid) + ' (' + h.bestBidder + ')')));
+    });
+    el.appendChild(tb);
+  }
   function renderBots() {
     if (!ui.botsTop) return;
     var d = BT.data;
@@ -477,6 +530,7 @@
     ui.botsTop.appendChild(row);
     if (d.truncated) ui.botsTop.appendChild($('p', 'chain-dim', $t('Hanya {0} baris terbaru yang dihitung.', [num(d.scanned)])));
     renderPrice(d);
+    renderTrade(d);
 
     // each resident: what they spent, the last buy, and the merchants they may buy from (a chip toggles one)
     ui.botsPeople.appendChild($('div', 'chain-h', $t('Warga dan lawan transaksinya')));
@@ -488,6 +542,7 @@
       t.appendChild($('div', 'adm-who-n', r.name));
       t.appendChild($('div', 'chain-dim', $t('{0} koin untuk {1} barang', [num(r.spent), num(r.units)])));
       if (r.last) t.appendChild($('div', 'chain-dim', $t('Terakhir: {0} dari {1}, {2} koin ({3} lalu)', [r.last.token, mname[r.last.merchant] || r.last.merchant, num(r.last.coin), ago(r.last.at)])));
+      if (r.trade && r.trade.units) t.appendChild($('div', 'chain-dim', $t('Dagang: beli {0}, jual {1} koin', [num(r.trade.bought), num(r.trade.sold)])));
       hd.appendChild(t); box.appendChild(hd);
       var chips = $('div', 'adm-chips'), allow = r.allow;
       d.merchants.forEach(function (m) {
@@ -523,7 +578,9 @@
     d.recent.forEach(function (x) {
       var line = $('div', 'adm-mv');
       line.appendChild($('span', 'chain-dim', ago(x.at)));
-      line.appendChild($('span', null, x.kind === 'resident_buy' ? $t('{0} beli {1} dari {2}', [x.who, x.token, x.to]) : kindWord(x.kind) + (x.to ? ' · ' + x.to : '')));
+      line.appendChild($('span', null, x.kind === 'resident_buy' ? $t('{0} beli {1} dari {2}', [x.who, x.token, x.to])
+        : x.kind === 'trade' && x.token ? (x.coin < 0 ? $t('{0} beli {1} dari {2} untuk dijual', [x.who || '?', x.token, x.to]) : $t('{0} jual {1} ke {2}', [x.who || '?', x.token, x.to]))
+        : kindWord(x.kind) + (x.to ? ' · ' + x.to : '')));
       line.appendChild($('span', 'gt-data ' + (x.coin < 0 ? 'adm-out' : 'adm-in'), (x.coin > 0 ? '+' : '') + num(x.coin)));
       ui.botsRecent.appendChild(line);
     });

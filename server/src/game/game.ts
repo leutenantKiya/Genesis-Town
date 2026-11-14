@@ -264,6 +264,7 @@ export class Game {
         this.market.tickAll();
         if (busy) this.market.merchantCraft();
         this.market.townDemand();
+        this.residents.trade(); // the townsfolk buy to sell again at the admin's margin
       }
       this.gs.setMeta('clock.hour', String(now));
       await this.npc.run();

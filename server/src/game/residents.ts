@@ -13,6 +13,9 @@
 // Admin controls (adminbots.ts, kept in the meta table so a restart keeps them): `paused` stops the town's shopping, and
 // `allow[resident]` lists the merchants that resident may buy from (missing = all); market.townDemand only picks a
 // merchant some resident may buy from, and pay() books the purchase under such a resident.
+// Trading (trade(), hourly): the townsfolk also buy goods to sell again to a merchant at the admin's margin; the settings
+// (wallet target, treasury reserve, trade) are config.json overlaid with meta `residents.settings`, the goods held and
+// what they cost are in meta `residents.stock`: everything the admin sets lives in the database.
 import type { Chain } from '../chain.ts';
 import type { Econ } from './econ.ts';
 import type { GameStore } from './gamestore.ts';
@@ -46,9 +49,11 @@ interface Walker {
   /** The purchase this walk ends in. */
   job: Job | null;
 }
-interface Job { merchant: string; token: string; ask: number; to: Pos }
+interface Job { merchant: string; token: string; ask: number; to: Pos; sell?: boolean }
 export interface ResidentControls { paused: boolean; allow: Record<string, string[]> }
-const CTL_KEY = 'residents.ctl';
+export interface TradeSettings { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number }
+export interface ResidentSettings { target: number; treasuryReserve: number; trade: TradeSettings }
+const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock';
 
 const DIRS: Array<[number, number, string]> = [[1, 0, 'right'], [-1, 0, 'left'], [0, 1, 'down'], [0, -1, 'up']];
 
@@ -143,9 +148,9 @@ export class Residents {
   /** Tops the wallet up to `target`: from the treasury above its reserve, then new coin within today's faucet. */
   handout(day: number): number {
     const { gs, town, market } = this.d;
-    const need = this.cfg.target - gs.balance(this.wallet, 'coin');
+    const set = this.settings(), need = set.target - gs.balance(this.wallet, 'coin');
     if (need <= 0) return 0;
-    const free = Math.max(0, Math.min(gs.settledBalance(town, 'coin'), gs.balance(town, 'coin')) - this.cfg.treasuryReserve);
+    const free = Math.max(0, Math.min(gs.settledBalance(town, 'coin'), gs.balance(town, 'coin')) - set.treasuryReserve);
     const fromTown = Math.min(need, free);
     if (fromTown > 0) {
       gs.add(day, town, 'coin', -fromTown, 'handout', this.wallet);
@@ -154,6 +159,96 @@ export class Residents {
     const minted = Math.max(0, Math.min(need - fromTown, market.faucetLeft(day)));
     if (minted > 0) gs.add(day, this.wallet, 'coin', minted, 'handout_mint', 'faucet');
     return fromTown + minted;
+  }
+
+  /* ---------------------------------------------------------------- trading: buy to sell again at a margin */
+
+  /** The townsfolk's settings: config.json `residents` (and `residents.trade`) overlaid with what the admin saved in
+   *  meta `residents.settings` (adminbots.ts), so a restart or a deploy keeps them. */
+  settings(): ResidentSettings {
+    const c = this.cfg, t = c.trade ?? { enabled: false, marginPct: 5, perHour: 2, holdMax: 5, minWallet: 100 };
+    let saved: Partial<ResidentSettings> & { trade?: Partial<TradeSettings> } = {};
+    try { saved = JSON.parse(this.d.gs.meta(SETTINGS_KEY) ?? '{}'); } catch { /* bad row: the config's */ }
+    const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+    const st: Partial<TradeSettings> = saved.trade ?? {};
+    return {
+      target: num(saved.target, c.target), treasuryReserve: num(saved.treasuryReserve, c.treasuryReserve),
+      trade: {
+        enabled: typeof st.enabled === 'boolean' ? st.enabled : t.enabled, marginPct: num(st.marginPct, t.marginPct),
+        perHour: num(st.perHour, t.perHour), holdMax: num(st.holdMax, t.holdMax), minWallet: num(st.minWallet, t.minWallet),
+      },
+    };
+  }
+  setSettings(s: ResidentSettings) { this.d.gs.setMeta(SETTINGS_KEY, JSON.stringify(s)); }
+
+  /** What the wallet holds to sell again, with what it paid (meta `residents.stock`: token -> { qty, cost }). */
+  stock(): Record<string, { qty: number; cost: number }> {
+    try { const s = JSON.parse(this.d.gs.meta(STOCK_KEY) ?? '{}'); return s && typeof s === 'object' ? s : {}; } catch { return {}; }
+  }
+  private setStock(s: Record<string, { qty: number; cost: number }>) { this.d.gs.setMeta(STOCK_KEY, JSON.stringify(s)); }
+
+  /** The next resident (in turn) who may trade with this merchant, or null. */
+  private pick(merchantId: string, c: ResidentControls): Walker | null {
+    for (let k = 0; k < this.walkers.length; k++) {
+      const w = this.walkers[(this.next + k) % this.walkers.length];
+      if (this.allows(w, merchantId, c)) { this.next += k + 1; return w; }
+    }
+    return null;
+  }
+  private walkTo(merchantId: string, token: string, coin: number, sell: boolean) {
+    const to = this.d.map ? this.stallFront(merchantId) : null;
+    if (!to) return;
+    this.queue.push({ merchant: this.d.market.account(merchantId), token, ask: coin, to, sell });
+    if (this.queue.length > this.cfg.queueMax) this.queue.shift();
+  }
+
+  /** One hour of trading (game.step, after the town's shopping). Sells what the wallet holds when a merchant pays at
+   *  least cost x (1 + marginPct / 100), and buys a good to sell again only when some merchant would pay that margin for
+   *  it right now; marginPct may be negative (selling at a loss). At most `perHour` trades, never more than `holdMax` of a
+   *  good held, never spending the wallet below `minWallet`. Merchants' own prices, stock, cash and daily caps apply
+   *  (market.buy / market.sell, ledger kind `trade`, ref tagged `#<resident>`). Returns the trades made. */
+  trade(): number {
+    const s = this.settings().trade, c = this.controls();
+    if (!this.ready || !s.enabled || c.paused || s.perHour < 1) return 0;
+    const { market, gs, econ } = this.d, m = 1 + s.marginPct / 100, stock = this.stock();
+    const ids = market.ids().filter((id) => market.isOpen(id) && this.walkers.some((w) => this.allows(w, id, c)));
+    const bidOf = (token: string) => ids.filter((id) => market.def(id).buys.includes(token) && market.buyRoom(id, token) >= 1)
+      .map((id) => ({ id, unit: market.quote(id, token, 'sell', 1).unit })).filter((o) => gs.balance(market.account(o.id), 'coin') >= o.unit)
+      .sort((a, b) => b.unit - a.unit)[0] ?? null;
+    let done = 0;
+    const sell = (token: string): boolean => {
+      const held = stock[token];
+      if (!held || held.qty < 1 || gs.balance(this.wallet, token) < 1) return false;
+      const bid = bidOf(token), avg = held.cost / held.qty;
+      if (!bid || bid.unit < avg * m) return false;
+      const w = this.pick(bid.id, c); if (!w) return false;
+      try { market.sell(this.wallet, bid.id, token, 1, w.id); } catch { return false; }
+      held.cost -= avg; held.qty -= 1; if (held.qty < 1) delete stock[token];
+      this.walkTo(bid.id, token, bid.unit, true);
+      done++;
+      return true;
+    };
+    // 1. sell what is held
+    for (const token of Object.keys(stock)) while (done < s.perHour && sell(token)) { /* one unit at a time */ }
+    // 2. buy to sell again, when a merchant would pay the margin for it now
+    for (const token of Object.keys(econ.items)) {
+      if (token === 'coin') continue;
+      while (done < s.perHour && (stock[token]?.qty ?? 0) < s.holdMax) {
+        if (market.trend.withdrawn(token)) break;
+        const ask = ids.filter((id) => market.def(id).sells.includes(token) && gs.balance(market.account(id), token) >= 1)
+          .map((id) => ({ id, unit: market.quote(id, token, 'buy', 1).unit })).sort((a, b) => a.unit - b.unit)[0];
+        const bid = bidOf(token);
+        if (!ask || !bid || bid.unit < ask.unit * m || gs.balance(this.wallet, 'coin') - ask.unit < s.minWallet) break;
+        const w = this.pick(ask.id, c); if (!w) break;
+        try { market.buy(this.wallet, ask.id, token, 1, w.id); } catch { break; }
+        const h = stock[token] ?? (stock[token] = { qty: 0, cost: 0 }); h.qty += 1; h.cost += ask.unit;
+        this.walkTo(ask.id, token, ask.unit, false);
+        done++;
+        if (done < s.perHour) sell(token);
+      }
+    }
+    this.setStock(stock);
+    return done;
   }
 
   /* ---------------------------------------------------------------- walking (shown only) */
@@ -174,7 +269,8 @@ export class Residents {
       if (w.path.length > 1) { w.path = [end]; w.t0 = now; }
       if (w.job) {
         const j = w.job; w.job = null;
-        this.d.onDeal?.(this.account(w.id), j.merchant, { [j.token]: 1 }, { coin: j.ask });
+        if (j.sell) this.d.onDeal?.(this.account(w.id), j.merchant, { coin: j.ask }, { [j.token]: 1 });
+        else this.d.onDeal?.(this.account(w.id), j.merchant, { [j.token]: 1 }, { coin: j.ask });
         w.until = now + 1800; w.dir = 'up';
         continue;
       }

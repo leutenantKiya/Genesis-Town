@@ -117,3 +117,38 @@ test('trace follows the coin: wallet -> merchants, treasury -> wallet, merchant 
   assert.ok(tt.outflow.some((f) => f.kind === 'handout' && f.account === WALLET));
   assert.throws(() => bots.trace('', 0), /account required/);
 });
+
+test('the townsfolk buy to sell again at the admin\'s margin, negative allowed, and the settings live in the database', async () => {
+  const { game, clock, bots } = await world();
+  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade'").all(WALLET) as Array<{ delta: number; ref: string }>;
+  // off: no trading at all
+  bots.control({ settings: { trade: { enabled: false } } });
+  for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
+  assert.equal(tradeRows().length, 0, 'disabled: no trades');
+  // a margin no merchant pays: nothing bought to resell
+  bots.control({ settings: { trade: { enabled: true, marginPct: 500, perHour: 5, holdMax: 3, minWallet: 0 } } });
+  for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
+  assert.equal(tradeRows().length, 0, '+500%: no merchant pays that');
+  // -90%: they buy and sell at a loss, booked per resident, never holding more than holdMax
+  bots.control({ settings: { trade: { marginPct: -90 } } });
+  assert.equal(JSON.parse(game.gs.meta('residents.settings')!).trade.marginPct, -90, 'saved in the database');
+  assert.equal(game.residents.settings().trade.perHour, 5, 'other fields kept');
+  await hours(game, clock, () => tradeRows().some((r) => r.delta > 0));
+  const rows = tradeRows();
+  assert.ok(rows.some((r) => r.delta < 0) && rows.some((r) => r.delta > 0), 'bought and sold');
+  assert.ok(rows.every((r) => /^\w+:\w+:1@\d+#r[1-5]$/.test(r.ref)), 'booked per resident');
+  for (const h of Object.values(game.residents.stock())) assert.ok(h.qty <= 3);
+  const st = bots.status(0);
+  assert.equal(st.trade.sold - st.trade.bought, st.trade.profit);
+  assert.equal(st.settings.trade.marginPct, -90);
+  assert.ok(st.residents.reduce((n, r) => n + r.trade.units, 0) === st.trade.boughtUnits + st.trade.soldUnits);
+  // the wallet's trace names the merchants it traded with
+  const t = bots.trace(WALLET, 0);
+  assert.ok(t.outflow.concat(t.inflow).filter((f) => f.kind === 'trade').every((f) => f.account && f.account.endsWith('.gt.test')));
+  // the wallet target and treasury reserve are the admin's too; bad input is refused
+  bots.control({ settings: { target: 900, treasuryReserve: 1000 } });
+  assert.deepEqual([game.residents.settings().target, game.residents.settings().treasuryReserve], [900, 1000]);
+  assert.throws(() => bots.control({ settings: { trade: { marginPct: -95 } } }), /marginPct must be a number from -90 to 500/);
+  assert.throws(() => bots.control({ settings: { trade: { enabled: 'yes' } } }), /enabled must be true or false/);
+  assert.throws(() => bots.control({ settings: { target: -1 } }), /target must be/);
+});
