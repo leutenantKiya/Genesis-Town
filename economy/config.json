@@ -113,7 +113,7 @@
   "residents": {
     "enabled": true,
     "wallet": "warga",
-    "names": ["Dewi", "Agus", "Rina", "Bayu", "Intan"],
+    "names": ["Haruto", "Yui", "Sota", "Hina", "Ren"],
     "looks": [1, 6, 7, 0, 5],
     "target": 600,
     "treasuryReserve": 2000,

@@ -7,7 +7,7 @@
  *   GT_THEME.season()                 -> 'semi' | 'panas' | 'gugur' | 'dingin'
  *   GT_THEME.label(ctx, text, x, y, {tone, size, align, bold})
  *       draws a small chip centred on x with its baseline at y: tone 'dark' (default: HUD chip), 'paper' (ink on
- *       paper), 'party' (green), 'dim' (faint, for guests) or 'accent' (ink on the season accent). Returns the chip's width.
+ *       paper), 'party' (green), 'dim' (faint, for guests), 'accent' (ink on the season accent) or 'bot' (ink on orange: the townsfolk the server walks). Returns the chip's width.
  *   GT_THEME.text(ctx, text, x, y, colour, size)   outlined text with no chip (floating numbers)
  */
 (function () {
@@ -25,7 +25,8 @@
     paper: function () { return { bg: get('paper') || '#f4f1dc', fg: get('paper-ink') || '#1c1c2c', alpha: 1 }; },
     party: function () { return { bg: get('good') || '#2f7d4a', fg: '#f4fff0', alpha: 0.92 }; },
     dim: function () { return { bg: get('hud') || '#14152a', fg: get('hud-ink') || '#dfe8c2', alpha: 0.5 }; },
-    accent: function () { return { bg: get('accent') || '#f28fb0', fg: get('accent-ink') || '#1c1c2c', alpha: 1 }; }
+    accent: function () { return { bg: get('accent') || '#f28fb0', fg: get('accent-ink') || '#1c1c2c', alpha: 1 }; },
+    bot: function () { return { bg: '#f08a24', fg: '#1c1c2c', alpha: 1 }; }
   };
   // in 2.5D an overlay unit spans several screen pixels: anchor labels on whole screen pixels so they glide with the camera
   function snap(v) { return window.GT && GT.snap ? GT.snap(v) : Math.round(v); }
@@ -44,7 +45,7 @@
     ctx.globalAlpha = t.alpha;
     ctx.fillStyle = t.bg; ctx.fillRect(left, top, w, h);
     ctx.globalAlpha = 1;
-    if (o.tone === 'paper' || o.tone === 'accent') { ctx.fillStyle = get('paper-ink') || '#1c1c2c'; ctx.fillRect(left, top + h, w, 1); } // the hard bottom edge
+    if (o.tone === 'paper' || o.tone === 'accent' || o.tone === 'bot') { ctx.fillStyle = get('paper-ink') || '#1c1c2c'; ctx.fillRect(left, top + h, w, 1); } // the hard bottom edge
     ctx.fillStyle = t.fg; ctx.textAlign = 'left';
     ctx.fillText(text, left + 2, Math.round(y) - 1);
     ctx.restore();

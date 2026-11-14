@@ -292,7 +292,7 @@
       ctx.font = sz + 'px "Pixelify Sans", sans-serif';
       var text = o.guest ? $t('Tamu') : o.nick + (!o.npc && o.title && o.title !== $t('Pedagang baru') ? ' · ' + o.title : ''); // merchants stand a tile apart: name only, the stall sign has the shop name
       if (o.trading && !o.npc && !o.guest) text = o.nick + ' \u21c4 ' + o.trading; // in an open trade: everyone in the world sees with whom
-      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.npc ? 'accent' : o.trading ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag), worn: o.worn || null, acct: a });
+      tags.push({ x: x, y: y, w: Math.ceil(ctx.measureText(text).width) + 4, text: text, tone: o.guest ? 'dim' : o.resident ? 'bot' : o.npc ? 'accent' : o.trading ? 'accent' : o.party ? 'party' : 'dark', size: sz, sc: TH.scale || 1, npc: !!o.npc, k: key(o.nick, o.tag), worn: o.worn || null, acct: a });
     });
     tags.sort(function (p, q) { return q.y - p.y || p.x - q.x; }); // lowest first: the ones behind step up
     tags.forEach(function (t) {
