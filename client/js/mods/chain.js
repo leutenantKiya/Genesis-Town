@@ -30,6 +30,18 @@
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
+  // NEAR Auth signs in by redirect, not a popup: nearLogin() sends the page to Auth0, which comes back to the site root
+  // with ?code&state (or ?error&state). That address is kept here and the bar put back at once to the page the player
+  // left (saved in sessionStorage, e.g. /admin), before the later mods read location; finishRedirect() then trades the
+  // code for the token. auth0-spa-js keeps the attempt (state, PKCE verifier) in sessionStorage, so it survives the trip.
+  var SS_RETURN = 'gt.auth.return', authReturn = (function () {
+    var q = new URLSearchParams(location.search);
+    if (!q.has('state') || !(q.has('code') || q.has('error'))) return null;
+    var href = location.href, back = null;
+    try { back = sessionStorage.getItem(SS_RETURN); sessionStorage.removeItem(SS_RETURN); } catch (e) { /* storage blocked */ }
+    try { history.replaceState(null, '', back || location.pathname); } catch (e) { /* the code stays in the bar */ }
+    return href;
+  })();
   function item(t) { var e = S.cfg && S.cfg.econ && S.cfg.econ.items[t]; return e ? e.name : t; }
   function button(label, onClick, cls) { var b = $('button', 'mbtn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.addEventListener('click', onClick); return b; }
 
@@ -154,7 +166,7 @@
     acts.appendChild(button($t('Main sekarang'), function () { login(); }, 'primary'));
     acts.appendChild(button($t('Lihat-lihat dulu'), function () { try { sessionStorage.setItem('gt.title.skip', '1'); } catch (e) { /* storage blocked */ } renderTitle(); }));
     card.appendChild(acts);
-    card.appendChild($('p', 'gt-title-note', S.cfg && S.cfg.google && !nearAuthHere() ? $t('Masuk pakai Google. Tanpa dompet, tanpa biaya, langsung di browser.') : $t('Masuk pakai Google atau email. Tanpa dompet, tanpa biaya, langsung di browser.')));
+    card.appendChild($('p', 'gt-title-note', $t('Masuk dengan NEAR Auth. Tanpa dompet, tanpa biaya, langsung di browser.')));
     titleEl.appendChild(card);
   }
 
@@ -234,15 +246,14 @@
     });
   }
 
-  // `via` is 'google' for "Masuk dengan Google" (the token is Google's own); otherwise the token is NEAR Auth's.
-  function finishLogin(idToken, retried, provider, via) {
+  function finishLogin(idToken, retried, provider) {
     var kp = sessionKey();
     GT.toast(chainUI() ? $t('Membuat akunmu di NEAR testnet…') : $t('Menyiapkan akunmu…'));
-    var reg = function (pk) { var b = { idToken: idToken, sessionPublicKey: pk }; if (via) b.provider = via; return api('/auth/register', { method: 'POST', body: b }); };
+    var reg = function (pk) { var b = { idToken: idToken, sessionPublicKey: pk }; return api('/auth/register', { method: 'POST', body: b }); };
     return reg(kp.getPublicKey().toString())
       .catch(function (e) {
         // This browser's key belongs to another login: make a fresh key for this one and try once more.
-        if (!retried && /already belongs to another account/.test(e.message)) { lsSet(LS_KEY, null); return finishLogin(idToken, true, provider, via).then(function () { return null; }); }
+        if (!retried && /already belongs to another account/.test(e.message)) { lsSet(LS_KEY, null); return finishLogin(idToken, true, provider).then(function () { return null; }); }
         throw e;
       })
       .then(function (r) {
@@ -270,7 +281,7 @@
   // NEAR Auth's login only returns to page addresses it has allowed (the server lists them in fastAuth.origins). Anywhere
   // else its popup can only fail with "Callback URL mismatch", so the game does not offer it there.
   // NEAR Auth's browser provider: our own NEAR Auth deployment (docs/fastauth-fork-plan.md) sends its client id, Auth0
-  // domain and signing audience in /api/config (`fastAuth` is null when the server has none: then only Google login).
+  // domain and signing audience in /api/config (`fastAuth` is null when the server has none: then nobody can sign in here).
   function nearProvider() {
     var fa = S.cfg.fastAuth;
     return new window.NearLib.JavascriptProvider({ network: 'testnet', clientId: fa.clientId, domain: fa.domain, signingAudience: fa.signingAudience });
@@ -318,7 +329,6 @@
     if (window.NearLib && S.cfg && S.cfg.fastAuth && !S.cfg.devLogin) {
       try { nearProvider().logout({ openUrl: false }).catch(noop); } catch (e) { /* cache only */ }
     }
-    try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) { /* not loaded */ }
     renderBanner(); renderHud();
     GT.toast($t('Kamu sudah keluar. Tekan Masuk untuk masuk lagi.'));
     return refresh(true);
@@ -327,78 +337,40 @@
   function login() {
     if (S.busy) return;
     if (S.cfg && S.cfg.devLogin) return devLogin();
-    if (S.cfg && S.cfg.google) return chooseLogin();
     if (!nearAuthHere()) {
-      GT.modal({ title: $t('Masuk'), body: $t('Login belum aktif di alamat ini: NEAR Auth hanya menerima alamat yang sudah didaftarkan, dan login Google belum dipasang di server ini. Kamu tetap bisa melihat-lihat desa sebagai tamu.'), actions: [{ label: $t('Oke'), primary: true }] });
+      GT.modal({ title: $t('Masuk'), body: $t('Login belum aktif di alamat ini: NEAR Auth hanya menerima alamat yang sudah didaftarkan. Kamu tetap bisa melihat-lihat desa sebagai tamu.'), actions: [{ label: $t('Oke'), primary: true }] });
       return;
     }
     return nearLogin();
   }
 
-  /* ---- "Masuk dengan Google": Google Identity Services, no NEAR Auth needed (it only accepts allow-listed domains).
-     The server checks Google's token and files the player under the id NEAR Auth gives the same Google account, so
-     both buttons open one account. Library, calls and options: https://developers.google.com/identity/gsi/web */
-  var gsi = null, onGoogle = null;
-  function loadGsi() {
-    if (gsi) return gsi;
-    gsi = new Promise(function (resolve, reject) {
-      // Google's docs: on plain-http localhost the button needs this referrer policy
-      if (location.protocol === 'http:') { var m = document.createElement('meta'); m.name = 'referrer'; m.content = 'no-referrer-when-downgrade'; document.head.appendChild(m); }
-      var sc = document.createElement('script');
-      sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true;
-      sc.onload = function () {
-        if (!window.google || !google.accounts || !google.accounts.id) { reject(new Error($t('Google tidak termuat'))); return; }
-        google.accounts.id.initialize({ client_id: S.cfg.google.clientId, callback: function (res) { if (onGoogle) onGoogle(res); }, ux_mode: 'popup', auto_select: false, use_fedcm_for_button: true });
-        resolve(google.accounts.id);
-      };
-      sc.onerror = function () { gsi = null; reject(new Error($t('Tidak bisa memuat tombol Google (cek koneksi atau pemblokir iklan).'))); };
-      document.head.appendChild(sc);
-    });
-    return gsi;
-  }
-  function chooseLogin() {
-    var body = $('div', 'gt-login');
-    body.appendChild($('p', null, $t('Pilih cara masuk. Akunmu tetap akun NEAR testnet; tanpa dompet, tanpa biaya gas.')));
-    var slot = $('div', 'gt-login-google'); slot.appendChild($('p', 'mnote', $t('Memuat tombol Google…')));
-    body.appendChild(slot);
-    var h;
-    if (nearAuthHere()) {
-      body.appendChild($('p', 'gt-login-or', $t('atau')));
-      var nb = $('button', 'gt-login-near', $t('Masuk dengan NEAR Auth (Google/email)')); nb.type = 'button';
-      nb.addEventListener('click', function () { h.close('near'); nearLogin(); });
-      body.appendChild(nb);
-    }
-    h = GT.modal({ title: $t('Masuk'), body: body, actions: [], onClose: function () { onGoogle = null; } });
-    onGoogle = function (res) {
-      if (!res || !res.credential) { GT.toast($t('Google tidak memberi token')); return; }
-      h.close('google'); onGoogle = null; S.busy = true;
-      var ring = busyRing();
-      finishLogin(res.credential, false, null, 'google')
-        .catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e && e.message || e])); })
-        .then(function () { S.busy = false; ring(); });
-    };
-    loadGsi().then(function (id) {
-      if (h.closed) return;
-      slot.textContent = '';
-      var btn = $('div'); slot.appendChild(btn);
-      id.renderButton(btn, { type: 'standard', theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular', width: 280, locale: (window.GT_LANG || 'en') });
-    }, function (e) { slot.textContent = ''; slot.appendChild($('p', 'mnote', e.message)); });
-  }
-
+  // NEAR Auth by redirect (see authReturn at the top): the page leaves for Auth0's sign-in page and comes back here.
+  // Approving a second device (approveDevice, newDevice) still opens NEAR Auth's window: it signs a key addition and
+  // must come back to the same page state.
   function nearLogin() {
     if (S.busy) return;
     if (!window.NearLib) { GT.toast($t('Pustaka NEAR belum dimuat (jalankan build klien).')); return; }
     S.busy = true;
     var ring = busyRing();
-    var provider = nearProvider();
-    var choose = lsGet(LS_FORCE) === '1';
-    provider.login(undefined, choose)
+    try { sessionStorage.setItem(SS_RETURN, location.pathname + location.search + location.hash); } catch (e) { /* storage blocked: back to / */ }
+    // redirect_uri must be one of the app's Allowed Callback URLs in Auth0 (the bare origin is)
+    nearProvider().client.loginWithRedirect({ authorizationParams: { redirect_uri: location.origin, prompt: lsGet(LS_FORCE) === '1' ? 'login' : undefined } })
+      .catch(function (e) { S.busy = false; ring(); GT.toast($t('Gagal masuk: {0}', [e && e.message || e])); });
+  }
+
+  // Back from NEAR Auth: trade the code for the token and sign in (an ?error, e.g. a cancelled sign-in, is shown).
+  function finishRedirect() {
+    var url = authReturn; authReturn = null;
+    if (!url || !nearAuthHere()) return;
+    S.busy = true;
+    var ring = busyRing(), provider = nearProvider();
+    return provider.client.handleRedirectCallback(url)
       .then(function () { lsSet(LS_FORCE, null); return provider.client.getIdTokenClaims(); })
       .then(function (claims) {
         if (!claims || !claims.__raw) throw new Error($t('Login tidak memberi token'));
         return finishLogin(claims.__raw, false, provider);
       })
-      .catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e && e.message || e])); })
+      .catch(function (e) { GT.toast($t('Gagal masuk: {0}', [e && (e.error_description || e.message) || e])); })
       .then(function () { S.busy = false; ring(); });
   }
 
@@ -1950,7 +1922,7 @@
       });
     }).catch(function () { S.mode = 'offline'; if (!forceOffline) { net.bootFailed = true; netDown(); } }).then(function () {
       renderBanner(); return refresh(true);
-    }).then(schedulePoll);
+    }).then(function () { return finishRedirect(); }).then(schedulePoll);
     renderBanner();
     // a live language switch: the server translates names and messages, so fetch them again, then redraw what is open
     if (window.GT_I18N) GT_I18N.onChange(function () {
