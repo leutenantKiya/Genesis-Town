@@ -701,6 +701,7 @@
     var wrap = $('div', 'gt-tools');
     wrap.appendChild($('p', null, $t('Setiap alat aus saat dipakai. Perbaiki alat (murah), atau buat yang baru dari bahan.')));
     if (!S.st || !S.st.tools) { wrap.appendChild($('p', 'chain-dim', $t('Memuat…'))); return wrap; }
+    var grid = $('div'); wrap.appendChild(grid);
     TOOL_ORDER.forEach(function (k) {
       var t = S.st.tools[k]; if (!t) return;
       var cost = toolCost(k), row = $('div', 'gt-tool' + (t.broken ? ' broken' : ''));
@@ -1235,7 +1236,7 @@
     var b = $('button', 'gt-card' + (opts.off ? ' off' : '') + (opts.sel ? ' sel' : '') + (opts.accent ? ' accent' : '')); b.type = 'button';
     if (window.GT_ITEMS && token !== 'coin') b.appendChild(GT_ITEMS.icon(token, 32)); else b.appendChild($('span', 'gt-card-coin'));
     if (opts.count != null) b.appendChild($('span', 'gt-card-n', String(opts.count)));
-    b.appendChild($('span', 'gt-card-name', item(token)));
+    b.appendChild($('span', 'gt-card-name', opts.label || item(token)));
     if (line1) b.appendChild($('span', 'gt-card-l1', line1));
     if (line2) b.appendChild($('span', 'gt-card-l2', line2));
     if (opts.title) b.title = opts.title;
@@ -1269,46 +1270,70 @@
       wrap.appendChild(tabs);
       if (cur === 'tools') { toolStallRows(id, m, wrap); return wrap; }
     }
-    var sel = S.shopSel && S.shopSel.id === id ? S.shopSel.token : null;
-    function pick(token) { S.shopSel = { id: id, token: token }; }
-    function trade(kind, token, qty) {
-      pick(token);
-      if (qty > 0) act({ action: kind, merchant: id, token: token, qty: qty }).then(function (r) { dealFly(kind, m.account, token, qty, r && r.total); refreshModal(); }, refreshModal);
-    }
-    var sells = m.items.filter(function (it) { return it.ask != null; });
-    if (sells.length) {
-      wrap.appendChild($('h4', 'chain-h', $t('Dijual {0}', [m.name])));
-      var g1 = $('div', 'gt-grid');
-      sells.forEach(function (it) {
-        g1.appendChild(itemCard(it.token, $t('{0} koin{1}', [it.ask, arrow(it)]), $t('stok {0}', [it.stock]), {
-          sel: sel === it.token, off: have('coin') < it.ask, title: it.reason,
-          onClick: function (e) { trade('buy', it.token, e.shiftKey ? 5 : 1); }
-        }));
-      });
-      wrap.appendChild(g1);
-    }
-    wrap.appendChild($('h4', 'chain-h', $t('Barangmu · jual ke {0}', [m.name])));
-    var g2 = $('div', 'gt-grid'), byToken = {};
+    // Like most RPG shops: Buy and Sell tabs, a grid of goods, and for the one picked its price, the merchant's reason,
+    // how many (- / + / Max, at most 10 a trade on the server), the total and one button to confirm.
+    var mode = (S.shopMode || (S.shopMode = {}))[id] || 'buy', byToken = {};
     m.items.forEach(function (it) { byToken[it.token] = it; });
-    (window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.cfg.econ.items).filter(function (t) { return t !== 'coin'; })).forEach(function (t) {
-      var it = byToken[t], n = have(t), buys = it && it.bid != null;
-      g2.appendChild(itemCard(t, buys ? $t('dapat {0}{1}', [it.bid, arrow(it)]) : $t('tidak dibeli'), null, {
-        count: n, off: !buys || n <= 0, sel: sel === t, accent: buys && n > 0, title: buys ? it.reason : $t('{0} tidak membeli {1}', [m.name, item(t)]),
-        onClick: function (e) { if (buys) trade('sell', t, Math.min(n, e.shiftKey ? 5 : 1)); else { pick(t); redraw(); } },
-        onRight: function () { if (buys) trade('sell', t, Math.min(n, 10)); }
-      }));
+    var sells = m.items.filter(function (it) { return it.ask != null; }).map(function (it) { return it.token; });
+    var mine = window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.cfg.econ.items).filter(function (t) { return t !== 'coin'; });
+    var tabs2 = $('div', 'gt-mall-tabs gt-shop-tabs'); tabs2.setAttribute('role', 'tablist');
+    [['buy', $t('Beli dari {0}', [m.name])], ['sell', $t('Jual ke {0}', [m.name])]].forEach(function (t) {
+      var on = mode === t[0], b = $('button', 'gt-mall-tab' + (on ? ' on' : ''), t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(on));
+      b.addEventListener('click', function () { if (on) return; S.shopMode[id] = t[0]; S.shopQty = 1; redraw(); });
+      tabs2.appendChild(b);
     });
-    wrap.appendChild(g2);
-    // the merchant's reason for the item you last touched (prices move every game hour)
-    var focus = sel && byToken[sel], touch = document.documentElement.classList.contains('gt-phone');
-    var why = $('div', 'gt-shop-why');
-    why.appendChild($('p', null, focus ? item(sel) + ': ' + focus.reason : touch ? $t('Ketuk barang untuk jual atau beli 1. Harga berubah tiap jam game.') : $t('Klik untuk 1, Shift+klik untuk 5, klik kanan untuk jual semua. Harga berubah tiap jam game.')));
-    var left = focus && focus.bid != null ? Math.min(have(sel), 10) : 0; // the server takes at most 10 per trade
-    if (left > 1) why.appendChild(button($t('Jual {0} {1} (sekitar {2} koin)', [left, item(sel), left * focus.bid]), function () { trade('sell', sel, left); }, 'gt-data'));
-    wrap.appendChild(why);
+    wrap.appendChild(tabs2);
+    var list = mode === 'buy' ? sells : mine;
+    function usable(t) { var it = byToken[t]; return mode === 'buy' ? !!it && it.stock > 0 : !!it && it.bid != null && have(t) > 0; }
+    var sel = S.shopSel && S.shopSel.id === id && S.shopSel.mode === mode && list.indexOf(S.shopSel.token) >= 0 ? S.shopSel.token : (list.filter(usable)[0] || list[0]);
+    var grid = $('div', 'gt-grid');
+    list.forEach(function (t) {
+      var it = byToken[t], buys = it && it.bid != null, n = have(t);
+      var card = mode === 'buy'
+        ? itemCard(t, $t('{0} koin{1}', [it.ask, arrow(it)]), $t('stok {0}', [it.stock]), { sel: sel === t, off: it.stock <= 0 })
+        : itemCard(t, buys ? $t('dapat {0}{1}', [it.bid, arrow(it)]) : $t('tidak dibeli'), null, { count: n, off: !buys || n <= 0, sel: sel === t });
+      card.addEventListener('click', function () { S.shopSel = { id: id, mode: mode, token: t }; S.shopQty = 1; redraw(); });
+      grid.appendChild(card);
+    });
+    if (!list.length) wrap.appendChild($('p', 'chain-dim', $t('{0} sedang tidak menjual apa-apa.', [m.name])));
+    wrap.appendChild(grid);
+    if (sel) wrap.appendChild(shopPick(id, m, mode, sel, byToken[sel]));
     holdingLine(id, wrap);
     if (S.account) wrap.appendChild(button($t('Ngobrol dengan {0}', [m.name]), function () { talkTo(id, m.name); }));
     return wrap;
+  }
+
+  // The panel for the good picked in a shop: price and why, how many, total, confirm.
+  function shopPick(id, m, mode, t, it) {
+    var box = $('div', 'gt-detail gt-shop-pick'), top = $('div', 'gt-detail-top');
+    if (window.GT_ITEMS) top.appendChild(GT_ITEMS.icon(t, 40));
+    var txt = $('div', 'grow'), buy = mode === 'buy', price = it ? (buy ? it.ask : it.bid) : null;
+    txt.appendChild($('div', 'gt-detail-name', item(t)));
+    if (price == null) txt.appendChild($('div', null, $t('{0} tidak membeli {1}.', [m.name, item(t)])));
+    else txt.appendChild($('div', 'gt-data', (buy ? $t('Harga {0} koin', [price]) : $t('{0} membayar {1} koin', [m.name, price])) + arrow(it) + (buy ? ' · ' + $t('stok {0}', [it.stock]) : ' · ' + $t('punyamu {0}', [have(t)]))));
+    if (it && it.reason) txt.appendChild($('div', 'chain-dim', it.reason));
+    top.appendChild(txt); box.appendChild(top);
+    if (price == null) return box;
+    var max = Math.max(0, buy ? Math.min(it.stock, 10, Math.floor(have('coin') / Math.max(1, price))) : Math.min(have(t), 10));
+    if (max < 1) { box.appendChild($('p', 'chain-dim', buy ? (it.stock < 1 ? $t('Stok habis.') : $t('Koinmu belum cukup.')) : $t('Kamu tidak punya {0}.', [item(t)]))); return box; }
+    var q = Math.max(1, Math.min(max, S.shopQty || 1)); S.shopQty = q;
+    var row = $('div', 'gt-qty');
+    function step(label, to, aria) { var b = button(label, function () { S.shopQty = Math.max(1, Math.min(max, to)); redraw(); }); b.setAttribute('aria-label', aria); b.disabled = to < 1 || to > max || to === q; return b; }
+    row.appendChild(step('−', q - 1, $t('Kurangi')));
+    row.appendChild($('span', 'gt-qty-n gt-data', String(q)));
+    row.appendChild(step('+', q + 1, $t('Tambah')));
+    row.appendChild(step($t('Maks'), max, $t('Jumlah terbanyak')));
+    box.appendChild(row);
+    var total = $('div', 'gt-shop-total gt-data', (buy ? $t('Kamu bayar sekitar {0} koin', [q * price]) : $t('Kamu dapat sekitar {0} koin', [q * price])));
+    box.appendChild(total);
+    // the exact total for this many (prices move a little with the size of the lot)
+    api('/quote?merchant=' + encodeURIComponent(id) + '&token=' + encodeURIComponent(t) + '&side=' + mode + '&qty=' + q).then(function (r) {
+      if (r && r.total != null && S.shopQty === q) total.textContent = buy ? $t('Kamu bayar {0} koin', [r.total]) : $t('Kamu dapat {0} koin', [r.total]);
+    }, noop);
+    box.appendChild(button(buy ? $t('Beli {0} {1}', [q, item(t)]) : $t('Jual {0} {1}', [q, item(t)]), function () {
+      act({ action: mode, merchant: id, token: t, qty: q }).then(function (r) { dealFly(mode, m.account, t, q, r && r.total); S.shopQty = 1; refreshModal(); }, refreshModal);
+    }, 'primary gt-shop-go'));
+    return box;
   }
 
   // The tool stall inside one merchant's shop (economy/config.json `toolShop`): a new tool or a repair for coin, paid to that merchant.
@@ -1464,6 +1489,9 @@
 
   // Tas: every item as a card (the same icons as the hotbar). Click one to see what it is for and what you can do
   // with it; the panel under the grid holds the actions, so the grid itself stays calm.
+  // The Bag: tools first (how worn each one is), then materials, then food. The window carries no instructions:
+  // hovering a card shows what it is for, and a click (a tap on a phone) also shows what can be done with it.
+  // Right-click holds it in the hand.
   function bagBody() {
     var wrap = $('div', 'gt-bag');
     if (S.mode === 'offline') {
@@ -1472,36 +1500,92 @@
       return wrap;
     }
     if (!S.st) { wrap.appendChild($('p', null, $t('Memuat…'))); return wrap; }
-    var coin = S.st.bag.coin || { settled: 0, today: 0 };
+    var coin = S.st.bag.coin || { settled: 0, today: 0 }, econItems = S.cfg.econ.items;
     var head = $('div', 'gt-shop-head');
-    head.appendChild($('span', null, $t('Koin {0}{1}', [coin.settled + coin.today, coin.today ? $t(' ({0}{1} hari ini)', [coin.today > 0 ? '+' : '', coin.today]) : ''])));
-    if (S.st.tools) {
-      var wornOut = TOOL_ORDER.filter(function (k) { return S.st.tools[k] && S.st.tools[k].broken; }).length;
-      var tb = button(wornOut ? $t('Alat · {0} rusak', [wornOut]) : $t('Alat'), function () { open('tools'); }, wornOut ? 'primary' : '');
-      head.appendChild(tb);
-    } else head.appendChild($('span', 'chain-dim', $t('Beliung {0}/{1} pemakaian', [S.st.tool.uses, S.st.tool.durability])));
+    head.appendChild($('span', 'gt-bag-coin', $t('Koin {0}', [coin.settled + coin.today])));
     wrap.appendChild(head);
     var slots = window.GT_ITEMS ? GT_ITEMS.SLOTS : Object.keys(S.st.bag).filter(function (t) { return t !== 'coin'; });
     var inHand = window.GT_ITEMS && GT_ITEMS.held();
-    // the hoe and the rod are in the hand but not in the bag: then the first item is shown, not an empty "hoe · 0"
-    var sel = S.bagSel && slots.indexOf(S.bagSel) >= 0 ? S.bagSel : inHand && slots.indexOf(inHand) >= 0 ? inHand : slots[0];
-    var grid = $('div', 'gt-grid');
-    slots.forEach(function (t) {
-      var b = S.st.bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today;
-      grid.appendChild(itemCard(t, b.today ? $t('{0} hari ini', [(b.today > 0 ? '+' : '') + b.today]) : null, t === inHand ? $t('di tangan') : null, {
-        count: n, off: n <= 0, sel: t === sel,
-        onClick: function () { S.bagSel = t; redraw(); },
-        onRight: function () { if (window.GT_ITEMS) { GT_ITEMS.hold(t); S.bagSel = t; redraw(); } }
-      }));
+    var pop = $('div', 'gt-pop'), pinned = null; pop.hidden = true;
+    var phone = document.documentElement.classList.contains('gt-phone');
+    function place(card) { // under the card, kept inside the window
+      pop.style.left = '0px'; pop.style.top = (card.offsetTop + card.offsetHeight + 6) + 'px';
+      var max = wrap.clientWidth - pop.offsetWidth;
+      pop.style.left = Math.max(0, Math.min(max, card.offsetLeft + card.offsetWidth / 2 - pop.offsetWidth / 2)) + 'px';
+    }
+    function show(card, fill, withActs) {
+      pop.textContent = ''; fill(pop, withActs); pop.hidden = false; place(card);
+    }
+    function hook(card, key, fill) {
+      card.addEventListener('mouseenter', function () { if (!phone && !pinned) show(card, fill, false); });
+      card.addEventListener('mouseleave', function () { if (!phone && !pinned) pop.hidden = true; });
+      card.addEventListener('click', function () {
+        if (pinned === key) { pinned = null; pop.hidden = true; return; }
+        pinned = key; show(card, fill, true);
+      });
+    }
+    function section(title, cards) {
+      if (!cards.length) return;
+      wrap.appendChild($('div', 'gt-bag-h', title));
+      var g = $('div', 'gt-grid'); cards.forEach(function (c) { g.appendChild(c); }); wrap.appendChild(g);
+    }
+    // tools, with a wear bar
+    var toolCards = [];
+    if (S.st.tools) TOOL_ORDER.forEach(function (k) {
+      var t = S.st.tools[k]; if (!t) return;
+      var c = itemCard(TOOL_ICON[k], null, t.broken ? $t('rusak') : null, { label: toolName(k), sel: inHand === (k === 'pickaxe' ? 'tool' : k), onRight: function () { if (window.GT_ITEMS) { GT_ITEMS.hold(TOOL_ICON[k]); redraw(); } } });
+      if (t.broken) c.classList.add('broken');
+      var pct = Math.max(0, Math.min(1, t.uses / Math.max(1, t.max))), bar = $('div', 'gt-dur'); bar.appendChild($('i'));
+      bar.firstChild.style.width = Math.round(pct * 100) + '%'; bar.firstChild.style.background = 'hsl(' + Math.round(pct * 120) + ',72%,46%)';
+      c.appendChild(bar);
+      hook(c, 'tool:' + k, function (box, withActs) { toolInfo(box, k, t, withActs); });
+      toolCards.push(c);
     });
-    wrap.appendChild(grid);
-    wrap.appendChild(bagDetail(sel));
-    wrap.appendChild($('p', 'chain-dim', $t('{0}Barang "hari ini" tersimpan permanen pukul 06:00{1}', [document.documentElement.classList.contains('gt-phone') ? $t('Ketuk barang untuk melihat, lalu Pegang. ') : $t('Klik untuk melihat, klik kanan untuk memegang. '), chainUI() ? $t(' (di NEAR).') : '.'])));
-    if (S.account) wrap.appendChild($('p', 'chain-dim', $t('Akun: {0}', [S.account])));
-    var more = $t('Semua riwayat');
-    wrap.appendChild(button(more, function () { open('history'); }));
-    if (S.st.missions) wrap.appendChild(button($t('Misi'), function () { open('missions'); }));
+    section($t('Alat'), toolCards);
+    function goodCards(list) {
+      return list.map(function (t) {
+        var b = S.st.bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today;
+        var c = itemCard(t, null, t === inHand ? $t('di tangan') : null, { count: n, off: n <= 0, sel: t === inHand, onRight: function () { if (window.GT_ITEMS) { GT_ITEMS.hold(t); redraw(); } } });
+        hook(c, t, function (box, withActs) { goodInfo(box, t, withActs); });
+        return c;
+      });
+    }
+    var goods = slots.filter(function (t) { return t !== 'tool' && econItems[t]; });
+    section($t('Bahan'), goodCards(goods.filter(function (t) { return !econItems[t].energy; })));
+    section($t('Makanan'), goodCards(goods.filter(function (t) { return econItems[t].energy; })));
+    wrap.appendChild(pop);
+    wrap.appendChild(button($t('Riwayat'), function () { open('history'); }));
     return wrap;
+  }
+  function toolInfo(box, k, t, withActs) {
+    var cost = toolCost(k);
+    box.appendChild($('div', 'gt-detail-name', toolName(k)));
+    box.appendChild($('div', null, t.broken ? $t('Rusak: perbaiki dulu sebelum dipakai lagi.') : $t('Ketahanan {0} dari {1} pemakaian.', [t.uses, t.max])));
+    box.appendChild($('div', 'chain-dim', $t('Perbaiki: {0}', [costText(cost.repair)]) + ' · ' + $t('Buat baru: {0}', [costText(cost.make)])));
+    if (!withActs) return;
+    var row = $('div', 'gt-detail-acts');
+    var rb = button($t('Perbaiki'), function () { act({ action: 'repair', tool: k }).then(refreshModal, noop); }, t.broken ? 'primary' : '');
+    rb.disabled = t.uses >= t.max || !canPay(cost.repair);
+    var nb = button($t('Buat baru'), function () { act({ action: 'maketool', tool: k }).then(refreshModal, noop); });
+    nb.disabled = !(canPay(cost.make) || (cost.alt && canPay(cost.alt)));
+    row.appendChild(rb); row.appendChild(nb);
+    if (window.GT_ITEMS) row.appendChild(button($t('Pegang'), function () { GT_ITEMS.hold(TOOL_ICON[k]); redraw(); }));
+    box.appendChild(row);
+  }
+  function goodInfo(box, t, withActs) {
+    var b = S.st.bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today, e = S.cfg.econ.items[t] || {}, can = spendable(t), bb = bestBid(t);
+    box.appendChild($('div', 'gt-detail-name', item(t) + ' · ' + n));
+    box.appendChild($('div', null, e.energy ? $t('Makanan: +{0} energi.', [e.energy]) : (USE[t] || '')));
+    if (n <= 0 && WHERE[t]) box.appendChild($('div', 'chain-dim', $t('Cara dapat: {0}', [WHERE[t]])));
+    if (bb) box.appendChild($('div', 'chain-dim', $t('Dibeli paling mahal oleh {0}: {1} koin.', [bb.name, bb.bid])));
+    if (!withActs) return;
+    var row = $('div', 'gt-detail-acts');
+    if (e.energy && n > 0) row.appendChild(button($t('Makan'), function () { act({ action: 'eat', token: t }).then(refreshModal, noop); }, 'primary'));
+    if (window.GT_ITEMS && GT_ITEMS.held() !== t) row.appendChild(button($t('Pegang'), function () { GT_ITEMS.hold(t); redraw(); }));
+    if (can > 0) row.appendChild(button($t('Jual ke pemain'), function () { askList(t, can); }));
+    if (can > 0) row.appendChild(button($t('Kirim'), function () { askSend(t); }));
+    row.appendChild(button($t('Riwayat'), function () { open('history', t); }));
+    box.appendChild(row);
   }
   var USE = {
     fish: $t('Mentah, tidak bisa dimakan. Masak jadi Ikan Bakar di Meja Kerja (Ikan + Kayu), atau jual.'),
@@ -1509,28 +1593,6 @@
     wheat: $t('Pegang lalu klik kanan petak kebun untuk menanam, atau buat Roti (2 Gandum).'),
     tool: $t('Dipakai otomatis saat menambang batu.')
   };
-  function bagDetail(t) {
-    var box = $('div', 'gt-detail'), b = S.st.bag[t] || { settled: 0, today: 0 }, n = b.settled + b.today;
-    var e = S.cfg.econ.items[t] || {}, can = spendable(t), bb = bestBid(t);
-    var top = $('div', 'gt-detail-top');
-    if (window.GT_ITEMS) top.appendChild(GT_ITEMS.icon(t, 40));
-    var txt = $('div', 'grow');
-    txt.appendChild($('div', 'gt-detail-name', item(t) + ' · ' + n));
-    txt.appendChild($('div', null, e.energy ? $t('Makanan: +{0} energi.', [e.energy]) : (USE[t] || '')));
-    txt.appendChild($('div', 'chain-dim', n > 0 ? $t('Tercatat {0}{1} · bisa dikirim/dijual ke pemain {2}', [b.settled, b.today ? $t(' · hari ini {0}{1}', [b.today > 0 ? '+' : '', b.today]) : '', can]) : $t('Cara dapat: {0}', [WHERE[t] || ''])));
-    if (bb) txt.appendChild($('div', 'chain-dim', $t('Pedagang yang paling mahal membeli: {0}, {1} koin.', [bb.name, bb.bid])));
-    top.appendChild(txt);
-    box.appendChild(top);
-    var row = $('div', 'gt-detail-acts');
-    if (e.energy && n > 0) row.appendChild(button($t('Makan'), function () { act({ action: 'eat', token: t }).then(refreshModal, noop); }, 'primary'));
-    if (window.GT_ITEMS && GT_ITEMS.held() !== t) row.appendChild(button($t('Pegang'), function () { GT_ITEMS.hold(t); redraw(); }));
-    if (can > 0) row.appendChild(button($t('Jual ke pemain'), function () { askList(t, can); }));
-    if (can > 0) row.appendChild(button($t('Kirim'), function () { askSend(t); }));
-    row.appendChild(button($t('Riwayat'), function () { open('history', t); }));
-    if (row.children.length) box.appendChild(row);
-    return box;
-  }
-
   function askSend(token) {
     var body = $('div');
     body.appendChild($('p', null, $t('Kirim 1 {0} ke pemain lain.{1}', [item(token), chainUI() ? $t(' Langsung on-chain, tanpa dompet, tanpa gas.') : $t(' Langsung sampai.')])));

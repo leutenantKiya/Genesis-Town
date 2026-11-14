@@ -435,3 +435,21 @@ html.gt-phone .gt-plist{pointer-events:auto}
 .gt-sig i.on{background:#4caf50}
 .gt-sig.fair i.on{background:#e0a030}
 .gt-sig.weak i.on{background:#e04040}
+/* the Bag: tools, materials, food in sections; a card explains itself in a popover (hover, or click/tap for actions) */
+.gt-bag{position:relative}
+.gt-bag-coin{font-family:var(--font-data);font-size:calc(16px*var(--ts));font-weight:600}
+.gt-bag-h{margin:10px 0 2px;font-size:calc(14px*var(--ts));font-weight:700;color:var(--paper-dim)}
+.gt-card .gt-dur{width:80%;height:6px;margin:2px 0 0}
+.gt-card.broken{border-color:var(--bad)}
+.gt-card.broken .gt-card-l2{color:var(--bad)}
+.gt-pop{position:absolute;z-index:3;width:min(300px,100%);padding:8px 10px;background:var(--paper);border:var(--line) solid var(--paper-ink);border-radius:var(--r-win);box-shadow:0 4px 0 var(--shade);font-size:calc(14px*var(--ts));line-height:1.5}
+.gt-pop[hidden]{display:none}
+.gt-bag .gt-grid{grid-auto-rows:1fr}
+/* the merchant window: Buy / Sell tabs, the picked good with a quantity stepper and its total */
+.gt-shop-tabs{margin:6px 0 4px}
+.gt-shop-pick{margin-top:4px}
+.gt-qty{display:flex;align-items:center;gap:6px;margin-top:8px}
+.gt-qty .mbtn{min-width:40px}
+.gt-qty-n{min-width:2.5em;text-align:center;font-size:calc(18px*var(--ts));font-weight:700}
+.gt-shop-total{margin:8px 0 6px;font-size:calc(15px*var(--ts));font-weight:600}
+.gt-shop-go{width:100%}
