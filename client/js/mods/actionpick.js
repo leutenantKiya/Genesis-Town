@@ -20,17 +20,24 @@
   var GT = window.GT;
   if (!GT) return;
 
-  var opts = [], sig = '', sel = 0, seen = '', shown = false, el = null, lastPoll = 0;
+  var opts = [], sig = '', sel = 0, shown = false, el = null, lastPoll = 0;
+  // Steadiness: a different set of options (or none, after walking off) must hold this long before the panel changes,
+  // so a one-poll blip at a tile edge (the player's moving flag, the boat's reach) never makes it blink between one and
+  // two options. A window, fishing or a fight still hides it at once.
+  var STEADY_MS = 250, pend = null, pendSince = 0;
+  // The side (right of the player or left) is chosen when the panel appears and then kept: it only moves when the
+  // panel no longer fits there, so a camera nudge or a turn of the head never swaps it from side to side.
+  var side = null;
   var screen = null, cv = null, unit = { k: 1, T: 12 };
 
   function phone() { return document.documentElement.classList.contains('gt-phone'); }
-  function blocked() {
-    var pl = GT.player, h = document.documentElement.classList;
-    return !pl || pl.moving || GT.isUiOpen() || h.contains('gt-fishing') || h.contains('gt-fighting') ||
-      (window.GT_FISH && GT_FISH.active && GT_FISH.active());
+  function busy() { // hides the panel at once
+    var h = document.documentElement.classList;
+    return GT.isUiOpen() || h.contains('gt-fishing') || h.contains('gt-fighting') || !!(window.GT_FISH && GT_FISH.active && GT_FISH.active());
   }
   function list() {
-    if (blocked() || !window.GT_ACTBTN || !GT_ACTBTN.list) return [];
+    var pl = GT.player;
+    if (!pl || pl.moving || busy() || !window.GT_ACTBTN || !GT_ACTBTN.list) return [];
     try { return GT_ACTBTN.list(); } catch (e) { return []; }
   }
   function wantsPanel(l) {
@@ -74,17 +81,20 @@
     return true;
   }
 
-  // poll about every 100 ms; a new set of options must hold for one poll before it shows (no flicker when walking past)
+  // poll about every 100 ms; a changed set of options takes over only after it has held for STEADY_MS
+  function hide() { if (shown) { el.hidden = true; shown = false; } side = null; }
   function refresh(now) {
     if (now - lastPoll < 100) return;
     lastPoll = now;
-    var l = list();
-    if (!wantsPanel(l)) { opts = l; if (shown) { el.hidden = true; shown = false; } sig = ''; seen = ''; return; }
-    var s = l.map(function (o) { return o.id + '|' + o.label; }).join('\n');
-    if (s !== sig) {
-      if (seen !== s) { seen = s; if (shown) { el.hidden = true; shown = false; } opts = l; return; }
-      sig = s; sel = 0; opts = l; paint();
-    } else opts = l.map(function (o, i) { return o; });
+    if (busy()) { hide(); opts = []; sig = ''; pend = null; return; }
+    var l = list(), want = wantsPanel(l);
+    var s = want ? l.map(function (o) { return o.id + '|' + o.label; }).join('\n') : '';
+    if (s === sig) { pend = null; opts = l; return; } // nothing changed: keep the fresh run functions (and a phone's single option for #btnAct)
+    if (pend !== s) { pend = s; pendSince = now; return; }  // a change: wait until it holds
+    if (now - pendSince < STEADY_MS) return;
+    pend = null; sig = s;
+    if (!want) { opts = l; hide(); return; }
+    sel = 0; opts = l; paint();
     if (!shown) { el.hidden = false; shown = true; }
   }
 
@@ -96,10 +106,15 @@
     var k = rc.width / vw, w = el.offsetWidth, h = el.offsetHeight;
     var cx = rc.left - rs.left + (a.x + T / 2) * k, cy = rc.top - rs.top + (a.y + T / 2) * k;
     var gap = Math.max(10, T * 0.7 * k), roomR = rs.width - cx - gap, roomL = cx - gap;
-    var right = roomR >= roomL;
-    // do not sit on the tile being faced: if the roomier side is where the player looks, take the other when it fits
-    if (right && p.dir === 'right' && roomL >= w) right = false;
-    else if (!right && p.dir === 'left' && roomR >= w) right = true;
+    if (side === null) { // first placement: the roomier side, but not on the tile being faced when the other fits
+      var r0 = roomR >= roomL;
+      if (r0 && p.dir === 'right' && roomL >= w) r0 = false;
+      else if (!r0 && p.dir === 'left' && roomR >= w) r0 = true;
+      side = r0 ? 'right' : 'left';
+    } else if (side === 'right' ? roomR < w : roomL < w) { // kept until it no longer fits there
+      if ((side === 'right' ? roomL : roomR) >= w) side = side === 'right' ? 'left' : 'right';
+    }
+    var right = side === 'right';
     var left = right ? cx + gap : cx - gap - w;
     left = Math.max(4, Math.min(rs.width - w - 4, left));
     var top = Math.max(4, Math.min(rs.height - h - 4, cy - h / 2));
