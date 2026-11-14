@@ -3,6 +3,8 @@
  * until DOMContentLoaded / next tick so every GT.register() has run).  Contract notes beyond SPEC2.md:
  *
  *  GT.register(mod)       mod = {id, init(GT), onWorld(world), onSceneEnter(scene), onFrame(dt), onInteract(ctx)->bool, onKey(e)->bool}
+ *  GT.interact(mode, {skip:[modIds]})  presses F with those mods' onInteract sitting out (used by the interaction picker,
+ *                         mods/actionpick.js; a mod adds an option beside the faced tile's with GT_ACTBTN.addExtra(fn))
  *                         onInteract ctx = {mode:'talk'|'message'|'bump', scene, tile:{x,y}, tileType, npc|null, door|null, building|null, locked:bool}
  *                           mode 'talk' = A / Space / Enter / Z, 'message' = E, 'bump' = walking into a locked door.
  *                           tileType is the faced tile ('door' for door tiles, 'npc' is NOT used: look at ctx.npc).
@@ -2010,8 +2012,12 @@ function callOne(mod, hook, args){
   try { return mod[hook].apply(mod, args); } catch(e){ console.error('[GT mod ' + (mod.id || '?') + '] ' + hook + ' failed', e); return undefined; }
 }
 function callMods(hook, args){ for (var i = 0; i < mods.length; i++) callOne(mods[i], hook, args); }
+var interactSkip = null; // mod ids that sit out the current interact() (the interaction picker, mods/actionpick.js)
 function callModsBool(hook, args){
-  for (var i = 0; i < mods.length; i++) if (callOne(mods[i], hook, args) === true) return true;
+  for (var i = 0; i < mods.length; i++){
+    if (interactSkip && hook === 'onInteract' && interactSkip.indexOf(mods[i].id) >= 0) continue;
+    if (callOne(mods[i], hook, args) === true) return true;
+  }
   return false;
 }
 
@@ -2055,7 +2061,13 @@ function engage(npc){
 }
 function keeperOf(sc){ var r = null; sc.npcs.forEach(function(n){ if (n.key && /:keeper$/.test(n.key)) r = n; }); return r; }
 
-function interact(mode){
+/* interact(mode, opts): opts.skip = ids of mods whose onInteract must not claim this press. The interaction picker uses it
+   so "Mancing" next to the boat is not taken over by the boat's own claim (mods/actionpick.js). */
+function interact(mode, opts){
+  interactSkip = opts && opts.skip && opts.skip.length ? opts.skip : null;
+  try { return interactNow(mode); } finally { interactSkip = null; }
+}
+function interactNow(mode){
   mode = mode || 'talk';
   if (tr || modals.length || unfoldT > 0) return;
   if (mapOpen){ setMap(false); return; }
@@ -2837,7 +2849,7 @@ var GT = {
   // extras
   facing: function(){ return facingTile(); },
   addHudButton: addHudButton, hotkey: hotkey, setHudDay: setHudDay,
-  interact: function(mode){ return interact(mode || 'talk'); },
+  interact: function(mode, opts){ return interact(mode || 'talk', opts); },
   // A point on the screen (e.g. a mouse click) to the map tile under it, in the current scene
   screenToTile: function(clientX, clientY){
     if (v3on()) return view3d.pick(clientX, clientY);
@@ -2940,7 +2952,7 @@ function exposeDebug(){
     reachable: reachableReport,
     teleport: function(x, y, dir){ P.x = P.fx = x; P.y = P.fy = y; P.moving = false; P.t = 0; if (dir) P.dir = dir; },
     isWalkable: function(x, y){ var m = scene.map; return inb(m,x,y) && m.walk[y*m.w + x] === 1; },
-    interact: function(mode){ interact(mode); },
+    interact: function(mode, opts){ interact(mode, opts); },
     setMap: setMap,
     closeDialog: function(){ closeDialog(); },
     enterHouse: function(b){ enterBuilding(b); },

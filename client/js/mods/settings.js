@@ -238,7 +238,7 @@
   // walk, fish or fight. The probes below read the same data the engine and the mods act on; a mod whose interaction
   // is not covered adds its own with GT_ACTBTN.add(fn): fn(ctx) returns {icon, label} or null, where ctx is
   // {scene, map, tile:{x,y}, idx, tileType, npc, door, player, world}. Probes added this way run first.
-  var actBtn = null, actIco = null, actLbl = null, actProbes = [], actSeen = '', actOn = '', actAt = 0;
+  var actBtn = null, actIco = null, actLbl = null, actProbes = [], actExtras = [], actSeen = '', actOn = '', actAt = 0;
 
   function npcOn(sc, x, y) {
     var a = sc.npcs || [];
@@ -253,7 +253,7 @@
       case 'water': return out ? { icon: '🎣', label: $t('Mancing') } : null;
       case 'tree': return out ? { icon: '🪓', label: $t('Tebang') } : null;
       case 'rock': return out ? { icon: '⛏️', label: $t('Tambang') } : null;
-      case 'grass': case 'tallgrass': { var gc = window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account && GT_CHAIN.state.cfg && GT_CHAIN.state.cfg.econ && GT_CHAIN.state.cfg.econ.grass; return out && gc && gc.tiles.indexOf(c.tileType) >= 0 ? { icon: '🌾', label: $t('Cari benih') } : null; } // grass: a small chance of a wheat seed (mods/chain.js searchGrass)
+      case 'grass': case 'tallgrass': { var gc = window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account && GT_CHAIN.state.cfg && GT_CHAIN.state.cfg.econ && GT_CHAIN.state.cfg.econ.grass; return out && gc && gc.tiles.indexOf(c.tileType) >= 0 ? { icon: '🌾', label: $t('Cari benih'), quiet: true } : null; } // grass: a small chance of a wheat seed (mods/chain.js searchGrass)
       case 'table': return { icon: '🔨', label: $t('Crafting') }; // every table is a workbench (chain.js)
       case 'chest': return out ? null : { icon: '📦', label: $t('Buka') };
       case 'bed': return out ? null : { icon: '😴', label: $t('Tidur') };
@@ -283,12 +283,7 @@
         // trade.js opens these on interact while you face them (walkable plaza tiles with no NPC, so nothing else shows the button)
         if (lm && at(lm.board)) return { icon: '🏆', label: $t('Papan Juara') };
         if (lm && at(lm.gamble)) return { icon: '🎲', label: $t('Main') };
-        var fe = V.ferryOf && V.ferryOf(L);
-        if (fe) {
-          var near = function (q) { return Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y)) <= 2; }; // boarding reach (ferry.js REACH)
-          var bp = window.GT_FERRY && GT_FERRY.pos ? { x: Math.round(GT_FERRY.pos.x), y: Math.round(GT_FERRY.pos.y) } : fe.wa; // the one boat, wherever it floats
-          if ((t.x === bp.x && t.y === bp.y) || near(bp)) return { icon: '⛵', label: $t('Perahu') };
-        }
+        // the boat is not decided here: mods/ferry.js adds it as an extra option (GT_ACTBTN.addExtra), so it can sit beside fishing
       } catch (e) { /* a village without these spots */ }
       var fun = L.fun || (L.layout && L.layout.fun), car = fun && fun.carousel; // the carousel lives under GT.world.layout.fun
       if (car && Math.max(Math.abs(t.x - (car.x + 0.5)), Math.abs(t.y - (car.y + 0.5))) <= 3 && Math.max(Math.abs(p.x - (car.x + 0.5)), Math.abs(p.y - (car.y + 0.5))) <= 3) return { icon: '🎠', label: $t('Naik') };
@@ -308,17 +303,23 @@
     // the Homeland's hoe grid and empty lots are not decided here: mods/homeland.js registers its own probe (GT_ACTBTN.add)
     return null;
   }
-  function actionAhead() {
+  // the probe context of the tile in front of the player (null while there is no scene or player yet)
+  function actCtx() {
     var sc = GT.scene, pl = GT.player, f = GT.facing && GT.facing();
     if (!sc || !sc.map || !pl || !f) return null;
-    if (GT.sitting) return GT.sitting.sleep ? { id: 'sit', icon: '🧍', label: $t('Bangun dari kasur') } : { id: 'sit', icon: '🧍', label: $t('Berdiri') };
-    var m = sc.map;
-    if (f.x < 0 || f.y < 0 || f.x >= m.w || f.y >= m.h) return null;
+    var m = sc.map, inb = f.x >= 0 && f.y >= 0 && f.x < m.w && f.y < m.h;
+    if (!inb) return { scene: sc, map: m, tile: { x: f.x, y: f.y }, idx: -1, tileType: null, npc: null, door: null, player: pl, world: GT.world, outside: true };
     var idx = f.y * m.w + f.x, tt = m.tiles[idx];
     var npc = npcOn(sc, f.x, f.y);
     if (!npc && tt === 'counter' && sc.kind === 'mart') npc = { name: '', key: 'x:keeper' };
     var door = m.door && m.door.get(idx) || null;
-    var c = { scene: sc, map: m, tile: { x: f.x, y: f.y }, idx: idx, tileType: door ? 'door' : tt, npc: npc, door: door, player: pl, world: GT.world };
+    return { scene: sc, map: m, tile: { x: f.x, y: f.y }, idx: idx, tileType: door ? 'door' : tt, npc: npc, door: door, player: pl, world: GT.world };
+  }
+  function actionAhead() {
+    var c = actCtx();
+    if (!c || c.outside) return null;
+    if (GT.sitting) return GT.sitting.sleep ? { id: 'sit', icon: '🧍', label: $t('Bangun dari kasur') } : { id: 'sit', icon: '🧍', label: $t('Berdiri') };
+    var m = c.map, idx = c.idx, npc = c.npc, door = c.door;
     var r = null, i;
     for (i = 0; i < actProbes.length && !r; i++) { try { r = actProbes[i](c) || null; } catch (e) { r = null; } }
     if (!r) r = spotAct(c);
@@ -329,6 +330,26 @@
     if (!r) r = tileAct(c);
     return r;
   }
+  // EVERY interaction available at this spot, for the picker (mods/actionpick.js): [{id, icon, label, run, quiet?}].
+  // The first is what the key did before (actionAhead, run through GT.interact with the extras' mods sitting out);
+  // the others come from extra probes (GT_ACTBTN.addExtra): fn(ctx) -> option | [option] | null, option = {id, icon,
+  // label, mod, run}; `mod` is the mod id whose onInteract claims that same press, `exclusive` makes it the only choice.
+  function actionList() {
+    var c = actCtx();
+    if (!c) return [];
+    var extras = [], i, r;
+    for (i = 0; i < actExtras.length; i++) {
+      try { r = actExtras[i](c); } catch (e) { r = null; }
+      if (r) extras = extras.concat(Array.isArray(r) ? r : [r]);
+    }
+    extras = extras.filter(function (o) { return o && o.label && typeof o.run === 'function'; });
+    var ex = extras.filter(function (o) { return o.exclusive; })[0];
+    if (ex) return [ex];
+    var skip = extras.map(function (o) { return o.mod; }).filter(Boolean);
+    var main = actionAhead(), list = [];
+    if (main) list.push({ id: main.id || 'main', icon: main.icon, label: main.label, quiet: !!main.quiet, run: function () { GT.interact('talk', { skip: skip }); } });
+    return list.concat(extras);
+  }
   function actHide() { if (actBtn && !actBtn.hidden) actBtn.hidden = true; actOn = ''; actSeen = ''; }
   function actTick() {
     if (!actBtn) return;
@@ -338,7 +359,7 @@
     var pl = GT.player;
     if (!document.documentElement.classList.contains('gt-phone') || !pl || pl.moving || GT.isUiOpen() ||
         (window.GT_FISH && GT_FISH.active()) || document.documentElement.classList.contains('gt-fighting')) return actHide();
-    var a = actionAhead();
+    var P = window.GT_ACTPICK, a = P && P.selected ? P.selected() : actionAhead(); // with several choices the button runs the picked one
     if (!a) return actHide();
     var key = a.icon + '|' + a.label;
     if (actOn === key) return; // already showing it
@@ -353,13 +374,13 @@
     actBtn = document.getElementById('btnAct');
     if (!actBtn) return;
     actIco = actBtn.querySelector('.ico'); actLbl = actBtn.querySelector('.lbl');
-    function press() { if (!GT.isUiOpen()) GT.interact('talk'); }
+    function press() { if (GT.isUiOpen()) return; if (window.GT_ACTPICK && GT_ACTPICK.run()) return; GT.interact('talk'); }
     actBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); actBtn.classList.add('down'); press(); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) { actBtn.addEventListener(t, function () { actBtn.classList.remove('down'); }); });
     actBtn.addEventListener('click', function (e) { if (e.detail === 0) press(); e.currentTarget.blur(); }); // the keyboard's Enter / Space
     actBtn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   }
-  window.GT_ACTBTN = { add: function (fn) { if (typeof fn === 'function') actProbes.push(fn); }, ahead: actionAhead };
+  window.GT_ACTBTN = { add: function (fn) { if (typeof fn === 'function') actProbes.push(fn); }, addExtra: function (fn) { if (typeof fn === 'function') actExtras.push(fn); }, ahead: actionAhead, list: actionList };
 
   // The phone's joystick (#joy, bottom left of the game view): push the knob to walk. In the 2.5D view outdoors it is
   // analog (any direction, GT.setStick); in 2D and indoors it holds the nearest of the four directions (GT.padDir).

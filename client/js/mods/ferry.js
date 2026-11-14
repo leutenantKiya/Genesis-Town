@@ -139,6 +139,14 @@
     return true;
   }
 
+  // the interaction picker (mods/actionpick.js): next to the boat, "Perahu" is one choice beside whatever else the faced tile offers
+  // (fishing at the lake); aboard, stepping off is the only choice
+  if (window.GT_ACTBTN && GT_ACTBTN.addExtra) GT_ACTBTN.addExtra(function () {
+    if (aboard) return { id: 'land', exclusive: true, mod: 'ferry', icon: '⛵', label: $t('Turun'), run: function () { GT.interact('talk'); } };
+    if (busy || !landing() || otherSteers()) return null;
+    return { id: 'boat', mod: 'ferry', icon: '⛵', label: $t('Perahu'), run: row };
+  });
+
   /* a small rowing boat on the water tile: hull, a plank seat, an oar (2D only; the 2.5D view has a real model) */
   function drawBoat(g, x, y, T) {
     var u = T / 12;
@@ -205,8 +213,8 @@
     var over = !!box && !GT.isUiOpen() && overBoat(mouse.x, mouse.y), cv = document.getElementById('cv');
     if (over !== cursorMine && cv) { cursorMine = over; cv.style.cursor = over ? 'pointer' : ''; } // only the cursor this mod set is put back
     if (on) drawOutline(ctx, T);
-    if (aboard) { // the hint over the boat: where you can step off
-      if (!window.GT_THEME || !GT_THEME.label || !shores().length) return;
+    if (aboard) { // the hint over the boat: where you can step off (the picker beside the player says it when it is loaded)
+      if (window.GT_ACTPICK || !window.GT_THEME || !GT_THEME.label || !shores().length) return;
       var pb = GT.at(p.x, p.y);
       GT_THEME.label(ctx, '⛵ ' + $t('Spasi: turun ke darat'), pb.x + T / 2, v3 ? pb.y - 4 : pb.y - T * 0.9, { tone: 'dark', size: 6, bold: true });
       return;
@@ -216,7 +224,7 @@
       var a = GT.at(P.x, P.y);
       GT_THEME.label(ctx, '⛵ ' + $t('Perahu'), a.x + T / 2, v3 ? a.y + T - 8 : a.y - 1, { tone: 'paper', size: 6, bold: true });
     }
-    if (!landing() || otherSteers()) return;
+    if (!landing() || otherSteers() || window.GT_ACTPICK) return; // beside the player the picker (actionpick.js) offers "Perahu"
     // the hint floats over the player, in world coordinates like the boat
     var pa = GT.at(p.x, p.y);
     GT_THEME.label(ctx, '⛵ ' + $t('Spasi: naik perahu'), pa.x + T / 2, v3 ? pa.y - 4 : pa.y - T * 0.9, { tone: 'dark', size: 6, bold: true });
