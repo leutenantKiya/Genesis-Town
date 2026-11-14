@@ -134,7 +134,9 @@
   function wantsFull() {
     if (st.layout === 'boxed') return false;
     if (st.layout === 'full' || fsElement()) return !wantsPhone();
-    return window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 900 && !wantsPhone();
+    // by default the game fills the window on any screen with a mouse, whatever its width (2026-11-14); a phone gets its own layout
+    var touchOnly = window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches; // a tablet keeps the boxed view with its D-pad
+    return !wantsPhone() && !touchOnly;
   }
   function applyText() { document.documentElement.style.setProperty('--ts', String(st.textSize || 1)); }
   function applyLayout() {
