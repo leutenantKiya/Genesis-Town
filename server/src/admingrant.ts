@@ -36,12 +36,15 @@ export class AdminGrants {
     return row.s;
   }
 
-  /** `to`: a unique name, name#tag, or an account id. 404 unknown (merchants, the town and guests are not players), 409 ambiguous. */
+  /** `to`: a unique name, name#tag, or an account id; a merchant only by its exact account id (working capital for its
+   *  shop). 404 unknown (the town and guests are not players), 409 ambiguous. */
   resolve(to: unknown): string {
     const q = typeof to === 'string' ? to.trim().slice(0, 80) : '';
     if (!q) throw new HttpError(400, 'Who gets the coin?');
     const { store, social } = this.d;
     if (store.isPlayer(q)) return q;
+    const { market } = this.d.game;
+    if (market.ids().some((id) => market.account(id) === q)) return q;
     const acct = social.accountOf(q);
     if (!acct) {
       if (social.isAmbiguous(q)) throw new HttpError(409, `Several players are named ${q}. Use name#tag.`);

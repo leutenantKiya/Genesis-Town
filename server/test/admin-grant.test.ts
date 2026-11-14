@@ -98,7 +98,7 @@ test('an admin moves coin from the town treasury to a player: ledger rows, histo
   } finally { unquiet(); h.close(); }
 });
 
-test('unknown, ambiguous, merchant, town and bad amounts are refused', async () => {
+test('unknown, ambiguous, town and bad amounts are refused; a merchant is reached by its account id only', async () => {
   const h = await harness();
   const unquiet = quiet();
   try {
@@ -108,12 +108,12 @@ test('unknown, ambiguous, merchant, town and bad amounts are refused', async () 
     const amb = await h.grant('budi', 10);
     assert.equal(amb.status, 409); assert.match(amb.json.error, /Several players/);
     assert.equal((await h.grant('budi#77777', 10)).status, 200);
-    assert.equal((await h.grant('sari.gt.test', 10)).status, 404, 'a merchant account');
-    assert.equal((await h.grant('Sari', 10)).status, 404);
+    assert.equal((await h.grant('sari.gt.test', 10)).status, 200, 'a merchant account: working capital for its shop');
+    assert.equal((await h.grant('Sari', 10)).status, 404, 'not by its name');
     assert.equal((await h.grant(TOWN, 10)).status, 404, 'the town account');
     assert.equal((await h.grant('', 10)).status, 400);
     for (const bad of [0, -5, 1.5, '10', null]) assert.equal((await h.grant(Q, bad)).status, 400, String(bad));
-    assert.equal(h.ledger().length, 2, 'only the one good grant');
+    assert.equal(h.ledger().length, 4, 'only the two good grants');
   } finally { unquiet(); h.close(); }
 });
 
