@@ -121,7 +121,8 @@
     "queueMax": 8,
     "meals": 2,
     "trade": { "enabled": true, "marginPct": 5, "perHour": 2, "holdMax": 5, "minWallet": 100 },
-    "craft": { "enabled": true, "marginPct": 0, "perHour": 2, "fillPct": 100 }
+    "craft": { "enabled": true, "marginPct": 0, "perHour": 2, "fillPct": 100 },
+    "gather": { "enabled": true, "goods": ["fish", "wood", "wheat", "ore"], "perHour": 2, "dailyMax": 20, "minPricePct": 100, "fillPct": 100, "keepMax": 10 }
   },
   "shops": {
     "rent": 40,

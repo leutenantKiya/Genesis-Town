@@ -120,7 +120,8 @@ test('trace follows the coin: wallet -> merchants, treasury -> wallet, merchant 
 
 test('the townsfolk buy to sell again at the admin\'s margin, negative allowed, and the settings live in the database', async () => {
   const { game, clock, bots } = await world();
-  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade' AND ref NOT LIKE '%-c' AND ref NOT LIKE '%-e'").all(WALLET) as Array<{ delta: number; ref: string }>;
+  bots.control({ settings: { gather: { enabled: false } } }); // gathering has its own test below
+  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade' AND ref NOT LIKE '%-c' AND ref NOT LIKE '%-e' AND ref NOT LIKE '%-g'").all(WALLET) as Array<{ delta: number; ref: string }>;
   // off: no trading at all
   bots.control({ settings: { trade: { enabled: false } } });
   for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
@@ -203,6 +204,7 @@ test('trading and crafting fund themselves from the treasury above its reserve, 
 
 test('the admin sees the townsfolk bag: books, chain, held to resell and spare', async () => {
   const { game, clock, bots } = await world();
+  bots.control({ settings: { gather: { enabled: false } } }); // gathering has its own test below
   bots.control({ settings: { trade: { enabled: true, marginPct: -90, perHour: 4, holdMax: 5, minWallet: 0 }, craft: { enabled: false } } });
   for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
   // a good the wallet holds outside the trading stock shows as spare
@@ -240,6 +242,7 @@ test('every resident eats 2 meals a game day from the bag, buying food when the 
 
 test('the admin sees why the townsfolk do not buy, sell or craft', async () => {
   const { game, clock, bots } = await world();
+  bots.control({ settings: { gather: { enabled: false } } }); // gathering has its own test below
   for (let h = 0; h < 2; h++) { clock.advanceHours(1); await game.step(); }
   bots.control({ settings: { trade: { enabled: true, marginPct: 500 }, craft: { enabled: true, marginPct: 500 } } });
   let why = bots.status(1).why;
@@ -257,4 +260,34 @@ test('the admin sees why the townsfolk do not buy, sell or craft', async () => {
   bots.control({ settings: { trade: { enabled: true, marginPct: -90, minWallet: 0 } } });
   why = bots.status(1).why;
   assert.ok(why.buy.some((b: any) => b.code === 'ok'), 'some good can be traded at -90%');
+});
+
+test('the townsfolk fish, chop and mine what is scarce or dear, cook with it, and stock the shelves', async () => {
+  const { game, clock, bots } = await world();
+  const sum = (kind: string, token: string) => (game.gs.db.prepare('SELECT COALESCE(SUM(delta), 0) AS n FROM ledger WHERE account = ? AND kind = ? AND token = ?').get(WALLET, kind, token) as { n: number }).n;
+  // a price nothing reaches: no gathering while the merchants have stock
+  bots.control({ settings: { trade: { enabled: false }, craft: { enabled: false }, gather: { enabled: true, goods: ['fish', 'wood', 'ore'], perHour: 2, dailyMax: 6, minPricePct: 500, fillPct: 200, keepMax: 4 } } });
+  for (let h = 0; h < 3; h++) { clock.advanceHours(1); await game.step(); }
+  assert.equal(sum('resident_gather', 'fish'), 0, 'fish is cheap enough');
+  const why0 = bots.status(1).why.gather;
+  assert.equal(why0.find((x: any) => x.token === 'fish')!.code, 'cheap');
+  assert.equal(why0.find((x: any) => x.token === 'wheat')!.code, 'not_picked');
+  // always gather: fish goes to the fish shelf, ore (nobody sells it) stays in the bag up to keepMax, at most dailyMax a day
+  bots.control({ settings: { gather: { minPricePct: 0 } } });
+  for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
+  assert.ok(sum('resident_gather', 'fish') > 0, 'fished');
+  assert.equal(game.gs.balance(WALLET, 'ore'), 4, 'ore kept up to keepMax');
+  const day = game.clock.time().settleDay;
+  for (const g of ['fish', 'wood', 'ore']) assert.ok(game.residents.gatheredOn(day, g) <= 6, g + ': at most dailyMax a day');
+  const st = bots.status(0);
+  assert.ok(st.gather.soldUnits > 0 && (st.gather.soldBy.fish ?? 0) > 0, 'fish sold to a shelf');
+  // cooking: with their own fish and wood the townsfolk make grilled fish (and tools from their ore) and stock the shelves
+  bots.control({ settings: { craft: { enabled: true, marginPct: 0, perHour: 4, fillPct: 300 } } });
+  await hours(game, clock, () => sum('resident_craft', 'meal') > 0);
+  assert.ok(sum('resident_craft', 'meal') > 0, 'cooked grilled fish');
+  const st2 = bots.status(0);
+  assert.ok(st2.craft.profit >= 0, 'never at a loss');
+  assert.ok(st2.why.craft.every((c: any) => c.code !== 'no_ingredient'), 'gathered goods are not missing');
+  assert.throws(() => bots.control({ settings: { gather: { goods: ['bread'] } } }), /goods must be a list of/);
+  assert.throws(() => bots.control({ settings: { gather: { dailyMax: 500 } } }), /dailyMax must be a number from 0 to 100/);
 });

@@ -419,6 +419,7 @@
     ui.botsMeals = $('div', 'adm-card'); v.appendChild(ui.botsMeals);
     ui.botsPrice = $('div', 'adm-card'); v.appendChild(ui.botsPrice);
     ui.botsTrade = $('div', 'adm-card'); v.appendChild(ui.botsTrade);
+    ui.botsGather = $('div', 'adm-card'); v.appendChild(ui.botsGather);
     ui.botsCraft = $('div', 'adm-card'); v.appendChild(ui.botsCraft);
     ui.botsPeople = $('div', 'adm-card'); v.appendChild(ui.botsPeople);
     ui.botsShops = $('div', 'adm-card'); v.appendChild(ui.botsShops);
@@ -521,7 +522,7 @@
     el.textContent = '';
     var s = d.settings.craft, L = d.limits, cr = d.craft;
     var broke = d.wallet.coin < d.settings.trade.minWallet && !d.wallet.treasuryFree;
-    el.appendChild($('div', 'chain-h', $t('Crafting warga')));
+    el.appendChild($('div', 'chain-h', $t('Crafting & memasak warga')));
     el.appendChild($('p', 'chain-dim', $t('Tugas warga menjaga harga tetap wajar. Kalau membuat barang (misalnya roti dari gandum) lebih murah daripada harga jual pedagang, warga membuatnya dan menjualnya ke pedagang itu seharga biaya buatnya. Stok pedagang naik, jadi harga jualnya turun. Kalau biaya buat lebih mahal, warga tidak crafting. Rak diisi sampai batas % dari target; di atas 100% harga makin turun.')));
     var g = $('div', 'adm-grid');
     g.appendChild(stat($t('Bahan dibeli'), num(cr.inputs) + ' ' + $t('koin'), cr.fees ? $t('Biaya craft: {0}', [num(cr.fees)]) : null));
@@ -595,8 +596,9 @@
   // why the townsfolk buy, sell or craft right now, or not (adminbots.ts why(): the same rules, read without acting)
   function whyText(x, kind) {
     switch (x.code) {
-      case 'ok': return kind === 'sell' ? $t('Bisa dijual sekarang ke {0} seharga {1}', [x.to, num(x.bid)]) : kind === 'craft' ? $t('Bisa: biaya buat {0} < harga jual {1} di {2}', [num(x.cost), num(x.ask), x.to]) : $t('Bisa: beli {0} di {1}, dibayar {2} oleh {3}', [num(x.ask), x.from, num(x.bid), x.to]);
-      case 'off': return kind === 'craft' ? $t('Crafting dimatikan admin') : $t('Dagang dimatikan admin');
+      case 'ok': if (kind === 'gather') return x.ask == null ? $t('Bisa: stok pedagang habis, warga mengumpulkan (hari ini {0})', [num(x.today)]) : $t('Bisa: harga {0} di {1} ≥ {2} (hari ini {3})', [num(x.ask), x.from, num(x.need), num(x.today)]);
+        return kind === 'sell' ? $t('Bisa dijual sekarang ke {0} seharga {1}', [x.to, num(x.bid)]) : kind === 'craft' ? $t('Bisa: biaya buat {0} < harga jual {1} di {2}', [num(x.cost), num(x.ask), x.to]) : $t('Bisa: beli {0} di {1}, dibayar {2} oleh {3}', [num(x.ask), x.from, num(x.bid), x.to]);
+      case 'off': return kind === 'craft' ? $t('Crafting dimatikan admin') : kind === 'gather' ? $t('Mengumpulkan dimatikan admin') : $t('Dagang dimatikan admin');
       case 'no_seller': return $t('Tidak ada pedagang yang menjual');
       case 'withdrawn': return $t('Ditarik dari pasar (harga Pasar Pemain tidak normal)');
       case 'out_of_stock': return $t('Stok habis di {0}', [x.from]);
@@ -612,6 +614,11 @@
       case 'ingredient_out': return $t('Stok bahan {0} habis', [x.input]);
       case 'too_costly': return $t('Biaya buat {0} (dengan selisih {1}) tidak lebih murah dari harga jual {2} di {3}', [num(x.cost), num(x.need), num(x.ask), x.to]);
       case 'shop_broke': return $t('Uang {0} tidak cukup membayar biaya buat', [x.to]);
+      case 'await_gather': return $t('Menunggu warga mengumpulkan {0}', [x.input]);
+      case 'not_picked': return $t('Tidak dipilih admin');
+      case 'cheap': return $t('Harga {0} di {1} masih di bawah {2}: biar pemain yang mengumpulkan', [num(x.ask), x.from, num(x.need)]);
+      case 'day_max': return $t('Sudah {0} hari ini (batas harian)', [num(x.today)]);
+      case 'bag_full': return $t('Tas sudah berisi {0} (batas simpan)', [num(x.spare)]);
       default: return x.code;
     }
   }
@@ -634,7 +641,8 @@
     }
     section($t('Beli untuk dijual lagi'), y.buy, 'buy', $t('Tidak ada barang yang dijual sekaligus dibeli pedagang.'));
     section($t('Jual barang yang dipegang'), y.sell, 'sell', $t('Bot tidak memegang barang untuk dijual.'));
-    section($t('Crafting'), y.craft, 'craft', $t('Tidak ada resep.'));
+    section($t('Memancing & mengumpulkan'), y.gather || [], 'gather', $t('Tidak ada bahan mentah.'));
+    section($t('Crafting & memasak'), y.craft, 'craft', $t('Tidak ada resep.'));
   }
   // the meals rule: foods a day per resident, who has eaten today, what they ate and spent on food
   function renderMeals(d) {
@@ -653,6 +661,53 @@
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); });
     f.appendChild($('span', null, $t('Makan per hari'))); f.appendChild(inp); f.appendChild(btn($t('Simpan'), save, 'primary'));
     el.appendChild(f);
+  }
+  // fishing, chopping, harvesting and mining: settings (saved on the server), the goods picked, and what was caught and sold
+  function renderGather(d) {
+    var el = ui.botsGather; if (!el || typingIn(el) || !d.settings || !d.settings.gather || !d.why) return;
+    el.textContent = '';
+    var s = d.settings.gather, L = d.limits, gs = d.gather || { caught: {}, sold: 0, soldUnits: 0, soldBy: {} };
+    el.appendChild($('div', 'chain-h', $t('Memancing & mengumpulkan')));
+    el.appendChild($('p', 'chain-dim', $t('Kalau bahan langka atau mahal (tidak ada stok, atau harga termurah minimal % dari harga dasar), warga memancing ikan, menebang kayu, memanen gandum, atau menambang bijih. Hasilnya dipakai dulu untuk memasak dan crafting, sisanya dijual ke pedagang yang menjual bahan itu, jadi harganya turun. Bijih tidak dijual siapa pun, jadi disimpan untuk membuat beliung.')));
+    var g = $('div', 'adm-grid');
+    g.appendChild(stat($t('Didapat'), Object.keys(gs.caught).map(function (k) { return num(gs.caught[k]) + ' ' + k; }).join(', ') || '0'));
+    g.appendChild(stat($t('Dijual ke rak'), num(gs.sold) + ' ' + $t('koin'), num(gs.soldUnits) + 'x'));
+    el.appendChild(g);
+    var form = $('div', 'adm-form'), fields = {}, picked = s.goods.slice();
+    var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!s.enabled;
+    on.appendChild($('span', null, $t('Mengumpulkan aktif'))); on.appendChild(cb); form.appendChild(on);
+    var gr = $('div', 'adm-frow'); gr.appendChild($('span', null, $t('Bahan')));
+    var chips = $('div', 'adm-chips');
+    d.why.gather.forEach(function (x) {
+      var b = btn(x.name, function () {
+        var i = picked.indexOf(x.token); if (i >= 0) picked.splice(i, 1); else picked.push(x.token);
+        b.classList.toggle('on', picked.indexOf(x.token) >= 0); b.setAttribute('aria-pressed', picked.indexOf(x.token) >= 0 ? 'true' : 'false');
+      }, 'adm-chip' + (picked.indexOf(x.token) >= 0 ? ' on' : ''));
+      b.setAttribute('aria-pressed', picked.indexOf(x.token) >= 0 ? 'true' : 'false');
+      chips.appendChild(b);
+    });
+    gr.appendChild(chips); form.appendChild(gr);
+    [['perHour', $t('Per jam (tiap bahan)'), s.perHour, 1, null],
+     ['dailyMax', $t('Maks per hari (tiap bahan)'), s.dailyMax, 1, null],
+     ['minPricePct', $t('Kumpulkan kalau harga'), s.minPricePct, 10, $t('% dari harga dasar atau lebih (atau stok habis)')],
+     ['keepMax', $t('Simpan di tas maks'), s.keepMax, 1, $t('per bahan')],
+     ['fillPct', $t('Isi rak sampai'), s.fillPct, 10, $t('% dari target stok pedagang')]].forEach(function (f) {
+      var row = $('label', 'adm-frow'); row.appendChild($('span', null, f[1]));
+      var i = $('input'); i.type = 'number'; i.min = String(L[f[0]][0]); i.max = String(L[f[0]][1]); i.step = String(f[3]); i.value = String(f[2]);
+      row.appendChild(i); if (f[4]) row.appendChild($('span', 'chain-dim', f[4]));
+      fields[f[0]] = i; form.appendChild(row);
+    });
+    el.appendChild(form);
+    var save = function () {
+      var v = {}, bad = null;
+      Object.keys(fields).forEach(function (k) { var n = Number(fields[k].value); if (fields[k].value === '' || !(n >= L[k][0] && n <= L[k][1])) bad = bad || k; v[k] = n; });
+      if (bad) { GT.toast($t('Angka di luar batas: {0}', [bad])); return; }
+      if (document.activeElement && el.contains(document.activeElement)) document.activeElement.blur();
+      botsSet({ settings: { gather: { enabled: cb.checked, goods: picked, perHour: v.perHour, dailyMax: v.dailyMax, minPricePct: v.minPricePct, keepMax: v.keepMax, fillPct: v.fillPct } } }, $t('Pengaturan warga disimpan.'));
+    };
+    Object.keys(fields).forEach(function (k) { fields[k].addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); }); });
+    var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', s.enabled ? $t('Mengumpulkan berjalan') : $t('Mengumpulkan mati'))); acts.appendChild(btn($t('Simpan pengaturan'), save, 'primary'));
+    el.appendChild(acts);
   }
   function renderBots() {
     if (!ui.botsTop) return;
@@ -680,6 +735,7 @@
     renderMeals(d);
     renderPrice(d);
     renderTrade(d);
+    renderGather(d);
     renderCraft(d);
 
     // each resident: what they spent, the last buy, and the merchants they may buy from (a chip toggles one)
@@ -731,6 +787,7 @@
       var line = $('div', 'adm-mv');
       line.appendChild($('span', 'chain-dim', ago(x.at)));
       line.appendChild($('span', null, x.kind === 'resident_buy' ? $t('{0} beli {1} dari {2}', [x.who, x.token, x.to])
+        : x.kind === 'trade' && x.token && x.gather ? $t('{0} jual {1} hasil tangkapan ke {2}', [x.who || '?', x.token, x.to])
         : x.kind === 'trade' && x.token && x.meal ? $t('{0} beli {1} dari {2} untuk makan', [x.who || '?', x.token, x.to])
         : x.kind === 'trade' && x.token && x.craft ? (x.coin < 0 ? $t('{0} beli {1} dari {2} untuk crafting', [x.who || '?', x.token, x.to]) : $t('{0} jual {1} hasil craft ke {2}', [x.who || '?', x.token, x.to]))
         : x.kind === 'trade' && x.token ? (x.coin < 0 ? $t('{0} beli {1} dari {2} untuk dijual', [x.who || '?', x.token, x.to]) : $t('{0} jual {1} ke {2}', [x.who || '?', x.token, x.to]))

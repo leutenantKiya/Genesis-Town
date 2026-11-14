@@ -18,6 +18,8 @@
 // what they cost are in meta `residents.stock`: everything the admin sets lives in the database.
 // Crafting (craft(), hourly): the townsfolk craft bread, meals and tools and stock the shelves of the merchants that sell
 // them, which brings those prices down (settings `craft`).
+// Gathering (gather() + stockShelves(), hourly): when a raw good is scarce or dear the townsfolk fish, chop, harvest or
+// mine it, cook and craft with it first, and put the rest on the shelf of the merchant that sells it (settings `gather`).
 // Meals (eat(), hourly): each resident eats `meals` foods (bread or grilled fish) a game day from the shared bag, buying
 // the cheapest when the bag has none (settings `meals`, today's count in meta `residents.meals`).
 import type { Chain } from '../chain.ts';
@@ -57,7 +59,8 @@ interface Job { merchant: string; token: string; ask: number; to: Pos; sell?: bo
 export interface ResidentControls { paused: boolean; allow: Record<string, string[]> }
 export interface TradeSettings { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number }
 export interface CraftSettings { enabled: boolean; marginPct: number; perHour: number; fillPct: number }
-export interface ResidentSettings { target: number; treasuryReserve: number; meals: number; trade: TradeSettings; craft: CraftSettings }
+export interface GatherSettings { enabled: boolean; goods: string[]; perHour: number; dailyMax: number; minPricePct: number; fillPct: number; keepMax: number }
+export interface ResidentSettings { target: number; treasuryReserve: number; meals: number; trade: TradeSettings; craft: CraftSettings; gather: GatherSettings }
 const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock', MEALS_KEY = 'residents.meals';
 
 const DIRS: Array<[number, number, string]> = [[1, 0, 'right'], [-1, 0, 'left'], [0, 1, 'down'], [0, -1, 'up']];
@@ -176,10 +179,11 @@ export class Residents {
   settings(): ResidentSettings {
     const c = this.cfg, t = c.trade ?? { enabled: false, marginPct: 5, perHour: 2, holdMax: 5, minWallet: 100 };
     const cc = c.craft ?? { enabled: false, marginPct: 0, perHour: 2, fillPct: 100 };
-    let saved: Partial<ResidentSettings> & { trade?: Partial<TradeSettings>; craft?: Partial<CraftSettings> } = {};
+    const cg = c.gather ?? { enabled: false, goods: [], perHour: 2, dailyMax: 20, minPricePct: 100, fillPct: 100, keepMax: 10 };
+    let saved: Partial<ResidentSettings> & { trade?: Partial<TradeSettings>; craft?: Partial<CraftSettings>; gather?: Partial<GatherSettings> } = {};
     try { saved = JSON.parse(this.d.gs.meta(SETTINGS_KEY) ?? '{}'); } catch { /* bad row: the config's */ }
     const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
-    const st: Partial<TradeSettings> = saved.trade ?? {}, sc: Partial<CraftSettings> = saved.craft ?? {};
+    const st: Partial<TradeSettings> = saved.trade ?? {}, sc: Partial<CraftSettings> = saved.craft ?? {}, sg: Partial<GatherSettings> = saved.gather ?? {};
     return {
       target: num(saved.target, c.target), treasuryReserve: num(saved.treasuryReserve, c.treasuryReserve), meals: num(saved.meals, c.meals ?? 2),
       trade: {
@@ -189,6 +193,11 @@ export class Residents {
       craft: {
         enabled: typeof sc.enabled === 'boolean' ? sc.enabled : cc.enabled, marginPct: Math.max(0, num(sc.marginPct, cc.marginPct)), // never crafted at a loss
         perHour: num(sc.perHour, cc.perHour), fillPct: num(sc.fillPct, cc.fillPct),
+      },
+      gather: {
+        enabled: typeof sg.enabled === 'boolean' ? sg.enabled : cg.enabled, goods: Array.isArray(sg.goods) ? sg.goods.map(String) : cg.goods.slice(),
+        perHour: num(sg.perHour, cg.perHour), dailyMax: num(sg.dailyMax, cg.dailyMax), minPricePct: num(sg.minPricePct, cg.minPricePct),
+        fillPct: num(sg.fillPct, cg.fillPct), keepMax: num(sg.keepMax, cg.keepMax),
       },
     };
   }
@@ -337,7 +346,68 @@ export class Residents {
     return done;
   }
 
-/* ---------------------------------------------------------------- meals: every resident eats `meals` foods a game day */
+/* ---------------------------------------------------------------- gathering: fishing, chopping, harvesting, mining */
+
+  /** The cheapest a merchant sells `good` for now (in stock), or null when nobody has it: then it is scarce. */
+  private cheapestAsk(good: string): { id: string; unit: number } | null {
+    const { market, gs } = this.d;
+    return market.ids().filter((id) => market.isOpen(id) && market.def(id).sells.includes(good) && !market.trend.withdrawn(good) && gs.balance(market.account(id), good) >= 1)
+      .map((id) => ({ id, unit: market.quote(id, good, 'buy', 1).unit })).sort((a, b) => a.unit - b.unit)[0] ?? null;
+  }
+  /** Units of `good` the townsfolk gathered on `day`. */
+  gatheredOn(day: number, good: string): number { return this.d.gs.sumKind(day, this.wallet, good, 'resident_gather'); }
+
+  /** One hour of gathering (game.step, before crafting): for each raw good the admin picked (fish, wood, wheat, ore) that
+   *  is scarce or dear (no merchant has it, or the cheapest costs at least `minPricePct` % of its base value), the
+   *  residents fish, chop, harvest or mine up to `perHour` units, at most `dailyMax` a game day, and never keep more than
+   *  `keepMax` spare in the bag. The catch first feeds crafting and cooking (own goods count at their base value), the
+   *  rest goes to the shelves (stockShelves). Ledger kind `resident_gather`, ref `<good>#<resident>`. */
+  gather(day: number): number {
+    const set = this.settings(), s = set.gather, c = this.controls();
+    if (!this.ready || !s.enabled || c.paused || s.perHour < 1 || !this.walkers.length) return 0;
+    const { gs, econ } = this.d, held = this.stock();
+    let done = 0;
+    for (const good of s.goods) {
+      if (econ.items[good]?.kind !== 'raw') continue;
+      const spare = gs.balance(this.wallet, good) - (held[good]?.qty ?? 0);
+      const ask = this.cheapestAsk(good);
+      if (ask && ask.unit < (econ.items[good].base * s.minPricePct) / 100) continue; // cheap enough: leave it to players
+      const n = Math.min(s.perHour, s.dailyMax - this.gatheredOn(day, good), s.keepMax - spare);
+      for (let i = 0; i < n; i++) {
+        const w = this.walkers[this.nextJob++ % this.walkers.length];
+        gs.add(day, this.wallet, good, 1, 'resident_gather', `${good}#${w.id}`);
+        done++;
+      }
+    }
+    return done;
+  }
+
+  /** After crafting: what is left of the catch goes to the shelf of the merchant that sells it (its bid), while that
+   *  shelf is under `fillPct` % of its target, which brings that price down. Tag `<resident>-g`. A good nobody sells
+   *  (ore) stays in the bag for crafting. */
+  stockShelves(day: number): number {
+    const set = this.settings(), s = set.gather, c = this.controls();
+    if (!this.ready || !s.enabled || c.paused || !this.walkers.length) return 0;
+    const { market, gs, econ } = this.d, held = this.stock();
+    let done = 0;
+    for (const good of s.goods) {
+      if (econ.items[good]?.kind !== 'raw') continue;
+      while (done < s.perHour * 2 && gs.balance(this.wallet, good) - (held[good]?.qty ?? 0) >= 1) {
+        const shop = market.ids().filter((id) => market.isOpen(id) && market.def(id).sells.includes(good)).map((id) => {
+          const upTo = Math.floor(((market.def(id).target[good] ?? 10) * s.fillPct) / 100), acct = market.account(id);
+          return { id, upTo, room: upTo - gs.balance(acct, good), unit: market.quote(id, good, 'sell', 1).unit, cash: gs.balance(acct, 'coin') };
+        }).filter((o) => o.room >= 1 && o.cash >= o.unit).sort((a, b) => a.room - b.room || b.unit - a.unit)[0];
+        if (!shop) break;
+        const w = this.pick(shop.id, c); if (!w) break;
+        try { market.restock(this.wallet, shop.id, good, 1, `${w.id}-g`, shop.upTo); } catch { break; }
+        this.walkTo(shop.id, good, shop.unit, true);
+        done++;
+      }
+    }
+    return done;
+  }
+
+  /* ---------------------------------------------------------------- meals: every resident eats `meals` foods a game day */
 
   /** How many meals a resident should have had by this hour of the game day (the day runs from 06:00; the meals are spread
    *  evenly: with 2, at 12:00 and 24:00). */

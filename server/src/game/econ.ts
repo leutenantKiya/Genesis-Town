@@ -85,7 +85,9 @@ export interface Econ {
     /** Buying to sell again (residents.trade); the admin's saved settings override it. */
     trade?: { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number };
     /** Crafting to stock the shelves (residents.craft); the admin's saved settings override it. */
-    craft?: { enabled: boolean; marginPct: number; perHour: number; fillPct: number } };
+    craft?: { enabled: boolean; marginPct: number; perHour: number; fillPct: number };
+    /** Fishing, chopping, harvesting and mining scarce raw goods (residents.gather); the admin's saved settings override it. */
+    gather?: { enabled: boolean; goods: string[]; perHour: number; dailyMax: number; minPricePct: number; fillPct: number; keepMax: number } };
   /** rent: the daily rent (also the pricing yardstick for "thin cash"); chargeRent false: merchants pay nothing and never close. */
   shops: { rent: number; chargeRent?: boolean; storageFeePerUnit: number; dividendShare: number; initialShares: number; minSharePrice: number };
   fees: { marketPct: number };

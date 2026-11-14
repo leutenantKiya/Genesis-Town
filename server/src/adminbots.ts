@@ -15,10 +15,10 @@ import type { Social } from './social.ts';
 
 const MAX_DAYS = 60, RECENT = 40, TOP = 40, SCAN = 20_000, MULT_MIN = 1, MULT_MAX = 5;
 /** What the admin may set, and the allowed range of each number. */
-const LIMITS = { target: [0, 100_000], treasuryReserve: [0, 10_000_000], marginPct: [-90, 500], perHour: [0, 20], holdMax: [0, 50], minWallet: [0, 100_000], fillPct: [10, 300], craftMarginPct: [0, 500], meals: [0, 5] } as const;
+const LIMITS = { target: [0, 100_000], treasuryReserve: [0, 10_000_000], marginPct: [-90, 500], perHour: [0, 20], holdMax: [0, 50], minWallet: [0, 100_000], fillPct: [10, 300], craftMarginPct: [0, 500], meals: [0, 5], dailyMax: [0, 100], minPricePct: [0, 500], keepMax: [0, 100] } as const;
 /** A trade row's ref: `<merchant>:<token>:<qty>@<unit>#<resident>` (market.buy / market.sell with a tag); crafting tags
  *  `#<resident>-c` (its inputs bought and the crafted good sold to a shelf, residents.craft). */
-const TRADE_REF = /^([^:]+):([^:]+):(\d+)@(\d+)(?:#([a-z]\d+)(-[ce])?)?$/; // -c crafting, -e a meal bought
+const TRADE_REF = /^([^:]+):([^:]+):(\d+)@(\d+)(?:#([a-z]\d+)(-[ceg])?)?$/; // -c crafting, -e a meal bought, -g the catch to a shelf
 type Flow = { account: string | null; name: string; kind: string; amount: number; count: number };
 
 export class AdminBots {
@@ -59,9 +59,11 @@ export class AdminBots {
     const trade = { bought: 0, boughtUnits: 0, sold: 0, soldUnits: 0 }, perTrade: Record<string, { bought: number; sold: number; units: number; crafted: number }> = {};
     for (const x of res.walkers) perTrade[x.id] = { bought: 0, sold: 0, units: 0, crafted: 0 };
     const craft = { inputs: 0, fees: 0, sold: 0, soldUnits: 0, byGood: {} as Record<string, number> }, meals = { coin: 0, bought: 0 };
+    const gathered = { sold: 0, soldUnits: 0, soldBy: {} as Record<string, number> };
     for (const r of rows) {
       const tc = r.kind === 'trade' ? TRADE_REF.exec(r.ref ?? '') : null;
       if (tc && tc[6] === '-e') { meals.coin -= r.delta; meals.bought += Number(tc[3]); continue; } // food bought to eat
+      if (tc && tc[6] === '-g') { gathered.sold += r.delta; gathered.soldUnits += Number(tc[3]); gathered.soldBy[tc[2]] = (gathered.soldBy[tc[2]] ?? 0) + Number(tc[3]); continue; } // the catch to a shelf
       if (tc && tc[6]) {
         // crafting: inputs bought (negative) and the crafted good sold to a shelf (positive)
         const units = Number(tc[3]);
@@ -87,7 +89,7 @@ export class AdminBots {
     }
     const label = (r: { kind: string; ref: string | null }) => {
       if (r.kind === 'resident_buy' && r.ref) { const [rid, mid, token] = r.ref.split(':'); return { who: res.walkers.find((x) => x.id === rid)?.name ?? rid, to: market.ids().includes(mid) ? market.def(mid).name : mid, token }; }
-      if (r.kind === 'trade') { const t = TRADE_REF.exec(r.ref ?? ''); if (t) return { who: res.walkers.find((x) => x.id === t[5])?.name ?? t[5] ?? null, to: market.ids().includes(t[1]) ? market.def(t[1]).name : t[1], token: t[2], craft: t[6] === '-c', meal: t[6] === '-e' }; }
+      if (r.kind === 'trade') { const t = TRADE_REF.exec(r.ref ?? ''); if (t) return { who: res.walkers.find((x) => x.id === t[5])?.name ?? t[5] ?? null, to: market.ids().includes(t[1]) ? market.def(t[1]).name : t[1], token: t[2], craft: t[6] === '-c', meal: t[6] === '-e', gather: t[6] === '-g' }; }
       if (r.kind === 'handout') return { who: null, to: 'Town treasury', token: null };
       if (r.kind === 'handout_mint') return { who: null, to: 'Faucet (new coin)', token: null };
       return { who: null, to: r.ref, token: null };
@@ -103,6 +105,7 @@ export class AdminBots {
       settings: res.settings(), limits: LIMITS, trade: { ...trade, profit: trade.sold - trade.bought, holding: this.holding() },
       craft: { ...craft, profit: craft.sold - craft.inputs - craft.fees, shelves: this.shelves() },
       meals: this.mealsView(from, meals),
+      gather: { ...gathered, caught: Object.fromEntries((gs.db.prepare("SELECT token, SUM(delta) AS n FROM ledger WHERE account = ? AND kind = 'resident_gather' AND day >= ? GROUP BY token").all(w, from) as Array<{ token: string; n: number }>).map((x) => [x.token, x.n])) },
       why: this.why(),
       recent: rows.slice(0, RECENT).map((r) => ({ seq: r.seq, day: r.day, at: r.created_at, kind: r.kind, coin: r.delta, ...label(r) })),
       price: this.price(),
@@ -192,7 +195,8 @@ export class AdminBots {
       const outTok = r.output, out: Record<string, unknown> = { token: outTok, name: econ.items[outTok].name };
       if (!set.craft.enabled) return { ...out, code: 'off' };
       // an ingredient nobody sells and the bag lacks stops it whatever the shelves say
-      for (const [tk, n] of Object.entries(r.inputs)) if (held(tk) < n && !ids.some((id) => market.def(id).sells.includes(tk))) return { ...out, code: 'no_ingredient', input: econ.items[tk].name };
+      const gathers = (tk: string) => set.gather.enabled && set.gather.goods.includes(tk);
+      for (const [tk, n] of Object.entries(r.inputs)) if (held(tk) < n && !ids.some((id) => market.def(id).sells.includes(tk))) return { ...out, code: gathers(tk) ? 'await_gather' : 'no_ingredient', input: econ.items[tk].name };
       const shops = ids.filter((id) => market.def(id).sells.includes(outTok)).map((id) => {
         const target = market.def(id).target[outTok] ?? 10, upTo = Math.floor((target * set.craft.fillPct) / 100);
         return { id, stock: gs.balance(market.account(id), outTok), upTo, ask: market.quote(id, outTok, 'buy', 1).unit, cash: gs.balance(market.account(id), 'coin') };
@@ -207,9 +211,9 @@ export class AdminBots {
         const own = Math.min(n, held(tk)), need = n - own;
         if (need < 1) { cost += own * econ.items[tk].base; continue; }
         const sellers = ids.filter((id) => market.def(id).sells.includes(tk));
-        if (!sellers.length) return { ...out, code: 'no_ingredient', input: econ.items[tk].name };
+        if (!sellers.length) return { ...out, code: gathers(tk) ? 'await_gather' : 'no_ingredient', input: econ.items[tk].name };
         const offer = sellers.filter((id) => !market.trend.withdrawn(tk) && gs.balance(market.account(id), tk) >= need).map((id) => market.quote(id, tk, 'buy', need).unit).sort((a, b) => a - b)[0];
-        if (offer == null) return { ...out, code: 'ingredient_out', input: econ.items[tk].name };
+        if (offer == null) return { ...out, code: gathers(tk) ? 'await_gather' : 'ingredient_out', input: econ.items[tk].name };
         cost += own * econ.items[tk].base + offer * need; coinNeed += offer * need;
       }
       Object.assign(out, { cost: Math.round(cost), need: Math.ceil(cost * cm) });
@@ -218,7 +222,20 @@ export class AdminBots {
       if (!funded(coinNeed)) return { ...out, code: 'no_money' };
       return { ...out, code: 'ok' };
     });
-    return { general, wallet: coin, treasuryFree: free, minWallet: set.trade.minWallet, buy, sell, craft };
+    // gathering: every raw good
+    const g = set.gather, day = this.d.game.clock.time().settleDay;
+    const gather = Object.keys(econ.items).filter((k) => econ.items[k].kind === 'raw').map((good) => {
+      const base = econ.items[good].base, out: Record<string, unknown> = { token: good, name: econ.items[good].name, today: res.gatheredOn(day, good), spare: held(good) };
+      if (!g.enabled) return { ...out, code: 'off' };
+      if (!g.goods.includes(good)) return { ...out, code: 'not_picked' };
+      const seller = ids.filter((id) => market.def(id).sells.includes(good) && gs.balance(market.account(id), good) >= 1).map((id) => ({ id, unit: market.quote(id, good, 'buy', 1).unit })).sort((a, b) => a.unit - b.unit)[0];
+      Object.assign(out, { ask: seller ? seller.unit : null, need: Math.ceil((base * g.minPricePct) / 100), from: seller ? name(seller.id) : null });
+      if (seller && seller.unit < (base * g.minPricePct) / 100) return { ...out, code: 'cheap' };
+      if ((out.today as number) >= g.dailyMax) return { ...out, code: 'day_max', max: g.dailyMax };
+      if ((out.spare as number) >= g.keepMax) return { ...out, code: 'bag_full', max: g.keepMax };
+      return { ...out, code: 'ok' };
+    });
+    return { general, wallet: coin, treasuryFree: free, minWallet: set.trade.minWallet, buy, sell, craft, gather };
   }
 
   /** For each recipe: the merchants that sell the good, their stock against the fill line, and their ask and bid now. */
@@ -272,7 +289,10 @@ export class AdminBots {
         return key === 'marginPct' || key === 'craftMarginPct' ? Math.round(v * 10) / 10 : Math.round(v);
       };
       const cr = (b.craft && typeof b.craft === 'object' ? b.craft : {}) as Record<string, unknown>;
-      if ((t.enabled !== undefined && typeof t.enabled !== 'boolean') || (cr.enabled !== undefined && typeof cr.enabled !== 'boolean')) throw new HttpError(400, 'enabled must be true or false.');
+      const ga = (b.gather && typeof b.gather === 'object' ? b.gather : {}) as Record<string, unknown>;
+      if ([t, cr, ga].some((x) => x.enabled !== undefined && typeof x.enabled !== 'boolean')) throw new HttpError(400, 'enabled must be true or false.');
+      const raw = Object.keys(this.d.game.econ.items).filter((k) => this.d.game.econ.items[k].kind === 'raw');
+      if (ga.goods !== undefined && (!Array.isArray(ga.goods) || ga.goods.some((g) => !raw.includes(String(g))))) throw new HttpError(400, `goods must be a list of: ${raw.join(', ')}.`);
       res.setSettings({
         target: num(b.target, 'target', s.target), treasuryReserve: num(b.treasuryReserve, 'treasuryReserve', s.treasuryReserve), meals: num(b.meals, 'meals', s.meals),
         trade: {
@@ -282,6 +302,12 @@ export class AdminBots {
         craft: {
           enabled: typeof cr.enabled === 'boolean' ? cr.enabled : s.craft.enabled, marginPct: num(cr.marginPct, 'craftMarginPct', s.craft.marginPct),
           perHour: num(cr.perHour, 'perHour', s.craft.perHour), fillPct: num(cr.fillPct, 'fillPct', s.craft.fillPct),
+        },
+        gather: {
+          enabled: typeof ga.enabled === 'boolean' ? ga.enabled : s.gather.enabled,
+          goods: Array.isArray(ga.goods) ? [...new Set(ga.goods.map(String))] : s.gather.goods,
+          perHour: num(ga.perHour, 'perHour', s.gather.perHour), dailyMax: num(ga.dailyMax, 'dailyMax', s.gather.dailyMax),
+          minPricePct: num(ga.minPricePct, 'minPricePct', s.gather.minPricePct), fillPct: num(ga.fillPct, 'fillPct', s.gather.fillPct), keepMax: num(ga.keepMax, 'keepMax', s.gather.keepMax),
         },
       });
       return this.status(1);
