@@ -1,6 +1,13 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Icons, logo, phones and the action picker** (2026-11-15): the HUD buttons, phone tab bar, window titles,
+>   steppers and History buttons use the new pixel-art icon set (`client/icons/ui/`), and the official island logo is on
+>   the loading screen and the installed app icons. A small panel beside the character lists what F can do at a spot
+>   and, when there is more than one (fishing or the boat at the lake), Up/Down picks and F runs it; on a phone the
+>   rows are tapped (`client/js/mods/actionpick.js`, `GT_ACTBTN.addExtra`). On phones the game fills exactly the
+>   visible screen (`--vvh` from `visualViewport`, safe-area insets, `manifest.json` fullscreen, full screen asked on the
+>   first tap), so the controls are no longer hidden under the browser's bars. Rain is quieter.
 > - **Clearer windows** (2026-11-15): the Bag groups Tools (with a wear bar and repairs right there; the old Tools
 >   window was broken), Goods and Food, explains an item on hover or tap, and no longer shows the account id or
 >   "saved at 06:00" chain wording; a merchant's window has Buy and Sell tabs, a picked good with the merchant's reason,
