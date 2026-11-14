@@ -15,10 +15,10 @@ import type { Social } from './social.ts';
 
 const MAX_DAYS = 60, RECENT = 40, TOP = 40, SCAN = 20_000, MULT_MIN = 1, MULT_MAX = 5;
 /** What the admin may set, and the allowed range of each number. */
-const LIMITS = { target: [0, 100_000], treasuryReserve: [0, 10_000_000], marginPct: [-90, 500], perHour: [0, 20], holdMax: [0, 50], minWallet: [0, 100_000], fillPct: [10, 300] } as const;
+const LIMITS = { target: [0, 100_000], treasuryReserve: [0, 10_000_000], marginPct: [-90, 500], perHour: [0, 20], holdMax: [0, 50], minWallet: [0, 100_000], fillPct: [10, 300], craftMarginPct: [0, 500], meals: [0, 5] } as const;
 /** A trade row's ref: `<merchant>:<token>:<qty>@<unit>#<resident>` (market.buy / market.sell with a tag); crafting tags
  *  `#<resident>-c` (its inputs bought and the crafted good sold to a shelf, residents.craft). */
-const TRADE_REF = /^([^:]+):([^:]+):(\d+)@(\d+)(?:#([a-z]\d+)(-c)?)?$/;
+const TRADE_REF = /^([^:]+):([^:]+):(\d+)@(\d+)(?:#([a-z]\d+)(-[ce])?)?$/; // -c crafting, -e a meal bought
 type Flow = { account: string | null; name: string; kind: string; amount: number; count: number };
 
 export class AdminBots {
@@ -58,9 +58,10 @@ export class AdminBots {
     // buying to sell again: kind `trade` (a negative coin row is a buy, a positive one a sale)
     const trade = { bought: 0, boughtUnits: 0, sold: 0, soldUnits: 0 }, perTrade: Record<string, { bought: number; sold: number; units: number; crafted: number }> = {};
     for (const x of res.walkers) perTrade[x.id] = { bought: 0, sold: 0, units: 0, crafted: 0 };
-    const craft = { inputs: 0, fees: 0, sold: 0, soldUnits: 0, byGood: {} as Record<string, number> };
+    const craft = { inputs: 0, fees: 0, sold: 0, soldUnits: 0, byGood: {} as Record<string, number> }, meals = { coin: 0, bought: 0 };
     for (const r of rows) {
       const tc = r.kind === 'trade' ? TRADE_REF.exec(r.ref ?? '') : null;
+      if (tc && tc[6] === '-e') { meals.coin -= r.delta; meals.bought += Number(tc[3]); continue; } // food bought to eat
       if (tc && tc[6]) {
         // crafting: inputs bought (negative) and the crafted good sold to a shelf (positive)
         const units = Number(tc[3]);
@@ -86,7 +87,7 @@ export class AdminBots {
     }
     const label = (r: { kind: string; ref: string | null }) => {
       if (r.kind === 'resident_buy' && r.ref) { const [rid, mid, token] = r.ref.split(':'); return { who: res.walkers.find((x) => x.id === rid)?.name ?? rid, to: market.ids().includes(mid) ? market.def(mid).name : mid, token }; }
-      if (r.kind === 'trade') { const t = TRADE_REF.exec(r.ref ?? ''); if (t) return { who: res.walkers.find((x) => x.id === t[5])?.name ?? t[5] ?? null, to: market.ids().includes(t[1]) ? market.def(t[1]).name : t[1], token: t[2], craft: !!t[6] }; }
+      if (r.kind === 'trade') { const t = TRADE_REF.exec(r.ref ?? ''); if (t) return { who: res.walkers.find((x) => x.id === t[5])?.name ?? t[5] ?? null, to: market.ids().includes(t[1]) ? market.def(t[1]).name : t[1], token: t[2], craft: t[6] === '-c', meal: t[6] === '-e' }; }
       if (r.kind === 'handout') return { who: null, to: 'Town treasury', token: null };
       if (r.kind === 'handout_mint') return { who: null, to: 'Faucet (new coin)', token: null };
       return { who: null, to: r.ref, token: null };
@@ -101,6 +102,8 @@ export class AdminBots {
       residents: res.walkers.map((x) => ({ id: x.id, name: x.name, look: x.look, account: res.account(x.id), allow: ctl.allow[x.id] ?? null, ...per[x.id], trade: perTrade[x.id] })),
       settings: res.settings(), limits: LIMITS, trade: { ...trade, profit: trade.sold - trade.bought, holding: this.holding() },
       craft: { ...craft, profit: craft.sold - craft.inputs - craft.fees, shelves: this.shelves() },
+      meals: this.mealsView(from, meals),
+      why: this.why(),
       recent: rows.slice(0, RECENT).map((r) => ({ seq: r.seq, day: r.day, at: r.created_at, kind: r.kind, coin: r.delta, ...label(r) })),
       price: this.price(),
       inventory: this.inventory(),
@@ -127,6 +130,95 @@ export class AdminBots {
       const books = gs.balance(w, token), chain = gs.settledBalance(w, token), h = stock[token], held = token === 'coin' ? 0 : Math.min(books, h?.qty ?? 0);
       return { token, name: econ.items[token].name, books, chain, held, avgCost: h && h.qty > 0 ? Math.round((h.cost / h.qty) * 100) / 100 : null, spare: token === 'coin' ? 0 : Math.max(0, books - held) };
     }).filter((r) => r.books !== 0 || r.chain !== 0 || r.token === 'coin');
+  }
+
+  /** The meals rule: foods a day, how many each resident has had today against how many are due by now, and what they
+   *  ate in the window (by food) and spent buying food. */
+  mealsView(from: number, bought: { coin: number; bought: number }) {
+    const { gs, clock } = this.d.game, t = clock.time(), set = this.res.settings(), log = this.res.meals(t.settleDay), due = this.res.mealsDue(t.hour, set.meals);
+    const eaten = gs.db.prepare("SELECT token, COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_eat' AND day >= ? GROUP BY token").all(this.res.wallet, from) as Array<{ token: string; n: number }>;
+    return { perDay: set.meals, due, today: Object.fromEntries(this.res.walkers.map((w) => [w.id, log.ate[w.id] ?? 0])), eaten: Object.fromEntries(eaten.map((e) => [e.token, e.n])), ...bought };
+  }
+
+  /** Why the townsfolk buy or sell something right now, or not: the same rules residents.trade() / craft() follow, read
+   *  without doing anything. Each line has a `code` (ok or the first rule that stops it) and the numbers behind it. */
+  why() {
+    const { market, econ, gs, town } = this.d.game, res = this.res, set = res.settings(), c = res.controls(), stock = res.stock();
+    const w = res.wallet, coin = gs.balance(w, 'coin');
+    const free = Math.max(0, Math.min(gs.settledBalance(town, 'coin'), gs.balance(town, 'coin')) - set.treasuryReserve);
+    // can the wallet pay `amount` and keep its floor, after an allowance from the treasury if needed?
+    const funded = (amount: number) => Math.max(coin, Math.min(set.target, coin + free)) - amount >= set.trade.minWallet;
+    const ids = market.ids().filter((id) => market.isOpen(id) && res.walkers.some((x) => !c.allow[x.id] || c.allow[x.id].includes(id)));
+    const name = (id: string) => market.def(id).name;
+    const general: string[] = [];
+    if (!res.ready) general.push('not_ready');
+    if (c.paused) general.push('paused');
+    const tm = 1 + set.trade.marginPct / 100, cm = 1 + set.craft.marginPct / 100;
+    const bestBid = (token: string) => ids.filter((id) => market.def(id).buys.includes(token)).map((id) => ({ id, unit: market.quote(id, token, 'sell', 1).unit, room: market.buyRoom(id, token), cash: gs.balance(market.account(id), 'coin') }));
+    // buying to sell again: every good some merchant sells and some merchant buys
+    const goods = Object.keys(econ.items).filter((t) => t !== 'coin' && market.ids().some((id) => market.def(id).sells.includes(t)) && market.ids().some((id) => market.def(id).buys.includes(t)));
+    const buy = goods.map((token) => {
+      const out: Record<string, unknown> = { token, name: econ.items[token].name };
+      const sellers = ids.filter((id) => market.def(id).sells.includes(token));
+      const stocked = sellers.filter((id) => gs.balance(market.account(id), token) >= 1);
+      const bids = bestBid(token), ok = bids.filter((b) => b.room >= 1 && b.cash >= b.unit).sort((a, b) => b.unit - a.unit);
+      if (!set.trade.enabled) return { ...out, code: 'off' };
+      if (!sellers.length) return { ...out, code: 'no_seller' };
+      if (market.trend.withdrawn(token)) return { ...out, code: 'withdrawn' };
+      if (!stocked.length) return { ...out, code: 'out_of_stock', from: sellers.map(name).join(', ') };
+      const ask = stocked.map((id) => ({ id, unit: market.quote(id, token, 'buy', 1).unit })).sort((a, b) => a.unit - b.unit)[0];
+      Object.assign(out, { ask: ask.unit, from: name(ask.id) });
+      if (!bids.length) return { ...out, code: 'no_buyer' };
+      if (!ok.length) return { ...out, code: bids.every((b) => b.room < 1) ? 'buyer_full' : 'buyer_broke', to: bids.map((b) => name(b.id)).join(', ') };
+      Object.assign(out, { bid: ok[0].unit, to: name(ok[0].id), need: Math.ceil(ask.unit * tm) });
+      if (ok[0].unit < ask.unit * tm) return { ...out, code: 'margin' };
+      if ((stock[token]?.qty ?? 0) >= set.trade.holdMax) return { ...out, code: 'hold_max', held: stock[token]?.qty ?? 0 };
+      if (!funded(ask.unit)) return { ...out, code: 'no_money' };
+      return { ...out, code: 'ok' };
+    });
+    // selling what is held
+    const sell = Object.entries(stock).filter(([, h]) => h.qty > 0).map(([token, h]) => {
+      const avg = h.cost / h.qty, out: Record<string, unknown> = { token, name: econ.items[token]?.name ?? token, held: h.qty, cost: Math.round(avg * 100) / 100, need: Math.ceil(avg * tm) };
+      if (!set.trade.enabled) return { ...out, code: 'off' };
+      const bids = bestBid(token), ok = bids.filter((b) => b.room >= 1 && b.cash >= b.unit).sort((a, b) => b.unit - a.unit);
+      if (!bids.length) return { ...out, code: 'no_buyer' };
+      if (!ok.length) return { ...out, code: bids.every((b) => b.room < 1) ? 'buyer_full' : 'buyer_broke', to: bids.map((b) => name(b.id)).join(', ') };
+      Object.assign(out, { bid: ok[0].unit, to: name(ok[0].id) });
+      return { ...out, code: ok[0].unit < avg * tm ? 'margin' : 'ok' };
+    });
+    // crafting: every recipe
+    const held = (tk: string) => Math.max(0, gs.balance(w, tk) - (stock[tk]?.qty ?? 0));
+    const craft = Object.entries(econ.recipes).map(([, r]) => {
+      const outTok = r.output, out: Record<string, unknown> = { token: outTok, name: econ.items[outTok].name };
+      if (!set.craft.enabled) return { ...out, code: 'off' };
+      // an ingredient nobody sells and the bag lacks stops it whatever the shelves say
+      for (const [tk, n] of Object.entries(r.inputs)) if (held(tk) < n && !ids.some((id) => market.def(id).sells.includes(tk))) return { ...out, code: 'no_ingredient', input: econ.items[tk].name };
+      const shops = ids.filter((id) => market.def(id).sells.includes(outTok)).map((id) => {
+        const target = market.def(id).target[outTok] ?? 10, upTo = Math.floor((target * set.craft.fillPct) / 100);
+        return { id, stock: gs.balance(market.account(id), outTok), upTo, ask: market.quote(id, outTok, 'buy', 1).unit, cash: gs.balance(market.account(id), 'coin') };
+      });
+      if (!shops.length) return { ...out, code: 'no_shop' };
+      const open = shops.filter((s) => s.upTo - s.stock >= 1).sort((a, b) => b.ask - a.ask);
+      if (!open.length) return { ...out, code: 'shelves_full', shelves: shops.map((s) => `${name(s.id)} ${s.stock}/${s.upTo}`).join(', ') };
+      const shop = open[0];
+      Object.assign(out, { ask: shop.ask, to: name(shop.id) });
+      let cost = r.fee ?? 0, coinNeed = r.fee ?? 0;
+      for (const [tk, n] of Object.entries(r.inputs)) {
+        const own = Math.min(n, held(tk)), need = n - own;
+        if (need < 1) { cost += own * econ.items[tk].base; continue; }
+        const sellers = ids.filter((id) => market.def(id).sells.includes(tk));
+        if (!sellers.length) return { ...out, code: 'no_ingredient', input: econ.items[tk].name };
+        const offer = sellers.filter((id) => !market.trend.withdrawn(tk) && gs.balance(market.account(id), tk) >= need).map((id) => market.quote(id, tk, 'buy', need).unit).sort((a, b) => a - b)[0];
+        if (offer == null) return { ...out, code: 'ingredient_out', input: econ.items[tk].name };
+        cost += own * econ.items[tk].base + offer * need; coinNeed += offer * need;
+      }
+      Object.assign(out, { cost: Math.round(cost), need: Math.ceil(cost * cm) });
+      if (cost * cm >= shop.ask) return { ...out, code: 'too_costly' };
+      if (shop.cash < Math.ceil(cost)) return { ...out, code: 'shop_broke' };
+      if (!funded(coinNeed)) return { ...out, code: 'no_money' };
+      return { ...out, code: 'ok' };
+    });
+    return { general, wallet: coin, treasuryFree: free, minWallet: set.trade.minWallet, buy, sell, craft };
   }
 
   /** For each recipe: the merchants that sell the good, their stock against the fill line, and their ask and bid now. */
@@ -177,18 +269,18 @@ export class AdminBots {
         if (v === undefined) return cur;
         const [lo, hi] = LIMITS[key];
         if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi) throw new HttpError(400, `${key} must be a number from ${lo} to ${hi}.`);
-        return key === 'marginPct' ? Math.round(v * 10) / 10 : Math.round(v);
+        return key === 'marginPct' || key === 'craftMarginPct' ? Math.round(v * 10) / 10 : Math.round(v);
       };
       const cr = (b.craft && typeof b.craft === 'object' ? b.craft : {}) as Record<string, unknown>;
       if ((t.enabled !== undefined && typeof t.enabled !== 'boolean') || (cr.enabled !== undefined && typeof cr.enabled !== 'boolean')) throw new HttpError(400, 'enabled must be true or false.');
       res.setSettings({
-        target: num(b.target, 'target', s.target), treasuryReserve: num(b.treasuryReserve, 'treasuryReserve', s.treasuryReserve),
+        target: num(b.target, 'target', s.target), treasuryReserve: num(b.treasuryReserve, 'treasuryReserve', s.treasuryReserve), meals: num(b.meals, 'meals', s.meals),
         trade: {
           enabled: typeof t.enabled === 'boolean' ? t.enabled : s.trade.enabled, marginPct: num(t.marginPct, 'marginPct', s.trade.marginPct),
           perHour: num(t.perHour, 'perHour', s.trade.perHour), holdMax: num(t.holdMax, 'holdMax', s.trade.holdMax), minWallet: num(t.minWallet, 'minWallet', s.trade.minWallet),
         },
         craft: {
-          enabled: typeof cr.enabled === 'boolean' ? cr.enabled : s.craft.enabled, marginPct: num(cr.marginPct, 'marginPct', s.craft.marginPct),
+          enabled: typeof cr.enabled === 'boolean' ? cr.enabled : s.craft.enabled, marginPct: num(cr.marginPct, 'craftMarginPct', s.craft.marginPct),
           perHour: num(cr.perHour, 'perHour', s.craft.perHour), fillPct: num(cr.fillPct, 'fillPct', s.craft.fillPct),
         },
       });

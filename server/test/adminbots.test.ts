@@ -120,7 +120,7 @@ test('trace follows the coin: wallet -> merchants, treasury -> wallet, merchant 
 
 test('the townsfolk buy to sell again at the admin\'s margin, negative allowed, and the settings live in the database', async () => {
   const { game, clock, bots } = await world();
-  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade' AND ref NOT LIKE '%-c'").all(WALLET) as Array<{ delta: number; ref: string }>;
+  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade' AND ref NOT LIKE '%-c' AND ref NOT LIKE '%-e'").all(WALLET) as Array<{ delta: number; ref: string }>;
   // off: no trading at all
   bots.control({ settings: { trade: { enabled: false } } });
   for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
@@ -156,7 +156,7 @@ test('the townsfolk buy to sell again at the admin\'s margin, negative allowed, 
 test('the townsfolk craft and stock the shelves, which brings the crafted goods\' prices down', async () => {
   const off = await world(), on = await world();
   off.bots.control({ settings: { trade: { enabled: false }, craft: { enabled: false } } });
-  on.bots.control({ settings: { trade: { enabled: false }, craft: { enabled: true, marginPct: -90, perHour: 6, fillPct: 200 } } });
+  on.bots.control({ settings: { trade: { enabled: false }, craft: { enabled: true, marginPct: 0, perHour: 6, fillPct: 200 } } });
   assert.equal(on.game.residents.settings().craft.fillPct, 200, 'saved');
   for (let h = 0; h < 12; h++) for (const w of [off, on]) { w.clock.advanceHours(1); await w.game.step(); }
   const crafts = on.game.gs.db.prepare("SELECT token, ref FROM ledger WHERE account = ? AND kind = 'resident_craft' AND delta > 0").all(WALLET) as Array<{ token: string; ref: string }>;
@@ -166,6 +166,7 @@ test('the townsfolk craft and stock the shelves, which brings the crafted goods\
   const st = on.bots.status(0);
   assert.ok(st.craft.soldUnits > 0, 'stocked a shelf');
   assert.equal(st.craft.profit, st.craft.sold - st.craft.inputs - st.craft.fees);
+  assert.ok(st.craft.profit >= 0, 'crafting never sells below what it cost to make');
   // never past the fill line, and the asks of what was crafted came down against the world without crafting
   let lower = 0;
   for (const shelf of st.craft.shelves) for (const sh of shelf.shops) {
@@ -187,7 +188,7 @@ test('trading and crafting fund themselves from the treasury above its reserve, 
   const q = (sql: string) => (game.gs.db.prepare(sql).get(WALLET) as { n: number }).n;
   // the town's own shopping stays off (ceiling x1: every ask is above it), so the wallet starts empty
   bots.control({ maxPriceMult: 1 });
-  bots.control({ settings: { treasuryReserve: 10_000_000, trade: { enabled: true, marginPct: -90, perHour: 4, minWallet: 50 }, craft: { enabled: true, marginPct: -90, perHour: 2 } } });
+  bots.control({ settings: { treasuryReserve: 10_000_000, trade: { enabled: true, marginPct: -90, perHour: 4, minWallet: 50 }, craft: { enabled: true, marginPct: 0, perHour: 2 } } });
   for (let h = 0; h < 4; h++) { clock.advanceHours(1); await game.step(); }
   assert.equal(game.gs.balance(WALLET, 'coin'), 0, 'reserve above the treasury: no allowance');
   assert.equal(q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'trade'"), 0, 'and no trading without coin');
@@ -214,4 +215,46 @@ test('the admin sees the townsfolk bag: books, chain, held to resell and spare',
     assert.equal(by[token].spare, by[token].books - by[token].held);
   }
   assert.ok(inv.every((r) => r.token === 'coin' || r.books !== 0 || r.chain !== 0), 'empty goods left out');
+});
+
+test('every resident eats 2 meals a game day from the bag, buying food when the bag has none', async () => {
+  const { game, clock, bots } = await world();
+  bots.control({ settings: { trade: { enabled: false }, craft: { enabled: false } } });
+  for (let h = 0; h < 30; h++) { clock.advanceHours(1); await game.step(); }
+  const rows = game.gs.db.prepare("SELECT token, ref, day FROM ledger WHERE account = ? AND kind = 'resident_eat'").all(WALLET) as Array<{ token: string; ref: string; day: number }>;
+  assert.ok(rows.every((r) => ['bread', 'meal'].includes(r.token)), 'only food');
+  const st = bots.status(0).meals;
+  assert.equal(st.perDay, 2);
+  for (const r of game.residents.walkers) {
+    assert.equal(st.today[r.id], st.due, `${r.name} is fed up to now`);
+    const days = new Set(rows.filter((x) => x.ref === r.id).map((x) => x.day));
+    for (const d of days) if (d < game.clock.time().settleDay) assert.equal(rows.filter((x) => x.ref === r.id && x.day === d).length, 2, `${r.name}: 2 meals on day ${d}`);
+  }
+  assert.ok(st.bought > 0 && st.coin > 0, 'bought food to eat');
+  // no meals: nobody eats
+  bots.control({ settings: { meals: 0 } });
+  const n0 = rows.length;
+  for (let h = 0; h < 24; h++) { clock.advanceHours(1); await game.step(); }
+  assert.equal((game.gs.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_eat'").get(WALLET) as { n: number }).n, n0);
+});
+
+test('the admin sees why the townsfolk do not buy, sell or craft', async () => {
+  const { game, clock, bots } = await world();
+  for (let h = 0; h < 2; h++) { clock.advanceHours(1); await game.step(); }
+  bots.control({ settings: { trade: { enabled: true, marginPct: 500 }, craft: { enabled: true, marginPct: 500 } } });
+  let why = bots.status(1).why;
+  const wood = why.buy.find((b: any) => b.token === 'wood') as any;
+  assert.equal(wood.code, 'margin', 'no merchant pays +500% for wood');
+  assert.ok((wood.need as number) > (wood.bid as number));
+  assert.equal(why.craft.find((c: any) => c.token === 'tool')!.code, 'no_ingredient', 'nobody sells ore');
+  assert.ok(why.craft.filter((c: any) => c.token !== 'tool').every((c: any) => ['too_costly', 'shelves_full', 'ingredient_out'].includes(c.code)));
+  bots.control({ settings: { trade: { enabled: false } } });
+  assert.ok(bots.status(1).why.buy.every((b: any) => b.code === 'off'));
+  bots.control({ paused: true });
+  assert.ok(bots.status(1).why.general.includes('paused'));
+  // ok when the rules allow it
+  bots.control({ paused: false });
+  bots.control({ settings: { trade: { enabled: true, marginPct: -90, minWallet: 0 } } });
+  why = bots.status(1).why;
+  assert.ok(why.buy.some((b: any) => b.code === 'ok'), 'some good can be traded at -90%');
 });

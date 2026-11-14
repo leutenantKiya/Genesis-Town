@@ -80,6 +80,8 @@ export interface Econ {
   town: { dailyUnits: Record<string, number>; maxPriceMult: number; faucetW0: number; moneyCap0: number; activePlayerDivisor: number; maxK: number; shippingBoxMult: number };
   /** The townsfolk who do the town's shopping from one shared wallet that lives on handouts (residents.ts). */
   residents: { enabled: boolean; wallet: string; names: string[]; looks: number[]; target: number; treasuryReserve: number; speed: number; queueMax: number;
+    /** Foods each resident eats a game day (residents.eat); the admin's saved setting overrides it. */
+    meals?: number;
     /** Buying to sell again (residents.trade); the admin's saved settings override it. */
     trade?: { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number };
     /** Crafting to stock the shelves (residents.craft); the admin's saved settings override it. */

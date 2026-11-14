@@ -137,14 +137,15 @@ export class Market {
   /** A townsperson stocks merchant `id`'s shelf with `qty` of a good it sells (residents.ts crafting): the merchant pays
    *  its bid while its stock stays at most `upTo` (default: its target) and it has the cash; the extra stock lowers its
    *  ask. Booked like a sale (kind `trade`, `#tag`). */
-  restock(account: string, id: string, token: string, qty: number, tag?: string, upTo?: number) {
+  restock(account: string, id: string, token: string, qty: number, tag?: string, upTo?: number, unitPrice?: number) {
     const d = this.def(id);
     this.checkTrade(id, qty);
     if (!d.sells.includes(token)) throw new HttpError(409, `${d.name} doesn't sell ${this.itemName(token)}.`);
     const t = this.clock.time(), acct = this.account(id);
     if (this.gs.balance(acct, token) + qty > (upTo ?? d.target[token] ?? 10)) throw new HttpError(409, `${d.name} has enough ${this.itemName(token)}.`);
     if (this.gs.balance(account, token) < qty) throw new HttpError(409, 'You don\'t have enough.');
-    const { unit, total } = this.quote(id, token, 'sell', qty);
+    // a supplier's price (the cost of making it) when given, else the merchant's bid
+    const unit = unitPrice != null ? Math.max(1, Math.round(unitPrice)) : this.quote(id, token, 'sell', qty).unit, total = unit * qty;
     if (this.gs.balance(acct, 'coin') < total) throw new HttpError(409, `${d.name} doesn't have enough money.`);
     const ref = `${id}:${token}:${qty}@${unit}` + (tag ? `#${tag}` : '');
     this.gs.add(t.settleDay, account, token, -qty, 'trade', ref);

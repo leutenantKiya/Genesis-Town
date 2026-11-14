@@ -18,6 +18,8 @@
 // what they cost are in meta `residents.stock`: everything the admin sets lives in the database.
 // Crafting (craft(), hourly): the townsfolk craft bread, meals and tools and stock the shelves of the merchants that sell
 // them, which brings those prices down (settings `craft`).
+// Meals (eat(), hourly): each resident eats `meals` foods (bread or grilled fish) a game day from the shared bag, buying
+// the cheapest when the bag has none (settings `meals`, today's count in meta `residents.meals`).
 import type { Chain } from '../chain.ts';
 import type { Econ } from './econ.ts';
 import type { GameStore } from './gamestore.ts';
@@ -55,8 +57,8 @@ interface Job { merchant: string; token: string; ask: number; to: Pos; sell?: bo
 export interface ResidentControls { paused: boolean; allow: Record<string, string[]> }
 export interface TradeSettings { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number }
 export interface CraftSettings { enabled: boolean; marginPct: number; perHour: number; fillPct: number }
-export interface ResidentSettings { target: number; treasuryReserve: number; trade: TradeSettings; craft: CraftSettings }
-const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock';
+export interface ResidentSettings { target: number; treasuryReserve: number; meals: number; trade: TradeSettings; craft: CraftSettings }
+const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock', MEALS_KEY = 'residents.meals';
 
 const DIRS: Array<[number, number, string]> = [[1, 0, 'right'], [-1, 0, 'left'], [0, 1, 'down'], [0, -1, 'up']];
 
@@ -69,6 +71,8 @@ export class Residents {
   walkers: Walker[] = [];
   queue: Job[] = [];
   next = 0;
+  /** The turn for trading and crafting, apart from the town's shopping turn (`next`). */
+  nextJob = 0;
   private spots: Pos[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -177,13 +181,13 @@ export class Residents {
     const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
     const st: Partial<TradeSettings> = saved.trade ?? {}, sc: Partial<CraftSettings> = saved.craft ?? {};
     return {
-      target: num(saved.target, c.target), treasuryReserve: num(saved.treasuryReserve, c.treasuryReserve),
+      target: num(saved.target, c.target), treasuryReserve: num(saved.treasuryReserve, c.treasuryReserve), meals: num(saved.meals, c.meals ?? 2),
       trade: {
         enabled: typeof st.enabled === 'boolean' ? st.enabled : t.enabled, marginPct: num(st.marginPct, t.marginPct),
         perHour: num(st.perHour, t.perHour), holdMax: num(st.holdMax, t.holdMax), minWallet: num(st.minWallet, t.minWallet),
       },
       craft: {
-        enabled: typeof sc.enabled === 'boolean' ? sc.enabled : cc.enabled, marginPct: num(sc.marginPct, cc.marginPct),
+        enabled: typeof sc.enabled === 'boolean' ? sc.enabled : cc.enabled, marginPct: Math.max(0, num(sc.marginPct, cc.marginPct)), // never crafted at a loss
         perHour: num(sc.perHour, cc.perHour), fillPct: num(sc.fillPct, cc.fillPct),
       },
     };
@@ -199,8 +203,8 @@ export class Residents {
   /** The next resident (in turn) who may trade with this merchant, or null. */
   private pick(merchantId: string, c: ResidentControls): Walker | null {
     for (let k = 0; k < this.walkers.length; k++) {
-      const w = this.walkers[(this.next + k) % this.walkers.length];
-      if (this.allows(w, merchantId, c)) { this.next += k + 1; return w; }
+      const w = this.walkers[(this.nextJob + k) % this.walkers.length];
+      if (this.allows(w, merchantId, c)) { this.nextJob += k + 1; return w; }
     }
     return null;
   }
@@ -265,9 +269,11 @@ export class Residents {
 
   /** One hour of crafting (game.step, after trading): a resident buys a recipe's inputs from the cheapest merchant (or
    *  uses what the wallet holds beyond the trading stock), crafts it like a player (the recipe's fee to the treasury) and
-   *  stocks the shelf of the merchant that sells the good, at that merchant's bid, while its stock is under `fillPct` % of
-   *  its target. More stock lowers that merchant's ask, so crafting brings the price of bread, meals and tools down.
-   *  Done only when the bid is at least the cost x (1 + marginPct / 100) (negative allowed), at most `perHour` crafts,
+   *  stocks the shelf of the merchant that sells the good dearest, while its stock is under `fillPct` % of its target.
+   *  More stock lowers that merchant's ask, so crafting brings the price of bread, meals and tools down. The townsfolk's job
+   *  is to keep prices fair: a good is crafted only when making it costs less than the merchant sells it for (cost x (1 +
+   *  marginPct / 100) < its ask; never at a loss), and the merchant pays the cost of making it (below its own ask), at most
+   *  `perHour` crafts,
    *  never spending the wallet below the trading floor `minWallet` (short: an allowance from the treasury, never new coin). Ledger: inputs kind `trade` (tag `<resident>-c`),
    *  the craft kind `resident_craft`, the sale kind `trade` (market.restock). Returns the crafts made. */
   craft(day: number): number {
@@ -276,11 +282,11 @@ export class Residents {
     const { market, gs, econ, town } = this.d, m = 1 + s.marginPct / 100, held = this.stock();
     const ids = market.ids().filter((id) => market.isOpen(id) && this.walkers.some((w) => this.allows(w, id, c)));
     const spare = (tk: string) => Math.max(0, gs.balance(this.wallet, tk) - (held[tk]?.qty ?? 0));
-    // the merchant that sells `out`, under its fill line, paying most for it now
+    // the merchant that sells `out` dearest (its ask: what players pay), under its fill line
     const shopFor = (out: string) => ids.filter((id) => market.def(id).sells.includes(out)).map((id) => {
       const d = market.def(id), acct = market.account(id), upTo = Math.floor(((d.target[out] ?? 10) * s.fillPct) / 100);
-      return { id, upTo, room: upTo - gs.balance(acct, out), unit: market.quote(id, out, 'sell', 1).unit, cash: gs.balance(acct, 'coin') };
-    }).filter((o) => o.room >= 1 && o.cash >= o.unit).sort((a, b) => b.unit - a.unit)[0] ?? null;
+      return { id, upTo, room: upTo - gs.balance(acct, out), ask: market.quote(id, out, 'buy', 1).unit, unit: market.quote(id, out, 'sell', 1).unit, cash: gs.balance(acct, 'coin') };
+    }).filter((o) => o.room >= 1 && o.cash >= 1).sort((a, b) => b.ask - a.ask)[0] ?? null;
     type Recipe = (typeof econ.recipes)[string];
     // one unit of one recipe; false when it cannot (no shelf with room, no ingredients, margin not met, wallet floor)
     const one = (rid: string, r: Recipe): boolean => {
@@ -290,6 +296,7 @@ export class Residents {
       const tag = `${w.id}-c`;
       // a good crafted earlier that never reached a shelf goes first
       if (spare(out) >= 1) {
+        if (shop.cash < shop.unit) return false;
         try { market.restock(this.wallet, shop.id, out, 1, tag, shop.upTo); } catch { return false; }
         this.walkTo(shop.id, out, shop.unit, true);
         return true;
@@ -305,7 +312,10 @@ export class Residents {
         cost += own * econ.items[tk].base + (seller ? seller.unit * need : 0); // what the wallet already holds counts at its base value
         coin += seller ? seller.unit * need : 0;
       }
-      if (shop.unit < cost * m) return false;
+      // making it must be cheaper than buying it from the merchant; then the merchant pays what it cost to make
+      if (cost * m >= shop.ask) return false;
+      const pay = Math.max(1, Math.min(shop.ask - 1, Math.ceil(cost)));
+      if (shop.cash < pay) return false;
       if (gs.balance(this.wallet, 'coin') - coin < set.trade.minWallet) this.handout(day, false); // from the treasury only
       if (gs.balance(this.wallet, 'coin') - coin < set.trade.minWallet) return false;
       try { for (const p of plan) if (p.seller) market.buy(this.wallet, p.seller.id, p.tk, p.need, tag); } catch { return false; } // bought inputs stay as spare
@@ -313,8 +323,8 @@ export class Residents {
       gs.add(day, this.wallet, out, 1, 'resident_craft', `${rid}#${w.id}`);
       if (r.fee > 0) { gs.add(day, this.wallet, 'coin', -r.fee, 'fee', rid); gs.add(day, town, 'coin', r.fee, 'fee', `${rid}:${this.wallet}`); }
       for (const p of plan) if (p.seller) this.walkTo(p.seller.id, p.tk, p.seller.unit * p.need, false);
-      try { market.restock(this.wallet, shop.id, out, 1, tag, shop.upTo); } catch { return true; } // kept as spare for next hour
-      this.walkTo(shop.id, out, shop.unit, true);
+      try { market.restock(this.wallet, shop.id, out, 1, tag, shop.upTo, pay); } catch { return true; } // kept as spare for next hour
+      this.walkTo(shop.id, out, pay, true);
       return true;
     };
     // the recipes take turns, one unit each per round, so bread does not use up the hour before meals get a go
@@ -325,6 +335,55 @@ export class Residents {
       for (const [rid, r] of recipes) { if (done >= s.perHour) break; if (one(rid, r)) { done++; moved = true; } }
     }
     return done;
+  }
+
+/* ---------------------------------------------------------------- meals: every resident eats `meals` foods a game day */
+
+  /** How many meals a resident should have had by this hour of the game day (the day runs from 06:00; the meals are spread
+   *  evenly: with 2, at 12:00 and 24:00). */
+  mealsDue(hour: number, meals = this.settings().meals): number {
+    const since = (((hour - 6) % 24) + 24) % 24;
+    let due = 0;
+    for (let k = 0; k < meals; k++) if (since >= Math.round(((k + 0.5) * 24) / meals)) due++;
+    return due;
+  }
+  /** Today's meals per resident (meta `residents.meals`, reset each game day). */
+  meals(day: number): { day: number; ate: Record<string, number> } {
+    try { const m = JSON.parse(this.d.gs.meta(MEALS_KEY) ?? '{}'); if (m && m.day === day && m.ate && typeof m.ate === 'object') return m; } catch { /* a new day */ }
+    return { day, ate: {} };
+  }
+
+  /** Each hour (game.step): every resident who is behind on today's meals eats one food from the shared bag (the cheapest
+   *  food it holds beyond the goods kept to sell again: bread or grilled fish, a crafted one too), else buys the cheapest
+   *  food a merchant has (an allowance from the treasury when short, never new coin; tag `<resident>-e`). Ledger kind
+   *  `resident_eat`, ref the resident. A resident with no food and no coin stays hungry until something turns up. */
+  eat(day: number, hour: number): number {
+    const set = this.settings();
+    if (!this.ready || set.meals < 1 || !this.walkers.length) return 0;
+    const { market, gs, econ } = this.d, held = this.stock(), due = this.mealsDue(hour, set.meals), log = this.meals(day);
+    const foods = Object.keys(econ.items).filter((t) => econ.items[t].energy).sort((a, b) => econ.items[a].base - econ.items[b].base);
+    const ids = market.ids().filter((id) => market.isOpen(id));
+    let eaten = 0;
+    for (const w of this.walkers) {
+      while ((log.ate[w.id] ?? 0) < due) {
+        let food = foods.find((t) => gs.balance(this.wallet, t) - (held[t]?.qty ?? 0) >= 1) ?? null;
+        if (!food) {
+          const offer = foods.flatMap((t) => ids.filter((id) => market.def(id).sells.includes(t) && !market.trend.withdrawn(t) && gs.balance(market.account(id), t) >= 1)
+            .map((id) => ({ id, t, unit: market.quote(id, t, 'buy', 1).unit }))).sort((a, b) => a.unit - b.unit)[0];
+          if (!offer) break;
+          if (gs.balance(this.wallet, 'coin') < offer.unit) this.handout(day, false); // from the treasury only
+          if (gs.balance(this.wallet, 'coin') < offer.unit) break;
+          try { market.buy(this.wallet, offer.id, offer.t, 1, `${w.id}-e`); } catch { break; }
+          this.walkTo(offer.id, offer.t, offer.unit, false);
+          food = offer.t;
+        }
+        gs.add(day, this.wallet, food, -1, 'resident_eat', w.id);
+        log.ate[w.id] = (log.ate[w.id] ?? 0) + 1;
+        eaten++;
+      }
+    }
+    this.d.gs.setMeta(MEALS_KEY, JSON.stringify(log));
+    return eaten;
   }
 
   /* ---------------------------------------------------------------- walking (shown only) */

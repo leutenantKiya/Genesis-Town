@@ -266,6 +266,7 @@ export class Game {
         this.market.townDemand();
         this.residents.trade(this.clock.time().settleDay); // the townsfolk buy to sell again at the admin's margin
         this.residents.craft(this.clock.time().settleDay); // and craft to stock the shelves, which lowers those prices
+        { const ct = this.clock.time(); this.residents.eat(ct.settleDay, ct.hour); } // and each eats its meals of the day
       }
       this.gs.setMeta('clock.hour', String(now));
       await this.npc.run();
