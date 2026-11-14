@@ -2101,6 +2101,16 @@
     "2. Pilih akun Google": "2. Choose the Google account",
     "Itu bukan akun Google.": "That is not a Google account.",
     "Akun Google terhubung. Lain kali kamu bisa masuk dengan Google ke akun ini.": "Google account linked. Next time you can sign in to this account with Google.",
-    "Hubungkan akun Google": "Link a Google account"
+    "Hubungkan akun Google": "Link a Google account",
+    "Batas ini mengikuti pasar dan tidak bisa diatur: paling rendah {0} x, naik sampai {1} x saat barang kebutuhan kota mahal (tingkat harga sekarang {2} x harga dasar).": "This ceiling follows the market and cannot be set: never under {0} x, up to {1} x when the goods the town needs run dear (the price level now is {2} x base value).",
+    "Angka yang mengikuti pasar": "Numbers that follow the market",
+    "makanan termurah {0}% dari harga dasar": "cheapest food at {0}% of base value",
+    "tidak ada makanan di rak": "no food on the shelves",
+    "kayu termurah {0}% dari harga dasar": "cheapest wood at {0}% of base value",
+    "tidak ada kayu di rak": "no wood on the shelves",
+    "dompet terisi {0}%": "wallet {0}% full",
+    "tingkat harga {0} x": "price level {0} x",
+    "Makanan atau kayu disebut murah kalau harganya paling tinggi {0}% dari harga dasar: saat itu warga makan dan membakar satu lebih banyak. Margin jual turun saat dompet warga penuh dan naik saat kosong.": "Food or wood counts as cheap at or under {0}% of its base value: then the townsfolk eat and burn one more. The resale margin falls as their wallet fills and rises as it empties.",
+    "Tidak ada yang mengatur warga: jumlah makan, kayu bakar, margin jual, dan batas harga kota mengikuti keadaan pasar. Halaman ini hanya untuk memantau.": "Nobody steers the townsfolk: meals, firewood, the resale margin and the town's price ceiling follow the market. This page is for watching only."
   });
 })();

@@ -494,8 +494,9 @@
     var p = d.price; if (!p) return;
     el.appendChild($('div', 'chain-h', $t('Batas harga kota')));
     el.appendChild($('p', 'chain-dim', $t('Warga hanya membeli kalau harga pedagang paling tinggi {0} x harga dasar barang. Naikkan kalau warga tidak belanja karena harga pasar naik; turunkan untuk menahan uang kas kota.', [p.mult])));
+    el.appendChild($('p', 'chain-dim', $t('Batas ini mengikuti pasar dan tidak bisa diatur: paling rendah {0} x, naik sampai {1} x saat barang kebutuhan kota mahal (tingkat harga sekarang {2} x harga dasar).', [p.min, p.max, p.level])));
     var f = $('div', 'chain-field adm-find'), inp = $('input');
-    inp.type = 'number'; inp.min = String(p.min); inp.max = String(p.max); inp.step = '0.1'; inp.value = String(p.mult); inp.setAttribute('aria-label', $t('Batas harga kota'));
+    inp.type = 'number'; inp.disabled = true; inp.min = String(p.min); inp.max = String(p.max); inp.step = '0.1'; inp.value = String(p.mult); inp.setAttribute('aria-label', $t('Batas harga kota'));
     var save = function () {
       var n = Number(inp.value);
       if (!(n >= p.min && n <= p.max)) { GT.toast($t('Isi angka {0} sampai {1}.', [p.min, p.max])); return; }
@@ -503,8 +504,6 @@
     };
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); });
     f.appendChild(inp); f.appendChild($('span', 'chain-dim', '× ' + $t('harga dasar')));
-    f.appendChild(btn($t('Simpan'), save, 'primary'));
-    if (p.mult !== p.default) f.appendChild(btn($t('Default ({0})', [p.default]), function () { botsSet({ maxPriceMult: null }); }));
     el.appendChild(f);
     var tb = $('div', 'adm-ptable');
     [$t('Barang'), $t('Dasar'), $t('Batas'), $t('Pedagang (harga, stok)')].forEach(function (h) { tb.appendChild($('b', 'chain-dim', h)); });
@@ -536,11 +535,11 @@
     var form = $('div', 'adm-form'), fields = {};
     function field(key, label, val, lim, step, note) {
       var row = $('label', 'adm-frow'); row.appendChild($('span', null, label));
-      var i = $('input'); i.type = 'number'; i.min = String(lim[0]); i.max = String(lim[1]); i.step = String(step); i.value = String(val);
+      var i = $('input'); i.type = 'number'; i.disabled = true; i.min = String(lim[0]); i.max = String(lim[1]); i.step = String(step); i.value = String(val);
       row.appendChild(i); if (note) row.appendChild($('span', 'chain-dim', note));
       fields[key] = i; form.appendChild(row);
     }
-    var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!t.enabled;
+    var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!t.enabled; cb.disabled = true;
     on.appendChild($('span', null, $t('Dagang aktif'))); on.appendChild(cb); form.appendChild(on);
     field('marginPct', $t('Margin jual'), t.marginPct, L.marginPct, 0.5, $t('% dari harga beli (minus = rugi)'));
     field('perHour', $t('Transaksi per jam'), t.perHour, L.perHour, 1);
@@ -558,7 +557,7 @@
     };
     Object.keys(fields).forEach(function (k) { fields[k].addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); }); });
     if (d.wallet.coin < t.minWallet && !d.wallet.treasuryFree) el.appendChild($('p', 'adm-result bad', $t('Dompet warga di bawah sisa minimal dan kas kota di bawah cadangannya: dagang dan crafting menunggu uang. Turunkan Cadangan kas kota atau Sisa dompet minimal.')));
-    var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', t.enabled ? $t('Dagang berjalan, margin {0}%', [t.marginPct]) : $t('Dagang mati'))); acts.appendChild(btn($t('Simpan pengaturan'), save, 'primary'));
+    var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', t.enabled ? $t('Dagang berjalan, margin {0}%', [t.marginPct]) : $t('Dagang mati')));
     el.appendChild(acts);
     el.appendChild($('div', 'adm-step', $t('Barang yang dipegang')));
     if (!tr.holding.length) { el.appendChild($('p', 'chain-dim', $t('Tidak ada.'))); return; }
@@ -587,14 +586,14 @@
     var pc = stat($t('Selisih'), (cr.profit > 0 ? '+' : '') + num(cr.profit) + ' ' + $t('koin')); pc.classList.add(cr.profit < 0 ? 'adm-out' : 'adm-in'); g.appendChild(pc);
     el.appendChild(g);
     var form = $('div', 'adm-form'), fields = {};
-    var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!s.enabled;
+    var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!s.enabled; cb.disabled = true;
     on.appendChild($('span', null, $t('Crafting aktif'))); on.appendChild(cb); form.appendChild(on);
     [['marginPct', $t('Selisih minimal'), s.marginPct, 0.5, $t('% biaya buat harus lebih murah dari harga jual pedagang')],
      ['perHour', $t('Craft per jam'), s.perHour, 1, null],
      ['fillPct', $t('Isi rak sampai'), s.fillPct, 10, $t('% dari target stok pedagang')]].forEach(function (f) {
       var row = $('label', 'adm-frow'); row.appendChild($('span', null, f[1]));
       var lim = L[f[0] === 'marginPct' ? 'craftMarginPct' : f[0]];
-      var i = $('input'); i.type = 'number'; i.min = String(lim[0]); i.max = String(lim[1]); i.step = String(f[3]); i.value = String(f[2]);
+      var i = $('input'); i.type = 'number'; i.disabled = true; i.min = String(lim[0]); i.max = String(lim[1]); i.step = String(f[3]); i.value = String(f[2]);
       row.appendChild(i); if (f[4]) row.appendChild($('span', 'chain-dim', f[4]));
       fields[f[0]] = i; form.appendChild(row);
     });
@@ -608,7 +607,7 @@
     };
     Object.keys(fields).forEach(function (k) { fields[k].addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); }); });
     if (broke) el.appendChild($('p', 'adm-result bad', $t('Dompet warga di bawah sisa minimal dan kas kota di bawah cadangannya: dagang dan crafting menunggu uang. Turunkan Cadangan kas kota atau Sisa dompet minimal.')));
-    var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', s.enabled ? $t('Crafting berjalan, selisih minimal {0}%', [s.marginPct]) : $t('Crafting mati'))); acts.appendChild(btn($t('Simpan pengaturan'), save, 'primary'));
+    var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', s.enabled ? $t('Crafting berjalan, selisih minimal {0}%', [s.marginPct]) : $t('Crafting mati')));
     el.appendChild(acts);
     el.appendChild($('div', 'adm-step', $t('Rak pedagang')));
     var tb = $('div', 'adm-ptable');
@@ -715,10 +714,10 @@
     g.appendChild(stat($t('Dibeli untuk makan'), num(m.coin) + ' ' + $t('koin'), num(m.bought) + 'x'));
     el.appendChild(g);
     var f = $('div', 'chain-field adm-find'), inp = $('input');
-    inp.type = 'number'; inp.min = String(L.meals[0]); inp.max = String(L.meals[1]); inp.step = '1'; inp.value = String(m.perDay); inp.setAttribute('aria-label', $t('Makan per hari'));
+    inp.type = 'number'; inp.disabled = true; inp.min = String(L.meals[0]); inp.max = String(L.meals[1]); inp.step = '1'; inp.value = String(m.perDay); inp.setAttribute('aria-label', $t('Makan per hari'));
     var save = function () { var n = Number(inp.value); if (inp.value === '' || !(n >= L.meals[0] && n <= L.meals[1])) { GT.toast($t('Angka di luar batas: {0}', ['meals'])); return; } inp.blur(); botsSet({ settings: { meals: n } }, $t('Pengaturan warga disimpan.')); };
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); });
-    f.appendChild($('span', null, $t('Makan per hari'))); f.appendChild(inp); f.appendChild(btn($t('Simpan'), save, 'primary'));
+    f.appendChild($('span', null, $t('Makan per hari'))); f.appendChild(inp);
     el.appendChild(f);
     // firewood: every resident burns wood each evening, bought from a merchant every time
     var fw = d.fire; if (!fw || !L.burnWood) return;
@@ -730,10 +729,10 @@
     g2.appendChild(stat($t('Api hari ini'), Object.keys(fw.today).reduce(function (n, k) { return n + fw.today[k]; }, 0) + ' / ' + (fw.perDay * Object.keys(fw.today).length), cold ? $t('{0} kali kedinginan', [num(cold)]) : ''));
     el.appendChild(g2);
     var f2 = $('div', 'chain-field adm-find'), inp2 = $('input');
-    inp2.type = 'number'; inp2.min = String(L.burnWood[0]); inp2.max = String(L.burnWood[1]); inp2.step = '1'; inp2.value = String(fw.perDay); inp2.setAttribute('aria-label', $t('Kayu dibakar per hari'));
+    inp2.type = 'number'; inp2.disabled = true; inp2.min = String(L.burnWood[0]); inp2.max = String(L.burnWood[1]); inp2.step = '1'; inp2.value = String(fw.perDay); inp2.setAttribute('aria-label', $t('Kayu dibakar per hari'));
     var save2 = function () { var n = Number(inp2.value); if (inp2.value === '' || !(n >= L.burnWood[0] && n <= L.burnWood[1])) { GT.toast($t('Angka di luar batas: {0}', ['burnWood'])); return; } inp2.blur(); botsSet({ settings: { burnWood: n } }, $t('Pengaturan warga disimpan.')); };
     inp2.addEventListener('keydown', function (e) { if (e.key === 'Enter') save2(); });
-    f2.appendChild($('span', null, $t('Kayu dibakar per hari'))); f2.appendChild(inp2); f2.appendChild(btn($t('Simpan'), save2, 'primary'));
+    f2.appendChild($('span', null, $t('Kayu dibakar per hari'))); f2.appendChild(inp2);
     el.appendChild(f2);
   }
   // one step of a resident (residents.plan via adminbots.planView): what it is, in words
@@ -762,7 +761,7 @@
     g.appendChild(stat($t('Alat baru di Ben'), num(gs.toolsSpent || 0) + ' ' + $t('koin'), num(gs.toolsBought || 0) + 'x'));
     el.appendChild(g);
     var form = $('div', 'adm-form'), fields = {}, picked = s.goods.slice();
-    var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!s.enabled;
+    var on = $('label', 'adm-frow'), cb = $('input'); cb.type = 'checkbox'; cb.checked = !!s.enabled; cb.disabled = true;
     on.appendChild($('span', null, $t('Mengumpulkan aktif'))); on.appendChild(cb); form.appendChild(on);
     var gr = $('div', 'adm-frow'); gr.appendChild($('span', null, $t('Bahan')));
     var chips = $('div', 'adm-chips');
@@ -771,7 +770,7 @@
         var i = picked.indexOf(x.token); if (i >= 0) picked.splice(i, 1); else picked.push(x.token);
         b.classList.toggle('on', picked.indexOf(x.token) >= 0); b.setAttribute('aria-pressed', picked.indexOf(x.token) >= 0 ? 'true' : 'false');
       }, 'adm-chip' + (picked.indexOf(x.token) >= 0 ? ' on' : ''));
-      b.setAttribute('aria-pressed', picked.indexOf(x.token) >= 0 ? 'true' : 'false');
+      b.setAttribute('aria-pressed', picked.indexOf(x.token) >= 0 ? 'true' : 'false'); b.disabled = true;
       chips.appendChild(b);
     });
     gr.appendChild(chips); form.appendChild(gr);
@@ -781,7 +780,7 @@
      ['keepMax', $t('Simpan di tas maks'), s.keepMax, 1, $t('per bahan')],
      ['fillPct', $t('Isi rak sampai'), s.fillPct, 10, $t('% dari target stok pedagang')]].forEach(function (f) {
       var row = $('label', 'adm-frow'); row.appendChild($('span', null, f[1]));
-      var i = $('input'); i.type = 'number'; i.min = String(L[f[0]][0]); i.max = String(L[f[0]][1]); i.step = String(f[3]); i.value = String(f[2]);
+      var i = $('input'); i.type = 'number'; i.disabled = true; i.min = String(L[f[0]][0]); i.max = String(L[f[0]][1]); i.step = String(f[3]); i.value = String(f[2]);
       row.appendChild(i); if (f[4]) row.appendChild($('span', 'chain-dim', f[4]));
       fields[f[0]] = i; form.appendChild(row);
     });
@@ -794,7 +793,7 @@
       botsSet({ settings: { gather: { enabled: cb.checked, goods: picked, perHour: v.perHour, dailyMax: v.dailyMax, minPricePct: v.minPricePct, keepMax: v.keepMax, fillPct: v.fillPct } } }, $t('Pengaturan warga disimpan.'));
     };
     Object.keys(fields).forEach(function (k) { fields[k].addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); }); });
-    var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', s.enabled ? $t('Mengumpulkan berjalan') : $t('Mengumpulkan mati'))); acts.appendChild(btn($t('Simpan pengaturan'), save, 'primary'));
+    var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', s.enabled ? $t('Mengumpulkan berjalan') : $t('Mengumpulkan mati')));
     el.appendChild(acts);
   }
   function renderBots() {
@@ -814,7 +813,6 @@
     if (!d.wallet.ready) ui.botsTop.appendChild($('p', 'adm-result bad', $t('Dompet warga belum terdaftar di chain: kota masih membeli dengan koin baru langsung ke pedagang.')));
     var row = $('div', 'adm-wallet-h');
     row.appendChild($('b', d.paused ? 'adm-result bad' : 'adm-result ok', d.paused ? $t('Belanja warga dijeda') : $t('Warga berbelanja seperti biasa')));
-    row.appendChild(btn(d.paused ? $t('Lanjutkan belanja') : $t('Jeda belanja'), function () { botsSet({ paused: !d.paused }); }, d.paused ? 'primary' : ''));
     row.appendChild(btn($t('Lacak dompet'), function () { TR.path = []; trace(d.wallet.account, false); }));
     ui.botsTop.appendChild(row);
     if (d.truncated) ui.botsTop.appendChild($('p', 'chain-dim', $t('Hanya {0} baris terbaru yang dihitung.', [num(d.scanned)])));
@@ -827,8 +825,18 @@
     renderCraft(d);
 
     // each resident: what they spent, the last buy, and the merchants they may buy from (a chip toggles one)
+    if (d.auto) {
+      var au = d.auto, ag = $('div', 'adm-grid');
+      ui.botsPeople.appendChild($('div', 'chain-h', $t('Angka yang mengikuti pasar')));
+      ag.appendChild(stat($t('Makan per hari'), String(au.meals), au.food ? $t('makanan termurah {0}% dari harga dasar', [au.food.pct]) : $t('tidak ada makanan di rak')));
+      ag.appendChild(stat($t('Kayu dibakar per hari'), String(au.burnWood), au.wood ? $t('kayu termurah {0}% dari harga dasar', [au.wood.pct]) : $t('tidak ada kayu di rak')));
+      ag.appendChild(stat($t('Margin jual'), au.marginPct + '%', $t('dompet terisi {0}%', [Math.round(au.walletFill * 100)])));
+      if (d.price) ag.appendChild(stat($t('Batas harga kota'), d.price.mult + ' x', $t('tingkat harga {0} x', [d.price.level])));
+      ui.botsPeople.appendChild(ag);
+      ui.botsPeople.appendChild($('p', 'chain-dim', $t('Makanan atau kayu disebut murah kalau harganya paling tinggi {0}% dari harga dasar: saat itu warga makan dan membakar satu lebih banyak. Margin jual turun saat dompet warga penuh dan naik saat kosong.', [au.cheapPct])));
+    }
     ui.botsPeople.appendChild($('div', 'chain-h', $t('Warga dan lawan transaksinya')));
-    ui.botsPeople.appendChild($('p', 'chain-dim', $t('Klik nama pedagang untuk mengizinkan atau melarang warga itu berbelanja di sana. Kota hanya membeli dari pedagang yang diizinkan untuk minimal satu warga.')));
+    ui.botsPeople.appendChild($('p', 'chain-dim', $t('Tidak ada yang mengatur warga: jumlah makan, kayu bakar, margin jual, dan batas harga kota mengikuti keadaan pasar. Halaman ini hanya untuk memantau.')));
     var mname = {}; d.merchants.forEach(function (m) { mname[m.id] = m.name; });
     d.residents.forEach(function (r) {
       var box = $('div', 'adm-bot'), hd = $('div', 'adm-who'), t = $('div', 'adm-who-t');
@@ -851,19 +859,8 @@
       if (d.toolDefs && r.tools) { var tl = Object.keys(r.tools).map(function (k) { var def = d.toolDefs[k] || { name: k, durability: 0 }; return def.name + ' ' + num(r.tools[k]) + '/' + num(def.durability); }); if (tl.length) t.appendChild($('div', 'chain-dim', $t('Alat: {0}', [tl.join(' \u00b7 ')]))); }
       if (r.trade && r.trade.crafted) t.appendChild($('div', 'chain-dim', $t('Crafting: {0} barang ke rak pedagang', [num(r.trade.crafted)])));
       hd.appendChild(t); box.appendChild(hd);
-      var chips = $('div', 'adm-chips'), allow = r.allow;
-      d.merchants.forEach(function (m) {
-        var on = !allow || allow.indexOf(m.id) >= 0, spent = r.byMerchant[m.id] || 0;
-        var b = btn(m.name + (spent ? ' · ' + num(spent) : ''), function () {
-          var cur = allow ? allow.slice() : d.merchants.map(function (x) { return x.id; });
-          var next = on ? cur.filter(function (x) { return x !== m.id; }) : cur.concat([m.id]);
-          if (!next.length) { GT.toast($t('Sisakan minimal satu pedagang, atau pakai Jeda belanja.')); return; }
-          botsSet({ resident: r.id, merchants: next });
-        }, 'adm-chip' + (on ? ' on' : ''));
-        b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.title = on ? $t('Diizinkan: klik untuk melarang') : $t('Dilarang: klik untuk mengizinkan');
-        chips.appendChild(b);
-      });
-      if (allow) chips.appendChild(btn($t('Semua'), function () { botsSet({ resident: r.id, merchants: null }); }));
+      var chips = $('div', 'chain-dim');
+      chips.textContent = d.merchants.filter(function (m) { return r.byMerchant[m.id]; }).map(function (m) { return m.name + ' ' + num(r.byMerchant[m.id]); }).join(' \u00b7 ');
       box.appendChild(chips);
       ui.botsPeople.appendChild(box);
     });

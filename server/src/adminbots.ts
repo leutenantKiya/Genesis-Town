@@ -107,7 +107,7 @@ export class AdminBots {
       residents: res.walkers.map((x) => ({ id: x.id, name: x.name, look: x.look, role: x.role, account: res.account(x.id), allow: ctl.allow[x.id] ?? null, ...per[x.id], trade: perTrade[x.id], tools: res.tools()[x.id] ?? {}, plan: plan.per[x.id] })),
       queueOpen: plan.open, now: this.d.game.now(),
       toolDefs: Object.fromEntries(Object.entries(this.d.game.econ.tools ?? {}).map(([k, t]) => [k, { name: t.name, durability: t.durability, price: this.d.game.econ.toolShop?.price?.[k] ?? null }])),
-      settings: res.settings(), limits: LIMITS, trade: { ...trade, profit: trade.sold - trade.bought, holding: this.holding() },
+      settings: res.settings(), auto: res.auto(), limits: LIMITS, trade: { ...trade, profit: trade.sold - trade.bought, holding: this.holding() },
       craft: { ...craft, profit: craft.sold - craft.inputs - craft.fees, shelves: this.shelves() },
       meals: this.mealsView(from, meals), fire: this.fireView(fire),
       gather: { ...gathered, caught: Object.fromEntries((gs.db.prepare("SELECT token, SUM(delta) AS n FROM ledger WHERE account = ? AND kind = 'resident_gather' AND day >= ? GROUP BY token").all(w, from) as Array<{ token: string; n: number }>).map((x) => [x.token, x.n])) },
@@ -300,7 +300,7 @@ export class AdminBots {
   price() {
     const { market, econ, gs } = this.d.game, mult = market.priceMult();
     return {
-      mult, default: econ.town.maxPriceMult, min: MULT_MIN, max: MULT_MAX,
+      mult, default: econ.town.maxPriceMult, min: econ.town.maxPriceMult, max: Math.max(econ.town.maxPriceMult, econ.town.maxPriceMultMax ?? econ.town.maxPriceMult), level: Math.round(market.priceLevel() * 100) / 100,
       goods: Object.keys(econ.town.dailyUnits).map((token) => {
         const base = econ.items[token].base, ceiling = Math.floor(mult * base), withdrawn = market.trend.withdrawn(token);
         const offers = market.ids().filter((id) => market.def(id).sells.includes(token)).map((id) => {
@@ -318,11 +318,11 @@ export class AdminBots {
     const { res } = this, { market } = this.d.game, ctl = res.controls();
     if ('maxPriceMult' in body) {
       const v = body.maxPriceMult;
-      if (v === null) this.gs.setMeta('town.maxPriceMult', '');
+      if (v === null) this.d.game.market.fixedMult = null;
       else {
         const n = Number(v);
         if (typeof v !== 'number' || !Number.isFinite(n) || n < MULT_MIN || n > MULT_MAX) throw new HttpError(400, `maxPriceMult must be between ${MULT_MIN} and ${MULT_MAX}.`);
-        this.gs.setMeta('town.maxPriceMult', String(Math.round(n * 100) / 100));
+        this.d.game.market.fixedMult = Math.round(n * 100) / 100;
       }
       return this.status(1);
     }

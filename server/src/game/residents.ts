@@ -10,9 +10,11 @@
 // shown: the buyer then walks to that stall and the goods fly when it arrives (social.ts deals, client mods/trade.js).
 // Until the wallet is registered on chain the town buys as before (new coin straight to the merchant), so settlement
 // never carries rows for an account the contract would skip.
-// Admin controls (adminbots.ts, kept in the meta table so a restart keeps them): `paused` stops the town's shopping, and
-// `allow[resident]` lists the merchants that resident may buy from (missing = all); market.townDemand only picks a
-// merchant some resident may buy from, and pay() books the purchase under such a resident.
+// Nobody steers the townsfolk (2026-11-15): there is no admin setting any more, and what an admin saved earlier in the
+// meta table (`residents.settings`, `residents.ctl`, `town.maxPriceMult`) is ignored. Their numbers come from
+// economy/config.json and follow the market (auto()): at least `meals` (2) foods and `burnWood` (1) wood a day, one more
+// when food or wood is cheap; the resale margin falls as the wallet fills. `tune` and `ctl` are in-memory overrides for
+// tests and simulations only: no route sets them.
 // Trading (trade(), hourly): the townsfolk also buy goods to sell again to a merchant at the admin's margin; the settings
 // (wallet target, treasury reserve, trade) are config.json overlaid with meta `residents.settings`, the goods held and
 // what they cost are in meta `residents.stock`: everything the admin sets lives in the database.
@@ -81,7 +83,7 @@ export interface TradeSettings { enabled: boolean; marginPct: number; perHour: n
 export interface CraftSettings { enabled: boolean; marginPct: number; perHour: number; fillPct: number }
 export interface GatherSettings { enabled: boolean; goods: string[]; perHour: number; dailyMax: number; minPricePct: number; fillPct: number; keepMax: number }
 export interface ResidentSettings { target: number; treasuryReserve: number; meals: number; burnWood: number; trade: TradeSettings; craft: CraftSettings; gather: GatherSettings }
-const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock', MEALS_KEY = 'residents.meals', TOOLS_KEY = 'residents.tools', BURN_KEY = 'residents.burn';
+const STOCK_KEY = 'residents.stock', MEALS_KEY = 'residents.meals', TOOLS_KEY = 'residents.tools', BURN_KEY = 'residents.burn';
 /** How long each kind of work is shown on the spot (ms). */
 const ACT_MS: Record<string, number> = { fish: 7000, chop: 5000, mine: 5000, hoe: 4500, cook: 5000, eat: 3000, burn: 4000 };
 /** The work that gathers each raw good. */
@@ -144,16 +146,29 @@ export class Residents {
   /** A resident's account as players see it: not a wallet, only a name on the map. */
   account(id: string) { return `${id}.residents`; }
 
-  /** The admin's controls (adminbots.ts): stored in meta, read on every purchase. */
-  controls(): ResidentControls {
-    try {
-      const c = JSON.parse(this.d.gs.meta(CTL_KEY) ?? '{}') as Partial<ResidentControls>;
-      const allow: Record<string, string[]> = {};
-      if (c.allow && typeof c.allow === 'object') for (const [k, v] of Object.entries(c.allow)) if (Array.isArray(v)) allow[k] = v.map(String);
-      return { paused: c.paused === true, allow };
-    } catch { return { paused: false, allow: {} }; }
+  /** Tests and simulations only (in memory, no route): pause the shopping or limit a resident to some merchants. */
+  private ctl: ResidentControls = { paused: false, allow: {} };
+  /** Tests and simulations only (in memory, no route): fixed settings instead of the ones that follow the market. */
+  private tune: ResidentSettings | null = null;
+  controls(): ResidentControls { return { paused: this.ctl.paused, allow: { ...this.ctl.allow } }; }
+  setControls(c: ResidentControls) { this.ctl = { paused: !!c.paused, allow: { ...c.allow } }; }
+
+  /** The numbers that follow the market, and what they were read from: the cheapest food and wood against their base
+   *  value, and how full the wallet is against its target. */
+  auto(): { meals: number; burnWood: number; marginPct: number; food: { token: string; ask: number; pct: number } | null; wood: { ask: number; pct: number } | null; walletFill: number; cheapPct: number } {
+    const c = this.cfg, a = c.adaptive ?? { cheapPct: 80, mealsMax: c.meals ?? 2, burnMax: c.burnWood ?? 1, marginMin: c.trade?.marginPct ?? 5, marginMax: c.trade?.marginPct ?? 5 };
+    const { econ, gs } = this.d, minMeals = c.meals ?? 2, minBurn = c.burnWood ?? 1;
+    const pct = (tk: string) => { const o = this.cheapestAsk(tk); return o ? { ask: o.unit, pct: Math.round((o.unit / econ.items[tk].base) * 100) } : null; };
+    const foods = Object.keys(econ.items).filter((t) => econ.items[t].energy).map((t) => ({ token: t, ...(pct(t) ?? { ask: 0, pct: Infinity }) })).filter((f) => Number.isFinite(f.pct)).sort((x, y) => x.pct - y.pct);
+    const food = foods[0] ?? null, wood = econ.items.wood ? pct('wood') : null;
+    const fill = c.target > 0 ? Math.max(0, Math.min(1, gs.balance(this.wallet, 'coin') / c.target)) : 1;
+    return {
+      meals: Math.max(minMeals, food && food.pct <= a.cheapPct ? a.mealsMax : minMeals),
+      burnWood: Math.max(minBurn, wood && wood.pct <= a.cheapPct ? a.burnMax : minBurn),
+      marginPct: Math.round((a.marginMax - (a.marginMax - a.marginMin) * fill) * 10) / 10,
+      food, wood, walletFill: Math.round(fill * 100) / 100, cheapPct: a.cheapPct,
+    };
   }
-  setControls(c: ResidentControls) { this.d.gs.setMeta(CTL_KEY, JSON.stringify({ paused: !!c.paused, allow: c.allow })); }
   private allows(w: Walker, merchantId: string, c: ResidentControls) { const a = c.allow[w.id]; return !a || a.includes(merchantId); }
   /** Whether the town may buy from this merchant now: not paused, and some resident may buy there. */
   canBuyFrom(merchantId: string): boolean {
@@ -216,14 +231,15 @@ export class Residents {
 
   /* ---------------------------------------------------------------- trading: buy to sell again at a margin */
 
-  /** The townsfolk's settings: config.json `residents` (and `residents.trade`) overlaid with what the admin saved in
-   *  meta `residents.settings` (adminbots.ts), so a restart or a deploy keeps them. */
+  /** The townsfolk's settings: config.json `residents`, with meals, firewood and the resale margin following the market
+   *  (auto()). Nothing is read from the database. */
   settings(): ResidentSettings {
+    if (this.tune) return this.tune;
+    const au = this.auto();
     const c = this.cfg, t = c.trade ?? { enabled: false, marginPct: 5, perHour: 2, holdMax: 5, minWallet: 100 };
     const cc = c.craft ?? { enabled: false, marginPct: 0, perHour: 2, fillPct: 100 };
     const cg = c.gather ?? { enabled: false, goods: [], perHour: 2, dailyMax: 20, minPricePct: 100, fillPct: 100, keepMax: 10 };
-    let saved: Partial<ResidentSettings> & { trade?: Partial<TradeSettings>; craft?: Partial<CraftSettings>; gather?: Partial<GatherSettings> } = {};
-    try { saved = JSON.parse(this.d.gs.meta(SETTINGS_KEY) ?? '{}'); } catch { /* bad row: the config's */ }
+    const saved: { target?: number; treasuryReserve?: number; meals?: number; burnWood?: number; trade?: Partial<TradeSettings>; craft?: Partial<CraftSettings>; gather?: Partial<GatherSettings> } = { meals: au.meals, burnWood: au.burnWood, trade: { marginPct: au.marginPct } };
     const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
     const st: Partial<TradeSettings> = saved.trade ?? {}, sc: Partial<CraftSettings> = saved.craft ?? {}, sg: Partial<GatherSettings> = saved.gather ?? {};
     return {
@@ -243,7 +259,8 @@ export class Residents {
       },
     };
   }
-  setSettings(s: ResidentSettings) { this.d.gs.setMeta(SETTINGS_KEY, JSON.stringify(s)); }
+  /** Tests and simulations only: fix every setting (null: follow the market again). In memory; no route calls it. */
+  setSettings(s: ResidentSettings | null) { this.tune = s; }
 
   /** What the wallet holds to sell again, with what it paid (meta `residents.stock`: token -> { qty, cost }). */
   stock(): Record<string, { qty: number; cost: number }> {
