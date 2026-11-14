@@ -465,7 +465,7 @@
     el.textContent = '';
     var s = d.settings, t = s.trade, L = d.limits, tr = d.trade;
     el.appendChild($('div', 'chain-h', $t('Dagang warga')));
-    el.appendChild($('p', 'chain-dim', $t('Warga membeli barang dari pedagang lalu menjualnya ke pedagang yang membayar paling tinggi, kalau harga jualnya minimal harga beli + margin. Margin boleh minus (rugi). Semua pengaturan disimpan di database server.')));
+    el.appendChild($('p', 'chain-dim', $t('Warga membeli barang dari pedagang lalu menjualnya ke pedagang yang membayar paling tinggi, kalau harga jualnya minimal harga beli + margin. Margin boleh minus (rugi). Modalnya uang saku dari kas kota (di atas cadangan, tanpa koin baru). Semua pengaturan disimpan di database server.')));
     var g = $('div', 'adm-grid');
     g.appendChild(stat($t('Beli untuk dijual'), num(tr.bought) + ' ' + $t('koin'), num(tr.boughtUnits) + 'x'));
     g.appendChild(stat($t('Hasil jual'), num(tr.sold) + ' ' + $t('koin'), num(tr.soldUnits) + 'x'));
@@ -495,6 +495,7 @@
       botsSet({ settings: { target: v.target, treasuryReserve: v.treasuryReserve, trade: { enabled: cb.checked, marginPct: v.marginPct, perHour: v.perHour, holdMax: v.holdMax, minWallet: v.minWallet } } }, $t('Pengaturan warga disimpan.'));
     };
     Object.keys(fields).forEach(function (k) { fields[k].addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); }); });
+    if (d.wallet.coin < t.minWallet && !d.wallet.treasuryFree) el.appendChild($('p', 'adm-result bad', $t('Dompet warga di bawah sisa minimal dan kas kota di bawah cadangannya: dagang dan crafting menunggu uang. Turunkan Cadangan kas kota atau Sisa dompet minimal.')));
     var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', t.enabled ? $t('Dagang berjalan, margin {0}%', [t.marginPct]) : $t('Dagang mati'))); acts.appendChild(btn($t('Simpan pengaturan'), save, 'primary'));
     el.appendChild(acts);
     el.appendChild($('div', 'adm-step', $t('Barang yang dipegang')));
@@ -515,6 +516,7 @@
     var el = ui.botsCraft; if (!el || typingIn(el) || !d.settings || !d.craft) return;
     el.textContent = '';
     var s = d.settings.craft, L = d.limits, cr = d.craft;
+    var broke = d.wallet.coin < d.settings.trade.minWallet && !d.wallet.treasuryFree;
     el.appendChild($('div', 'chain-h', $t('Crafting warga')));
     el.appendChild($('p', 'chain-dim', $t('Warga membeli bahan, membuat roti, makanan, atau alat, lalu menjualnya ke pedagang yang menjual barang itu. Stok pedagang naik, jadi harga jualnya turun. Pedagang diisi sampai batas % dari targetnya; di atas 100% harga makin turun.')));
     var g = $('div', 'adm-grid');
@@ -542,6 +544,7 @@
       botsSet({ settings: { craft: { enabled: cb.checked, marginPct: v.marginPct, perHour: v.perHour, fillPct: v.fillPct } } }, $t('Pengaturan warga disimpan.'));
     };
     Object.keys(fields).forEach(function (k) { fields[k].addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); }); });
+    if (broke) el.appendChild($('p', 'adm-result bad', $t('Dompet warga di bawah sisa minimal dan kas kota di bawah cadangannya: dagang dan crafting menunggu uang. Turunkan Cadangan kas kota atau Sisa dompet minimal.')));
     var acts = $('div', 'adm-wallet-h'); acts.appendChild($('span', 'chain-dim', s.enabled ? $t('Crafting berjalan, margin {0}%', [s.marginPct]) : $t('Crafting mati'))); acts.appendChild(btn($t('Simpan pengaturan'), save, 'primary'));
     el.appendChild(acts);
     el.appendChild($('div', 'adm-step', $t('Rak pedagang')));

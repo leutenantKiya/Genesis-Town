@@ -148,8 +148,9 @@ export class Residents {
     return rid;
   }
 
-  /** Tops the wallet up to `target`: from the treasury above its reserve, then new coin within today's faucet. */
-  handout(day: number): number {
+  /** Tops the wallet up to `target`: from the treasury above its reserve, then (unless `mint` is false) new coin within
+   *  today's faucet. Trading and crafting ask with `mint` false: their losses never print coin. */
+  handout(day: number, mint = true): number {
     const { gs, town, market } = this.d;
     const set = this.settings(), need = set.target - gs.balance(this.wallet, 'coin');
     if (need <= 0) return 0;
@@ -159,7 +160,7 @@ export class Residents {
       gs.add(day, town, 'coin', -fromTown, 'handout', this.wallet);
       gs.add(day, this.wallet, 'coin', fromTown, 'handout', 'treasury');
     }
-    const minted = Math.max(0, Math.min(need - fromTown, market.faucetLeft(day)));
+    const minted = mint ? Math.max(0, Math.min(need - fromTown, market.faucetLeft(day))) : 0;
     if (minted > 0) gs.add(day, this.wallet, 'coin', minted, 'handout_mint', 'faucet');
     return fromTown + minted;
   }
@@ -214,8 +215,9 @@ export class Residents {
    *  least cost x (1 + marginPct / 100), and buys a good to sell again only when some merchant would pay that margin for
    *  it right now; marginPct may be negative (selling at a loss). At most `perHour` trades, never more than `holdMax` of a
    *  good held, never spending the wallet below `minWallet`. Merchants' own prices, stock, cash and daily caps apply
-   *  (market.buy / market.sell, ledger kind `trade`, ref tagged `#<resident>`). Returns the trades made. */
-  trade(): number {
+   *  (market.buy / market.sell, ledger kind `trade`, ref tagged `#<resident>`). A wallet short of that floor asks for an
+   *  allowance from the treasury (above its reserve, never new coin). Returns the trades made. */
+  trade(day: number): number {
     const s = this.settings().trade, c = this.controls();
     if (!this.ready || !s.enabled || c.paused || s.perHour < 1) return 0;
     const { market, gs, econ } = this.d, m = 1 + s.marginPct / 100, stock = this.stock();
@@ -246,7 +248,9 @@ export class Residents {
         const ask = ids.filter((id) => market.def(id).sells.includes(token) && gs.balance(market.account(id), token) >= 1)
           .map((id) => ({ id, unit: market.quote(id, token, 'buy', 1).unit })).sort((a, b) => a.unit - b.unit)[0];
         const bid = bidOf(token);
-        if (!ask || !bid || bid.unit < ask.unit * m || gs.balance(this.wallet, 'coin') - ask.unit < s.minWallet) break;
+        if (!ask || !bid || bid.unit < ask.unit * m) break;
+        if (gs.balance(this.wallet, 'coin') - ask.unit < s.minWallet) this.handout(day, false); // from the treasury only
+        if (gs.balance(this.wallet, 'coin') - ask.unit < s.minWallet) break;
         const w = this.pick(ask.id, c); if (!w) break;
         try { market.buy(this.wallet, ask.id, token, 1, w.id); } catch { break; }
         const h = stock[token] ?? (stock[token] = { qty: 0, cost: 0 }); h.qty += 1; h.cost += ask.unit;
@@ -264,7 +268,7 @@ export class Residents {
    *  stocks the shelf of the merchant that sells the good, at that merchant's bid, while its stock is under `fillPct` % of
    *  its target. More stock lowers that merchant's ask, so crafting brings the price of bread, meals and tools down.
    *  Done only when the bid is at least the cost x (1 + marginPct / 100) (negative allowed), at most `perHour` crafts,
-   *  never spending the wallet below the trading floor `minWallet`. Ledger: inputs kind `trade` (tag `<resident>-c`),
+   *  never spending the wallet below the trading floor `minWallet` (short: an allowance from the treasury, never new coin). Ledger: inputs kind `trade` (tag `<resident>-c`),
    *  the craft kind `resident_craft`, the sale kind `trade` (market.restock). Returns the crafts made. */
   craft(day: number): number {
     const set = this.settings(), s = set.craft, c = this.controls();
@@ -301,7 +305,9 @@ export class Residents {
         cost += own * econ.items[tk].base + (seller ? seller.unit * need : 0); // what the wallet already holds counts at its base value
         coin += seller ? seller.unit * need : 0;
       }
-      if (shop.unit < cost * m || gs.balance(this.wallet, 'coin') - coin < set.trade.minWallet) return false;
+      if (shop.unit < cost * m) return false;
+      if (gs.balance(this.wallet, 'coin') - coin < set.trade.minWallet) this.handout(day, false); // from the treasury only
+      if (gs.balance(this.wallet, 'coin') - coin < set.trade.minWallet) return false;
       try { for (const p of plan) if (p.seller) market.buy(this.wallet, p.seller.id, p.tk, p.need, tag); } catch { return false; } // bought inputs stay as spare
       for (const p of plan) gs.add(day, this.wallet, p.tk, -(p.own + p.need), 'resident_craft', `${rid}#${w.id}`);
       gs.add(day, this.wallet, out, 1, 'resident_craft', `${rid}#${w.id}`);

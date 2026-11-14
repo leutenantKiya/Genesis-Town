@@ -92,7 +92,9 @@ export class AdminBots {
       return { who: null, to: r.ref, token: null };
     };
     return {
-      wallet: { account: w, coin: gs.balance(w, 'coin'), chain: gs.settledBalance(w, 'coin'), ready: res.ready },
+      wallet: { account: w, coin: gs.balance(w, 'coin'), chain: gs.settledBalance(w, 'coin'), ready: res.ready,
+        // what an allowance can still take from the treasury (above its reserve; residents.handout)
+        treasuryFree: Math.max(0, Math.min(gs.settledBalance(this.d.game.town, 'coin'), gs.balance(this.d.game.town, 'coin')) - res.settings().treasuryReserve) },
       enabled: res.cfg.enabled, paused: ctl.paused, from, scanned: rows.length, truncated: rows.length >= SCAN,
       inflow, spent: Object.values(byMerchant).reduce((s, m) => s + m.coin, 0),
       merchants: market.ids().map((id) => ({ id, name: market.def(id).name, shop: market.def(id).shop, account: market.account(id), open: market.isOpen(id), coin: byMerchant[id]?.coin ?? 0, units: byMerchant[id]?.units ?? 0 })),

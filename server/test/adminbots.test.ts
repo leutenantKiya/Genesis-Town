@@ -181,3 +181,21 @@ test('the townsfolk craft and stock the shelves, which brings the crafted goods\
   assert.equal((on.game.gs.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_craft' AND delta > 0").get(WALLET) as { n: number }).n, n0);
   assert.throws(() => on.bots.control({ settings: { craft: { fillPct: 5 } } }), /fillPct must be a number from 10 to 300/);
 });
+
+test('trading and crafting fund themselves from the treasury above its reserve, never with new coin', async () => {
+  const { game, clock, bots } = await world();
+  const q = (sql: string) => (game.gs.db.prepare(sql).get(WALLET) as { n: number }).n;
+  // the town's own shopping stays off (ceiling x1: every ask is above it), so the wallet starts empty
+  bots.control({ maxPriceMult: 1 });
+  bots.control({ settings: { treasuryReserve: 10_000_000, trade: { enabled: true, marginPct: -90, perHour: 4, minWallet: 50 }, craft: { enabled: true, marginPct: -90, perHour: 2 } } });
+  for (let h = 0; h < 4; h++) { clock.advanceHours(1); await game.step(); }
+  assert.equal(game.gs.balance(WALLET, 'coin'), 0, 'reserve above the treasury: no allowance');
+  assert.equal(q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'trade'"), 0, 'and no trading without coin');
+  // a reserve the treasury is above: the allowance comes from it and the bots trade and craft
+  bots.control({ settings: { treasuryReserve: 1000 } });
+  await hours(game, clock, () => q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'trade' AND delta > 0 AND token = 'coin'") > 0);
+  assert.ok(q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'handout'") > 0, 'allowance from the treasury');
+  assert.ok(q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'trade' AND delta > 0 AND token = 'coin'") > 0, 'sold to a merchant');
+  assert.equal(q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'handout_mint'"), 0, 'no new coin for trading');
+  assert.equal(q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_buy'"), 0, 'the town itself still bought nothing');
+});

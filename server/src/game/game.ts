@@ -264,7 +264,7 @@ export class Game {
         this.market.tickAll();
         if (busy) this.market.merchantCraft();
         this.market.townDemand();
-        this.residents.trade(); // the townsfolk buy to sell again at the admin's margin
+        this.residents.trade(this.clock.time().settleDay); // the townsfolk buy to sell again at the admin's margin
         this.residents.craft(this.clock.time().settleDay); // and craft to stock the shelves, which lowers those prices
       }
       this.gs.setMeta('clock.hour', String(now));
