@@ -216,3 +216,14 @@ html.gt-phone .tr-acts .mbtn{min-height:44px;flex:1}
 .tr-pick-amt .tr-num{width:72px}
 .tr-pick-acts{display:flex;gap:6px;margin-top:10px}
 .tr-pick-items .tr-tile-n{top:3px;bottom:auto}
+/* the Town Hall, tighter: less padding between and inside the blocks, and a block's cost and its button share one row */
+.hl-hall .hl-cell{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:center;padding:8px 10px;margin:0 0 6px}
+.hl-hall .hl-cell > *{grid-column:1 / -1}
+.hl-hall .hl-cell > .hl-cost{margin:0 0 6px}
+.hl-hall .hl-cell > .hl-cost:has(+ .hl-acts > :only-child){grid-column:1;margin:0}
+.hl-hall .hl-cell > .hl-cost + .hl-acts:has(> :only-child){grid-column:2;margin:0}
+.hl-hall .hl-cell-h{margin-bottom:2px}
+.hl-hall .hl-p{margin:0 0 6px;line-height:1.45}
+.hl-hall .hl-why{margin:4px 0 0}
+.hl-hall .hl-stats{margin-bottom:6px}
+html.gt-phone .hl-hall .hl-cell > .hl-cost:has(+ .hl-acts > :only-child),html.gt-phone .hl-hall .hl-cell > .hl-cost + .hl-acts:has(> :only-child){grid-column:1 / -1;margin-top:6px}

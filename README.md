@@ -1,6 +1,13 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Clearer windows** (2026-11-15): the Bag groups Tools (with a wear bar and repairs right there; the old Tools
+>   window was broken), Goods and Food, explains an item on hover or tap, and no longer shows the account id or
+>   "saved at 06:00" chain wording; a merchant's window has Buy and Sell tabs, a picked good with the merchant's reason,
+>   a - / + / Max picker and the exact total before you confirm; the live trade window shows both players (name#tag)
+>   over two grids of nine tiles, where a + tile adds coins or an item picked by its icon (up to 9 kinds a side,
+>   `trade.maxLines`); Settings read as a form in larger text; the Town Hall's blocks are tighter; and the profile has
+>   an Achievements tab (finished missions), while the Missions window lists rewards waiting first and finished ones last.
 > - **Smooth movement for everyone else** (2026-11-14): other players are no longer guessed ahead (which overshot at
 >   every stop and corner and then snapped back). Like Minecraft's entity interpolation, the server keeps a short trail
 >   of each player's outdoor positions stamped with its own clock (`server/src/social.ts`, `trail`, jumps marked `tp`),

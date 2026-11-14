@@ -652,7 +652,10 @@
     var wrap = $('div', 'gt-missions'), ms = S.st && S.st.missions;
     wrap.appendChild($('p', null, $t('Misi kecil untuk belajar bermain. Selesaikan, lalu ambil hadiahnya sekali.')));
     if (!ms || !ms.list) { wrap.appendChild($('p', 'chain-dim', $t('Memuat…'))); return wrap; }
-    ms.list.forEach(function (m) {
+    // rewards waiting first, then what is still going, and the finished ones at the bottom under their own heading
+    var rank = function (m) { return m.claimed ? 2 : m.done ? 0 : 1; }, sorted = ms.list.slice().sort(function (a, b) { return rank(a) - rank(b); }), doneHead = false;
+    sorted.forEach(function (m) {
+      if (m.claimed && !doneHead) { doneHead = true; wrap.appendChild($('h4', 'chain-h', $t('Selesai · lihat juga Pencapaian di profilmu'))); }
       var row = $('div', 'gt-mission' + (m.claimed ? ' claimed' : m.done ? ' done' : ''));
       var txt = $('div', 'grow');
       txt.appendChild($('b', null, (m.claimed ? '✓ ' : m.done ? '🎁 ' : '') + m.name));

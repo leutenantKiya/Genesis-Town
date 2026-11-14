@@ -2133,5 +2133,11 @@
     "Ubah": "Change",
     "Hapus": "Remove",
     "Taruh": "Put in",
+    "Pencapaian": "Achievements",
+    "{0} dari {1} pencapaian": "{0} of {1} achievements",
+    "{0} hadiah menunggu diambil": "Rewards waiting: {0}",
+    "Belum ada. Selesaikan misi untuk mengisi daftar ini.": "Nothing yet. Finish missions to fill this list.",
+    "{0} misi lagi": "{0} more missions",
+    "Selesai · lihat juga Pencapaian di profilmu": "Finished · also in Achievements in your profile",
   });
 })();
