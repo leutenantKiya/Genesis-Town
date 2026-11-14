@@ -126,10 +126,21 @@ html.gt-riding #gt-hint,html.gt-riding .gt3d-bar,html.gt-riding .gt3d-hint,html.
 .gt-ride-bars i{position:absolute;left:0;right:0;height:11vh;background:#000;animation:gt-bars .6s ease-out both}
 .gt-ride-bars i:first-child{top:0}.gt-ride-bars i:last-child{bottom:0}
 @keyframes gt-bars{from{height:0}}
-/* a nap in a house bed (interior.js): the room dims, then wakes */
-.gt-nap{position:fixed;inset:0;z-index:35;pointer-events:none;background:#0a0c1c;opacity:0;animation:gt-nap .6s ease-out forwards}
-.gt-nap.wake{animation:gt-wake .7s ease-in forwards}
-@keyframes gt-nap{to{opacity:.82}}@keyframes gt-wake{from{opacity:.82}to{opacity:0}}
+/* a nap in a house bed (interior.js): letterbox bars and an iPhone-style banner */
+.gt-cine{position:fixed;left:0;right:0;height:12vh;background:#000;z-index:35;pointer-events:none;transition:transform 1.2s cubic-bezier(.3,.7,.2,1)}
+.gt-cine-top{top:0;transform:translateY(-100%)}.gt-cine-bot{bottom:0;transform:translateY(100%)}
+.gt-cine.on{transform:none}
+.gt-ios{position:fixed;top:calc(12vh + 10px);left:50%;z-index:36;width:min(360px,calc(100vw - 32px));display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:22px;background:rgba(44,44,48,.62);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 8px 30px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.12);color:#fff;font:13px/1.3 -apple-system,'SF Pro Text','Segoe UI',system-ui,sans-serif;pointer-events:none;transform:translate(-50%,-220%);opacity:0;transition:transform .7s cubic-bezier(.2,1.2,.3,1) .9s,opacity .5s ease .9s}
+.gt-ios.on{transform:translate(-50%,0);opacity:1}
+.gt-ios.on.ping{animation:gt-ios-ping .9s ease-out}
+.gt-ios-ic{flex:none;width:38px;height:38px;border-radius:9px;background:linear-gradient(145deg,#5ee27a,#1fa84a);display:grid;place-items:center;font-size:21px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+.gt-ios-tx{min-width:0;flex:1}
+.gt-ios-top{display:flex;justify-content:space-between;gap:8px;font-size:12px}.gt-ios-top b{font-weight:600}.gt-ios-top span{opacity:.6}
+.gt-ios-msg{margin-top:1px;font-size:13.5px;overflow-wrap:anywhere}
+@keyframes gt-ios-ping{0%{transform:translate(-50%,-14px)}35%{transform:translate(-50%,5px)}65%{transform:translate(-50%,-2px)}100%{transform:translate(-50%,0)}}
+html.gt-reduced-motion .gt-cine,html.gt-reduced-motion .gt-ios{transition:opacity .2s linear}
+html.gt-reduced-motion .gt-cine{transform:none;opacity:0}html.gt-reduced-motion .gt-cine.on{opacity:1}
+html.gt-reduced-motion .gt-ios{transform:translate(-50%,0)}html.gt-reduced-motion .gt-ios.ping{animation:none}
 #dlg.on{display:block;z-index:20} /* over the 2.5D key hint (.gt3d-hint, z 5) and the action hint */
 #dtxt{display:block;white-space:pre-wrap;overflow-wrap:anywhere}
 #dtxt .h{visibility:hidden}

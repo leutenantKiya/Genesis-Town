@@ -5,11 +5,13 @@
  *     chord progression every few minutes, and sounds muffled indoors.
  *  2. Ducking: it fades to about 15% while the night concert plays (GT_CONCERT.playing()) and out while riding the
  *     carousel.
- *  3. Carousel music: GT_MUSIC.ride(true/false), a fairground waltz (oom-pah-pah, organ lead, glockenspiel sparkles).
+ *  3. Sleep music: GT_MUSIC.sleep(true/false), a slow music-box lullaby (6/8) while the player naps; the background
+ *     fades out and comes back when waking.
+ *  4. Carousel music: GT_MUSIC.ride(true/false), a fairground waltz (oom-pah-pah, organ lead, glockenspiel sparkles).
  * Everything goes through a compressor/limiter so it is clearly audible on small speakers at 100%.
  * Settings: localStorage 'gt.bgm' ('on'/'off', default on; 'gt.music' belongs to the concert switch) and
  * 'gt.musicVol' (0..1, default 0.7). Audio starts after the first key press, click or touch (browsers need that).
- *   window.GT_MUSIC = { on(), setOn(bool), vol(), setVol(0..1), ride(bool), playing() }
+ *   window.GT_MUSIC = { on(), setOn(bool), vol(), setVol(0..1), ride(bool), sleep(bool), playing() }
  */
 (function () {
   'use strict';
@@ -18,6 +20,7 @@
   var ac = null, unlocked = false, started = false, paused = false, timer = null, tick = null;
   var master = null, comp = null, bgIn = null, lp = null, bgDuck = null, rideBus = null, rideGain = null, dlyIn = null;
   var noiseBuf = null;
+  var sleepBus = null, sleepGain = null, sleepWant = false, sleepEndT = 0, sleepT = 0, sleepStep = 0;
   var rideWant = false, rideEndT = 0, rideT = 0, rideStep = 0;
   var duckNow = -1, lpNow = -1, volNow = -1;
 
@@ -69,6 +72,12 @@
       rideBus = ac.createGain(); rideBus.gain.value = 1;
       rideGain = ac.createGain(); rideGain.gain.value = 0;
       rideBus.connect(rideGain); rideGain.connect(master);
+      // lullaby bus: a soft echo of its own (the background's reverb is ducked away while sleeping)
+      sleepBus = ac.createGain(); sleepGain = ac.createGain(); sleepGain.gain.value = 0;
+      var sd2 = ac.createDelay(1.0), sfb = ac.createGain(), sdl = ac.createBiquadFilter();
+      sd2.delayTime.value = 0.68; sfb.gain.value = 0.38; sdl.type = 'lowpass'; sdl.frequency.value = 2400;
+      sleepBus.connect(sleepGain); sleepBus.connect(sd2); sd2.connect(sdl); sdl.connect(sfb); sfb.connect(sd2); sdl.connect(sleepGain);
+      sleepGain.connect(master);
       return true;
     } catch (e) { ac = null; return false; }
   }
@@ -222,13 +231,41 @@
     rideT += sd; rideStep++;
   }
 
+  // ---------- lullaby (6/8, eighth notes of 0.36 s, 8 bars: a rocking melody over I I IV V I IV V I). Semitones from C5.
+  var S_MEL = [[7, null, 4, null, 7, null], [9, null, 7, null, 4, null], [5, null, 9, null, 12, null], [11, null, 7, null, null, null],
+    [7, null, 4, null, 7, null], [9, null, 12, null, 9, null], [11, null, 9, null, 5, null], [4, null, null, null, 0, null]];
+  var S_ROOT = [0, 0, 5, 7, 0, 5, 7, 0], S_CH = { 0: [0, 4, 7], 5: [5, 9, 12], 7: [7, 11, 14] };
+  function boxNote(f, t, dur, peak) { // a music-box tine: a soft sine and a quick high partial
+    osc('sine', f, t, 0.01, dur, peak, sleepBus);
+    osc('sine', f * 4, t, 0.004, 0.18, peak * 0.14, sleepBus);
+  }
+  function sleepSchedule() {
+    var sd = 0.36, t = sleepT, i = sleepStep, bar = Math.floor(i / 6) % 8, s = i % 6, root = S_ROOT[bar], ch = S_CH[root];
+    if (s === 0) {
+      osc('sine', rf(root - 24, 0), t, 0.05, sd * 5.6, 0.2, sleepBus);
+      pad2(ch, t, sd * 6);
+    }
+    if (s === 2 || s === 4) boxNote(rf(ch[s === 2 ? 1 : 2] - 12, 0), t, 1.0, 0.045); // a gentle rocking arpeggio underneath
+    var m = S_MEL[bar][s];
+    if (m != null) boxNote(rf(m, 0), t, s === 0 || s === 4 ? 1.5 : 1.1, 0.16);
+    sleepT += sd; sleepStep++;
+  }
+  function pad2(ch, t, dur) { // a very soft sustained chord for the lullaby bus
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.035, t + 1.2);
+    g.gain.setValueAtTime(0.035, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.8);
+    g.connect(sleepBus);
+    ch.forEach(function (x) { var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = rf(x - 12, 0); o.connect(g); o.start(t); o.stop(t + dur + 1); });
+  }
+
   // ---------- scheduler and control
   function run() {
     if (!ac || paused) return;
     try {
       var now = ac.currentTime;
       if (rideWant || now < rideEndT) { while (rideT < now + 0.5) rideSchedule(); }
-      if (!rideWant && bgWanted()) {
+      if (sleepWant || now < sleepEndT) { while (sleepT < now + 0.5) sleepSchedule(); }
+      if (!rideWant && !sleepWant && bgWanted()) {
         if (!bg.prog) newProgression(true);
         if (!bg.started) { bg.started = true; bg.t = now + 0.1; }
         if (bg.t < now) bg.t = now + 0.05; // fell behind (tab was busy): jump forward instead of bursting
@@ -249,7 +286,7 @@
       if (v !== volNow) { master.gain.setTargetAtTime(v, now, paused ? 0.15 : 0.25); volNow = v; }
       // ducking: concert nearby leaves 15%, the carousel ride silences the background
       var duck = 1;
-      if (rideWant) duck = 0;
+      if (rideWant || sleepWant) duck = 0;
       else if (window.GT_CONCERT && GT_CONCERT.playing && GT_CONCERT.playing()) duck = 0.15;
       if (duck !== duckNow) { bgDuck.gain.setTargetAtTime(duck, now, duck === 0 ? 0.25 : 0.6); duckNow = duck; }
       // indoors the music is muffled, at night it is a bit softer on top
@@ -275,6 +312,19 @@
     } catch (e) { /* ignore */ }
   }
 
+  function sleep(v) {
+    try {
+      v = !!v; if (v === sleepWant) return;
+      sleepWant = v;
+      if (!ensure()) return;
+      var now = ac.currentTime;
+      sleepGain.gain.cancelScheduledValues(now);
+      if (v) { sleepStep = 0; sleepT = now + 0.3; sleepGain.gain.setTargetAtTime(1, now, 0.9); } // slow fade in
+      else { sleepEndT = now + 2.5; sleepGain.gain.setTargetAtTime(0, now, 0.6); }
+      control();
+    } catch (e) { /* ignore */ }
+  }
+
   function unlock() { unlocked = true; if (ac && ac.state === 'suspended') { try { ac.resume(); } catch (e) { /* ignore */ } } control(); }
   ['keydown', 'pointerdown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, unlock, { passive: true, capture: true }); });
   document.addEventListener('visibilitychange', function () { if (unlocked) control(); });
@@ -282,6 +332,6 @@
 
   window.GT_MUSIC = {
     on: on, setOn: function (v) { setOn(v); control(); }, vol: vol, setVol: function (v) { setVol(v); control(); },
-    ride: ride, playing: function () { return !!(started && !paused && ac && on() && vol() > 0); }
+    ride: ride, sleep: sleep, playing: function () { return !!(started && !paused && ac && on() && vol() > 0); }
   };
 })();

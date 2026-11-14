@@ -26,19 +26,20 @@
     if (world() !== 'public' || !L || !V || !V.ferryOf) return null;
     try { return V.ferryOf(L); } catch (e) { return null; }
   }
-    function near(p, q) { return Math.abs(Math.round(p.x) - Math.round(q.x)) + Math.abs(Math.round(p.y) - Math.round(q.y)) <= 1; }
+    function near(p, q) { return Math.max(Math.abs(Math.round(p.x) - Math.round(q.x)), Math.abs(Math.round(p.y) - Math.round(q.y))) <= 1; } // the 8 tiles around, like the server
   // the tile the boat floats on (where the server has it)
   function tile() { var f = ferry(); return boat ? { x: boat.x, y: boat.y } : f ? { x: f.wa.x, y: f.wa.y } : null; }
   function landing() { var t = tile(), p = GT.player; if (aboard || !t || !p || !GT.scene || GT.scene.kind !== 'out') return false; return near(p, t); }
   function otherSteers() { return !!(boat && boat.by && !boat.mine); }
 
   // the land tiles that touch the boat, the one it faces first
+  // land tiles to step onto: the faced one first, then the other sides, then the corners (the server takes any of the 8)
   function shores() {
-    var p = GT.player, out = [], order = [p.dir || 'down', 'up', 'down', 'left', 'right'], seen = {};
-    order.forEach(function (d) {
-      if (seen[d] || !DV[d]) return;
-      seen[d] = 1;
-      var t = { x: p.x + DV[d][0], y: p.y + DV[d][1] };
+    var p = GT.player, px = Math.round(p.x), py = Math.round(p.y), out = [], seen = {};
+    var order = [p.dir || 'down', 'up', 'down', 'left', 'right'].map(function (d) { return DV[d]; }).filter(Boolean).concat([[1, 1], [1, -1], [-1, 1], [-1, -1]]);
+    order.forEach(function (v) {
+      var t = { x: px + v[0], y: py + v[1] }, k = t.x + ',' + t.y;
+      if (seen[k]) return; seen[k] = 1;
       if (GT.landAt && GT.landAt(t.x, t.y)) out.push(t);
     });
     return out;
@@ -69,7 +70,7 @@
     if (busy || !aboard) return;
     if (!c.length) { GT.toast($t('Dekati pantai dulu, lalu Spasi untuk turun.')); return; }
     busy = true;
-    var tile0 = c[0], at = { x: GT.player.x, y: GT.player.y };
+    var tile0 = c[0], at = { x: Math.round(GT.player.x), y: Math.round(GT.player.y) };
     C.act({ action: 'boat', op: 'land', world: 'public', x: tile0.x, y: tile0.y }, true).then(function (r) {
       if (!r || !r.arrive || r.aboard) return;
       aboard = false;

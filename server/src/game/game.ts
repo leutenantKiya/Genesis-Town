@@ -185,12 +185,13 @@ export class Game {
     if (!this.map || !this.positions || wid !== 'public') throw new HttpError(409, 'The boat is in the public village.');
     const f = Village.ferryOf(this.map.layout);
     if (!f) throw new HttpError(409, 'There is no boat here.');
-    const dist = (p: Pos, q: Pos) => Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
+    // next to = one of the 8 tiles around (diagonals too, so a boat at an angle to the shore never strands anyone)
+    const dist = (p: Pos, q: Pos) => Math.max(Math.abs(Math.round(p.x) - Math.round(q.x)), Math.abs(Math.round(p.y) - Math.round(q.y)));
     const boat = this.positions.boatNow(this.now())!;
     if (this.positions.aboard.has(account)) {
       if (op !== 'land') throw new HttpError(409, 'You are already in the boat.');
       if (!Number.isInteger(to.x) || !Number.isInteger(to.y)) throw new HttpError(400, 'Where to land?');
-      if (dist(pos, to) !== 1) throw new HttpError(409, 'Steer the boat next to the shore first.');
+      if (dist(pos, to) !== 1 && dist(boat, to) !== 1) throw new HttpError(409, 'Steer the boat next to the shore first.');
       if (!this.map.walkable(to.x, to.y)) throw new HttpError(409, 'You cannot step off there.');
       this.positions.land(account, to, this.now());
       return { toast: 'You step ashore.', world: 'public', arrive: to, aboard: false };

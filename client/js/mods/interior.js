@@ -1,7 +1,7 @@
 /*
  * interior.js - things to do with the furniture inside houses (all client-side and visual; nothing changes on the
  * server). Face a piece and press Space / F, or click it:
- *   bed        a short nap: the room dims, "Zzz" rises, you wake up refreshed
+ *   bed        a nap: you lie in the bed, cinematic camera + lullaby + a "your energy is charging" banner; move to get up
  *   bookshelf  a book with a useful tip about the game
  *   tv         the town news: today's live prices from the merchants
  *   fridge     a glass of orange juice
@@ -33,14 +33,63 @@
   ];
 
   function float(text) { if (window.GT_FX && GT_FX.float) GT_FX.float({ x: GT.player.x, y: GT.player.y - 1 }, text, '#ffffff'); }
+  /* Napping: face a bed and press the action key. The character lies on the bed (engine.js sleepIn; the player's tile for
+     the server does not change), the screen gets letterbox bars, the camera eases in (2.5D: GT_VIEW3D.cine; 2D: a slow
+     zoom of the canvas), a lullaby plays (GT_MUSIC.sleep) and an iPhone-style banner says the energy is charging. Any
+     movement (keys, joystick, click-to-walk, the action key, a scene change) clears GT.sitting and wakes the player,
+     who stands next to the bed again. The energy itself is the server's (food or the next day); the banner shows its real value. */
+  var sleepUi = null, sleepClock = 0, pingAt = 0, zzAt = 0;
+  function reduced() { return document.documentElement.classList.contains('gt-reduced-motion'); }
+  function energyPct() {
+    var C = window.GT_CHAIN, st = C && C.state && C.state.st;
+    return st && st.energyMax > 0 ? Math.max(0, Math.min(100, Math.round(100 * st.energy / st.energyMax))) : null;
+  }
+  function bannerText() { var n = energyPct(); return n == null ? $t('Energimu sedang diisi ⚡') : $t('Energimu sedang diisi ⚡ {0}%', [n]); }
+  function el(cls, html) { var d = document.createElement('div'); d.className = cls; if (html) d.innerHTML = html; return d; }
   function nap() {
-    if (napping) return;
+    if (napping || GT.sitting) return;
+    var f = GT.facing && GT.facing();
+    if (!f || !GT.sleepIn) return;
+    GT.sleepIn(f.x, f.y);
     napping = true; sfx('notify');
-    var dim = document.createElement('div'); dim.className = 'gt-nap'; document.body.appendChild(dim);
+    var top = el('gt-cine gt-cine-top'), bot = el('gt-cine gt-cine-bot');
+    var ban = el('gt-ios', '<div class="gt-ios-ic">⚡</div><div class="gt-ios-tx"><div class="gt-ios-top"><b>Genesis Town</b><span></span></div><div class="gt-ios-msg"></div></div>');
+    ban.querySelector('.gt-ios-top span').textContent = $t('sekarang');
+    ban.querySelector('.gt-ios-msg').textContent = bannerText();
+    document.body.appendChild(top); document.body.appendChild(bot); document.body.appendChild(ban);
+    var v3 = GT.view3dOn && GT.view3dOn(), cv = document.getElementById('cv');
+    sleepUi = { top: top, bot: bot, ban: ban, v3: !!v3, cv: cv };
+    void top.offsetWidth; // bars and banner slide in from the next frame
+    top.classList.add('on'); bot.classList.add('on'); ban.classList.add('on');
+    if (v3 && window.GT_VIEW3D && GT_VIEW3D.cine) GT_VIEW3D.cine(true);
+    else if (cv) { cv.style.transition = reduced() ? 'none' : 'scale 4s ease-in-out'; cv.style.scale = '1.28'; }
+    try { window.GT_MUSIC && GT_MUSIC.sleep(true); } catch (e) { /* music must never break the game */ }
+    var now = performance.now(); pingAt = now + 20000; zzAt = now + 1200; sleepClock = 0;
     float('Zzz');
-    setTimeout(function () { float('Zzz'); }, 600);
-    setTimeout(function () { dim.classList.add('wake'); GT.toast('😴 ' + $t('Kamu tidur siang sebentar. Segar lagi!')); }, 1500);
-    setTimeout(function () { if (dim.parentNode) dim.parentNode.removeChild(dim); napping = false; }, 2300);
+  }
+  function wake() {
+    var u = sleepUi; sleepUi = null; napping = false;
+    if (!u) return;
+    if (u.v3 && window.GT_VIEW3D && GT_VIEW3D.cine) GT_VIEW3D.cine(false);
+    if (u.cv) { u.cv.style.scale = ''; setTimeout(function () { if (!sleepUi) u.cv.style.transition = ''; }, 1200); if (reduced()) u.cv.style.transition = 'none'; else u.cv.style.transition = 'scale .9s ease-out'; }
+    try { window.GT_MUSIC && GT_MUSIC.sleep(false); } catch (e) { /* ignore */ }
+    [u.top, u.bot, u.ban].forEach(function (d) { d.classList.remove('on'); });
+    setTimeout(function () { [u.top, u.bot, u.ban].forEach(function (d) { if (d.parentNode) d.parentNode.removeChild(d); }); }, 1300);
+    sfx('ui_click');
+  }
+  function sleepTick(dt) {
+    if (!napping) return;
+    var sit = GT.sitting;
+    if (!sit || !sit.sleep) { wake(); return; }
+    var now = performance.now();
+    sleepClock += dt;
+    var msg = sleepUi && sleepUi.ban.querySelector('.gt-ios-msg'), txt = bannerText();
+    if (msg && msg.textContent !== txt) msg.textContent = txt;
+    if (now > zzAt) { zzAt = now + 2600; float('Zzz'); }
+    if (now > pingAt && sleepUi) { // the gentle re-ping: the banner nudges and a soft chime
+      pingAt = now + 20000; sfx('notify', { vol: 0.5 });
+      var b = sleepUi.ban; b.classList.remove('ping'); void b.offsetWidth; b.classList.add('ping');
+    }
   }
   function news() {
     var C = window.GT_CHAIN, m = C && C.state && C.state.market, lines = [];
@@ -127,5 +176,5 @@
     ctx.restore();
   }
 
-  GT.register({ id: 'interior', onInteract: onInteract, onFrame: doorWatch, init: function (g) { g.register({ id: 'interior-hint', onDraw: onDraw }); } });
+  GT.register({ id: 'interior', onInteract: onInteract, onFrame: function (dt) { doorWatch(); sleepTick(dt); }, init: function (g) { g.register({ id: 'interior-hint', onDraw: onDraw }); } });
 })();

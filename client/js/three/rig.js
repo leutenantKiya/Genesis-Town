@@ -18,7 +18,7 @@
   GT3.Rig = function (camera, o) {
     o = o || {};
     var target = new THREE.Vector3(), want = new THREE.Vector3(), first = true;
-    var pitch = (o.pitch || 52) * Math.PI / 180, dist = 30, zoom = 1, yaw = 0, yawWant = 0;
+    var basePitch = (o.pitch || 52) * Math.PI / 180, pitch = basePitch, dist = 30, zoom = 1, yaw = 0, yawWant = 0;
     camera.fov = o.fov || 28; camera.near = 1; camera.far = 160; camera.updateProjectionMatrix();
     function place() {
       var d = dist / zoom;
@@ -39,6 +39,8 @@
       getZoom: function () { return zoom; },
       distance: function (d) { dist = d; place(); },
       pitch: pitch,
+      // the cinematic shot (sleeping, mods/view3d.js) lowers the camera by `down` radians; 0 puts it back exactly
+      tilt: function (down) { pitch = basePitch - (down || 0); this.pitch = pitch; place(); },
       turn: function (rad) { yawWant = rad; },
       target: target
     };

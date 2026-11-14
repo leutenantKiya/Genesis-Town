@@ -63,6 +63,8 @@
     var card = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
     card.position.y = h / 2 - 1 * PX; card.receiveShadow = true; card.name = 'actor-card';
     var pivot = new THREE.Group(); pivot.add(card); group.add(pivot);
+    // lying: a flat card on a bed (plain material: the upright depth trick above is for standing cards)
+    var lying = false, lieY = 0.5, lieMat = null;
     var sh = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.3), new THREE.MeshBasicMaterial({ map: shadow(), transparent: true, depthWrite: false }));
     sh.rotation.x = -Math.PI / 2; sh.position.y = 0.012; sh.renderOrder = 1; group.add(sh);
     group.userData.actor = true;
@@ -81,14 +83,29 @@
       set: function (x, z, d, s) {
         group.position.set(x, 0, z);
         d = d || dir; s = s === 'sit' ? 'sit' : s | 0;
-        if (d !== dir || s !== step) { dir = d; step = s; mat.map = frame(pal, dir, step); mat.needsUpdate = true; }
+        if (d !== dir || s !== step) { dir = d; step = s; mat.map = frame(pal, dir, step); mat.needsUpdate = true; if (lieMat) { lieMat.map = mat.map; lieMat.needsUpdate = true; } }
       },
+      // lie(true, height) lays the card flat on its back at that height (a bed top), head away from the camera; lie(false) stands it up
+      lie: function (on, height) {
+        on = !!on; lieY = height == null ? 0.5 : height;
+        if (on === lying) return;
+        lying = on;
+        if (on) { if (!lieMat) lieMat = GT3.mat({ map: mat.map, alphaTest: 0.5, side: THREE.DoubleSide }); lieMat.map = mat.map; card.material = lieMat; card.receiveShadow = false; }
+        else { card.material = mat; card.receiveShadow = true; pivot.position.set(0, 0, 0); }
+      },
+      lying: function () { return lying; },
       // turn to the camera and lean back by its pitch, pivoting at the feet: from the high game camera an upright card
       // would show as a squashed head, a leaning one shows the whole sprite at its drawn proportions
       face: function (camera) {
         var dx = camera.position.x - group.position.x, dz = camera.position.z - group.position.z;
         pivot.rotation.order = 'YXZ';
         pivot.rotation.y = Math.atan2(dx, dz);
+        if (lying) { // flat, its feet at the camera's side; the pivot moves back so the body, not the feet, sits on the bed's middle
+          var yw = pivot.rotation.y;
+          pivot.rotation.x = -Math.PI / 2;
+          pivot.position.set(Math.sin(yw) * h / 2, lieY, Math.cos(yw) * h / 2);
+          return;
+        }
         pivot.rotation.x = -Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));
       },
       dispose: function () { card.geometry.dispose(); mat.dispose(); sh.geometry.dispose(); sh.material.dispose(); if (group.parent) group.parent.remove(group); }

@@ -158,6 +158,16 @@ function sitDown(cx, cy){
   sitSpot = { x:cx, y:cy, dir:dir, scene:scene };
   P.dir = dir;
 }
+// napping in a bed (mods/interior.js): the same idea with sleep:true; the character lies on the bed tile, any movement wakes
+function sleepIn(bx, by){ sitSpot = { x:bx, y:by, dir:'down', scene:scene, sleep:true }; P.dir = 'down'; }
+// the lying figure on the 2D bed: pillow, blanket and a sleeping head (the bed tile itself is already drawn)
+function drawLying(g, x, y){
+  g.fillStyle = '#f4f0e6'; g.fillRect(x + 1, y + 3, 4, 6);
+  g.fillStyle = '#e8c8a0'; g.fillRect(x + 2, y + 4, 3, 3);
+  g.fillStyle = '#3a2a22'; g.fillRect(x + 2, y + 3, 3, 1); g.fillRect(x + 2, y + 4, 1, 2);
+  g.fillStyle = '#7aa0d8'; g.fillRect(x + 5, y + 3, T - 6, 6);
+  g.fillStyle = '#a8c4ec'; g.fillRect(x + 5, y + 3, T - 6, 1);
+}
 var sailPos = null; // the ferry ride (mods/ferry.js): where the boat is, in tiles; the camera and the player's picture follow it
 function selfPos(){ return sailPos ? { px:sailPos.x * T, py:sailPos.y * T } : sitSpot ? { px:sitSpot.x * T, py:sitSpot.y * T } : lerpPos(P); }
 function drawChar(g, x, y, pal, dir, step){
@@ -165,6 +175,7 @@ function drawChar(g, x, y, pal, dir, step){
   // sitting: standing still on a bench (the public square, village v2) sets the sprite down on the seat, facing out
   if (!step && scene){
     var m = scene.map, tx = Math.round((x + camX) / T), ty = Math.round((y + camY) / T), st = inb(m, tx, ty) ? m.tiles[ty*m.w + tx] : '';
+    if (sitSpot && sitSpot.sleep && st === 'bed' && sitSpot.x === tx && sitSpot.y === ty){ drawLying(g, x, y); return; }
     if (scene.kind === 'out' && st === 'bench'){ y -= 3; dir = 'down'; step = 'sit'; }
     else if (st === 'chair' && sitSpot && sitSpot.x === tx && sitSpot.y === ty){ y -= 3; dir = sitSpot.dir; step = 'sit'; }
   }
@@ -2278,7 +2289,7 @@ function render3d(pp){
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, elCv.width, elCv.height); ctx.setTransform(S, 0, 0, S, 0, 0);
   var ents = [];
   scene.npcs.forEach(function(n){ if (n.hidden) return; var p = lerpPos(n); ents.push({py:p.py, px:p.px, n:n, pal:n.pal, dir:n.dir, step:charStep(n)}); });
-  ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true, hidden:playerHidden, sit:!!sitSpot});
+  ents.push({py:pp.py, px:pp.px, n:null, pal:0, dir:P.dir, step:charStep(P), me:true, hidden:playerHidden, sit:!!sitSpot && !sitSpot.sleep, sleep:!!(sitSpot && sitSpot.sleep)});
   callMods('onEntities', [ents, ctx, camX, camY, T]); // mods add {px, py, pal, dir, step, id}; their draw() is not called
   var outside = scene.kind === 'out', g = outside ? view3d.groundCtx(scene.map) : null;
   if (g) {
@@ -2905,7 +2916,8 @@ Object.defineProperties(GT, {
   // sx / sy: where the player is drawn, in tiles, between two tiles while walking (players.js sends it so others see
   // the same smooth walk); x / y stay the tile, which is what the server checks
   player: { get: function(){ var l = smoothAt(); return { x:P.x, y:P.y, dir:P.dir, moving:P.moving, sx:l.x, sy:l.y }; } },
-  sitting: { get: function(){ return sitSpot ? { x:sitSpot.x, y:sitSpot.y, dir:sitSpot.dir } : null; } },
+  sitting: { get: function(){ return sitSpot ? { x:sitSpot.x, y:sitSpot.y, dir:sitSpot.dir, sleep:!!sitSpot.sleep } : null; } },
+  sleepIn: sleepIn,
   time: { get: function(){ return clockInfo(); } },
   buildings: { get: function(){ return world ? world.buildings : []; } },
   seed: { get: function(){ return seed; } }

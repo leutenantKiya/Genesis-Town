@@ -1151,7 +1151,15 @@
     hintEl.className = 'on';
   }
 
-  // Crops are drawn in the ground pass (onDrawGround), so characters walk in front of them.
+  // The crops for the 2.5D view (three/crops.js stands them up): the plots of this world with their stage.
+  window.GT_CROPS = function () {
+    if (!GT.scene || GT.scene.kind !== 'out' || !S.plots.length || !S.st) return [];
+    var out = [];
+    S.plots.forEach(function (pp, i) { var p = S.st.plots[i], lk = p && plotLook(p); if (lk) out.push({ x: pp.x, y: pp.y, stage: lk.stage, ripe: lk.ripe }); });
+    return out;
+  };
+  // Crops are drawn in the ground pass (onDrawGround), so characters walk in front of them; in 2.5D only the empty
+  // plots' marks are drawn here (the wheat stands up in three/crops.js).
   function onDrawGround(ctx, camX, camY, T) {
     if (!GT.scene || GT.scene.kind !== 'out' || !S.plots.length || !S.st) return;
     var vw = ctx.canvas.width, vh = ctx.canvas.height;
@@ -1162,6 +1170,7 @@
       // an empty plot: the soil stays as it is, four light corner marks say "a plot, till me"
       if (p.state === 'empty') { ctx.fillStyle = 'rgba(240,214,160,.85)'; [[1, 1], [T - 4, 1], [1, T - 2], [T - 4, T - 2]].forEach(function (c) { ctx.fillRect(x + c[0], y + c[1], 3, 1); }); [[1, 2], [T - 2, 2], [1, T - 4], [T - 2, T - 4]].forEach(function (c) { ctx.fillRect(x + c[0], y + c[1], 1, 2); }); return; }
       var lk = plotLook(p); if (!lk) return;
+      if (GT.view3dOn && GT.view3dOn()) return;
       var u = T / 12, st = lk.stage, now = performance.now();
       // the same stalks in both views (the 2.5D ground sheet redraws this ~8 times a second): green sprouts, taller
       // and yellower each stage, ripe = tall and golden with a grain head. The tops sway in the wind.

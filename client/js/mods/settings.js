@@ -308,7 +308,7 @@
   function actionAhead() {
     var sc = GT.scene, pl = GT.player, f = GT.facing && GT.facing();
     if (!sc || !sc.map || !pl || !f) return null;
-    if (GT.sitting) return { id: 'sit', icon: '🧍', label: $t('Berdiri') };
+    if (GT.sitting) return GT.sitting.sleep ? { id: 'sit', icon: '🧍', label: $t('Bangun dari kasur') } : { id: 'sit', icon: '🧍', label: $t('Berdiri') };
     var m = sc.map;
     if (f.x < 0 || f.y < 0 || f.x >= m.w || f.y >= m.h) return null;
     var idx = f.y * m.w + f.x, tt = m.tiles[idx];

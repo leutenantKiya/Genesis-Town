@@ -21,7 +21,7 @@
   var LS = 'gt.view', T = 12, STEP = Math.PI / 4;
   var DV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var KIT = ['vendor/three.js', 'js/three/kit.js', 'js/three/ground.js', 'js/three/building.js', 'js/three/nature.js', 'js/three/props.js',
-    'js/three/actor.js', 'js/three/rod.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/fun.js', 'js/three/life.js', 'js/three/world.js', 'js/three/room.js', 'js/three/monsters.js'];
+    'js/three/actor.js', 'js/three/rod.js', 'js/three/sky.js', 'js/three/rig.js', 'js/three/seethrough.js', 'js/three/fun.js', 'js/three/life.js', 'js/three/crops.js', 'js/three/world.js', 'js/three/room.js', 'js/three/monsters.js'];
   var mode = saved() || '3d';
   var loading = null, ok = false, failed = false, booted = false;
   var THREE, renderer, cv, scene, camera, rig, sky, world = null, see = null, built = null, seasonKey = '';
@@ -323,6 +323,19 @@
     if (!rideLamp) { if (!on) return; rideLamp = new THREE.PointLight(0xffe0b0, 0, 7, 1.2); scene.add(rideLamp); }
     rideLamp.intensity = on ? 2.2 + 5 * (sky ? sky.night : 0) : 0;
   }
+  /* ---------------------------------------------------------------- the cinematic nap shot (interior.js asks: GT_VIEW3D.cine(true))
+     While the player sleeps the camera eases (about 3 s) toward the bed: zoom in, a little lower and a quarter turn
+     around it. k runs 0..1 and back; at 0 the zoom, pitch and turn are put back exactly as the player had them. */
+  var cineK = 0, cineWant = 0, cineLive = false;
+  function cineShot(dt) {
+    if (!cineWant && cineK <= 0 && !cineLive) return;
+    var step = dt / (reducedMotion() ? 0.01 : 3.2);
+    cineK = cineWant ? Math.min(1, cineK + step) : Math.max(0, cineK - step);
+    var e = cineK * cineK * (3 - 2 * cineK);
+    if (cineK <= 0 && !cineWant) { cineLive = false; rig.tilt(0); rig.turn(yawWant); rig.zoom(zoom * fit); return; }
+    cineLive = true;
+    rig.zoom(zoom * fit * (1 + 0.85 * e)); rig.tilt(0.2 * e); rig.turn(yawWant + 0.6 * e + (cineWant ? Math.sin(performance.now() / 4000) * 0.05 * e : 0));
+  }
   var rodeLast = false; // the figure was on the horse last frame: getting off puts it back on its feet once
   function rideShot(now) {
     var R = window.GT_RIDE, L = world && world.layout, car = L && L.fun && L.fun.carousel;
@@ -535,6 +548,12 @@
         var tm = o.house ? o.map : (o.out || o.map), tx = Math.floor(e.px / T + 0.5), ty = Math.floor(e.py / T + 0.5);
         // (or on a chair indoors: the engine puts the player on the chair tile and says so with e.sit)
         var onChair = !!e.sit, sit = onChair || (!(e.step | 0) && tm.tiles && tm.tiles[ty * tm.w + tx] === 'bench');
+        if (e.sleep) { // napping in a bed: lying flat on it, from the bed's own place (engine.js sleepIn)
+          a.actor.set(x, z, 'down', 0); a.actor.lie(true, 0.45 * (cur ? cur.s : 1) + 0.07); a.sat = false; a.slept = true;
+          a.actor.group.visible = !e.hidden; seen.add(key); if (e.me) { pt.x = x; pt.y = z; }
+          return;
+        }
+        if (a.slept) { a.slept = false; a.actor.lie(false); a.actor.pose(0, 0, 1); }
         a.actor.set(x, z, sit ? screenDir(onChair ? (e.dir || 'down') : 'down') : screenDir(e.dir || 'down'), sit ? 'sit' : e.step | 0); a.outdoor = !o.house;
         if (!(e.me && drop)) { if (sit) a.actor.pose((onChair ? 0.35 : 0.41) - 3 * GT3.PX, 0, 1); else if (a.sat) a.actor.pose(0, 0, 1); }
         a.sat = sit;
@@ -548,7 +567,7 @@
       actors.forEach(function (a, k) { if (!seen.has(k) && !(keepOut && a.outdoor)) { a.actor.dispose(); actors.delete(k); } });
       rig.follow(pt.x, pt.y, dt);
       if (snapNext || Math.hypot(rig.target.x - pt.x, rig.target.z - pt.y) > 8) { rig.snap(); snapNext = false; } // a new world or a long jump: no glide across the map
-      rideShot(now);
+      rideShot(now); cineShot(dt);
       sky.set(o.hour, season); sky.follow(pt.x, pt.y);
       world.update(now / 1000, o.hour, sky.night);
       syncStumps(now); world.nature.tick(dt);
@@ -594,6 +613,8 @@
     toScreen: function (x, z, l) { return toScreen(mx(x), mz(z), l); },
     playerTile: function () { return api.playerTile(); },
     turn: turn,
+    // the sleeping camera: true eases toward the bed, false gives the player's own camera back
+    cine: function (on) { cineWant = on ? 1 : 0; },
     // drop the player's own 3D sprite into the world over `ms`, then call done (charscreen.js); false when not drawing
     dropIn: function (ms, done) { if (!GT.view3dOn || !GT.view3dOn()) return false; drop = { t0: performance.now(), ms: ms, done: done, dusted: false }; return true; },
     tookClick: function () { return api.tookClick(); },
