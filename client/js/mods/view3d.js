@@ -603,6 +603,8 @@
   };
 
   window.GT_VIEW3D = {
+    // the hover outline (mods/charhover.js): the actor drawn for `key` (an NPC object or 'player:<account>') gets level lv, every other none
+    highlight: function (key, lv) { actors.forEach(function (a, k) { if (a.actor.highlight) a.actor.highlight(key != null && k === key ? lv : 0); }); },
     get: function () { return mode; },
     set: function (v) {
       mode = v === '3d' ? '3d' : '2d';

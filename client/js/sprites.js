@@ -1045,19 +1045,20 @@
       var c = it.color, c2 = it.color2 || c, dk = shade(c, 0.7), lt = shade(c, 1.22), k = it.slot, s = it.shape, sd = d === 'left' || d === 'right';
       /* ---- cape: behind the body, or in front of it when seen from behind */
       if (k === 'cape') {
-        var h = s === 'long' ? 8 : 5;
+        // from the shoulders (row 7) down to the knees at most: the hem stays above the feet (rows 14-15)
+        var h = s === 'long' ? 6 : 4, top = 7;
         if (d === 'up' && front) {
-          r(0, 8, 12, h, OL); r(1, 8, 10, h - 1, c); r(1, 8, 10, 1, c2); r(2, 9, 1, h - 2, dk); r(9, 9, 1, h - 2, dk); r(3, 7 + h - 1, 6, 1, dk);
+          r(0, top, 12, h + 1, OL); r(1, top, 10, h, c); r(1, top, 10, 1, c2); r(2, top + 1, 1, h - 2, dk); r(9, top + 1, 1, h - 2, dk); r(3, top + h - 1, 6, 1, dk);
         } else if (d !== 'up' && back) {
-          // an A-line cape hanging behind: as wide as the shoulders at the top, flaring a little towards the hem
-          var mid = sd ? 8 : 6;
+          // a cape hanging behind: as wide as the shoulders, flaring by one pixel at the hem, so from the front only its
+          // edges show beside the arms and from the side it trails behind the back
+          var mid = sd ? (d === 'left' ? 8 : 4) : 6;
           for (var cr = 0; cr < h; cr++) {
-            var hw = sd ? 3 + (cr >> 1) : 5 + (cr >> 1), left = mid - hw;
-            r(left - 1, 8 + cr, 1, 1, OL); r(mid + hw, 8 + cr, 1, 1, OL);
-            r(left, 8 + cr, hw * 2, 1, cr === 0 ? c2 : cr === h - 1 ? dk : c);
-            if (cr > 1 && cr < h - 1) r(mid - 1, 8 + cr, 1, 1, dk);
+            var hw = (sd ? 2 : 5) + (cr >= h - 2 ? 1 : 0), left = mid - hw;
+            r(left - 1, top + cr, 1, 1, OL); r(mid + hw, top + cr, 1, 1, OL);
+            r(left, top + cr, hw * 2, 1, cr === 0 ? c2 : cr === h - 1 ? dk : c);
           }
-          r(mid - hw - 1, 7 + h, hw * 2 + 2, 1, OL);
+          r(mid - hw - 1, top + h, hw * 2 + 2, 1, OL);
         }
         return;
       }

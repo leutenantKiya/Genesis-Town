@@ -139,7 +139,7 @@ export function createApp(deps: AppDeps) {
   const social = new Social(deps.store);
   game.trade.onDone = (a, b, world) => social.tradeLine(a, b, world); // a finished swap is a public line for its world
   const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
-  const adminAccounts = new AdminAccounts({ game, store: deps.store, admins: () => deps.cfg.adminAccounts });
+  const adminAccounts = new AdminAccounts({ game, store: deps.store, social, admins: () => deps.cfg.adminAccounts });
   const purge = new Purge({ cfg: deps.cfg, chain: deps.chain, store: deps.store, game, social, invalidate: (a) => { chainCheck.invalidate(a); readCache.clear(); } });
   social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs, perIp: game.econ.guest.perIp, maxMinutes: game.econ.guest.maxMinutes };
   const guestHelloLimiter = new RateLimiter(game.econ.guest.helloPerMinute, 200); // new guests per IP

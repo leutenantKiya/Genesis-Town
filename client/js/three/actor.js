@@ -32,6 +32,23 @@
     var t = GT3.tex(c); t.userData.shared = true;
     return (set[key] = t);
   }
+  // The same frame with a 1 px outline round the figure (hover, mods/charhover.js): lv 2 bright, lv 1 faint (too far to reach)
+  var glowSets = {};
+  function glowFrame(pal, dir, step, lv) {
+    var set = glowSets[pal] || (glowSets[pal] = {}), key = dir + step + ':' + lv;
+    if (set[key]) return set[key];
+    var src = frame(pal, dir, step).image, c = GT3.canvas(CW, CH), g = c.getContext('2d');
+    var d = src.getContext('2d').getImageData(0, 0, CW, CH).data, out = g.createImageData(CW, CH), o = out.data;
+    var col = lv > 1 ? [255, 226, 110, 255] : [255, 240, 190, 150];
+    function solid(x, y) { return x >= 0 && y >= 0 && x < CW && y < CH && d[(y * CW + x) * 4 + 3] > 0; }
+    for (var y = 0; y < CH; y++) for (var x = 0; x < CW; x++) {
+      if (solid(x, y) || !(solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) continue;
+      var i = (y * CW + x) * 4; o[i] = col[0]; o[i + 1] = col[1]; o[i + 2] = col[2]; o[i + 3] = col[3];
+    }
+    g.putImageData(out, 0, 0); g.drawImage(src, 0, 0);
+    var t = GT3.tex(c); t.userData.shared = true;
+    return (set[key] = t);
+  }
   function shadow() {
     if (shadowTex) return shadowTex;
     var c = GT3.canvas(16, 8), g = c.getContext('2d');
@@ -44,7 +61,8 @@
   }
 
   GT3.Actor = function (palette) {
-    var group = new THREE.Group(), pal = palette | 0, dir = 'down', step = 0;
+    var group = new THREE.Group(), pal = palette | 0, dir = 'down', step = 0, hl = 0;
+    function cur() { return hl ? glowFrame(pal, dir, step, hl) : frame(pal, dir, step); }
     var mat = GT3.mat({ map: frame(pal, dir, step), alphaTest: 0.5, side: THREE.DoubleSide });
     var w = CW * PX, h = CH * PX;
     // The card leans back about a tile, so next to a wall its top half sat inside the building and the wall hid it
@@ -83,7 +101,12 @@
       set: function (x, z, d, s) {
         group.position.set(x, 0, z);
         d = d || dir; s = s === 'sit' ? 'sit' : s | 0;
-        if (d !== dir || s !== step) { dir = d; step = s; mat.map = frame(pal, dir, step); mat.needsUpdate = true; if (lieMat) { lieMat.map = mat.map; lieMat.needsUpdate = true; } }
+        if (d !== dir || s !== step) { dir = d; step = s; mat.map = cur(); mat.needsUpdate = true; if (lieMat) { lieMat.map = mat.map; lieMat.needsUpdate = true; } }
+      },
+      // a hover outline round the figure: 0 off, 1 faint, 2 bright
+      highlight: function (lv) {
+        lv = lv | 0; if (lv === hl) return;
+        hl = lv; mat.map = cur(); mat.needsUpdate = true; if (lieMat) { lieMat.map = mat.map; lieMat.needsUpdate = true; }
       },
       // lie(true, height) lays the card flat on its back at that height (a bed top), head away from the camera; lie(false) stands it up
       lie: function (on, height) {
