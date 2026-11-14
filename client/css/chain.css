@@ -375,6 +375,8 @@ html.gt-phone:not(.gt-land) .gt-tool-grid{grid-template-columns:minmax(0,1fr)}
 .adm-in{color:var(--good,#2f7d32)}.adm-out{color:#b05a10}
 .adm-ptable{display:grid;grid-template-columns:auto auto auto minmax(0,1fr);gap:4px 12px;margin:8px 0;align-items:baseline}
 .adm-ptable span.gt-data{text-align:right}
+.adm-itable{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto;gap:4px 14px;margin:8px 0;align-items:baseline}
+.adm-itable span.gt-data,.adm-itable b:not(:first-child){text-align:right}
 .adm-form{display:flex;flex-direction:column;gap:6px;margin:8px 0}
 .adm-frow{display:grid;grid-template-columns:14em 7em minmax(0,1fr);gap:8px;align-items:center}
 .adm-frow input[type=number]{width:100%}.adm-frow input[type=checkbox]{justify-self:start;width:18px;height:18px}

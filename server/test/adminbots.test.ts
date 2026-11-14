@@ -199,3 +199,19 @@ test('trading and crafting fund themselves from the treasury above its reserve, 
   assert.equal(q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'handout_mint'"), 0, 'no new coin for trading');
   assert.equal(q("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_buy'"), 0, 'the town itself still bought nothing');
 });
+
+test('the admin sees the townsfolk bag: books, chain, held to resell and spare', async () => {
+  const { game, clock, bots } = await world();
+  bots.control({ settings: { trade: { enabled: true, marginPct: -90, perHour: 4, holdMax: 5, minWallet: 0 }, craft: { enabled: false } } });
+  for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
+  // a good the wallet holds outside the trading stock shows as spare
+  game.gs.add(game.clock.time().settleDay, WALLET, 'ore', 3, 'test', null);
+  const inv = bots.status(0).inventory, by = Object.fromEntries(inv.map((r) => [r.token, r]));
+  assert.ok(by.coin && by.coin.books === game.gs.balance(WALLET, 'coin'), 'coin always listed');
+  assert.equal(by.ore.books, 3); assert.equal(by.ore.spare, 3); assert.equal(by.ore.held, 0);
+  for (const [token, h] of Object.entries(game.residents.stock())) {
+    assert.equal(by[token].held, Math.min(h.qty, by[token].books));
+    assert.equal(by[token].spare, by[token].books - by[token].held);
+  }
+  assert.ok(inv.every((r) => r.token === 'coin' || r.books !== 0 || r.chain !== 0), 'empty goods left out');
+});

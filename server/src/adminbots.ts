@@ -103,6 +103,7 @@ export class AdminBots {
       craft: { ...craft, profit: craft.sold - craft.inputs - craft.fees, shelves: this.shelves() },
       recent: rows.slice(0, RECENT).map((r) => ({ seq: r.seq, day: r.day, at: r.created_at, kind: r.kind, coin: r.delta, ...label(r) })),
       price: this.price(),
+      inventory: this.inventory(),
     };
   }
 
@@ -115,6 +116,17 @@ export class AdminBots {
       const best = bids.sort((a, b) => b.unit - a.unit)[0] ?? null, avg = h.cost / h.qty;
       return { token, name: econ.items[token]?.name ?? token, qty: h.qty, inWallet: gs.balance(this.res.wallet, token), avgCost: Math.round(avg * 100) / 100, sellAt: Math.ceil(avg * m), bestBid: best ? best.unit : null, bestBidder: best ? market.def(best.id).name : null };
     });
+  }
+
+  /** The townsfolk's shared bag (one wallet for all five): every token it holds in the game books and on chain (as of
+   *  the last settlement); of the goods, how many are held to sell again (and what they cost) and how many are spare
+   *  (ingredients or crafted goods waiting for a shelf). */
+  inventory() {
+    const { econ, gs } = this.d.game, w = this.res.wallet, stock = this.res.stock();
+    return Object.keys(econ.items).map((token) => {
+      const books = gs.balance(w, token), chain = gs.settledBalance(w, token), h = stock[token], held = token === 'coin' ? 0 : Math.min(books, h?.qty ?? 0);
+      return { token, name: econ.items[token].name, books, chain, held, avgCost: h && h.qty > 0 ? Math.round((h.cost / h.qty) * 100) / 100 : null, spare: token === 'coin' ? 0 : Math.max(0, books - held) };
+    }).filter((r) => r.books !== 0 || r.chain !== 0 || r.token === 'coin');
   }
 
   /** For each recipe: the merchants that sell the good, their stock against the fill line, and their ask and bid now. */

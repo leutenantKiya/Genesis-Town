@@ -527,7 +527,10 @@
       body.appendChild(portrait(o));
       body.appendChild(el('p', 'gt-pcard-title', $t('Warga desa')));
       body.appendChild(el('p', 'chain-dim', $t('Belanja roti, ikan bakar, kayu, dan alat untuk kota dari dompet bersama warga. Dompet itu hidup dari bansos kas kota.')));
-      GT.modal({ title: o.nick + '#NPC', body: body, actions: [{ label: $t('Tutup'), primary: true, close: true }] });
+      var ra = [{ label: $t('Tutup'), primary: !(window.GT_ADMIN && GT_ADMIN.isAdmin()), close: true }];
+      // admins: the townsfolk's shared bag, in the Admin window
+      if (window.GT_ADMIN && GT_ADMIN.isAdmin() && GT_ADMIN.openBag) ra.unshift({ label: $t('Lihat isi tas'), primary: true, onClick: function (h) { h.close('ok'); setTimeout(function () { GT_ADMIN.openBag(); }, 0); return true; } });
+      GT.modal({ title: o.nick + '#NPC', body: body, actions: ra });
       return;
     }
     if (o.npc) {

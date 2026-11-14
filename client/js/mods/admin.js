@@ -9,7 +9,8 @@
  * name as you type; a row opens its wallet (GET /api/admin/wallet): each token in the game books and on chain.
  * Tab "Bot warga": the townsfolk's shared wallet (adminbots.ts): balance, coin in (treasury, faucet) and out (per merchant,
  * per resident), the town's price ceiling, buying to sell again at a margin ("Dagang warga", settings saved on the server),
- * crafting to stock the merchants' shelves ("Crafting warga": brings the crafted goods' prices down),
+ * crafting to stock the merchants' shelves ("Crafting warga": brings the crafted goods' prices down), the townsfolk's
+ * shared bag ("Isi tas warga"; GT_ADMIN.openBag() opens it, e.g. from a townsperson's card in the game),
  * pause the shopping, the merchants each resident may buy from, and "Lacak uang": any account's coin by
  * counterpart, a click following it one hop further.
  * Tab "Keamanan": guests online (Kick / Ban IP), banned addresses, frozen accounts, settlement status, and the purge of old
@@ -413,6 +414,7 @@
   function buildBots() {
     var v = $('div');
     ui.botsTop = $('div', 'adm-card'); v.appendChild(ui.botsTop);
+    ui.botsInv = $('div', 'adm-card'); v.appendChild(ui.botsInv);
     ui.botsPrice = $('div', 'adm-card'); v.appendChild(ui.botsPrice);
     ui.botsTrade = $('div', 'adm-card'); v.appendChild(ui.botsTrade);
     ui.botsCraft = $('div', 'adm-card'); v.appendChild(ui.botsCraft);
@@ -561,6 +563,32 @@
     el.appendChild(tb);
     el.appendChild($('p', 'chain-dim', $t('Bahan alat (bijih) tidak dijual pedagang, jadi alat hanya dibuat kalau dompet warga punya bijih.')));
   }
+  // the townsfolk's shared bag: one wallet for all five (adminbots.ts inventory())
+  function renderInv(d) {
+    var el = ui.botsInv; if (!el || !d.inventory) return;
+    el.textContent = '';
+    el.appendChild($('div', 'chain-h', $t('Isi tas warga')));
+    el.appendChild($('p', 'chain-dim', $t('Kelima warga memakai satu tas bersama (dompet {0}). Buku game = tersimpan + gerakan hari ini; blockchain = per settlement terakhir (06:00).', [d.wallet.account])));
+    var goods = d.inventory.filter(function (r) { return r.token !== 'coin'; }), coin = d.inventory.filter(function (r) { return r.token === 'coin'; })[0];
+    var tb = $('div', 'adm-itable');
+    [$t('Barang'), $t('Di buku game'), $t('Di blockchain'), $t('Ditahan untuk dijual'), $t('Sisa')].forEach(function (h) { tb.appendChild($('b', 'chain-dim', h)); });
+    if (coin) {
+      tb.appendChild($('span', null, coin.name));
+      tb.appendChild($('span', 'gt-data', num(coin.books)));
+      tb.appendChild($('span', 'gt-data' + (coin.books !== coin.chain ? ' adm-diff' : ''), num(coin.chain)));
+      tb.appendChild($('span', 'chain-dim', '-')); tb.appendChild($('span', 'chain-dim', '-'));
+    }
+    goods.forEach(function (r) {
+      tb.appendChild($('span', null, r.name));
+      tb.appendChild($('span', 'gt-data', num(r.books)));
+      tb.appendChild($('span', 'gt-data' + (r.books !== r.chain ? ' adm-diff' : ''), num(r.chain)));
+      tb.appendChild($('span', 'gt-data', r.held ? num(r.held) + ' @ ' + num(r.avgCost) : '-'));
+      tb.appendChild($('span', 'gt-data', r.spare ? num(r.spare) : '-'));
+    });
+    el.appendChild(tb);
+    if (!goods.length) el.appendChild($('p', 'chain-dim', $t('Tas warga belum berisi barang.')));
+    if (BT.focus === 'inv') { BT.focus = null; if (el.scrollIntoView) el.scrollIntoView({ block: 'start' }); }
+  }
   function renderBots() {
     if (!ui.botsTop) return;
     var d = BT.data;
@@ -582,6 +610,7 @@
     row.appendChild(btn($t('Lacak dompet'), function () { TR.path = []; trace(d.wallet.account, false); }));
     ui.botsTop.appendChild(row);
     if (d.truncated) ui.botsTop.appendChild($('p', 'chain-dim', $t('Hanya {0} baris terbaru yang dihitung.', [num(d.scanned)])));
+    renderInv(d);
     renderPrice(d);
     renderTrade(d);
     renderCraft(d);
@@ -742,6 +771,14 @@
     timer = setInterval(function () { if (panel && panel.isOpen()) load(); else clearInterval(timer); }, 5000);
   }
 
+  // Straight to the townsfolk's bag (a townsperson's card in the game): the Bot warga tab, scrolled to it once it loads.
+  function openBag() {
+    if (!isAdmin()) return;
+    tab = 'bots'; BT.focus = 'inv';
+    if (panel && panel.isOpen()) { showTab(); botsLoad(); return; }
+    open();
+  }
+
   // The same panel inside another window (the Admin tab of Settings); it reloads every 5 s while that tab is on screen.
   function embed(host) {
     if (!isAdmin()) return;
@@ -767,7 +804,7 @@
 
   function init() {
     C = window.GT_CHAIN || null;
-    window.GT_ADMIN = { open: open, embed: embed, isAdmin: isAdmin };
+    window.GT_ADMIN = { open: open, embed: embed, isAdmin: isAdmin, openBag: openBag };
     if (wantPage) watchPage();
   }
   GT.register({ id: 'admin', init: init });

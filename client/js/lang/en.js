@@ -1971,6 +1971,12 @@
     "{0} beli {1} dari {2} untuk crafting": "{0} bought {1} from {2} for crafting",
     "{0} jual {1} hasil craft ke {2}": "{0} sold crafted {1} to {2}",
     "Warga membeli barang dari pedagang lalu menjualnya ke pedagang yang membayar paling tinggi, kalau harga jualnya minimal harga beli + margin. Margin boleh minus (rugi). Modalnya uang saku dari kas kota (di atas cadangan, tanpa koin baru). Semua pengaturan disimpan di database server.": "Townsfolk buy goods from merchants and sell them to whichever merchant pays most, when that price is at least the purchase price + the margin. The margin may be negative (a loss). The money is an allowance from the town treasury (above its reserve, never new coin). Every setting is saved in the server's database.",
-    "Dompet warga di bawah sisa minimal dan kas kota di bawah cadangannya: dagang dan crafting menunggu uang. Turunkan Cadangan kas kota atau Sisa dompet minimal.": "The townsfolk wallet is below its floor and the treasury is below its reserve: trading and crafting wait for money. Lower the Treasury reserve or Keep in the wallet."
+    "Dompet warga di bawah sisa minimal dan kas kota di bawah cadangannya: dagang dan crafting menunggu uang. Turunkan Cadangan kas kota atau Sisa dompet minimal.": "The townsfolk wallet is below its floor and the treasury is below its reserve: trading and crafting wait for money. Lower the Treasury reserve or Keep in the wallet.",
+    "Isi tas warga": "Townsfolk bag",
+    "Kelima warga memakai satu tas bersama (dompet {0}). Buku game = tersimpan + gerakan hari ini; blockchain = per settlement terakhir (06:00).": "All five townsfolk share one bag (wallet {0}). Game books = saved + today's moves; blockchain = as of the last settlement (06:00).",
+    "Ditahan untuk dijual": "Held to resell",
+    "Sisa": "Spare",
+    "Tas warga belum berisi barang.": "The townsfolk bag holds no goods yet.",
+    "Lihat isi tas": "See their bag"
   });
 })();
