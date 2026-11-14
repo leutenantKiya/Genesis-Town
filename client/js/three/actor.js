@@ -123,10 +123,13 @@
         var dx = camera.position.x - group.position.x, dz = camera.position.z - group.position.z;
         pivot.rotation.order = 'YXZ';
         pivot.rotation.y = Math.atan2(dx, dz);
-        if (lying) { // flat, its feet at the camera's side; the pivot moves back so the body, not the feet, sits on the bed's middle
-          var yw = pivot.rotation.y;
-          pivot.rotation.x = -Math.PI / 2;
-          pivot.position.set(Math.sin(yw) * h / 2, lieY, Math.cos(yw) * h / 2);
+        if (lying) { // propped up on the pillow, its feet at the camera's side: tipped most of the way back but still turned
+          // towards the camera (a flat card reads as a sliver from a low camera); the pivot moves back so the body sits on the bed
+          var yw = pivot.rotation.y, camP = Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));
+          var lean = camP + (Math.PI / 2 - camP) * 0.45;
+          pivot.rotation.x = -lean;
+          var back = Math.sin(lean) * h / 2;
+          pivot.position.set(Math.sin(yw) * back, lieY, Math.cos(yw) * back);
           return;
         }
         pivot.rotation.x = -Math.atan2(camera.position.y - group.position.y, Math.hypot(dx, dz));

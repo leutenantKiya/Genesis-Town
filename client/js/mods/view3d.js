@@ -335,8 +335,8 @@
     if (cineK <= 0 && !cineWant) { cineLive = false; rig.tilt(0); rig.turn(yawWant); rig.zoom(zoom * fit); return; }
     cineLive = true;
     // close in on the bed from the room's open side, low: the camera keeps its heading (a turn swings a wall into the
-    // shot), drops about 29 degrees towards eye level, comes in to about 3.4x, with a slow breath of a sway
-    rig.zoom(zoom * fit * (1 + 2.4 * e)); rig.tilt(0.5 * e); rig.turn(yawWant + (cineWant ? Math.sin(performance.now() / 4000) * 0.03 * e : 0));
+    // shot), drops about 17 degrees towards eye level, comes in to about 3.4x, with a slow breath of a sway
+    rig.zoom(zoom * fit * (1 + 2.4 * e)); rig.tilt(0.3 * e); rig.turn(yawWant + (cineWant ? Math.sin(performance.now() / 4000) * 0.03 * e : 0));
   }
   var rodeLast = false; // the figure was on the horse last frame: getting off puts it back on its feet once
   function rideShot(now) {
