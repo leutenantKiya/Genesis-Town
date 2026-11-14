@@ -405,7 +405,7 @@ html.gt-phone .gt-trbtn-players{display:block;min-width:44px;min-height:44px}
 html.gt-phone .gt-trbtn{min-height:44px}
 .gt-trbadge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#e04040;color:#fff;font:700 12px/18px var(--font);font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--hud)}
 .gt-trbadge[hidden]{display:none}
-.gt-plist{position:absolute;left:50%;top:44px;transform:translateX(-50%);z-index:6;width:min(340px,calc(100% - 24px));max-height:60%;overflow-y:auto;padding:8px 10px;background:var(--hud);color:var(--hud-ink);border:var(--line) solid var(--outline);border-radius:var(--r-win);font-size:calc(14px*var(--ts));pointer-events:none}
+.gt-plist{position:absolute;left:50%;top:44px;transform:translateX(-50%);z-index:6;line-height:1.35;width:min(340px,calc(100% - 24px));max-height:60%;overflow-y:auto;padding:8px 10px;background:var(--hud);color:var(--hud-ink);border:var(--line) solid var(--outline);border-radius:var(--r-win);font-size:calc(14px*var(--ts));pointer-events:none}
 html.gt-phone .gt-plist{pointer-events:auto}
 .gt-plist[hidden]{display:none}
 .gt-plist-h{font-weight:700;margin:0 0 4px}
