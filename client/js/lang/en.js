@@ -2091,6 +2091,16 @@
     "{0} akun pemain dihapus. Kalau akunmu ikut terhapus, muat ulang halaman dan masuk lagi.": "{0} player accounts deleted. If yours was among them, reload the page and sign in again.",
     "Hapus semua akun pemain": "Delete all player accounts",
     "Menghapus data game semua pemain, termasuk akun admin: nama, Homeland, bangunan, pekerja, alat, chip, misi. Pedagang, bot warga, dan kas kota tidak tersentuh. Koin dan barang di blockchain dan di buku besar tetap milik akun itu, dan login yang sama bisa masuk lagi sebagai pemain baru. Tidak bisa dibatalkan.": "Deletes every player's game data, admin accounts included: name, Homeland, buildings, workers, tools, chips, missions. Merchants, the townsfolk and the town treasury are not touched. Coin and goods on the blockchain and in the ledger stay with that account, and the same login can sign in again as a new player. This cannot be undone.",
-    "Tidak ada akun pemain.": "No player accounts."
+    "Tidak ada akun pemain.": "No player accounts.",
+    "Masuk dulu dengan email untuk menghubungkan Google.": "Sign in with email first to link Google.",
+    "Setelah terhubung, \"Masuk dengan Google\" dengan akun Google itu membuka akun ini (akun email). Kalau akun Google itu sudah punya akun game sendiri, akun game itu tidak bisa dibuka lagi.": "Once linked, \"Sign in with Google\" with that Google account opens this account (the email one). If that Google account already has a game account of its own, that game account can no longer be opened.",
+    "1. Konfirmasi akun email": "1. Confirm the email account",
+    "Menunggu jendela login…": "Waiting for the sign-in window…",
+    "Akun ini sudah akun Google. Keluar, lalu masuk dengan email dulu.": "This is already a Google account. Sign out, then sign in with email first.",
+    "Akun email dikonfirmasi. Lanjut ke langkah 2.": "Email account confirmed. Go on to step 2.",
+    "2. Pilih akun Google": "2. Choose the Google account",
+    "Itu bukan akun Google.": "That is not a Google account.",
+    "Akun Google terhubung. Lain kali kamu bisa masuk dengan Google ke akun ini.": "Google account linked. Next time you can sign in to this account with Google.",
+    "Hubungkan akun Google": "Link a Google account"
   });
 })();

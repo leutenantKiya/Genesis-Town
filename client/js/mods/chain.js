@@ -349,6 +349,51 @@
     ] });
   }
 
+  /* Link a Google account to an account made with email (Settings > "Hubungkan akun Google"). The NEAR account comes from
+     the login's id (`sub`), so Google and email are two accounts until Auth0 links them: after linking, signing in with
+     that Google account gives the email account's id, i.e. the same NEAR account. Done in the browser with Auth0's own
+     account linking (Management API, the user's own token with scope update:current_user_identities):
+       step 1 (popup): the email account confirms and gives a token for the Management API;
+       step 2 (popup): the Google account signs in and gives its ID token;
+       then POST /api/v2/users/<email account>/identities { link_with: <Google ID token> }.
+     Each popup opens from its own click (browsers block a popup that opens later). Nothing goes through our server. */
+  function jwtSub(tok) { try { return JSON.parse(atob(String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || null; } catch (e) { return null; } }
+  function linkGoogle() {
+    if (!nearAuthHere() || !S.account) { GT.toast($t('Masuk dulu dengan email untuk menghubungkan Google.')); return; }
+    var fa = S.cfg.fastAuth, api2 = 'https://' + fa.domain + '/api/v2/', st = { token: null, sub: null, busy: false }, h;
+    var body = $('div'), msg = $('p', 'chain-dim', ''), b1, b2;
+    body.appendChild($('p', null, $t('Setelah terhubung, "Masuk dengan Google" dengan akun Google itu membuka akun ini (akun email). Kalau akun Google itu sudah punya akun game sendiri, akun game itu tidak bisa dibuka lagi.')));
+    function say(t) { msg.textContent = t; }
+    function sync() { b1.disabled = st.busy || !!st.token; b2.disabled = st.busy || !st.token; }
+    b1 = button($t('1. Konfirmasi akun email'), function () {
+      st.busy = true; sync(); say($t('Menunggu jendela login…'));
+      nearProvider().client.getTokenWithPopup({ authorizationParams: { audience: api2, scope: 'openid update:current_user_identities' } }).then(function (tok) {
+        var sub = jwtSub(tok);
+        if (!tok || !sub) throw new Error($t('Login tidak memberi token'));
+        if (sub.indexOf('google-oauth2|') === 0) throw new Error($t('Akun ini sudah akun Google. Keluar, lalu masuk dengan email dulu.'));
+        st.token = tok; st.sub = sub; say($t('Akun email dikonfirmasi. Lanjut ke langkah 2.'));
+      }).catch(function (e) { say($t('Gagal: {0}', [e && (e.error_description || e.message) || e])); }).then(function () { st.busy = false; sync(); });
+    }, 'primary');
+    b2 = button($t('2. Pilih akun Google'), function () {
+      st.busy = true; sync(); say($t('Menunggu jendela login…'));
+      var c2 = nearProvider().client; // its own client: the Google sign-in must not replace the email account's token
+      c2.loginWithPopup({ authorizationParams: { connection: 'google-oauth2', prompt: 'login' } })
+        .then(function () { return c2.getIdTokenClaims(); })
+        .then(function (cl) {
+          if (!cl || !cl.__raw || String(cl.sub).indexOf('google-oauth2|') !== 0) throw new Error($t('Itu bukan akun Google.'));
+          return fetch(api2 + 'users/' + encodeURIComponent(st.sub) + '/identities', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + st.token }, body: JSON.stringify({ link_with: cl.__raw }) });
+        })
+        .then(function (r) { return r.ok ? null : r.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.message || ('HTTP ' + r.status)); }); })
+        .then(function () { say(''); if (h) h.close('action'); GT.toast($t('Akun Google terhubung. Lain kali kamu bisa masuk dengan Google ke akun ini.')); })
+        .catch(function (e) { say($t('Gagal: {0}', [e && (e.error_description || e.message) || e])); })
+        .then(function () { st.busy = false; sync(); });
+    });
+    var row = $('div', 'chain-row'); row.appendChild(b1); row.appendChild(b2);
+    body.appendChild(row); body.appendChild(msg);
+    sync();
+    h = GT.modal({ title: $t('Hubungkan akun Google'), body: body, actions: [{ label: $t('Tutup') }] });
+  }
+
   // NEAR Auth by redirect (see authReturn at the top): the page leaves for Auth0's sign-in page and comes back here.
   // Approving a second device (approveDevice, newDevice) still opens NEAR Auth's window: it signs a key addition and
   // must come back to the same page state.
@@ -1956,6 +2001,6 @@
     return true;
   }
 
-  window.GT_CHAIN = { weather: weatherKind, approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, toolBroken: toolBroken, _signedCall: signedCall };
+  window.GT_CHAIN = { weather: weatherKind, approveDevice: approveDevice, monsters: monstersNow, state: S, refresh: refresh, login: login, signOut: signOut, linkGoogle: linkGoogle, canLinkGoogle: function () { return !!S.account && nearAuthHere(); }, open: open, act: act, askSend: askSend, askList: askList, spendable: spendable, plotAt: plotAt, api: api, signHeaders: signHeaders, standPos: standPos, toolBroken: toolBroken, _signedCall: signedCall };
   GT.register({ id: 'chain', init: init, onWorld: onWorld, onInteract: onInteract, onDrawGround: onDrawGround, onDraw: onDraw, onFrame: onFrame, onKey: onKey });
 })();

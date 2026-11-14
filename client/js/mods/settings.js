@@ -199,6 +199,7 @@
   function shortcuts() {
     var row = $('div', 'gt-set-links'), opts = [];
     if (document.getElementById('devbtn')) opts.push(['🛠️', 'Dev', function () { press('devbtn'); }]);
+    if (window.GT_CHAIN && GT_CHAIN.canLinkGoogle && GT_CHAIN.canLinkGoogle()) opts.push(['🔗', $t('Hubungkan akun Google'), function () { GT_CHAIN.linkGoogle(); }]);
     if (window.GT_CHAIN && GT_CHAIN.state && GT_CHAIN.state.account) opts.push(['🚪', $t('Keluar (ganti akun)'), function () { GT_CHAIN.signOut(); }]);
     opts.forEach(function (o) {
       var b = $('button', 'mbtn gt-set-link', o[0] + ' ' + o[1]); b.type = 'button';
