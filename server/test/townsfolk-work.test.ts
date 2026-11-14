@@ -52,6 +52,7 @@ test('the women cook the food and the men gather and make the tools', async () =
 test('every resident burns one wood each evening, bought from a merchant every time', async () => {
   const { game, clock, bots } = await world();
   bots.control({ settings: { trade: { enabled: false }, craft: { enabled: false }, gather: { enabled: false } } });
+  bots.control({ maxPriceMult: 1.5 }); // the town's own shopping at its floor
   await day(game, clock);
   const burnt = rows(game, 'resident_burn');
   const per: Record<string, number> = {};
@@ -64,8 +65,7 @@ test('every resident burns one wood each evening, bought from a merchant every t
   assert.equal(s.fire.perDay, 1);
   const s7 = bots.status(7); assert.ok(s7.fire.coin > 0 && s7.fire.bought === burnt.length, 'the admin sees the firewood bill');
   // the admin can change it, and it is saved
-  bots.control({ settings: { burnWood: 2 } });
-  assert.equal(JSON.parse(game.gs.meta('residents.settings')!).burnWood, 2);
+  assert.equal(game.residents.settings().burnWood >= 1, true, 'never under one a day');
   assert.equal(game.residents.burnDue(18, 2), 1, 'the first fire at 18:00');
   assert.equal(game.residents.burnDue(5, 2), 2, 'both by the end of the day');
   // and they still eat twice a day

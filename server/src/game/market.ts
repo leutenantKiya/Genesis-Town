@@ -216,9 +216,27 @@ export class Market {
     return Math.max(0, allowed - this.gs.newCoin(day));
   }
 
-  /** The town's price ceiling as a multiple of a good's base value: the admin's setting (meta `town.maxPriceMult`,
-   *  adminbots.ts) or the config's `town.maxPriceMult`. */
-  priceMult(): number { const v = Number(this.gs.meta('town.maxPriceMult')); return Number.isFinite(v) && v > 0 ? v : this.econ.town.maxPriceMult; }
+  /** A fixed ceiling for tests and simulations (in memory only; no route sets it). */
+  fixedMult: number | null = null;
+  /** How dear the goods the town buys are right now: the median of ask / base over the open merchants that have them in stock (1 when none). */
+  priceLevel(): number {
+    const r: number[] = [];
+    for (const token of Object.keys(this.econ.town.dailyUnits)) {
+      if (this.trend.withdrawn(token)) continue;
+      for (const id of this.ids()) if (this.isOpen(id) && this.def(id).sells.includes(token) && this.gs.balance(this.account(id), token) >= 1) r.push(this.row(id, token).ask / this.econ.items[token].base);
+    }
+    if (!r.length) return 1;
+    r.sort((a, b) => a - b);
+    return r.length % 2 ? r[(r.length - 1) / 2] : (r[r.length / 2 - 1] + r[r.length / 2]) / 2;
+  }
+  /** The town's price ceiling as a multiple of a good's base value. Nobody sets it (2026-11-15): it follows the market.
+   *  Never under the config's `town.maxPriceMult` (1.5); when goods run dear the town pays more, up to
+   *  `town.maxPriceMultMax`: the floor times the price level, so it rises and falls with the shelves. */
+  priceMult(): number {
+    if (this.fixedMult != null) return this.fixedMult;
+    const tw = this.econ.town, lo = tw.maxPriceMult, hi = Math.max(lo, tw.maxPriceMultMax ?? lo);
+    return Math.round(Math.min(hi, Math.max(lo, lo * this.priceLevel())) * 100) / 100;
+  }
 
   /** Town buys its hourly share of daily demand from the cheapest open merchant (new coin, within the faucet). */
   townDemand() {

@@ -279,6 +279,11 @@ move merchant prices, and every wash trade burns 5%.
   changes who has coins to spend.
 - Town demand scales with how many players are active (k). The money cap scales with it, so a busier town has a
   bigger economy and an empty town shrinks back without anyone resetting it.
+- The townsfolk have no admin controls (since 2026-11-15; `/api/admin/bots` is read-only). Their numbers follow the
+  market by fixed rules: each eats at least 2 foods and burns at least 1 wood a game day, one more when the cheapest
+  food or wood is at or under 80% of its base value; their resale margin runs from 15% (empty wallet) down to 0%
+  (wallet at its target); the town's price ceiling is 1.5 x base times the median ask / base of the goods it buys,
+  never under 1.5 and at most 2.5.
 - All tuning constants live in `economy/config.json`, and the contract's copy is set at `init`. Changing them is a
   config change with an on-chain record, not a code patch. It is not needed for the economy to move.
 

@@ -75,8 +75,9 @@ test('the admin watches the wallet, pauses the shopping and picks the merchants 
 
 test('the admin sets the town price ceiling: too low and the town stops buying, null goes back to the config', async () => {
   const { game, clock, bots } = await world();
-  const def = game.econ.town.maxPriceMult;
-  assert.equal(bots.status(1).price.mult, def);
+  const def = game.econ.town.maxPriceMult, top = game.econ.town.maxPriceMultMax!;
+  const m0 = bots.status(1).price.mult;
+  assert.ok(m0 >= def && m0 <= top, `the ceiling follows the market between ${def} and ${top}: ${m0}`);
   bots.control({ maxPriceMult: 1 });
   assert.equal(game.market.priceMult(), 1);
   const p = bots.status(1).price;
@@ -94,7 +95,8 @@ test('the admin sets the town price ceiling: too low and the town stops buying, 
   await hours(game, clock, () => buys(game).length > n0);
   assert.ok(buys(game).length > n0, 'a high ceiling buys again');
   bots.control({ maxPriceMult: null });
-  assert.equal(game.market.priceMult(), def);
+  const m1 = game.market.priceMult();
+  assert.ok(m1 >= def && m1 <= top, 'back to following the market');
   assert.throws(() => bots.control({ maxPriceMult: 0.5 }), /between 1 and 5/);
   assert.throws(() => bots.control({ maxPriceMult: '2' }), /between 1 and 5/);
 });
@@ -132,7 +134,8 @@ test('the townsfolk buy to sell again at the admin\'s margin, negative allowed, 
   assert.equal(tradeRows().length, 0, '+500%: no merchant pays that');
   // -90%: they buy and sell at a loss, booked per resident, never holding more than holdMax
   bots.control({ settings: { trade: { marginPct: -90 } } });
-  assert.equal(JSON.parse(game.gs.meta('residents.settings')!).trade.marginPct, -90, 'saved in the database');
+  assert.equal(game.gs.meta('residents.settings') ?? null, null, 'nothing is saved in the database any more');
+  assert.equal(game.residents.settings().trade.marginPct, -90, 'fixed for this test (in memory)');
   assert.equal(game.residents.settings().trade.perHour, 5, 'other fields kept');
   await hours(game, clock, () => tradeRows().some((r) => r.delta > 0));
   const rows = tradeRows();
@@ -222,6 +225,7 @@ test('the admin sees the townsfolk bag: books, chain, held to resell and spare',
 test('every resident eats 2 meals a game day from the bag, buying food when the bag has none', async () => {
   const { game, clock, bots } = await world();
   bots.control({ settings: { trade: { enabled: false }, craft: { enabled: false } } });
+  bots.control({ maxPriceMult: 1.5 }); // the town's own shopping at its floor, so the shelves keep food for the meals
   for (let h = 0; h < 30; h++) { clock.advanceHours(1); await game.step(); }
   const rows = game.gs.db.prepare("SELECT token, ref, day FROM ledger WHERE account = ? AND kind = 'resident_eat'").all(WALLET) as Array<{ token: string; ref: string; day: number }>;
   assert.ok(rows.every((r) => ['bread', 'meal'].includes(r.token)), 'only food');
@@ -326,4 +330,42 @@ test('a broken tool is replaced with a new one from Ben, never repaired, and no 
   clock.advanceHours(1); await game.step();
   assert.equal((game.gs.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_gather'").get(WALLET) as { n: number }).n, caught0, 'no rod, no fish');
   assert.equal(bots.status(1).why.gather.find((x: any) => x.token === 'fish')!.code, 'no_tool');
+});
+
+test('nobody steers the townsfolk: their numbers follow the market, and what an admin saved earlier is ignored', async () => {
+  const { game, clock } = await world();
+  // an old admin setting left in the database changes nothing
+  game.gs.setMeta('residents.settings', JSON.stringify({ meals: 0, burnWood: 0, trade: { marginPct: -90, enabled: false } }));
+  game.gs.setMeta('residents.ctl', JSON.stringify({ paused: true, allow: { r1: [] } }));
+  game.gs.setMeta('town.maxPriceMult', '5');
+  const s = game.residents.settings(), tw = game.econ.town, ad = game.econ.residents.adaptive!;
+  assert.ok(s.meals >= 2 && s.meals <= ad.mealsMax, `at least 2 meals: ${s.meals}`);
+  assert.ok(s.burnWood >= 1 && s.burnWood <= ad.burnMax, `at least 1 wood: ${s.burnWood}`);
+  assert.ok(s.trade.enabled && s.trade.marginPct >= ad.marginMin && s.trade.marginPct <= ad.marginMax, `margin in range: ${s.trade.marginPct}`);
+  assert.equal(game.residents.controls().paused, false, 'not paused');
+  assert.deepEqual(game.residents.controls().allow, {}, 'every merchant allowed');
+  assert.ok(game.market.priceMult() >= tw.maxPriceMult && game.market.priceMult() <= tw.maxPriceMultMax!, 'the ceiling ignores the old setting');
+  // the ceiling: the floor times how dear the town's goods are, never under 1.5
+  const level = game.market.priceLevel();
+  assert.equal(game.market.priceMult(), Math.round(Math.min(tw.maxPriceMultMax!, Math.max(tw.maxPriceMult, tw.maxPriceMult * level)) * 100) / 100);
+  // cheap food and wood: one more meal and one more fire; dear: back to the minimum
+  const a0 = game.residents.auto();
+  const set = (tk: string, n: number) => { for (const id of game.market.ids()) { const acct = game.market.account(id), have = game.gs.balance(acct, tk); if (game.market.def(id).sells.includes(tk)) game.gs.add(game.clock.time().settleDay, acct, tk, n - have, 'test', null); } };
+  for (const tk of ['bread', 'meal', 'wood']) set(tk, 400); // full shelves: low prices
+  for (let i = 0; i < 48; i++) game.market.tickAll(); // prices move toward the stock hour by hour
+  const cheap = game.residents.auto();
+  assert.ok(cheap.food && cheap.food.pct <= ad.cheapPct, `food is cheap: ${cheap.food?.pct}%`);
+  assert.equal(cheap.meals, ad.mealsMax); assert.equal(cheap.burnWood, ad.burnMax);
+  for (const tk of ['bread', 'meal', 'wood']) set(tk, 1); // nearly empty: high prices
+  for (let i = 0; i < 48; i++) game.market.tickAll();
+  const dear = game.residents.auto();
+  assert.equal(dear.meals, 2); assert.equal(dear.burnWood, 1);
+  assert.ok(game.market.priceMult() > tw.maxPriceMult, 'dear goods lift the ceiling');
+  // the margin falls as the wallet fills
+  const w = game.residents.wallet, day = game.clock.time().settleDay;
+  game.gs.add(day, w, 'coin', -game.gs.balance(w, 'coin'), 'test', null);
+  assert.equal(game.residents.auto().marginPct, ad.marginMax, 'empty wallet: the widest margin');
+  game.gs.add(day, w, 'coin', game.econ.residents.target, 'test', null);
+  assert.equal(game.residents.auto().marginPct, ad.marginMin, 'full wallet: the narrowest');
+  void a0; void clock;
 });

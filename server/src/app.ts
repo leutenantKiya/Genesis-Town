@@ -488,18 +488,14 @@ export function createApp(deps: AppDeps) {
         return send(res, 200, p === '/api/admin/accounts' ? adminAccounts.list(url.searchParams.get('q')) : adminAccounts.wallet(url.searchParams.get('account')));
       }
       if (p === '/api/admin/bots' || p === '/api/admin/trace') {
-        // the townsfolk's wallet: watch it, steer whom they buy from, and follow any account's coin (adminbots.ts)
+        // the townsfolk's wallet: watch it, and follow any account's coin (adminbots.ts)
         if (req.method === 'GET') {
           const acct = adminOf(req, url);
           if (!adminReadLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
           return send(res, 200, p === '/api/admin/bots' ? adminBots.status(url.searchParams.get('days')) : adminBots.trace(url.searchParams.get('account'), url.searchParams.get('days')));
         }
-        if (req.method === 'POST' && p === '/api/admin/bots') {
-          const raw = await readRaw(req);
-          const acct = adminOf(req, url, raw);
-          if (!adminGrantLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
-          return send(res, 200, adminBots.control(parseJson(raw)));
-        }
+        // monitoring only (2026-11-15): nothing here changes what the townsfolk or the town do; their numbers follow the market
+        if (req.method === 'POST' && p === '/api/admin/bots') { adminOf(req, url, await readRaw(req)); throw new HttpError(405, 'The townsfolk follow the market. Admins can only watch.'); }
         throw new HttpError(404, 'no such route');
       }
       if (p === '/api/admin/grant' || p === '/api/admin/resolve') {
