@@ -3,6 +3,10 @@
 export const EXACT: Record<string, string> = {
  "This account was made with the old NEAR Auth and is retired. Please make a new account with a different login.": "Akun ini dibuat dengan NEAR Auth versi lama dan sudah dihentikan. Buat akun baru dengan login yang berbeda.",
  "Unknown tool.": "Alat tidak dikenal.",
+ "You lie down to rest.": "Kamu berbaring untuk beristirahat.",
+ "You get up.": "Kamu bangun.",
+ "Unknown sleep action.": "Aksi tidur tidak dikenal.",
+ "Lie down in a bed first.": "Berbaring di kasur dulu.",
  "Unknown tool shop action.": "Aksi toko alat tidak dikenal.",
  "Unknown game.": "Permainan tidak dikenal.",
  "Unknown chips action.": "Aksi chip tidak dikenal.",

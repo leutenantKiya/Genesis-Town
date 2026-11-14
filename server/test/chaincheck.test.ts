@@ -146,7 +146,7 @@ test('which tokens an action can take: spends only, never gains', () => {
 async function harness(env: Record<string, string> = {}) {
   const econ = loadEcon();
   const TOWN = 'town.gt.test';
-  const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: TOWN, MERCHANT_PARENT_ACCOUNT_ID: 'gt.test', ...env } as NodeJS.ProcessEnv);
+  const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: TOWN, MERCHANT_PARENT_ACCOUNT_ID: 'gt.test', CHAIN_CHECK: 'lenient', ...env } as NodeJS.ProcessEnv); // the check itself (the live default is off)
   const chain = new MockChain();
   chain.contractId = cfg.gameContractId;
   const base = Object.fromEntries(Object.entries(econ.items).map(([t, i]) => [t, i.base]));
@@ -277,7 +277,7 @@ import { world as tradeWorld, P, Q } from './tradeworld.ts';
 async function tradeHarness() {
   const w = await tradeWorld();
   w.stand(P, 'board'); w.stand(Q, 'board', 1);
-  const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: 'town.gt.test', MERCHANT_PARENT_ACCOUNT_ID: 'gt.test' } as NodeJS.ProcessEnv);
+  const cfg = loadConfig({ CHAIN_MODE: 'mock', GAME_CONTRACT_ID: 'game.test', PLAYERS_PARENT_ACCOUNT_ID: 'players.test', TOWN_ACCOUNT_ID: 'town.gt.test', MERCHANT_PARENT_ACCOUNT_ID: 'gt.test', CHAIN_CHECK: 'lenient' } as NodeJS.ProcessEnv); // the check itself (the live default is off)
   const chain = w.game.chain as MockChain;
   const keys = new Map<string, near.KeyPair>();
   for (const a of [P, Q]) { const kp = near.KeyPair.fromRandom('ed25519'); keys.set(a, kp); w.store.addSessionKey(kp.getPublicKey().toString(), a); }

@@ -38,7 +38,12 @@
      zoom of the canvas), a lullaby plays (GT_MUSIC.sleep) and an iPhone-style banner says the energy is charging. Any
      movement (keys, joystick, click-to-walk, the action key, a scene change) clears GT.sitting and wakes the player,
      who stands next to the bed again. The energy itself is the server's (food or the next day); the banner shows its real value. */
-  var sleepUi = null, sleepClock = 0, pingAt = 0, zzAt = 0;
+  var sleepUi = null, sleepClock = 0, pingAt = 0, zzAt = 0, restAt = 0;
+  // the server pays the energy back for the real time asleep (act 'sleep': start, a tick every 10 s, stop): 30 a minute
+  function rest(op) {
+    var C = window.GT_CHAIN; if (!C || !C.state || !C.state.account || !C.act) return;
+    C.act({ action: 'sleep', op: op }, true).catch(function () { if (op === 'tick' && napping) rest('start'); });
+  }
   function reduced() { return document.documentElement.classList.contains('gt-reduced-motion'); }
   function energyPct() {
     var C = window.GT_CHAIN, st = C && C.state && C.state.st;
@@ -51,7 +56,7 @@
     var f = GT.facing && GT.facing();
     if (!f || !GT.sleepIn) return;
     GT.sleepIn(f.x, f.y);
-    napping = true; sfx('notify');
+    napping = true; sfx('notify'); rest('start'); restAt = performance.now() + 10000;
     var top = el('gt-cine gt-cine-top'), bot = el('gt-cine gt-cine-bot');
     var ban = el('gt-ios', '<div class="gt-ios-ic">⚡</div><div class="gt-ios-tx"><div class="gt-ios-top"><b>Genesis Town</b><span></span></div><div class="gt-ios-msg"></div></div>');
     ban.querySelector('.gt-ios-top span').textContent = $t('sekarang');
@@ -70,6 +75,7 @@
   function wake() {
     var u = sleepUi; sleepUi = null; napping = false;
     if (!u) return;
+    rest('tick'); setTimeout(function () { rest('stop'); }, 400);
     if (u.v3 && window.GT_VIEW3D && GT_VIEW3D.cine) GT_VIEW3D.cine(false);
     if (u.cv) { u.cv.style.scale = ''; setTimeout(function () { if (!sleepUi) u.cv.style.transition = ''; }, 1200); if (reduced()) u.cv.style.transition = 'none'; else u.cv.style.transition = 'scale .9s ease-out'; }
     try { window.GT_MUSIC && GT_MUSIC.sleep(false); } catch (e) { /* ignore */ }
@@ -86,6 +92,7 @@
     var msg = sleepUi && sleepUi.ban.querySelector('.gt-ios-msg'), txt = bannerText();
     if (msg && msg.textContent !== txt) msg.textContent = txt;
     if (now > zzAt) { zzAt = now + 2600; float('Zzz'); }
+    if (now > restAt) { restAt = now + 10000; rest('tick'); }
     if (now > pingAt && sleepUi) { // the gentle re-ping: the banner nudges and a soft chime
       pingAt = now + 20000; sfx('notify', { vol: 0.5 });
       var b = sleepUi.ban; b.classList.remove('ping'); void b.offsetWidth; b.classList.add('ping');

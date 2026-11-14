@@ -419,7 +419,14 @@
     if (!boardHover || GT.isUiOpen()) { boardHover = boardHover && !GT.isUiOpen(); return; }
     var m = marks(); if (!m) return;
     var a = GT.at(m.board.x, m.board.y), pulse = 0.5 + 0.5 * Math.sin(Date.now() / 260);
-    var x = a.x - 2, y = v3 ? a.y + T - UP3 - 2 : a.y - 1, w = T + 4, h = v3 ? UP3 + 4 : T + 2;
+    var x = a.x - 2, y = a.y - 1, w = T + 4, h = T + 2;
+    var V = window.GT_VIEW3D;
+    if (v3 && V && V.toScreen) {
+      // 2.5D: the board's own box (a tile wide, about 1.4 tiles tall) projected by the camera, in overlay units
+      var k = ctx.getTransform().a || 1, cx = m.board.x + 0.5, cz = m.board.y + 0.5, xs = [], ys = [];
+      [[-0.5, 0], [0.5, 0], [-0.5, 1.4], [0.5, 1.4]].forEach(function (q) { var p = V.toScreen(cx + q[0], cz, q[1]); xs.push(p.x / k); ys.push(p.y / k); });
+      x = Math.min.apply(null, xs) - 2; y = Math.min.apply(null, ys) - 2; w = Math.max.apply(null, xs) - x + 2; h = Math.max.apply(null, ys) - y + 2;
+    }
     ctx.save();
     ctx.shadowColor = 'rgba(255,224,120,.9)'; ctx.shadowBlur = 4 + 6 * pulse;
     ctx.strokeStyle = 'rgba(255,240,170,' + (0.75 + 0.25 * pulse).toFixed(2) + ')'; ctx.lineWidth = Math.max(1, T / 10); ctx.lineJoin = 'round';

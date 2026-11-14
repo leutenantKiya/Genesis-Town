@@ -31,6 +31,7 @@
     "energyMax": 100,
     "energyRegenPerHour": 2
   },
+  "sleep": { "perMinute": 30, "maxGapSecs": 15 },
   "grass": { "token": "wheat", "tiles": ["grass", "tallgrass"], "chance": 0.8, "energyCost": 1, "dailyMax": 6, "cooldownSecs": 3 },
   "farm": {
     "plots": 15,

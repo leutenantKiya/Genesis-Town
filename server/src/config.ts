@@ -36,7 +36,7 @@ export interface Config {
   /** Warn when a server account (settler, relayer, players' parent) has less than this many NEAR left for gas (funds.ts). */
   fundsLowNear: number;
   chainMode: 'testnet' | 'mock';
-  /** Every off-chain spend is also checked against the chain's balance (chaincheck.ts). CHAIN_CHECK: strict | lenient (default) | off. */
+  /** Every off-chain spend is also checked against the chain's balance (chaincheck.ts). CHAIN_CHECK: strict | lenient | off (default: spends read the game's own books only). */
   chainCheck: { mode: 'strict' | 'lenient' | 'off'; ttlMs: number };
   devLogin: boolean; // mock chain only: accept idToken "dev:<name>" so tests run without a Google account
   // Merchant dialogue via NEAR AI Cloud (optional; local lines without a key). Base URL: near-ai-cloud skill / docs.near.ai.
@@ -110,7 +110,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     fundsLowNear: Number(env.FUNDS_LOW_NEAR ?? 0.25) || 0.25,
     chainMode,
     chainCheck: {
-      mode: env.CHAIN_CHECK === 'strict' || env.CHAIN_CHECK === 'off' ? env.CHAIN_CHECK : 'lenient',
+      mode: env.CHAIN_CHECK === 'strict' || env.CHAIN_CHECK === 'lenient' ? env.CHAIN_CHECK : 'off',
       ttlMs: Number.isFinite(Number(env.CHAIN_CHECK_TTL_MS)) && Number(env.CHAIN_CHECK_TTL_MS) > 0 ? Number(env.CHAIN_CHECK_TTL_MS) : 15_000,
     },
     devLogin: chainMode === 'mock' && env.DEV_LOGIN === '1',

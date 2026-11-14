@@ -171,6 +171,25 @@ export class World {
     return { toast: `+1 ${this.name(r.output)} (${cost})`, gained: { [r.output]: 1 } };
   }
 
+  /** Sleeping in a bed (the client's nap): energy comes back at `sleep.perMinute` for the real time asleep. 'start' marks
+   *  the moment; each 'tick' pays for the time since the last start/tick, at most `sleep.maxGapSecs` of it (a closed tab
+   *  or a long pause earns nothing extra), never past energyMax. Off-chain player state, like eating. */
+  private asleep = new Map<string, number>();
+  sleep(account: string, op: string): ActionResult & { energy: number } {
+    const c = this.econ.sleep ?? { perMinute: 30, maxGapSecs: 15 }, max = this.econ.gather.energyMax, now = this.clock.now();
+    const p = this.state(account);
+    if (op === 'start') { this.asleep.set(account, now); return { toast: 'You lie down to rest.', energy: p.energy }; }
+    if (op === 'stop') { this.asleep.delete(account); return { toast: 'You get up.', energy: p.energy }; }
+    if (op !== 'tick') throw new HttpError(400, 'Unknown sleep action.');
+    const from = this.asleep.get(account);
+    if (from == null) throw new HttpError(409, 'Lie down in a bed first.');
+    const secs = Math.min(c.maxGapSecs, Math.max(0, (now - from) / 1000));
+    this.asleep.set(account, now);
+    const gain = Math.round((secs * c.perMinute / 60) * 100) / 100;
+    if (gain > 0 && p.energy < max) { p.energy = Math.min(max, p.energy + gain); this.gs.savePlayer(p); }
+    return { toast: '', energy: p.energy };
+  }
+
   eat(account: string, token: string): ActionResult {
     const e = this.econ.items[token]?.energy;
     if (!e) throw new HttpError(400, 'That can\'t be eaten.');
