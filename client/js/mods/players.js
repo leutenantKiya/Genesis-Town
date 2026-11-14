@@ -45,9 +45,12 @@
     guestBusy = true;
     var p = GT.player, pos = c.standPos();
     var go = guestId ? Promise.resolve() : c.api('/guest/hello', { method: 'POST', body: {} }).then(function (h) { guestId = h.guest; guestNick = h.nick; guestToldFull = false; });
+    var sent = 0;
     go.then(function () {
+      sent = performance.now();
       return c.api('/guest/presence', { method: 'POST', body: { guest: guestId, x: pos.x, y: pos.y, dir: p.dir } });
     }).then(function (r) {
+      syncClock(r.now, sent, performance.now());
       if (c.state.account) return; // signed in meanwhile: the account loop takes over
       curWorld = 'public'; me = r.me; online = r.online; meTag = '';
       // the server picks a guest's look: draw it on our side too, so the guest sees what everyone else sees
@@ -78,7 +81,8 @@
         else if (!moved) { o.vx = 0; o.vy = 0; }
       }
       o.sx = sx; o.sy = sy; o.rt = now; o.x = q.x; o.y = q.y; o.age = ((q.age || 0) + rtt / 2) / 1000;
-      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.resident = !!q.resident; o.guest = !!q.guest; o.merchant = q.merchant; o.dir = q.dir; if (q.fish && !q.npc && (!o.fish || o.fish.phase !== q.fish.phase)) { var fp = q.fish.phase; var fs = fp === 'cast' ? 'cast' : fp === 'bite' ? 'bite' : fp === 'reel' ? 'reel' : ''; if (fs) sfx(fs, { vol: 0.6, x: q.x, y: q.y }); } // another player's rod
+      o.route = q.route || null; if (q.trail) addTrail(o, q.trail); else o.buf = null;
+      o.nick = q.nick; o.tag = q.tag; o.look = q.look; o.title = q.title; o.npc = !!q.npc; o.resident = !!q.resident; o.guest = !!q.guest; o.merchant = q.merchant; o.sdir = q.dir; if (!o.dir || !(o.route || o.buf)) o.dir = q.dir; if (q.fish && !q.npc && (!o.fish || o.fish.phase !== q.fish.phase)) { var fp = q.fish.phase; var fs = fp === 'cast' ? 'cast' : fp === 'bite' ? 'bite' : fp === 'reel' ? 'reel' : ''; if (fs) sfx(fs, { vol: 0.6, x: q.x, y: q.y }); } // another player's rod
       o.worn = q.worn || null; o.fish = q.fish || null; o.room = q.room || null; o.account = q.account; o.party = !!q.party; o.trading = q.trading || null; o.tradingWith = q.tradingWith || null; o.seen = now;
     });
     Object.keys(others).forEach(function (a) { if (!keep[a]) delete others[a]; });
@@ -113,6 +117,7 @@
     busy = true;
     c.api('/presence', { method: 'POST', body: body }).then(function (r) {
       rtt += (Math.min(3000, performance.now() - t) - rtt) * 0.2;
+      syncClock(r.now, t, performance.now());
       if (r.world !== curWorld) return;
       backoff = 0;
       me = r.me; meTag = r.tag || meTag; online = r.online;
@@ -136,14 +141,73 @@
     (sc && sc.npcs || []).forEach(function (n) { if (/^out:\d+$/.test(n.key || '') && !n.hidden) GT.npcHide(n, true); });
   }
   function clampV(v) { return Math.max(-8, Math.min(8, v)); }
-  // Move the drawn figure once per frame: toward the reported spot pushed on by the walking speed, quickly but never in
-  // a jump (a far jump, a portal or a respawn, is a snap)
+  /* ---------------------------------------------------------------- drawing the others where they really were
+     Like Minecraft's entity interpolation: nobody is guessed ahead. A player is drawn a little in the past (the
+     server's time minus `lagMs`), between the two positions from their trail (server social.ts) that frame that
+     moment, so a stop or a corner is drawn where it happened instead of overshooting and snapping back. A sample
+     marked `tp` (portal, respawn, a long gap) is a jump, shown at once. A townsperson follows the walk the server
+     planned for it (`route`, residents.ts), placed from the server's clock, the same on every screen. */
+  var clock = { off: null, best: 1e9 }, lagMs = 300;
+  function syncClock(serverNow, sent, got) { // server time = performance.now() + clock.off, from the quickest round trips
+    if (typeof serverNow !== 'number' || !(got >= sent)) return;
+    var r = got - sent, off = serverNow - (sent + got) / 2;
+    clock.best = Math.min(clock.best * 1.02 + 1, 3000);
+    if (clock.off === null) { clock.off = off; clock.best = r; return; }
+    if (r <= clock.best * 1.5) { clock.off += (off - clock.off) * 0.25; clock.best = Math.min(clock.best, r); }
+  }
+  function serverNow() { return clock.off === null ? null : performance.now() + clock.off; }
+  function delayMs() { return Math.max(150, Math.min(900, lagMs + 60)); }
+  function addTrail(o, tr) {
+    var buf = o.buf || (o.buf = []), last = buf.length ? buf[buf.length - 1].t : -Infinity, sn = serverNow(), fresh = false;
+    tr.forEach(function (q) {
+      if (!(q[0] > last)) return;
+      var n = buf.length, walking = n > 1 && (buf[n - 1].x !== buf[n - 2].x || buf[n - 1].y !== buf[n - 2].y);
+      if (!fresh && walking && sn !== null) { // how old the newest position had grown before this one came (while walking; a player standing still reports slowly): the delay follows it
+        var stale = Math.max(0, Math.min(1500, sn - buf[n - 1].t));
+        lagMs += (stale - lagMs) * (stale > lagMs ? 0.3 : 0.05);
+      }
+      fresh = true; buf.push({ t: q[0], x: q[1], y: q[2], tp: !!q[3] }); last = q[0];
+    });
+    if (sn !== null) while (buf.length > 2 && buf[1].t < sn - 3000) buf.shift();
+    if (buf.length > 24) buf.splice(0, buf.length - 24);
+  }
+  function dirOf(dx, dy) { return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); }
+  function trailAt(buf, rt) { // where a player was at server time rt
+    if (rt <= buf[0].t) return { x: buf[0].x, y: buf[0].y };
+    for (var i = 0; i < buf.length - 1; i++) {
+      var a = buf[i], b = buf[i + 1];
+      if (rt >= b.t) continue;
+      if (b.tp) return { x: a.x, y: a.y }; // the jump comes when its moment does
+      var f = (rt - a.t) / (b.t - a.t);
+      return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, dir: b.x !== a.x || b.y !== a.y ? dirOf(b.x - a.x, b.y - a.y) : null };
+    }
+    var z = buf[buf.length - 1];
+    return { x: z.x, y: z.y }; // no newer news: wait there, never guess ahead
+  }
+  function routeAt(r, t) { // a townsperson on its planned walk at server time t
+    var n = r.pts.length / 2;
+    if (!n) return null;
+    var done = Math.max(0, ((t - r.t0) / 1000) * r.sp);
+    if (n === 1 || done >= n - 1) return { x: r.pts[2 * n - 2], y: r.pts[2 * n - 1] };
+    var i = Math.floor(done), f = done - i, ax = r.pts[2 * i], ay = r.pts[2 * i + 1], bx = r.pts[2 * i + 2], by = r.pts[2 * i + 3];
+    return { x: ax + (bx - ax) * f, y: ay + (by - ay) * f, dir: dirOf(bx - ax, by - ay) };
+  }
+  // Move the drawn figure once per frame: from the trail or the route when the server sent one; otherwise (guests,
+  // indoors) toward the reported spot pushed on by the walking speed, quickly but never in a jump (a far jump is a snap)
   function glide(o, now) {
     if (o.dt === now) return;
-    var dt = Math.min(0.1, Math.max(0, (now - o.dt) / 1000)), lead = Math.min(LEAD_S, (o.age || 0) + (now - o.rt) / 1000);
-    var tx = o.sx + o.vx * lead, ty = o.sy + o.vy * lead, ex = tx - o.dx, ey = ty - o.dy, d = Math.hypot(ex, ey);
-    var k = 1 - Math.exp(-dt * GLIDE), px = o.dx, py = o.dy;
-    if (d > 6) { o.dx = tx; o.dy = ty; } else { o.dx += ex * k; o.dy += ey * k; }
+    var dt = Math.min(0.1, Math.max(0, (now - o.dt) / 1000)), px = o.dx, py = o.dy, sn = serverNow();
+    var at = sn === null ? null : o.route ? routeAt(o.route, sn) : o.buf && o.buf.length ? trailAt(o.buf, sn - delayMs()) : null;
+    if (at) {
+      o.dx = at.x; o.dy = at.y;
+      o.dir = at.dir || o.sdir || o.dir;
+    } else {
+      var lead = Math.min(LEAD_S, (o.age || 0) + (now - o.rt) / 1000);
+      var tx = o.sx + o.vx * lead, ty = o.sy + o.vy * lead, ex = tx - o.dx, ey = ty - o.dy, d = Math.hypot(ex, ey);
+      var k = 1 - Math.exp(-dt * GLIDE);
+      if (d > 6) { o.dx = tx; o.dy = ty; } else { o.dx += ex * k; o.dy += ey * k; }
+      o.dir = o.sdir || o.dir;
+    }
     var sp = dt > 0 ? Math.hypot(o.dx - px, o.dy - py) / dt : 0;
     o.spd = o.spd + (sp - o.spd) * Math.min(1, dt * 10); o.dt = now;
   }

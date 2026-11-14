@@ -1,6 +1,14 @@
 # Genesis Town
 
 > **Status (2026-11-09): M3 done, M4 (hardening) in progress; Homeland phases A, B and C built and merged into `main`.** Done and tested:
+> - **Smooth movement for everyone else** (2026-11-14): other players are no longer guessed ahead (which overshot at
+>   every stop and corner and then snapped back). Like Minecraft's entity interpolation, the server keeps a short trail
+>   of each player's outdoor positions stamped with its own clock (`server/src/social.ts`, `trail`, jumps marked `tp`),
+>   and `client/js/mods/players.js` draws each player a little in the past (the delay follows how late positions
+>   arrive, 150-900 ms), between the two positions that frame that moment; a marked jump (portal, respawn) is shown at
+>   once. The townsfolk follow the walk the server planned (`route`, starting 1.2 s after it is chosen so every client
+>   has it first), placed from the server's clock, the same on every screen. Measured with a scripted second player:
+>   no overshoot at the ends of its walk and at most 0.09 tile per frame.
 > - **Townsfolk with a wallet** (2026-11-14): five townsfolk (Dewi, Agus, Rina, Bayu, Intan) are walked by the server,
 >   the same for every player, and do the town's shopping from one shared keyless wallet, `warga.genesistown.testnet`
 >   (registered by the settler like a player). Every buy is booked under the resident who made it; the buyer walks to

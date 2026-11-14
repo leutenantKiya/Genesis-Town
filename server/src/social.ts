@@ -13,7 +13,17 @@ export interface Guest extends Seen { id: string; pub: string; ip: string; since
 /** What a player is busy with, for the others to draw: fishing, with the phase and the float's water tile. */
 export interface Fishing { phase: 'cast' | 'wait' | 'bite' | 'reel'; x: number; y: number }
 const FISH_PHASES = new Set(['cast', 'wait', 'bite', 'reel']);
-export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; fx?: number; fy?: number; vx?: number; vy?: number; fish?: Fishing; room?: string; rx?: number; ry?: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; resident?: boolean; party?: boolean; guest?: boolean }
+export interface Seen { account: string; world: string; nick: string; tag: string; look: number; x: number; y: number; fx?: number; fy?: number; vx?: number; vy?: number; fish?: Fishing; room?: string; rx?: number; ry?: number; dir: string; scene: string; t: number; npc?: boolean; title?: string; merchant?: string; resident?: boolean; party?: boolean; guest?: boolean;
+  /** The last few outdoor positions with their server time, for clients that draw a little behind (players.js); `tp`: a jump to show at once. */
+  trail?: Sample[];
+  /** A townsperson's walk (residents.ts ResidentView.route). */
+  route?: { pts: number[]; t0: number; sp: number } }
+/** One reported position: server time (ms), where (tiles, smooth), and whether it is a jump (portal, respawn, a long gap). */
+export interface Sample { t: number; x: number; y: number; tp?: true }
+/** Samples kept per player, and for how long: enough for a slow poll (0.9 s) to still get the corners of a walk. */
+const TRAIL_MAX = 8, TRAIL_MS = 2500;
+/** Faster than this between two reports is not walking: the second is drawn as a jump. */
+const WALK_MAX_TPS = 9;
 /** A merchant shown as a player in the public area (tag "NPC"). Set by the app from the economy config and the village map. */
 export interface Npc { id: string; account: string; name: string; look: number; x: number; y: number; title: string }
 export const NPC_TAG = 'NPC';
@@ -94,7 +104,7 @@ export class Social {
 
   npcs: Npc[] = [];
   /** Set by the app (game.residents): the townsfolk walking the village right now, the same for everyone. */
-  residents: () => Array<{ account: string; name: string; look: number; x: number; y: number; fx: number; fy: number; vx: number; vy: number; dir: string }> = () => [];
+  residents: () => Array<{ account: string; name: string; look: number; x: number; y: number; fx: number; fy: number; vx: number; vy: number; dir: string; route: { pts: number[]; t0: number; sp: number } }> = () => [];
   /** Set by the app: a player wrote to a merchant. May throw HttpError (rate limit); the answer comes later through npcSay. */
   onNpcMsg?: (npc: Npc, fromAccount: string, text: string) => void;
 
@@ -167,7 +177,17 @@ export class Social {
     const rx = Number(p.rx), ry = Number(p.ry);
     const inRoom = scene === 'in' && typeof p.room === 'string' && /^[a-z0-9:_-]{1,40}$/i.test(p.room) && Number.isInteger(rx) && Number.isInteger(ry) && rx >= 0 && ry >= 0 && rx < 80 && ry < 80;
     const room = inRoom ? { room: p.room as string, rx, ry } : {};
-    this.seen.set(account, { account, world, nick: this.nick(account), tag: this.tag(account), look: this.look(account), x, y, ...(scene === 'out' ? smooth : {}), ...room, ...(fish ? { fish } : {}), dir, scene, t: this.now() });
+    const now = this.now(), trail = scene === 'out' ? this.trailAfter(this.seen.get(account), world, near ? fx : x, near ? fy : y, now) : undefined;
+    this.seen.set(account, { account, world, nick: this.nick(account), tag: this.tag(account), look: this.look(account), x, y, ...(scene === 'out' ? smooth : {}), ...room, ...(fish ? { fish } : {}), dir, scene, t: now, ...(trail ? { trail } : {}) });
+  }
+  /** The trail with a new outdoor sample: a fresh start (marked a jump) after another world, indoors or a long silence. */
+  private trailAfter(prev: Seen | undefined, world: string, x: number, y: number, now: number): Sample[] {
+    const same = prev && prev.world === world && prev.scene === 'out' && prev.trail?.length ? prev.trail : null;
+    const last = same ? same[same.length - 1] : null;
+    const gap = last ? Math.max(0.05, (now - last.t) / 1000) : 0;
+    const jump = !last || now - last.t > TRAIL_MS || Math.hypot(x - last.x, y - last.y) > Math.max(1.5, gap * WALK_MAX_TPS);
+    const s: Sample = { t: now, x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000, ...(jump ? { tp: true as const } : {}) };
+    return [...(same ?? []).filter((q) => now - q.t <= TRAIL_MS), s].slice(-TRAIL_MAX);
   }
   /** Other players outdoors in the same world within `radius` tiles who reported in the last 15 seconds. */
   nearby(account: string, world: string, radius = 30, maxAge = 15_000) {
@@ -181,7 +201,7 @@ export class Social {
       }
       for (const r of this.residents()) {
         if (me && (Math.abs(r.x - me.x) > radius || Math.abs(r.y - me.y) > radius)) continue;
-        out.push({ account: r.account, world, nick: r.name, tag: NPC_TAG, look: r.look, x: r.x, y: r.y, fx: r.fx, fy: r.fy, vx: r.vx, vy: r.vy, dir: r.dir, scene: 'out', t: now, npc: true, resident: true });
+        out.push({ account: r.account, world, nick: r.name, tag: NPC_TAG, look: r.look, x: r.x, y: r.y, fx: r.fx, fy: r.fy, vx: r.vx, vy: r.vy, dir: r.dir, scene: 'out', t: now, npc: true, resident: true, route: r.route });
       }
     }
     for (const s of this.seen.values()) {

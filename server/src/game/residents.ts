@@ -24,7 +24,15 @@ export interface ResidentsDeps {
   log?: (line: string) => void;
 }
 /** What players are sent (presence): a resident is drawn like a player and tagged NPC. */
-export interface ResidentView { id: string; account: string; name: string; look: number; x: number; y: number; fx: number; fy: number; vx: number; vy: number; dir: string }
+export interface ResidentView {
+  id: string; account: string; name: string; look: number; x: number; y: number; fx: number; fy: number; vx: number; vy: number; dir: string;
+  /** The walk being followed: tiles from the current one on as a flat [x, y, x, y, ...], started at server time `t0`
+   *  (ms) at `sp` tiles a second. Clients place the resident from it every frame (players.js), so everyone sees the same. */
+  route: { pts: number[]; t0: number; sp: number };
+}
+/** A new walk starts this long after it is chosen, so every client has it before the resident sets off (presence polls
+ *  every 0.22-0.9 s): nobody sees a resident jump ahead to catch up with a walk it learned late. */
+const ROUTE_LEAD_MS = 1200;
 
 interface Walker {
   id: string; name: string; look: number;
@@ -148,7 +156,7 @@ export class Residents {
       const goal = job ? job.to : this.spots[Math.floor(Math.random() * this.spots.length)];
       const path = this.route(end, goal);
       if (!path) { w.until = now + 3000; continue; }
-      w.path = path; w.t0 = now; w.job = job ?? null;
+      w.path = path; w.t0 = now + ROUTE_LEAD_MS; w.job = job ?? null;
       w.until = now + (job ? 0 : 2000 + Math.random() * 5000);
     }
   }
@@ -156,19 +164,24 @@ export class Residents {
   /** Where everyone is now, between path points (presence; drawn smooth by players.js). */
   view(now = this.d.now()): ResidentView[] {
     return this.walkers.map((w) => {
-      const p = this.at(w, now), moving = now < this.arrival(w);
+      const p = this.at(w, now), moving = now >= w.t0 && now < this.arrival(w);
       const seg = this.segment(w, now);
       const dir = moving && seg ? (seg.dx > 0 ? 'right' : seg.dx < 0 ? 'left' : seg.dy > 0 ? 'down' : 'up') : w.dir;
       if (moving) w.dir = dir;
       const v = moving && seg ? this.cfg.speed : 0;
-      return { id: w.id, account: this.account(w.id), name: w.name, look: w.look, x: Math.round(p.x), y: Math.round(p.y), fx: Math.round(p.x * 1000) / 1000, fy: Math.round(p.y * 1000) / 1000, vx: seg ? seg.dx * v : 0, vy: seg ? seg.dy * v : 0, dir };
+      // the rest of the walk from the current tile on (the tiles already behind are not sent)
+      const i = Math.max(0, Math.min(w.path.length - 1, Math.floor(((now - w.t0) / 1000) * this.cfg.speed)));
+      const pts: number[] = [];
+      for (let k = i; k < w.path.length; k++) pts.push(w.path[k].x, w.path[k].y);
+      const route = { pts, t0: Math.round(w.t0 + (i / this.cfg.speed) * 1000), sp: this.cfg.speed };
+      return { id: w.id, account: this.account(w.id), name: w.name, look: w.look, x: Math.round(p.x), y: Math.round(p.y), fx: Math.round(p.x * 1000) / 1000, fy: Math.round(p.y * 1000) / 1000, vx: seg ? seg.dx * v : 0, vy: seg ? seg.dy * v : 0, dir, route };
     });
   }
 
   private arrival(w: Walker) { return w.t0 + ((w.path.length - 1) / this.cfg.speed) * 1000; }
   private segment(w: Walker, now: number) {
     if (w.path.length < 2) return null;
-    const i = Math.min(w.path.length - 2, Math.floor(((now - w.t0) / 1000) * this.cfg.speed));
+    const i = Math.max(0, Math.min(w.path.length - 2, Math.floor(((now - w.t0) / 1000) * this.cfg.speed)));
     const a = w.path[i], b = w.path[i + 1];
     return { dx: b.x - a.x, dy: b.y - a.y };
   }
