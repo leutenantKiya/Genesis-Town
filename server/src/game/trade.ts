@@ -28,7 +28,7 @@ export interface TradeDeps {
 }
 
 export interface SessionView {
-  id: number; status: string; me: 'a' | 'b'; other: { account: string; name: string; tag: string };
+  id: number; status: string; me: 'a' | 'b'; other: { account: string; name: string; tag: string }; self: { name: string; tag: string };
   mine: Lines; theirs: Lines; my_ok: boolean; their_ok: boolean; version: number; swap_at: number; note: string | null; world: string;
   /** Only when status is 'done': what the swap really moved, from the caller's side (`gave` left their bag, `got` arrived), and when. Both windows read it to play the trade animation. */
   result?: { gave: Lines; got: Lines; at: number };
@@ -198,6 +198,7 @@ export class Trade {
     return {
       id: r.id, status: r.status, me: mineIsA ? 'a' : 'b',
       other: { account: other, name: n.nameOf(other) ?? other, tag: n.tagOf(other) },
+      self: { name: n.nameOf(me) ?? me, tag: n.tagOf(me) },
       mine: JSON.parse(mineIsA ? r.a_lines : r.b_lines), theirs: JSON.parse(mineIsA ? r.b_lines : r.a_lines),
       my_ok: !!(mineIsA ? r.a_ok : r.b_ok), their_ok: !!(mineIsA ? r.b_ok : r.a_ok),
       version: r.version, swap_at: r.swap_at, note: r.note, world: r.world,

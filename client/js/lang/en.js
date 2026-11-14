@@ -2126,5 +2126,12 @@
     "Kamu dapat {0} koin": "You get {0} coins",
     "Beli {0} {1}": "Buy {0} {1}",
     "Jual {0} {1}": "Sell {0} {1}",
+    "Tambah ke tawaranmu": "Add to your offer",
+    "Pilih barang": "Choose an item",
+    "Tidak ada barang lain di tasmu.": "No other items in your bag.",
+    "Kamu punya {0}": "You have {0}",
+    "Ubah": "Change",
+    "Hapus": "Remove",
+    "Taruh": "Put in",
   });
 })();
