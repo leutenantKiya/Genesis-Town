@@ -174,17 +174,19 @@ export class World {
   /** Sleeping in a bed (the client's nap): energy comes back at `sleep.perMinute` for the real time asleep. 'start' marks
    *  the moment; each 'tick' pays for the time since the last start/tick, at most `sleep.maxGapSecs` of it (a closed tab
    *  or a long pause earns nothing extra), never past energyMax. Off-chain player state, like eating. */
-  private asleep = new Map<string, number>();
-  sleep(account: string, op: string): ActionResult & { energy: number } {
+  /** Who is asleep: since when and on which tile (the player's reported spot). Moving or any other action ends it (game.ts). */
+  asleep = new Map<string, { t: number; x: number; y: number }>();
+  sleep(account: string, op: string, pos: { x: number; y: number } | null = null): ActionResult & { energy: number } {
     const c = this.econ.sleep ?? { perMinute: 30, maxGapSecs: 15 }, max = this.econ.gather.energyMax, now = this.clock.now();
     const p = this.state(account);
-    if (op === 'start') { this.asleep.set(account, now); return { toast: 'You lie down to rest.', energy: p.energy }; }
+    if (op === 'start') { this.asleep.set(account, { t: now, x: pos?.x ?? -1, y: pos?.y ?? -1 }); return { toast: 'You lie down to rest.', energy: p.energy }; }
     if (op === 'stop') { this.asleep.delete(account); return { toast: 'You get up.', energy: p.energy }; }
     if (op !== 'tick') throw new HttpError(400, 'Unknown sleep action.');
     const from = this.asleep.get(account);
     if (from == null) throw new HttpError(409, 'Lie down in a bed first.');
-    const secs = Math.min(c.maxGapSecs, Math.max(0, (now - from) / 1000));
-    this.asleep.set(account, now);
+    if (pos && (pos.x !== from.x || pos.y !== from.y)) { this.asleep.delete(account); throw new HttpError(409, 'Lie down in a bed first.'); } // got up and walked
+    const secs = Math.min(c.maxGapSecs, Math.max(0, (now - from.t) / 1000));
+    from.t = now;
     const gain = Math.round((secs * c.perMinute / 60) * 100) / 100;
     if (gain > 0 && p.energy < max) { p.energy = Math.min(max, p.energy + gain); this.gs.savePlayer(p); }
     return { toast: '', energy: p.energy };

@@ -106,7 +106,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dbPath: env.DB_PATH ?? 'data/genesis-town.db',
     // the direct string when `neon env pull` / `neon deploy` wrote both (Neon: one long-lived client, session-level SQL)
     databaseUrl: env.DATABASE_URL_UNPOOLED?.trim() || env.DATABASE_URL?.trim() || null,
-    snapshotMinutes: Math.max(1, Number(env.SNAPSHOT_MINUTES ?? 5) || 5),
+    // how often a changed database is copied to Neon: every 15 s by default (a redeploy loses at most that much play
+    // when the host has no volume); SNAPSHOT_MINUTES may set it, never below 0.25
+    snapshotMinutes: Math.max(0.25, Number(env.SNAPSHOT_MINUTES ?? 0.25) || 0.25),
     fundsLowNear: Number(env.FUNDS_LOW_NEAR ?? 0.25) || 0.25,
     chainMode,
     chainCheck: {

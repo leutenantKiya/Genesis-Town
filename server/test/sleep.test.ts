@@ -29,4 +29,12 @@ test('sleep gives energy back at the configured rate, capped per tick and at the
   sleep('stop');
   fails(() => sleep('tick'), 409, 'Lie down in a bed first.');
   assert.throws(() => sleep('nap'), /Unknown sleep action/);
+  // moving or doing anything else ends the nap: no energy for a sleeper who walked off
+  sleep('start');
+  const spawn = g.map!.layout.spawn, step = g.map!.walkable(spawn.x + 1, spawn.y) ? { x: spawn.x + 1, y: spawn.y } : { x: spawn.x, y: spawn.y + 1 };
+  w.adv(5_000); g.reportPosition(P, step, 'public');
+  fails(() => g.act(P, { action: 'sleep', op: 'tick', world: 'public', pos: step }) as any, 409, 'Lie down in a bed first.');
+  g.reportPosition(P, step, 'public'); g.act(P, { action: 'sleep', op: 'start', world: 'public', pos: step });
+  try { g.act(P, { action: 'eat', token: 'bread', world: 'public', pos: step }); } catch { /* no bread: still an action */ }
+  fails(() => g.act(P, { action: 'sleep', op: 'tick', world: 'public', pos: step }) as any, 409, 'Lie down in a bed first.');
 });

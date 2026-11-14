@@ -324,6 +324,7 @@ export class Game {
       }
       if (a === 'collect' && w.map instanceof HomelandMap && !w.map.nearLot(pos, s('lot'))) far('Stand near the building.');
     }
+    if (a !== 'sleep') this.world.asleep.delete(account); // any other action gets the player out of bed
     let res: { toast: string; tags?: string[]; world?: string; arrive?: Pos; aboard?: boolean; gained?: Record<string, number> };
     switch (a) {
       case 'gather': {
@@ -366,7 +367,7 @@ export class Game {
       case 'flee': res = this.need(this.monsters).flee(account); break;
       case 'craft': res = this.world.craft(account, s('recipe')); break;
       case 'eat': res = this.world.eat(account, s('token')); break;
-      case 'sleep': res = this.world.sleep(account, s('op')); break;
+      case 'sleep': res = this.world.sleep(account, s('op'), pos); break;
       case 'farm': {
         const own = w.row?.account ?? account; // a guest farms the owner's plots; the owner's Petani speeds the crops
         res = this.world.farm(account, s('op'), n('plot', -1), w.row ? { plotAccount: `${own}@${wid}`, count: this.farmCount(w.row), growSecs: this.farmSecs(own), yieldBonus: 0, owner: own, guest: own !== account } : undefined);
