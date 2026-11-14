@@ -1949,6 +1949,26 @@
     "Dijual pada / tawaran terbaik": "Sells at / best offer",
     "Dagang: beli {0}, jual {1} koin": "Trading: bought {0}, sold {1} coins",
     "{0} beli {1} dari {2} untuk dijual": "{0} bought {1} from {2} to resell",
-    "{0} jual {1} ke {2}": "{0} sold {1} to {2}"
+    "{0} jual {1} ke {2}": "{0} sold {1} to {2}",
+    "Crafting warga": "Townsfolk crafting",
+    "Warga membeli bahan, membuat roti, makanan, atau alat, lalu menjualnya ke pedagang yang menjual barang itu. Stok pedagang naik, jadi harga jualnya turun. Pedagang diisi sampai batas % dari targetnya; di atas 100% harga makin turun.": "Townsfolk buy the ingredients, craft bread, meals or tools, and sell them to the merchant that sells that good. The merchant's stock goes up, so its price comes down. Shelves are filled up to a % of the merchant's target; above 100% the price drops further.",
+    "Bahan dibeli": "Ingredients bought",
+    "Biaya craft: {0}": "Crafting fees: {0}",
+    "Dijual ke pedagang": "Sold to merchants",
+    "Crafting aktif": "Crafting on",
+    "% dari biaya bahan (minus = rugi)": "% of the ingredient cost (negative = a loss)",
+    "Craft per jam": "Crafts per hour",
+    "Isi rak sampai": "Fill shelves up to",
+    "% dari target stok pedagang": "% of the merchant's stock target",
+    "Crafting berjalan, margin {0}%": "Crafting on, margin {0}%",
+    "Crafting mati": "Crafting off",
+    "Rak pedagang": "Merchant shelves",
+    "Stok": "Stock",
+    "Batas isi": "Fill line",
+    "Pedagang: harga jual / beli": "Merchant: sell / buy price",
+    "Bahan alat (bijih) tidak dijual pedagang, jadi alat hanya dibuat kalau dompet warga punya bijih.": "No merchant sells ore (a tool ingredient), so tools are only crafted when the townsfolk wallet holds ore.",
+    "Crafting: {0} barang ke rak pedagang": "Crafting: {0} goods to merchant shelves",
+    "{0} beli {1} dari {2} untuk crafting": "{0} bought {1} from {2} for crafting",
+    "{0} jual {1} hasil craft ke {2}": "{0} sold crafted {1} to {2}"
   });
 })();

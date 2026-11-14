@@ -9,6 +9,7 @@
 >   once. The townsfolk follow the walk the server planned (`route`, starting 1.2 s after it is chosen so every client
 >   has it first), placed from the server's clock, the same on every screen. Measured with a scripted second player:
 >   no overshoot at the ends of its walk and at most 0.09 tile per frame.
+> - **Townsfolk crafting** (2026-11-14): the townsfolk buy ingredients, craft bread and meals (tools when the wallet holds ore) and stock the shelves of the merchants that sell them, up to a % of their stock target, so those prices come down; margin, crafts per hour and fill line are in Admin > Bot warga and saved in the database.
 > - **Townsfolk trading** (2026-11-14): the townsfolk also buy goods to sell again to whichever merchant pays most, when that beats the purchase price by the admin's margin (negative allowed); margin, trades per hour, goods held, wallet floor, wallet target and treasury reserve are set in Admin > Bot warga and saved in the database.
 > - **Townsfolk admin** (2026-11-14): Admin > Bot warga pauses the townsfolk's shopping, sets which merchants each one may buy from, shows the shared wallet's coin in and out, and traces any account's coin by counterpart (`/api/admin/bots`, `/api/admin/trace`, `server/src/adminbots.ts`).
 > - **Townsfolk with a wallet** (2026-11-14): five townsfolk (Haruto, Yui, Sota, Hina, Ren; orange name tags) are walked by the server,

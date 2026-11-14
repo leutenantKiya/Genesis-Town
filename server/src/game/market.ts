@@ -134,6 +134,29 @@ export class Market {
     return { toast: `Sold ${qty} ${this.econ.items[token].name} to ${d.name}: +${total} coins`, unit, total };
   }
 
+  /** A townsperson stocks merchant `id`'s shelf with `qty` of a good it sells (residents.ts crafting): the merchant pays
+   *  its bid while its stock stays at most `upTo` (default: its target) and it has the cash; the extra stock lowers its
+   *  ask. Booked like a sale (kind `trade`, `#tag`). */
+  restock(account: string, id: string, token: string, qty: number, tag?: string, upTo?: number) {
+    const d = this.def(id);
+    this.checkTrade(id, qty);
+    if (!d.sells.includes(token)) throw new HttpError(409, `${d.name} doesn't sell ${this.itemName(token)}.`);
+    const t = this.clock.time(), acct = this.account(id);
+    if (this.gs.balance(acct, token) + qty > (upTo ?? d.target[token] ?? 10)) throw new HttpError(409, `${d.name} has enough ${this.itemName(token)}.`);
+    if (this.gs.balance(account, token) < qty) throw new HttpError(409, 'You don\'t have enough.');
+    const { unit, total } = this.quote(id, token, 'sell', qty);
+    if (this.gs.balance(acct, 'coin') < total) throw new HttpError(409, `${d.name} doesn't have enough money.`);
+    const ref = `${id}:${token}:${qty}@${unit}` + (tag ? `#${tag}` : '');
+    this.gs.add(t.settleDay, account, token, -qty, 'trade', ref);
+    this.gs.add(t.settleDay, account, 'coin', total, 'trade', ref);
+    this.gs.add(t.settleDay, acct, token, qty, 'trade', ref);
+    this.gs.add(t.settleDay, acct, 'coin', -total, 'trade', ref);
+    const row = this.row(id, token);
+    row.bought += qty;
+    this.gs.saveMarket(row);
+    return { unit, total };
+  }
+
   /** Player buys `qty` of `token` from merchant `id` (`tag`: as in sell). */
   buy(account: string, id: string, token: string, qty: number, tag?: string) {
     const d = this.def(id);

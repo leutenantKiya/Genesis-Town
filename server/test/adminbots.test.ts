@@ -120,7 +120,7 @@ test('trace follows the coin: wallet -> merchants, treasury -> wallet, merchant 
 
 test('the townsfolk buy to sell again at the admin\'s margin, negative allowed, and the settings live in the database', async () => {
   const { game, clock, bots } = await world();
-  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade'").all(WALLET) as Array<{ delta: number; ref: string }>;
+  const tradeRows = () => game.gs.db.prepare("SELECT delta, ref FROM ledger WHERE account = ? AND token = 'coin' AND kind = 'trade' AND ref NOT LIKE '%-c'").all(WALLET) as Array<{ delta: number; ref: string }>;
   // off: no trading at all
   bots.control({ settings: { trade: { enabled: false } } });
   for (let h = 0; h < 6; h++) { clock.advanceHours(1); await game.step(); }
@@ -151,4 +151,33 @@ test('the townsfolk buy to sell again at the admin\'s margin, negative allowed, 
   assert.throws(() => bots.control({ settings: { trade: { marginPct: -95 } } }), /marginPct must be a number from -90 to 500/);
   assert.throws(() => bots.control({ settings: { trade: { enabled: 'yes' } } }), /enabled must be true or false/);
   assert.throws(() => bots.control({ settings: { target: -1 } }), /target must be/);
+});
+
+test('the townsfolk craft and stock the shelves, which brings the crafted goods\' prices down', async () => {
+  const off = await world(), on = await world();
+  off.bots.control({ settings: { trade: { enabled: false }, craft: { enabled: false } } });
+  on.bots.control({ settings: { trade: { enabled: false }, craft: { enabled: true, marginPct: -90, perHour: 6, fillPct: 200 } } });
+  assert.equal(on.game.residents.settings().craft.fillPct, 200, 'saved');
+  for (let h = 0; h < 12; h++) for (const w of [off, on]) { w.clock.advanceHours(1); await w.game.step(); }
+  const crafts = on.game.gs.db.prepare("SELECT token, ref FROM ledger WHERE account = ? AND kind = 'resident_craft' AND delta > 0").all(WALLET) as Array<{ token: string; ref: string }>;
+  assert.ok(crafts.length > 0, 'something crafted');
+  assert.ok(crafts.every((c) => /^\w+#r[1-5]$/.test(c.ref)), 'booked per resident');
+  assert.equal(off.game.gs.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE kind = 'resident_craft'").get()!.n, 0, 'off: nothing crafted');
+  const st = on.bots.status(0);
+  assert.ok(st.craft.soldUnits > 0, 'stocked a shelf');
+  assert.equal(st.craft.profit, st.craft.sold - st.craft.inputs - st.craft.fees);
+  // never past the fill line, and the asks of what was crafted came down against the world without crafting
+  let lower = 0;
+  for (const shelf of st.craft.shelves) for (const sh of shelf.shops) {
+    assert.ok(sh.stock <= Math.max(sh.upTo, off.game.gs.balance(off.game.market.account(sh.id), shelf.token)), `${sh.name} ${shelf.token} within the fill line`);
+    const a0 = off.game.market.row(sh.id, shelf.token).ask, a1 = on.game.market.row(sh.id, shelf.token).ask;
+    if (st.craft.byGood[shelf.token]) { assert.ok(a1 <= a0, `${sh.name} ${shelf.token}: ${a1} <= ${a0}`); if (a1 < a0) lower++; }
+  }
+  assert.ok(lower > 0, 'at least one crafted good is cheaper');
+  // a margin nobody pays: no crafting
+  const n0 = crafts.length;
+  on.bots.control({ settings: { craft: { marginPct: 500 } } });
+  for (let h = 0; h < 4; h++) { on.clock.advanceHours(1); await on.game.step(); }
+  assert.equal((on.game.gs.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account = ? AND kind = 'resident_craft' AND delta > 0").get(WALLET) as { n: number }).n, n0);
+  assert.throws(() => on.bots.control({ settings: { craft: { fillPct: 5 } } }), /fillPct must be a number from 10 to 300/);
 });

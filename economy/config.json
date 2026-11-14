@@ -119,7 +119,8 @@
     "treasuryReserve": 2000,
     "speed": 2.4,
     "queueMax": 8,
-    "trade": { "enabled": true, "marginPct": 5, "perHour": 2, "holdMax": 5, "minWallet": 100 }
+    "trade": { "enabled": true, "marginPct": 5, "perHour": 2, "holdMax": 5, "minWallet": 100 },
+    "craft": { "enabled": true, "marginPct": 0, "perHour": 2, "fillPct": 100 }
   },
   "shops": {
     "rent": 40,

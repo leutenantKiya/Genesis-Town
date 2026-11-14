@@ -81,7 +81,9 @@ export interface Econ {
   /** The townsfolk who do the town's shopping from one shared wallet that lives on handouts (residents.ts). */
   residents: { enabled: boolean; wallet: string; names: string[]; looks: number[]; target: number; treasuryReserve: number; speed: number; queueMax: number;
     /** Buying to sell again (residents.trade); the admin's saved settings override it. */
-    trade?: { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number } };
+    trade?: { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number };
+    /** Crafting to stock the shelves (residents.craft); the admin's saved settings override it. */
+    craft?: { enabled: boolean; marginPct: number; perHour: number; fillPct: number } };
   /** rent: the daily rent (also the pricing yardstick for "thin cash"); chargeRent false: merchants pay nothing and never close. */
   shops: { rent: number; chargeRent?: boolean; storageFeePerUnit: number; dividendShare: number; initialShares: number; minSharePrice: number };
   fees: { marketPct: number };

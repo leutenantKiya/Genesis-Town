@@ -16,6 +16,8 @@
 // Trading (trade(), hourly): the townsfolk also buy goods to sell again to a merchant at the admin's margin; the settings
 // (wallet target, treasury reserve, trade) are config.json overlaid with meta `residents.settings`, the goods held and
 // what they cost are in meta `residents.stock`: everything the admin sets lives in the database.
+// Crafting (craft(), hourly): the townsfolk craft bread, meals and tools and stock the shelves of the merchants that sell
+// them, which brings those prices down (settings `craft`).
 import type { Chain } from '../chain.ts';
 import type { Econ } from './econ.ts';
 import type { GameStore } from './gamestore.ts';
@@ -52,7 +54,8 @@ interface Walker {
 interface Job { merchant: string; token: string; ask: number; to: Pos; sell?: boolean }
 export interface ResidentControls { paused: boolean; allow: Record<string, string[]> }
 export interface TradeSettings { enabled: boolean; marginPct: number; perHour: number; holdMax: number; minWallet: number }
-export interface ResidentSettings { target: number; treasuryReserve: number; trade: TradeSettings }
+export interface CraftSettings { enabled: boolean; marginPct: number; perHour: number; fillPct: number }
+export interface ResidentSettings { target: number; treasuryReserve: number; trade: TradeSettings; craft: CraftSettings }
 const CTL_KEY = 'residents.ctl', SETTINGS_KEY = 'residents.settings', STOCK_KEY = 'residents.stock';
 
 const DIRS: Array<[number, number, string]> = [[1, 0, 'right'], [-1, 0, 'left'], [0, 1, 'down'], [0, -1, 'up']];
@@ -167,15 +170,20 @@ export class Residents {
    *  meta `residents.settings` (adminbots.ts), so a restart or a deploy keeps them. */
   settings(): ResidentSettings {
     const c = this.cfg, t = c.trade ?? { enabled: false, marginPct: 5, perHour: 2, holdMax: 5, minWallet: 100 };
-    let saved: Partial<ResidentSettings> & { trade?: Partial<TradeSettings> } = {};
+    const cc = c.craft ?? { enabled: false, marginPct: 0, perHour: 2, fillPct: 100 };
+    let saved: Partial<ResidentSettings> & { trade?: Partial<TradeSettings>; craft?: Partial<CraftSettings> } = {};
     try { saved = JSON.parse(this.d.gs.meta(SETTINGS_KEY) ?? '{}'); } catch { /* bad row: the config's */ }
     const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
-    const st: Partial<TradeSettings> = saved.trade ?? {};
+    const st: Partial<TradeSettings> = saved.trade ?? {}, sc: Partial<CraftSettings> = saved.craft ?? {};
     return {
       target: num(saved.target, c.target), treasuryReserve: num(saved.treasuryReserve, c.treasuryReserve),
       trade: {
         enabled: typeof st.enabled === 'boolean' ? st.enabled : t.enabled, marginPct: num(st.marginPct, t.marginPct),
         perHour: num(st.perHour, t.perHour), holdMax: num(st.holdMax, t.holdMax), minWallet: num(st.minWallet, t.minWallet),
+      },
+      craft: {
+        enabled: typeof sc.enabled === 'boolean' ? sc.enabled : cc.enabled, marginPct: num(sc.marginPct, cc.marginPct),
+        perHour: num(sc.perHour, cc.perHour), fillPct: num(sc.fillPct, cc.fillPct),
       },
     };
   }
@@ -248,6 +256,68 @@ export class Residents {
       }
     }
     this.setStock(stock);
+    return done;
+  }
+
+  /** One hour of crafting (game.step, after trading): a resident buys a recipe's inputs from the cheapest merchant (or
+   *  uses what the wallet holds beyond the trading stock), crafts it like a player (the recipe's fee to the treasury) and
+   *  stocks the shelf of the merchant that sells the good, at that merchant's bid, while its stock is under `fillPct` % of
+   *  its target. More stock lowers that merchant's ask, so crafting brings the price of bread, meals and tools down.
+   *  Done only when the bid is at least the cost x (1 + marginPct / 100) (negative allowed), at most `perHour` crafts,
+   *  never spending the wallet below the trading floor `minWallet`. Ledger: inputs kind `trade` (tag `<resident>-c`),
+   *  the craft kind `resident_craft`, the sale kind `trade` (market.restock). Returns the crafts made. */
+  craft(day: number): number {
+    const set = this.settings(), s = set.craft, c = this.controls();
+    if (!this.ready || !s.enabled || c.paused || s.perHour < 1) return 0;
+    const { market, gs, econ, town } = this.d, m = 1 + s.marginPct / 100, held = this.stock();
+    const ids = market.ids().filter((id) => market.isOpen(id) && this.walkers.some((w) => this.allows(w, id, c)));
+    const spare = (tk: string) => Math.max(0, gs.balance(this.wallet, tk) - (held[tk]?.qty ?? 0));
+    // the merchant that sells `out`, under its fill line, paying most for it now
+    const shopFor = (out: string) => ids.filter((id) => market.def(id).sells.includes(out)).map((id) => {
+      const d = market.def(id), acct = market.account(id), upTo = Math.floor(((d.target[out] ?? 10) * s.fillPct) / 100);
+      return { id, upTo, room: upTo - gs.balance(acct, out), unit: market.quote(id, out, 'sell', 1).unit, cash: gs.balance(acct, 'coin') };
+    }).filter((o) => o.room >= 1 && o.cash >= o.unit).sort((a, b) => b.unit - a.unit)[0] ?? null;
+    type Recipe = (typeof econ.recipes)[string];
+    // one unit of one recipe; false when it cannot (no shelf with room, no ingredients, margin not met, wallet floor)
+    const one = (rid: string, r: Recipe): boolean => {
+      const out = r.output, shop = shopFor(out);
+      if (!shop) return false;
+      const w = this.pick(shop.id, c); if (!w) return false;
+      const tag = `${w.id}-c`;
+      // a good crafted earlier that never reached a shelf goes first
+      if (spare(out) >= 1) {
+        try { market.restock(this.wallet, shop.id, out, 1, tag, shop.upTo); } catch { return false; }
+        this.walkTo(shop.id, out, shop.unit, true);
+        return true;
+      }
+      const plan: Array<{ tk: string; own: number; need: number; seller: { id: string; unit: number } | null }> = [];
+      let cost = r.fee ?? 0, coin = r.fee ?? 0;
+      for (const [tk, n] of Object.entries(r.inputs)) {
+        const own = Math.min(n, spare(tk)), need = n - own;
+        const seller = need < 1 ? null : ids.filter((id) => market.def(id).sells.includes(tk) && !market.trend.withdrawn(tk) && gs.balance(market.account(id), tk) >= need)
+          .map((id) => ({ id, unit: market.quote(id, tk, 'buy', need).unit })).sort((a, b) => a.unit - b.unit)[0] ?? null;
+        if (need >= 1 && !seller) return false;
+        plan.push({ tk, own, need, seller });
+        cost += own * econ.items[tk].base + (seller ? seller.unit * need : 0); // what the wallet already holds counts at its base value
+        coin += seller ? seller.unit * need : 0;
+      }
+      if (shop.unit < cost * m || gs.balance(this.wallet, 'coin') - coin < set.trade.minWallet) return false;
+      try { for (const p of plan) if (p.seller) market.buy(this.wallet, p.seller.id, p.tk, p.need, tag); } catch { return false; } // bought inputs stay as spare
+      for (const p of plan) gs.add(day, this.wallet, p.tk, -(p.own + p.need), 'resident_craft', `${rid}#${w.id}`);
+      gs.add(day, this.wallet, out, 1, 'resident_craft', `${rid}#${w.id}`);
+      if (r.fee > 0) { gs.add(day, this.wallet, 'coin', -r.fee, 'fee', rid); gs.add(day, town, 'coin', r.fee, 'fee', `${rid}:${this.wallet}`); }
+      for (const p of plan) if (p.seller) this.walkTo(p.seller.id, p.tk, p.seller.unit * p.need, false);
+      try { market.restock(this.wallet, shop.id, out, 1, tag, shop.upTo); } catch { return true; } // kept as spare for next hour
+      this.walkTo(shop.id, out, shop.unit, true);
+      return true;
+    };
+    // the recipes take turns, one unit each per round, so bread does not use up the hour before meals get a go
+    let done = 0, moved = true;
+    const recipes = Object.entries(econ.recipes);
+    while (done < s.perHour && moved) {
+      moved = false;
+      for (const [rid, r] of recipes) { if (done >= s.perHour) break; if (one(rid, r)) { done++; moved = true; } }
+    }
     return done;
   }
 
