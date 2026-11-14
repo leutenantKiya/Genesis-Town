@@ -23,7 +23,7 @@
   }
   // The catalogue as economy/config.json `mall.items` has it (the server is the price list: the same ids, a buy at another price is refused).
   var T = [
-    ['hat_straw', 'hat', 20, 'brim', '#d8b04a', '#a07a2c', 'Straw Hat', 'Topi Jerami'],
+    ['hat_straw', 'hat', 20, 'brim', '#f2c230', '#d83c3c', 'Straw Hat', 'Topi Jerami'],
     ['hat_cap', 'hat', 30, 'cap', '#4a7ac8', '#2c4a86', "Farmer's Cap", 'Topi Petani'],
     ['hat_beret', 'hat', 45, 'beret', '#b83a5a', '#7c2038', "Painter's Beret", 'Baret Pelukis'],
     ['hat_wizard', 'hat', 120, 'wizard', '#4a3a9a', '#f2d030', 'Starry Wizard Hat', 'Topi Penyihir Bintang'],

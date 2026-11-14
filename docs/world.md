@@ -141,7 +141,7 @@ job has a maximum and a Town Hall level (`homeland.bots`):
 | Bot | Price | Max | Town Hall | Effect per bot |
 | --- | --- | --- | --- | --- |
 | Tukang | 150 | 3 | 1 | one more builder: another job can run at the same time |
-| Petani | 120 | 2 | 2 | Homeland crops grow 1.5x faster (`ceil(growDays / 1.5^n)`, minimum 1 day) |
+| Petani | 120 | 2 | 2 | Homeland crops grow 1.5x faster (`growSecs / 1.5^n`) |
 | Nelayan | 120 | 2 | 2 | Kolam Ikan makes 1.5x more per game hour |
 | Penebang | 120 | 2 | 2 | +1 wood for every tree gathered in the owner's Homeland |
 

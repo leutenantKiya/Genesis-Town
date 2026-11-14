@@ -25,10 +25,7 @@ function farm(w: W, h: ReturnType<W['home']>, a: string, op: string, idx: number
   return w.game.act(a, { action: 'farm', op, plot: idx, world: h.wid, pos: stand }) as any;
 }
 const growUp = (w: W, h: ReturnType<W['home']>, a: string, idx: number) => {
-  for (let d = 0; d < w.econ.farm.growDays; d++) {
-    farm(w, h, a, 'water', idx);
-    w.adv(w.econ.time.realMsPerGameHour * w.econ.time.hoursPerDay);
-  }
+  w.adv(w.econ.farm.growSecs * 1000 + 1000);
 };
 
 test('a helper plants in the owner\'s field and gets the harvest even when the owner harvests it', async () => {

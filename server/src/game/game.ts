@@ -170,14 +170,23 @@ export class Game {
     return { toast: target.row ? (target.row.account === account ? 'Arrived at your Homeland.' : 'Arrived at your friend\'s Homeland.') : 'Arrived in the public area.', world: to, arrive };
   }
 
-  /** The ferry boat to the island in the village's bottom-right corner, steered by the player. op 'board': from beside a landing, step into
-   *  the boat on the water tile there; while aboard the player's reports are water tiles the boat can reach (Positions). op 'land' {x, y}: step
-   *  off onto a walkable tile right next to where the boat is. Nothing else works aboard, and the boat moves at walking speed like anyone. */
+  /** The one public boat, shared by everybody: where it floats and who steers it (what presence tells every client). */
+  boatView(viewer?: string): { x: number; y: number; by: string | null; name: string | null; mine: boolean } | null {
+    const b = this.positions?.boatNow(this.now());
+    if (!b) return null;
+    return { x: b.x, y: b.y, by: b.by, name: b.by ? (this.store.nameOf(b.by) ?? b.by.split('.')[0]) : null, mine: !!b.by && b.by === viewer };
+  }
+
+  /** The ferry boat to the island in the village's bottom-right corner, steered by the player. There is ONE boat, wherever it was left. op 'board':
+   *  from a land tile right next to the boat (and nobody else steering it), step in; while aboard the player's reports are water tiles the boat can
+   *  reach (Positions) and the boat follows. op 'land' {x, y}: step off onto a walkable tile right next to the boat. Nothing else works aboard, and
+   *  the boat moves at walking speed like anyone. An unused boat sails home to the mainland dock (Positions.boatNow). */
   private boat(account: string, wid: string, pos: Pos, op: string, to: Pos): { toast: string; world: string; arrive: Pos; aboard: boolean } {
     if (!this.map || !this.positions || wid !== 'public') throw new HttpError(409, 'The boat is in the public village.');
     const f = Village.ferryOf(this.map.layout);
     if (!f) throw new HttpError(409, 'There is no boat here.');
     const dist = (p: Pos, q: Pos) => Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
+    const boat = this.positions.boatNow(this.now())!;
     if (this.positions.aboard.has(account)) {
       if (op !== 'land') throw new HttpError(409, 'You are already in the boat.');
       if (!Number.isInteger(to.x) || !Number.isInteger(to.y)) throw new HttpError(400, 'Where to land?');
@@ -187,8 +196,9 @@ export class Game {
       return { toast: 'You step ashore.', world: 'public', arrive: to, aboard: false };
     }
     if (op !== 'board') throw new HttpError(409, 'You are not in the boat.');
-    const at = dist(pos, f.a) <= 1 ? f.wa : dist(pos, f.b) <= 1 ? f.wb : null;
-    if (!at) throw new HttpError(409, 'Stand next to the boat.');
+    if (boat.by) throw new HttpError(409, `The boat is in use by ${this.store.nameOf(boat.by) ?? boat.by.split('.')[0]}.`);
+    if (dist(pos, boat) !== 1) throw new HttpError(409, 'Stand next to the boat.');
+    const at = { x: boat.x, y: boat.y };
     this.positions.board(account, at, this.now());
     return { toast: 'You climb into the boat.', world: 'public', arrive: at, aboard: true };
   }
@@ -357,7 +367,7 @@ export class Game {
       case 'eat': res = this.world.eat(account, s('token')); break;
       case 'farm': {
         const own = w.row?.account ?? account; // a guest farms the owner's plots; the owner's Petani speeds the crops
-        res = this.world.farm(account, s('op'), n('plot', -1), w.row ? { plotAccount: `${own}@${wid}`, count: this.farmCount(w.row), growDays: Math.max(1, Math.ceil(this.econ.farm.growDays / this.homelands.effects(own).farmGrowFactor - 1e-9)), yieldBonus: 0, owner: own, guest: own !== account } : undefined);
+        res = this.world.farm(account, s('op'), n('plot', -1), w.row ? { plotAccount: `${own}@${wid}`, count: this.farmCount(w.row), growSecs: this.farmSecs(own), yieldBonus: 0, owner: own, guest: own !== account } : undefined);
         const cr = (res as { credit?: { account: string; token: string; n: number } }).credit;
         if (cr) {
           const who = this.store.nameOf(account) ?? account.split('.')[0], at = this.store.nameOf(own) ?? own.split('.')[0];
@@ -461,6 +471,8 @@ export class Game {
   }
 
   /** Farm plots in a Homeland: one per Town Hall level, up to 6. */
+  /** Seconds from planting to ripe in a Homeland: the owner's Petani workers divide it. */
+  private farmSecs(owner: string) { return Math.max(1, this.econ.farm.growSecs / this.homelands.effects(owner).farmGrowFactor); }
   private farmCount(row: HomelandRow) { return Math.min(row.th, 6); }
 
   state(account: string) {
@@ -468,7 +480,6 @@ export class Game {
     const koUntil = this.monsters?.koUntil(account) ?? null; // first: waking up restores energy
     const t = this.clock.time();
     const weather = this.weather();
-    if (weather && (this.positions?.worldOf(account) ?? 'public') === 'public') this.world.rainWater(account, weather.wet); // rain waters the farm by itself
     const wid = this.positions?.worldOf(account) ?? 'public';
     const hid = wid === 'public' ? null : parseHome(wid);
     const hrow = hid ? this.homelands.byId(hid) : undefined;
@@ -498,7 +509,7 @@ export class Game {
       worldId: hrow ? wid : 'public',
       here,
       homeland: this.homelands.view(account),
-      plots: (field ? this.world.plots(`${fieldOwner}@${wid}`, field) : hrow ? [] : this.world.plots(account)).map((x) => ({ idx: x.idx, state: x.state, grown: x.grown, wateredToday: x.watered_day === t.day, mine: !x.planter || x.planter === account, ...(x.planter && x.planter !== account ? { planter_name: this.store.nameOf(x.planter) ?? x.planter.split('.')[0] } : {}) })),
+      plots: (field ? this.world.plots(`${fieldOwner}@${wid}`, field, this.farmSecs(fieldOwner!)) : hrow ? [] : this.world.plots(account)).map((x) => ({ idx: x.idx, state: x.state, growMs: Math.round((field ? this.farmSecs(fieldOwner!) : this.econ.farm.growSecs) * 1000), ...(x.state === 'planted' || x.state === 'ready' ? { ageMs: Math.max(0, this.clock.now() - x.planted_at) } : {}), mine: !x.planter || x.planter === account, ...(x.planter && x.planter !== account ? { planter_name: this.store.nameOf(x.planter) ?? x.planter.split('.')[0] } : {}) })),
       world: this.map ? { seed: this.map.seed, unlocked: this.map.unlocked } : null,
       encounter: this.monsters?.pending.get(account) ?? null,
       koUntil,

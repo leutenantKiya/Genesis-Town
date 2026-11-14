@@ -559,6 +559,6 @@
   }
 
   function refresh() { others = {}; curWorld = null; backoff = 0; nextAt = 0; holdUntil = 0; tick(); } // after sailing: forget the old world's players at once
-  window.GT_PLAYERS = { anglers: anglers, where: function (account) { var o = others[account]; if (!o || !here(o)) return null; var n = performance.now(); return { x: curX(o, n), y: curY(o, n) }; }, onPresence: function (f) { presenceFns.push(f); }, addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, _others: function () { return others; }, _lines: function () { return lines; } };
+  window.GT_PLAYERS = { anglers: anglers, where: function (account) { var o = others[account]; if (!o || !here(o)) return null; var n = performance.now(); return { x: curX(o, n), y: curY(o, n) }; }, onPresence: function (f) { presenceFns.push(f); }, addCardAction: function (f) { cardActions.push(f); }, refresh: refresh, promptName: function () { if (window.GT_CHARSCREEN) window.GT_CHARSCREEN.open(); }, openChat: openChat, closeChat: closeChat, card: card, _others: function () { return others; }, _lines: function () { return lines; } };
   GT.register({ id: 'players', init: function (g) { init(g); g.register({ id: 'players-labels', onDraw: onDraw }); }, onEntities: onEntities, onKey: onKey }); // tags and bubbles register last from init, so they draw over every other mod's signs
 })();

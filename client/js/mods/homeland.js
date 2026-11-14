@@ -735,7 +735,20 @@
     var w = null; (H && H.workers || []).forEach(function (x) { if (x.slot === slot) w = x; });
     return !!(w && w.sick_until && endMs({ ends_at: w.sick_until }) > Date.now());
   }
+  // In 2.5D a worker is an upright card: a hat drawn flat over the scene lands on the face. There the hat goes into the
+  // card itself (the Mall's worn system: SPRITES.wornCombo in the palette's high bits, three/actor.js); other gear is
+  // only drawn in 2D. In 2D the palette stays the plain look (the 2D sprite has no worn bits).
+  var HAT3 = { caping: { slot: 'hat', shape: 'brim', color: '#f2c230', color2: '#d83c3c' }, helm: { slot: 'hat', shape: 'helm', color: '#f2c230', color2: '#a07a2c' }, mahkota: { slot: 'hat', shape: 'crown', color: '#f2d030', color2: '#d84a4a' } };
+  function wearPal(n, name) {
+    if (!n) return false;
+    if (n.basePal == null) n.basePal = n.pal | 0;
+    var v3 = GT.view3dOn && GT.view3dOn(), def = v3 && HAT3[name], combo = def && window.SPRITES && SPRITES.wornCombo ? SPRITES.wornCombo([def]) : 0;
+    var want = combo ? (n.basePal & 15) + (combo << 4) : n.basePal;
+    if (n.pal !== want) n.pal = want;
+    return v3; // true: nothing more to draw over the scene
+  }
   function drawHat(ctx, n, name, camX, camY, T, sick) {
+    if (!sick && wearPal(n, name)) return;
     var d = name && H.cosmetics && H.cosmetics[name]; if (!d || !n) return;
     // where the sprite is now: a walking NPC's x, y is already the next tile, so the hat would run ahead of the head
     var k = n.moving ? Math.min(1, n.t || 0) : 1, nx = n.moving ? n.fx + (n.x - n.fx) * k : n.x, ny = n.moving ? n.fy + (n.y - n.fy) * k : n.y;
@@ -900,13 +913,14 @@
     if (ctx.mode === 'talk' && p && ((t.x === p.x && t.y === p.y) || (Math.round(GT.player.x) === p.x && Math.round(GT.player.y) === p.y))) { portalT = 0; dizzy(0); openPortal(); return true; }
     if (!isHL(wid())) return false;
     var d = ctx.door;
+    // the Town Hall is a house: its door leads inside (the engine's room); upgrades live in the top bar's Upgrade button
+    if (d && d.kind === 'townhall') return false;
     if (d && HOME_KINDS[d.kind]) {
       lastDoor = d;
       if (ctx.mode === 'bump' && Date.now() - lastClose < 700) return true; // key still held after closing the window
       if (ctx.mode === 'message') return false;
       if (!loggedIn()) return true;
-      if (d.kind === 'townhall') openWin('hall', inOwnHome() ? $t('Balai Kota') : $t('Balai Kota · {0}', [hostName()]));
-      else openWin('lot', KIND_NAME[d.kind] || $t('Bangunan'), d.lot);
+      openWin('lot', KIND_NAME[d.kind] || $t('Bangunan'), d.lot);
       return true;
     }
     if (ctx.mode === 'talk') {
@@ -987,7 +1001,7 @@
     }
   }
   /* ---- locked islands: hover glow, click to unlock (the owner, in their own Homeland) ---- */
-  var hoverChunk = null, hoverT = 0;
+  var hoverChunk = null, hoverT = 0, hoverLot = null;
   // the locked chunk under a screen point, or null
   function lockedChunkAt(cx, cy) {
     var L = layoutOf(), sc = GT.scene;
@@ -1005,8 +1019,11 @@
   function onHoverMove(e) {
     var now = performance.now(); if (now - hoverT < 50) return; hoverT = now;
     if (GT.isUiOpen()) { hoverChunk = null; return; }
+    if (!inOwnHome()) { hoverChunk = null; hoverLot = null; return; } // the cursor elsewhere belongs to other mods (the Papan Juara)
     var c = lockedChunkAt(e.clientX, e.clientY); hoverChunk = c ? c.id : null;
-    var cv = document.getElementById('cv'); if (cv) cv.style.cursor = c || (e.target === cv && emptyLotAt(e.clientX, e.clientY)) ? 'pointer' : '';
+    var cv = document.getElementById('cv'), lot = !c && e.target === cv ? emptyLotAt(e.clientX, e.clientY) : null;
+    hoverLot = lot ? lot.id : null;
+    if (cv) cv.style.cursor = c || lot ? 'pointer' : '';
   }
   function onUnlockClick(e) {
     if (e.button !== 0 || GT.isUiOpen() || !e.target || e.target.id !== 'cv') return;
@@ -1074,10 +1091,25 @@
     var cc = GT.at(x0 + CHs / 2, y0 + CHs / 2);
     if (window.GT_THEME && GT_THEME.label) GT_THEME.label(ctx, '🔒 ' + $t('Klik untuk membuka pulau'), cc.x + (v3 ? 0 : 0), cc.y, { tone: 'paper', size: 7, bold: true });
   }
+  // the hovered empty lot: the same pulsing outline and wash as an island, around the lot's tiles
+  function drawHoverLot(ctx, T) {
+    if (!hoverLot || !inOwnHome() || GT.isUiOpen()) return;
+    var l = lotById(hoverLot); if (!l || builtOf(l.id)) { hoverLot = null; return; }
+    var v3 = GT.view3dOn && GT.view3dOn();
+    function pt(X, Y) { var a = v3 ? GT.at(X - 0.5, Y - 0.5) : GT.at(X, Y); return v3 ? { x: a.x + 6, y: a.y + 12 } : a; }
+    var a = pt(l.x, l.y), b = pt(l.x + l.w, l.y), c = pt(l.x + l.w, l.y + l.h), d = pt(l.x, l.y + l.h), pulse = 0.5 + 0.5 * Math.sin(Date.now() / 260);
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.closePath();
+    ctx.fillStyle = 'rgba(255,236,150,' + (0.12 + 0.1 * pulse).toFixed(3) + ')'; ctx.fill();
+    ctx.shadowColor = 'rgba(255,224,120,.9)'; ctx.shadowBlur = 6 + 6 * pulse;
+    ctx.strokeStyle = 'rgba(255,240,170,' + (0.75 + 0.25 * pulse).toFixed(2) + ')'; ctx.lineWidth = Math.max(1, T / 8); ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.restore();
+  }
   function onDraw(ctx, camX, camY, T) {
     drawMall(ctx, camX, camY, T);
     if (!GT.scene || GT.scene.kind !== 'out') return;
     drawHoverChunk(ctx, T);
+    drawHoverLot(ctx, T);
     var now = Date.now(), tt = now / 1000, p = portalPos(), L = layoutOf();
     ctx.save();
     if (p) { // portal shimmer

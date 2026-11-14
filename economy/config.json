@@ -31,11 +31,11 @@
     "energyMax": 100,
     "energyRegenPerHour": 2
   },
-  "grass": { "token": "wheat", "tiles": ["grass", "tallgrass"], "chance": 0.2, "energyCost": 1, "dailyMax": 6, "cooldownSecs": 3 },
+  "grass": { "token": "wheat", "tiles": ["grass", "tallgrass"], "chance": 0.8, "energyCost": 1, "dailyMax": 6, "cooldownSecs": 3 },
   "farm": {
     "plots": 15,
     "seed": "wheat",
-    "growDays": 3,
+    "growSecs": 60,
     "harvest": 3,
     "noGrowthSeasons": ["dingin"],
     "energyCost": 2,
@@ -154,7 +154,7 @@
   "mall": {
     "slots": ["hat", "outfit", "cape", "pet", "emote", "namecolor", "decor"],
     "items": [
-      { "id": "hat_straw", "name": "Straw Hat", "slot": "hat", "price": 20, "color": "#d8b04a", "color2": "#a07a2c", "shape": "brim" },
+      { "id": "hat_straw", "name": "Straw Hat", "slot": "hat", "price": 20, "color": "#f2c230", "color2": "#d83c3c", "shape": "brim" },
       { "id": "hat_cap", "name": "Farmer's Cap", "slot": "hat", "price": 30, "color": "#4a7ac8", "color2": "#2c4a86", "shape": "cap" },
       { "id": "hat_beret", "name": "Painter's Beret", "slot": "hat", "price": 45, "color": "#b83a5a", "color2": "#7c2038", "shape": "beret" },
       { "id": "hat_wizard", "name": "Starry Wizard Hat", "slot": "hat", "price": 120, "color": "#4a3a9a", "color2": "#f2d030", "shape": "wizard" },

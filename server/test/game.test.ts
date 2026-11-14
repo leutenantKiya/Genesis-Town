@@ -131,16 +131,16 @@ test('crafting: simple recipes cost energy, complex ones cost coin; eating resto
   assert.equal(game.state(P).energy, 29);
 });
 
-test('farm: till, plant, water once a day, harvest after 3 watered days', async () => {
+test('farm: till, plant, harvest only once the wheat has ripened (a minute)', async () => {
   const { game, clock } = await world();
   game.act(P, { action: 'farm', op: 'till', plot: 0 });
   game.act(P, { action: 'farm', op: 'plant', plot: 0 });
   assert.equal(bal(game, P, 'wheat'), 2);
-  for (let d = 0; d < 3; d++) {
-    game.act(P, { action: 'farm', op: 'water', plot: 0 });
-    if (d === 0) assert.throws(() => game.act(P, { action: 'farm', op: 'water', plot: 0 }), /Already watered/);
-    clock.advanceHours(24);
-  }
+  assert.equal(game.state(P).plots[0].state, 'planted');
+  assert.throws(() => game.act(P, { action: 'farm', op: 'harvest', plot: 0 }), /Not ready/);
+  clock.advanceHours(0.5 * 60_000 / game.econ.time.realMsPerGameHour); // half a minute
+  assert.equal(game.state(P).plots[0].state, 'planted');
+  clock.advanceHours(0.5 * 60_000 / game.econ.time.realMsPerGameHour + 0.01);
   assert.equal(game.state(P).plots[0].state, 'ready');
   game.act(P, { action: 'farm', op: 'harvest', plot: 0 });
   assert.equal(bal(game, P, 'wheat'), 5);

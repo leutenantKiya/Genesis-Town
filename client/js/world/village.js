@@ -476,7 +476,16 @@
     })();
     // the island in the south-east corner is cut off by a wide band of water: the top rows of the 'danau' chunk are lake, so the mainland's
     // shore and the island's north tip are 4+ tiles apart (no random numbers used; reserved tiles, i.e. roads and buildings, stay)
-    for (y = 2 * CH; y < 2 * CH + 4; y++) for (x = 1; x < W - 1; x++) {
+    // (the band also cuts the map's tree ring on the east edge, so no line of trees joins the island's north-east corner to the mainland)
+    for (y = 2 * CH; y < 2 * CH + 4; y++) for (x = 1; x < W; x++) {
+      if (!res[I(x, y)] && chunkAtR(x, y).id === 'danau') tiles[I(x, y)] = 'water';
+    }
+    // the island's three west columns are water too, so the little islet of Rawa/Padang shore south-west of it is 3+ tiles of water away
+    for (y = 2 * CH + 4; y < H - 1; y++) for (x = 2 * CH; x < 2 * CH + 3; x++) {
+      if (!res[I(x, y)]) tiles[I(x, y)] = 'water';
+    }
+    // and the island's last two columns by the east edge are water too, so the tree ring there is an edge, not a shore it is joined to
+    for (y = 2 * CH + 4; y < H - 1; y++) for (x = W - 3; x < W - 1; x++) {
       if (!res[I(x, y)] && chunkAtR(x, y).id === 'danau') tiles[I(x, y)] = 'water';
     }
     // sandy spots along the river banks (fishing places)
@@ -512,7 +521,7 @@
     }
     // border ring of trees
     for (x = 0; x < W; x++) { tiles[I(x, 0)] = 'tree'; tiles[I(x, H - 1)] = 'tree'; }
-    for (y = 0; y < H; y++) { tiles[I(0, y)] = 'tree'; tiles[I(W - 1, y)] = 'tree'; }
+    for (y = 0; y < H; y++) { tiles[I(0, y)] = 'tree'; if (!(y >= 2 * CH && y < 2 * CH + 4)) tiles[I(W - 1, y)] = 'tree'; }
 
     /* --- spawn and validation */
     var spawn = { x: own.dx, y: own.dy + 1 };

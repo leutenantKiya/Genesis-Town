@@ -283,7 +283,8 @@
         var fe = V.ferryOf && V.ferryOf(L);
         if (fe) {
           var near = function (q) { return Math.abs(p.x - q.x) + Math.abs(p.y - q.y) <= 1; };
-          if ((t.x === fe.wa.x && t.y === fe.wa.y) || (t.x === fe.wb.x && t.y === fe.wb.y) || near(fe.a) || near(fe.b)) return { icon: '⛵', label: $t('Perahu') };
+          var bp = window.GT_FERRY && GT_FERRY.pos ? { x: Math.round(GT_FERRY.pos.x), y: Math.round(GT_FERRY.pos.y) } : fe.wa; // the one boat, wherever it floats
+          if ((t.x === bp.x && t.y === bp.y) || near(bp)) return { icon: '⛵', label: $t('Perahu') };
         }
       } catch (e) { /* a village without these spots */ }
       var fun = L.fun || (L.layout && L.layout.fun), car = fun && fun.carousel; // the carousel lives under GT.world.layout.fun
@@ -299,7 +300,7 @@
     for (var i = 0; i < plots.length; i++) {
       if (plots[i].x !== t.x || plots[i].y !== t.y) continue;
       var pl = cs && cs.st && cs.st.plots && cs.st.plots[i], s = pl && pl.state;
-      return { icon: '🌱', label: s === 'empty' ? $t('Cangkul') : s === 'tilled' ? $t('Tanam') : s === 'ready' ? $t('Panen') : s ? $t('Siram') : $t('Kebun') };
+      return { icon: '🌱', label: s === 'empty' ? $t('Cangkul') : s === 'tilled' ? $t('Tanam') : s === 'ready' ? $t('Panen') : s ? $t('Tumbuh') : $t('Kebun') };
     }
     // the Homeland's hoe grid and empty lots are not decided here: mods/homeland.js registers its own probe (GT_ACTBTN.add)
     return null;

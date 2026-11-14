@@ -94,8 +94,8 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     if (p.role === 'farmer') {
       for (let i = 0; i < 6; i++) {
         const plot = game.world.plots(a)[i];
-        const op = plot.state === 'empty' ? 'till' : plot.state === 'tilled' ? 'plant' : plot.state === 'ready' ? 'harvest' : 'water';
-        tryAct(a, { action: 'farm', op, plot: i });
+        const op = plot.state === 'empty' ? 'till' : plot.state === 'tilled' ? 'plant' : plot.state === 'ready' ? 'harvest' : '';
+        if (op) tryAct(a, { action: 'farm', op, plot: i });
       }
     } else if (p.role === 'cook') {
       if (bal(a, 'fish') < 1) { const m = cheapestBuy('fish'); if (m) tryAct(a, { action: 'buy', merchant: m, token: 'fish', qty: 2 }); }

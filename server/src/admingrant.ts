@@ -57,9 +57,10 @@ export class AdminGrants {
   /** The player a grant would reach (for the confirmation card in the window): name#tag, look, and the coin they can still receive today. */
   who(to: unknown) {
     const acct = this.resolve(to), day = this.d.game.clock.time().settleDay;
+    const { market } = this.d.game, mid = market.ids().find((id) => market.account(id) === acct); // a merchant: its own name, no tag
     const { receiverDailyCap } = this.limits();
     return {
-      account: acct, nick: this.d.store.nameOf(acct) ?? acct, tag: this.d.store.tagOf(acct), look: this.d.store.lookOf(acct),
+      account: acct, nick: mid ? market.def(mid).name : (this.d.store.nameOf(acct) ?? acct), tag: mid ? null : this.d.store.tagOf(acct), look: this.d.store.lookOf(acct),
       gainLeft: Math.max(0, receiverDailyCap - this.d.game.world.dayNet(acct, 'coin', day)), gainCap: receiverDailyCap,
     };
   }

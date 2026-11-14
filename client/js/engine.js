@@ -341,7 +341,7 @@ function buildWorldCache(m){
   m.buildings.forEach(function(b){
     if (b.kind === 'mart') Sp.drawMart(g, b.x*T, b.y*T);
     else if (b.kind === 'casino' && !m.layout){ if (Sp.drawCasino) Sp.drawCasino(g, b.x*T, b.y*T); else Sp.drawHouse(g, b.x*T, b.y*T, 2, false); }
-    else if (PUBLIC_KINDS[b.kind] && Sp.drawPublic) Sp.drawPublic(g, b.kind, b.x*T, b.y*T, b.w, b.h);
+    else if (PUBLIC_KINDS[b.kind] && Sp.drawPublic) Sp.drawPublic(g, b.kind, b.x*T, b.y*T, b.w, b.h, false, b.level);
     else Sp.drawHouse(g, b.x*T, b.y*T, b.style, !b.invited);
   });
   if (m.layout && m.layout.lots) drawLots(g, m);

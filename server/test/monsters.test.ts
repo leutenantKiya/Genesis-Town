@@ -120,29 +120,6 @@ test('roaming monsters: walking into one starts a fight, beating it drops wood o
   if (far) assert.throws(() => w.game.act(P, { action: 'engage', monster: far.id, pos: stand }), /nothing here/);
 });
 
-test('rain waters planted plots by itself, once per rainy day', async () => {
-  const w = await world();
-  const L = w.game.map!.layout;
-  const farm = (L as unknown as { farm: { plots: Array<{ x: number; y: number }> } }).farm;
-  const plot = farm.plots[0];
-  const stand = [[0, 1], [0, -1], [1, 0], [-1, 0]].map(([dx, dy]) => ({ x: plot.x + dx, y: plot.y + dy })).find((p) => w.game.map!.walkable(p.x, p.y)) ?? { x: plot.x, y: plot.y + 1 };
-  // find a dry day in a growing season to plant, then wait for rain
-  let guard = 0;
-  while ((w.game.weather()!.wet || w.game.clock.time().season === 'dingin') && guard++ < 200) w.nowAdd(w.econ.time.realMsPerGameHour * 24);
-  w.nowAdd(60_000);
-  w.game.act(P, { action: 'farm', op: 'till', plot: 0, pos: stand });
-  w.nowAdd(1000);
-  w.game.act(P, { action: 'farm', op: 'plant', plot: 0, pos: stand });
-  guard = 0;
-  while (!w.game.weather()!.wet && guard++ < 200) w.nowAdd(w.econ.time.realMsPerGameHour * 24);
-  assert.ok(w.game.weather()!.wet, 'a rainy day came');
-  const s1 = w.game.state(P) as { plots: Array<{ grown: number; wateredToday: boolean }>; weather: { label: string } };
-  assert.equal(s1.weather.label, 'Rain');
-  assert.equal(s1.plots[0].wateredToday, true);
-  const g = s1.plots[0].grown;
-  assert.equal((w.game.state(P) as { plots: Array<{ grown: number }> }).plots[0].grown, g, 'only once per day');
-});
-
 test('a monster bonus at 02:00 lands on the same ledger day as every other write (the settle day, not the calendar day)', async () => {
   const w = await world();
   w.advanceTo(2);

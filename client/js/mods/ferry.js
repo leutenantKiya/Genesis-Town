@@ -1,18 +1,21 @@
 /*
- * ferry.js - the public boat between the public village's mainland shore and the island in its bottom-right corner (the 'danau'
- * chunk, which no path reaches). GTVillage.ferryOf(layout) gives the two docks: a boat floats on a water tile beside each landing.
- * Walk up to a landing (or face the boat), press Space / F / the action button, or click the boat: the server's 'boat' act (op 'board')
- * puts you in the boat. Then YOU steer it with the normal movement keys / joystick over water only (GT.setBoatWalk, GTVillage.boatWater: the
- * same tiles the server accepts; land is closed) and the camera follows. Press the action key next to a shore to step off onto that land
- * (act 'boat' op 'land', the tile must touch the boat). The boats at the docks always wait there for the next passenger.
- * Boats: 2D sprites drawn here under the characters; in 2.5D real 3D models (three/fun.js GT3.Boats), which read window.GT_FERRY.sail.
+ * ferry.js - the public village's ONE boat, between the mainland shore and the island in the bottom-right corner (the 'danau' chunk,
+ * which no path reaches). The boat floats wherever it was last left (the server keeps its tile and presence tells every client:
+ * `boat` {x, y, by, name, mine}); it starts at the mainland dock (GTVillage.ferryOf(layout).wa) and an unused boat sails home by itself.
+ * Stand on land next to the boat (or face it), press Space / F / the action button, or click the boat: the server's 'boat' act
+ * (op 'board') puts you in it, unless someone else steers it ("Perahu sedang dipakai X"). Then YOU steer it with the normal movement
+ * keys / joystick over water only (GT.setBoatWalk, GTVillage.boatWater: the same tiles the server accepts; land is closed) and the
+ * camera follows. Press the action key next to a shore to step off onto that land (act 'boat' op 'land', the tile must touch the boat).
+ * While somebody steers, everyone else sees the boat follow that player (GT_PLAYERS.where).
+ * Boat: a 2D sprite drawn here under the characters; in 2.5D a real 3D model (three/fun.js GT3.Boats) reading window.GT_FERRY.pos.
  */
 (function () {
   'use strict';
   var GT = window.GT;
   if (!GT) return;
-  var busy = false, aboard = false, yaw = 0, lastX = 0, lastY = 0;
-  var FERRY = window.GT_FERRY = { sail: null };
+  var busy = false, aboard = false, yaw = 0, lastX = 0, lastY = 0, hooked = false, boardedAt = 0;
+  var boat = null; // the shared boat as the server last said: { x, y, by, name, mine }
+  var FERRY = window.GT_FERRY = { pos: null };
   var DV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
   function sfx(n, o) { try { window.GT_SFX && GT_SFX.play(n, o); } catch (e) { /* sound must never break the game */ } }
@@ -23,8 +26,11 @@
     if (world() !== 'public' || !L || !V || !V.ferryOf) return null;
     try { return V.ferryOf(L); } catch (e) { return null; }
   }
-  function near(p, q) { return Math.abs(Math.round(p.x) - q.x) + Math.abs(Math.round(p.y) - q.y) <= 1; }
-  function landing() { var f = ferry(), p = GT.player; if (aboard || !f || !p || !GT.scene || GT.scene.kind !== 'out') return null; return near(p, f.a) ? 'a' : near(p, f.b) ? 'b' : null; }
+    function near(p, q) { return Math.abs(Math.round(p.x) - Math.round(q.x)) + Math.abs(Math.round(p.y) - Math.round(q.y)) <= 1; }
+  // the tile the boat floats on (where the server has it)
+  function tile() { var f = ferry(); return boat ? { x: boat.x, y: boat.y } : f ? { x: f.wa.x, y: f.wa.y } : null; }
+  function landing() { var t = tile(), p = GT.player; if (aboard || !t || !p || !GT.scene || GT.scene.kind !== 'out') return false; return near(p, t); }
+  function otherSteers() { return !!(boat && boat.by && !boat.mine); }
 
   // the land tiles that touch the boat, the one it faces first
   function shores() {
@@ -39,16 +45,18 @@
   }
 
   function row() {
-    var C = window.GT_CHAIN, f = ferry(), which = landing();
-    if (busy || aboard || !f || !which) return;
+    var C = window.GT_CHAIN, f = ferry(), p = GT.player;
+    if (busy || aboard || !f || !landing()) return;
     if (!C || !C.state || !C.state.account) { GT.toast($t('Masuk dulu untuk naik perahu.')); return; }
+    if (otherSteers()) { GT.toast($t('Perahu sedang dipakai {0}.', [boat.name || '?'])); return; }
     busy = true;
+    var fromX = p.x, fromY = p.y;
     C.act({ action: 'boat', op: 'board', world: 'public' }, true).then(function (r) {
       if (!r || !r.arrive || !r.aboard) return;
-      var land = which === 'a' ? f.a : f.b;
-      aboard = true;
-      yaw = Math.atan2(r.arrive.x - land.x, r.arrive.y - land.y) + Math.PI / 2;
-      FERRY.sail = { x: r.arrive.x, y: r.arrive.y, yaw: yaw, fromIdx: which === 'a' ? 0 : 1 };
+      aboard = true; boardedAt = performance.now();
+      yaw = Math.atan2(r.arrive.x - fromX, r.arrive.y - fromY) + Math.PI / 2;
+      boat = { x: r.arrive.x, y: r.arrive.y, by: 'me', mine: true, name: '' };
+      FERRY.pos = { x: r.arrive.x, y: r.arrive.y, yaw: yaw };
       lastX = r.arrive.x; lastY = r.arrive.y;
       GT.setBoatWalk(function (x, y) { return window.GTVillage.boatWater(layout(), x, y); }, r.arrive.x, r.arrive.y);
       GT.toast('⛵ ' + $t('Kamu naik perahu. Kemudikan dengan tombol gerak; Spasi di dekat pantai untuk turun.'));
@@ -61,20 +69,50 @@
     if (busy || !aboard) return;
     if (!c.length) { GT.toast($t('Dekati pantai dulu, lalu Spasi untuk turun.')); return; }
     busy = true;
-    var tile = c[0];
-    C.act({ action: 'boat', op: 'land', world: 'public', x: tile.x, y: tile.y }, true).then(function (r) {
+    var tile0 = c[0], at = { x: GT.player.x, y: GT.player.y };
+    C.act({ action: 'boat', op: 'land', world: 'public', x: tile0.x, y: tile0.y }, true).then(function (r) {
       if (!r || !r.arrive || r.aboard) return;
-      aboard = false; FERRY.sail = null;
+      aboard = false;
+      boat = { x: at.x, y: at.y, by: null, mine: false, name: '' }; // it stays where you left it
       GT.setBoatWalk(null, r.arrive.x, r.arrive.y);
       sfx('ui_close');
       GT.toast('⛵ ' + $t('Kamu turun dari perahu.'));
     }, function () { /* act() already said why */ }).then(function () { busy = false; });
   }
 
+  // where the boat is drawn now: under me while I steer, under the steerer while another does, else on its tile
+  function place() {
+    var t = tile();
+    if (aboard) { var p = GT.player; return { x: p.sx != null ? p.sx : p.x, y: p.sy != null ? p.sy : p.y }; }
+    if (boat && boat.by && window.GT_PLAYERS && GT_PLAYERS.where) {
+      var q = null; try { q = GT_PLAYERS.where(boat.by); } catch (e) { q = null; }
+      if (q) return q;
+    }
+    return t;
+  }
+
+  function hook() {
+    if (hooked || !window.GT_PLAYERS || !GT_PLAYERS.onPresence) return;
+    hooked = true;
+    GT_PLAYERS.onPresence(function (r) {
+      if (!r || r.world !== 'public' || r.boat === undefined) return;
+      if (aboard && performance.now() - boardedAt < 3000) return; // my own boarding is newer than this answer
+      boat = r.boat ? { x: r.boat.x, y: r.boat.y, by: r.boat.by || null, mine: !!r.boat.mine, name: r.boat.name || '' } : null;
+    });
+  }
+
   function onFrame() {
-    if (!aboard) return;
-    if (world() !== 'public' || !GT.scene || GT.scene.kind !== 'out') { aboard = false; FERRY.sail = null; GT.setBoatWalk(null, GT.player.x, GT.player.y); return; }
-    var p = GT.player, x = p.sx != null ? p.sx : p.x, y = p.sy != null ? p.sy : p.y, dx = x - lastX, dy = y - lastY;
+    hook();
+    var f = ferry();
+    if (!f) { FERRY.pos = null; return; }
+    if (aboard) {
+      if (world() !== 'public' || !GT.scene || GT.scene.kind !== 'out') { aboard = false; GT.setBoatWalk(null, GT.player.x, GT.player.y); return; }
+      if (boat && !boat.mine && performance.now() - boardedAt > 3000) { // the server let go of me (I went silent): back on the mainland dock
+        aboard = false; GT.setBoatWalk(null, f.a.x, f.a.y); GT.toast('⛵ ' + $t('Perahu kembali ke dermaga.'));
+      }
+    }
+    var pl = place(), x = pl.x, y = pl.y, dx = x - lastX, dy = y - lastY;
+    if (!FERRY.pos) { yaw = Math.atan2(f.a.x - f.wa.x, f.a.y - f.wa.y) + Math.PI / 2; lastX = x; lastY = y; dx = dy = 0; }
     if (Math.abs(dx) + Math.abs(dy) > 0.002) {
       var ty = Math.atan2(dx, dy) + Math.PI / 2, d = ty - yaw;
       while (d > Math.PI) d -= 2 * Math.PI;
@@ -82,23 +120,23 @@
       yaw += d * 0.25;
     }
     lastX = x; lastY = y;
-    FERRY.sail.x = x; FERRY.sail.y = y; FERRY.sail.yaw = yaw;
+    FERRY.pos = { x: x, y: y, yaw: yaw };
   }
 
   function onInteract(ctx) {
     if (ctx.scene.kind !== 'out' || ctx.npc || ctx.mode === 'message') return false;
     if (aboard) { if (ctx.mode === 'talk') land(); return true; }
-    var f = ferry(), t = ctx.tile;
-    if (!f || !t) return false;
-    var onBoat = (t.x === f.wa.x && t.y === f.wa.y) || (t.x === f.wb.x && t.y === f.wb.y);
+    var t0 = tile(), t = ctx.tile;
+    if (!ferry() || !t0 || !t) return false;
+    var onBoat = t.x === t0.x && t.y === t0.y;
     if (!onBoat && !(ctx.mode === 'talk' && landing())) return false;
     if (ctx.mode === 'bump') return true; // walking into the boat does not row it
-    if (!landing()) { GT.toast($t('Dekati dermaga dulu, lalu naik perahu.')); return true; }
+    if (!landing()) { GT.toast($t('Dekati perahu dulu, lalu naik.')); return true; }
     row();
     return true;
   }
 
-  /* a small rowing boat on the water tile: hull, a plank seat, an oar (2D only; the 2.5D view has real models) */
+  /* a small rowing boat on the water tile: hull, a plank seat, an oar (2D only; the 2.5D view has a real model) */
   function drawBoat(g, x, y, T) {
     var u = T / 12;
     g.fillStyle = '#2a2430'; g.fillRect(x + 1 * u, y + 5 * u, 10 * u, 5 * u);
@@ -108,20 +146,16 @@
     g.fillStyle = '#e0bc80'; g.fillRect(x + 5 * u, y + 6 * u, 2 * u, 1 * u);
     g.fillStyle = '#6a4020'; g.fillRect(x + 9 * u, y + 2 * u, 1 * u, 7 * u);
   }
-  // 2D boats on the ground layer, so the player (drawn after) sits in the boat they ride
+  // the boat on the ground layer, so the player (drawn after) sits in the boat they ride
   function onDrawGround(ctx, camX, camY, T) {
     if (GT.view3dOn && GT.view3dOn()) return;
-    var f = ferry(); if (!f) return;
-    var t = performance.now() / 1000;
-    [[f.wa, 0], [f.wb, 1]].forEach(function (d) {
-      if (aboard && FERRY.sail && FERRY.sail.fromIdx === d[1]) return; // its boat is out on the water
-      drawBoat(ctx, d[0].x * T - camX, d[0].y * T - camY + Math.round(Math.sin(t * 1.6 + d[1] * 2) * 0.6), T);
-    });
-    if (aboard && FERRY.sail) drawBoat(ctx, FERRY.sail.x * T - camX, FERRY.sail.y * T - camY + Math.round(Math.sin(t * 3) * 0.8), T);
+    var P = FERRY.pos; if (!P || !ferry()) return;
+    var t = performance.now() / 1000, moving = aboard || (boat && boat.by);
+    drawBoat(ctx, P.x * T - camX, P.y * T - camY + Math.round(Math.sin(t * (moving ? 3 : 1.6)) * (moving ? 0.8 : 0.6)), T);
   }
   function onDraw(ctx, camX, camY, T) {
-    var f = ferry();
-    if (!f) return;
+    var P = FERRY.pos;
+    if (!P || !ferry()) return;
     var v3 = GT.view3dOn && GT.view3dOn(), p = GT.player;
     if (aboard) { // the hint over the boat: where you can step off
       if (!window.GT_THEME || !GT_THEME.label || !shores().length) return;
@@ -129,17 +163,15 @@
       GT_THEME.label(ctx, '⛵ ' + $t('Spasi: turun ke darat'), pb.x + T / 2, v3 ? pb.y - 4 : pb.y - T * 0.9, { tone: 'dark', size: 6, bold: true });
       return;
     }
-    var which = landing();
-    // a small sign over each boat: Perahu, and where it goes
-    if (window.GT_THEME && GT_THEME.label) [[f.wa, $t('Ke pulau seberang')], [f.wb, $t('Ke daratan')]].forEach(function (d) {
-      var a = GT.at(d[0].x, d[0].y);
-      GT_THEME.label(ctx, '⛵ ' + $t('Perahu') + ' · ' + d[1], a.x + T / 2, v3 ? a.y + T - 8 : a.y - 1, { tone: 'paper', size: 6, bold: true });
-    });
-    if (!which) return;
-    // the hint floats over the player, in world coordinates like the boats
-    var txt = '⛵ ' + (which === 'a' ? $t('Spasi: naik perahu ke pulau seberang') : $t('Spasi: naik perahu ke daratan'));
+    // one small sign over the boat
+    if (window.GT_THEME && GT_THEME.label) {
+      var a = GT.at(P.x, P.y);
+      GT_THEME.label(ctx, '⛵ ' + $t('Perahu'), a.x + T / 2, v3 ? a.y + T - 8 : a.y - 1, { tone: 'paper', size: 6, bold: true });
+    }
+    if (!landing() || otherSteers()) return;
+    // the hint floats over the player, in world coordinates like the boat
     var pa = GT.at(p.x, p.y);
-    GT_THEME.label(ctx, txt, pa.x + T / 2, v3 ? pa.y - 4 : pa.y - T * 0.9, { tone: 'dark', size: 6, bold: true });
+    GT_THEME.label(ctx, '⛵ ' + $t('Spasi: naik perahu'), pa.x + T / 2, v3 ? pa.y - 4 : pa.y - T * 0.9, { tone: 'dark', size: 6, bold: true });
   }
 
   GT.register({ id: 'ferry', onInteract: onInteract, onFrame: onFrame, onDraw: onDraw, onDrawGround: onDrawGround });

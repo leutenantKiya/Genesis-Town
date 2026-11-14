@@ -5,7 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 export interface LedgerRow { seq: number; day: number; account: string; token: string; delta: number; kind: string; ref: string | null; settled: number; created_at: number }
 export interface PlayerState { account: string; energy: number; energy_hour: number; tool_uses: number }
-export interface Plot { account: string; idx: number; state: 'empty' | 'tilled' | 'planted' | 'ready'; planted_day: number; grown: number; watered_day: number; planter: string }
+export interface Plot { account: string; idx: number; state: 'empty' | 'tilled' | 'planted' | 'ready'; planted_at: number; planter: string }
 export interface MarketRow { merchant: string; token: string; mid: number; bought: number; sold: number; ask: number; bid: number; reason: string; change_pct: number; hour: number }
 
 
@@ -69,6 +69,7 @@ export class GameStore {
     const ic = (this.db.prepare('PRAGMA table_info(homeland_invites)').all() as Array<{ name: string }>).map((c) => c.name);
     const pc = (this.db.prepare('PRAGMA table_info(plots)').all() as Array<{ name: string }>).map((c) => c.name);
     if (!pc.includes('planter')) this.db.exec("ALTER TABLE plots ADD COLUMN planter TEXT NOT NULL DEFAULT ''");
+    if (!pc.includes('planted_at')) this.db.exec('ALTER TABLE plots ADD COLUMN planted_at INTEGER NOT NULL DEFAULT 0'); // ms since epoch; the old day-based columns stay unused
     if (!hc.includes('party_role')) this.db.exec('ALTER TABLE homelands ADD COLUMN party_role TEXT');
     if (!ic.includes('role')) this.db.exec("ALTER TABLE homeland_invites ADD COLUMN role TEXT NOT NULL DEFAULT 'visitor'");
     if (!bc.includes('house')) this.db.exec("ALTER TABLE homeland_bots ADD COLUMN house TEXT NOT NULL DEFAULT ''");
@@ -201,9 +202,9 @@ export class GameStore {
     return this.db.prepare('SELECT * FROM plots WHERE account = ? ORDER BY idx').all(account) as unknown as Plot[];
   }
   savePlot(p: Plot) {
-    this.db.prepare(`INSERT INTO plots (account, idx, state, planted_day, grown, watered_day, planter) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(account, idx) DO UPDATE SET state = excluded.state, planted_day = excluded.planted_day, grown = excluded.grown, watered_day = excluded.watered_day, planter = excluded.planter`)
-      .run(p.account, p.idx, p.state, p.planted_day, p.grown, p.watered_day, p.planter ?? '');
+    this.db.prepare(`INSERT INTO plots (account, idx, state, planted_at, planter) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(account, idx) DO UPDATE SET state = excluded.state, planted_at = excluded.planted_at, planter = excluded.planter`)
+      .run(p.account, p.idx, p.state, p.planted_at, p.planter ?? '');
   }
 
   node(key: string): { key: string; charges: number; refill_hour: number } | undefined {

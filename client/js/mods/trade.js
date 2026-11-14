@@ -391,6 +391,42 @@
     }, fail);
   }
 
+  /* ---- the Papan Juara under the pointer: a glowing outline on hover; a click opens it when you stand near (3 tiles) ---- */
+  var boardHover = false, hoverT = 0, BOARD_NEAR = 3;
+  function boardAt(cx, cy) {
+    var m = marks(); if (!m || !GT.scene || GT.scene.kind !== 'out' || !GT.screenToTile) return false;
+    var t = GT.screenToTile(cx, cy); if (!t) return false;
+    var v3 = GT.view3dOn && GT.view3dOn();
+    // the board stands up from its tile: in 2.5D the pointer on its face reads as the tile or the one or two behind it
+    return t.x === m.board.x && t.y <= m.board.y && t.y >= m.board.y - (v3 ? 2 : 0);
+  }
+  function onBoardMove(e) {
+    var now = performance.now(); if (now - hoverT < 50) return; hoverT = now;
+    var cv = document.getElementById('cv');
+    var on = !GT.isUiOpen() && e.target === cv && boardAt(e.clientX, e.clientY);
+    if (on !== boardHover) { boardHover = on; if (cv) cv.style.cursor = on ? 'pointer' : ''; }
+  }
+  function onBoardClick(e) {
+    if (e.button !== 0 || GT.isUiOpen() || !e.target || e.target.id !== 'cv') return;
+    if (window.GT_VIEW3D && GT_VIEW3D.tookClick && GT_VIEW3D.tookClick()) return; // the end of a drag, not a click
+    if (!boardAt(e.clientX, e.clientY)) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    var m = marks(), p = GT.player;
+    if (Math.abs(p.x - m.board.x) + Math.abs(p.y - m.board.y) > BOARD_NEAR) { GT.toast($t('Dekati Papan Juara untuk membacanya.')); return; }
+    boardModal('day');
+  }
+  function drawBoardHover(ctx, T, v3) {
+    if (!boardHover || GT.isUiOpen()) { boardHover = boardHover && !GT.isUiOpen(); return; }
+    var m = marks(); if (!m) return;
+    var a = GT.at(m.board.x, m.board.y), pulse = 0.5 + 0.5 * Math.sin(Date.now() / 260);
+    var x = a.x - 2, y = v3 ? a.y + T - UP3 - 2 : a.y - 1, w = T + 4, h = v3 ? UP3 + 4 : T + 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,224,120,.9)'; ctx.shadowBlur = 4 + 6 * pulse;
+    ctx.strokeStyle = 'rgba(255,240,170,' + (0.75 + 0.25 * pulse).toFixed(2) + ')'; ctx.lineWidth = Math.max(1, T / 10); ctx.lineJoin = 'round';
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  }
+
   /* ---------------------------------------------------------------- engine hooks */
   function onInteract(ctx) {
     if (ctx.scene.kind !== 'out' || ctx.mode !== 'talk' || ctx.npc) return false;
@@ -426,7 +462,7 @@
   }
   // the public buildings' signs: kind -> icon + name (the Mall, the casino and the news hall read from afar; the rest are the village's services)
   var BUILD_SIGNS = {
-    hall: ['🏛️', 'Balai Desa'], broker: ['📜', 'Kantor Makelar'], post: ['✉️', 'Kantor Pos'], warung: ['☕', 'Warung Kopi'],
+    hall: ['🏰', 'Guild'], broker: ['📜', 'Kantor Makelar'], post: ['✉️', 'Kantor Pos'], warung: ['☕', 'Warung Kopi'],
     mall: ['🛍️', 'Mall'], casino: ['🎰', 'Kasino'], papan: ['📰', 'Balai Berita'], tambangpub: ['⛏️', 'Tambang Umum']
   };
   var UP3 = 15; // 2.5D: a sign's bottom edge over a prop, art px above the tile's ground point (the props stand about 1.5 tall)
@@ -452,6 +488,7 @@
         ctx.fillStyle = '#c83c3c'; ctx.fillRect(x + 3, y + 4, 1, 1); ctx.fillRect(x + 8, y + 6, 1, 1);
       }
     }
+    drawBoardHover(ctx, T, v3);
     sign(ctx, '🏆 ' + $t('Papan Juara'), a.x + T / 2, v3 ? a.y + T - UP3 : a.y - 1, placed);
     (L && L.buildings || []).forEach(function (b) {
       var s = BUILD_SIGNS[b.kind]; if (!s) return;
@@ -465,6 +502,8 @@
     C = window.GT_CHAIN || null;
     // the player card (mods/players.js) has its own Trade button and calls GT_TRADE.start
     window.GT_TRADE = { start: startWith, board: boardModal, fly: flyStart };
+    window.addEventListener('mousemove', onBoardMove);
+    window.addEventListener('click', onBoardClick, true);
   }
   GT.register({ id: 'trade', init: function (g) { init(g); g.register({ id: 'trade-fx', onDraw: drawFly }); }, onInteract: onInteract, onFrame: onFrame, onDraw: onDraw });
 })();

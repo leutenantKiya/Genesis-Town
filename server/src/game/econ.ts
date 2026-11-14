@@ -70,7 +70,7 @@ export interface Econ {
   gather: { tiles: Record<string, string>; charges: number; respawnGameHours: number; energyCost: number; energyMax: number; energyRegenPerHour: number };
   /** Searching grass for a Wheat seed (act `grass`): next to a grass tile, a small chance per try, a few finds a day. The seed is the farm's own token (no new token). */
   grass?: { token: string; tiles: string[]; chance: number; energyCost: number; dailyMax: number; cooldownSecs: number };
-  farm: { plots: number; seed: string; growDays: number; harvest: number; noGrowthSeasons: string[]; energyCost: number; villageSeedsPerDay?: number };
+  farm: { plots: number; seed: string; growSecs: number; harvest: number; noGrowthSeasons: string[]; energyCost: number; villageSeedsPerDay?: number };
   seasons: Record<string, SeasonDef>;
   merchants: Record<string, MerchantDef>;
   personalities: Record<string, Personality>;

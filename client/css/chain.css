@@ -346,6 +346,25 @@ html.gt-phone .gt-slot-dur{left:3px;right:3px}
 /* Admin window (admin.js) and the chip exchange (casino.js) */
 .adm-card{background:var(--paper-2);border:var(--line) solid var(--paper-dim);border-radius:var(--r-win);padding:10px 12px;margin:8px 0}
 .adm-card .chain-h{margin-top:0}
+.gt-tool-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.gt-tool-card{flex-wrap:wrap;align-content:flex-start}
+.gt-tool-card .gt-tool-acts{flex-direction:row;width:100%}
+.gt-tool-card .gt-tool-acts .mbtn{flex:1}
+html.gt-phone:not(.gt-land) .gt-tool-grid{grid-template-columns:minmax(0,1fr)}
+.adm-sugg{display:flex;flex-direction:column;gap:2px;margin:-4px 0 6px}
+.adm-sugg:empty{display:none}
+.adm-sugg-row,.adm-acct{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;text-align:left;width:100%;padding:6px 10px;background:var(--paper);color:var(--paper-ink);border:var(--line) solid var(--paper-dim);border-radius:var(--r-ctl);cursor:pointer;font:inherit}
+.adm-sugg-row:hover,.adm-acct:hover,.adm-acct.on{border-color:var(--paper-ink);background:var(--paper-hi)}
+.adm-sugg-n{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adm-sugg-a{grid-column:1 / -1;font-size:calc(12px*var(--ts));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adm-accts{display:flex;flex-direction:column;gap:4px}
+.adm-role{font-size:calc(12px*var(--ts));padding:0 6px;border-radius:var(--r-ctl);background:var(--paper-2);border:1px solid var(--paper-dim)}
+.adm-role.admin{background:#f2c94c;color:#2a2010}.adm-role.npc{background:#7fd1a8;color:#10261a}
+.adm-wallet{background:var(--paper);border:var(--line) solid var(--paper-ink);border-radius:var(--r-ctl);padding:8px 10px;margin:6px 0 10px}
+.adm-wallet-h{display:flex;align-items:center;gap:8px}.adm-wallet-h b{flex:1}
+.adm-wtable{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 14px;margin:8px 0}
+.adm-wtable span.gt-data,.adm-wtable b:not(:first-child){text-align:right}
+.adm-diff{color:#b05a10}
 .adm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .adm-stat{background:var(--paper);border-radius:var(--r-ctl);padding:6px 10px}
 .adm-num{font-size:calc(20px*var(--ts));font-weight:700}

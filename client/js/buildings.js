@@ -29,6 +29,9 @@
     broker: { roof: '#3c7a48', roofD: '#24502e', roofL: '#68a870', wall: '#efe4cc', wallD: '#d0c0a0', sign: '#fff8e4' },
     warung: { roof: '#8a5a30', roofD: '#5a3a1e', roofL: '#b07a44', wall: '#c89a62', wallD: '#a87a48', sign: '#fff0d8' },
     townhall: { roof: '#2f5fa8', roofD: '#1c3c70', roofL: '#5c8ed8', wall: '#f2e8cc', wallD: '#d8c89c', sign: '#fff6d8' },
+    // the Town Hall at level 2 and 3 (S.styleFor): a teal roof, then a red roof with a gold edge
+    townhall2: { roof: '#2a8a86', roofD: '#165a58', roofL: '#5cbab4', wall: '#f4ecd4', wallD: '#d8c89c', sign: '#fff6d8' },
+    townhall3: { roof: '#b23a32', roofD: '#701f1c', roofL: '#e2684e', wall: '#fbf2dc', wallD: '#e0cfa0', sign: '#fff2c0' },
     kolam:    { roof: '#2a7ab0', roofD: '#1a4e78', roofL: '#5cb0e0', wall: '#e4f0ec', wallD: '#bcd4cc', sign: '#f2fbff' },
     tambang:  { roof: '#5c5868', roofD: '#3a3644', roofL: '#8a8698', wall: '#a8a2a0', wallD: '#847e80', sign: '#ece8e0' },
     restoran: { roof: '#b8422e', roofD: '#7a2a1e', roofL: '#e0705a', wall: '#f6e4c8', wallD: '#dcc09a', sign: '#fff4dc' },
@@ -75,7 +78,8 @@
     icon(g, cx, y + 1);
   }
   var ICON = {
-    hall: function (g, cx, y) { R(g, cx - 3, y + 1, 1, 5, '#6a4020'); R(g, cx - 2, y + 1, 5, 2, '#d83c3c'); R(g, cx - 2, y + 3, 5, 2, '#f8f8f8'); },
+    // the NEAR logo on a little flag (NEAR green, a black N), like the flag on the roof
+    hall: function (g, cx, y) { R(g, cx - 3, y + 1, 1, 5, '#6a4020'); R(g, cx - 2, y + 1, 5, 4, '#00ec97'); R(g, cx - 1, y + 2, 1, 2, '#000'); R(g, cx + 1, y + 2, 1, 2, '#000'); R(g, cx, y + 2, 1, 1, '#000'); },
     church: function (g, cx, y) { R(g, cx - 1, y, 2, 6, '#c8a030'); R(g, cx - 3, y + 2, 6, 2, '#c8a030'); },
     clinic: function (g, cx, y) { R(g, cx - 1, y, 2, 6, '#d83c3c'); R(g, cx - 3, y + 2, 6, 2, '#d83c3c'); },
     post: function (g, cx, y) { R(g, cx - 4, y + 1, 8, 5, '#f0c050'); R(g, cx - 4, y + 1, 8, 1, '#8e4a1c'); R(g, cx - 3, y + 2, 2, 1, '#8e4a1c'); R(g, cx + 1, y + 2, 2, 1, '#8e4a1c'); R(g, cx - 1, y + 3, 2, 1, '#8e4a1c'); },
@@ -109,8 +113,11 @@
     R(g, x - 1, y - 1, 4, 1, '#3a3a3a'); R(g, x, y, 2, 1, '#3a3a3a'); R(g, x, y + 1, 2, 3, '#f8d048'); R(g, x, y + 1, 1, 1, '#fff2a0'); R(g, x, y + 4, 2, 1, '#3a3a3a');
   }
 
-  function build(kind, wt, ht, bare) {
-    var st = STYLE[kind], w = wt * TILE, h = ht * TILE, cv = mk(w, h), g = cv.getContext('2d');
+  function styleFor(kind, level) { return (kind === 'townhall' && level > 1 && STYLE['townhall' + Math.min(3, level)]) || STYLE[kind]; }
+  S.styleFor = styleFor;
+  function build(kind, wt, ht, bare, level) {
+    level = Math.max(1, Math.min(3, level | 0 || 1));
+    var st = styleFor(kind, level), w = wt * TILE, h = ht * TILE, cv = mk(w, h), g = cv.getContext('2d');
     var cx = Math.floor(wt / 2) * TILE + TILE / 2; // middle of the door column
     var roofRows = Math.round(h * 0.38), wallTop = roofRows + 2;
     if (kind === 'church') {
@@ -201,6 +208,20 @@
     }
     if (kind === 'kolam') { R(g, 2, h - 6, w - 4, 2, '#3d7fc2'); R(g, 2, h - 6, w - 4, 1, '#9ad8ff'); }
     if (HOME[kind]) homeTrim(g, w, h, wallTop, kind);
+    if (kind === 'townhall' && level >= 2) {
+      // level 2: lanterns beside the door, a dressed stone foot
+      lantern(g, cx - 13, h - 22); lantern(g, cx + 11, h - 22);
+      R(g, 2, h - 6, w - 4, 2, '#a8a090'); for (var sx2 = 3; sx2 < w - 3; sx2 += 6) R(g, sx2, h - 6, 1, 2, '#6e685c');
+    }
+    if (kind === 'townhall' && level >= 3) {
+      // level 3: a gold edge along the roof, two NEAR pennants over the windows and a gold crest over the sign
+      R(g, 0, roofRows - 1, w, 2, '#e8c050'); R(g, 0, roofRows - 1, w, 1, '#fff0a0');
+      [9, w - 14].forEach(function (bx) { // a small NEAR pennant over each front window, hung from the gold edge
+        R(g, bx, wallTop, 7, 5, OL); R(g, bx + 1, wallTop, 5, 4, '#00ec97');
+        R(g, bx + 2, wallTop + 1, 1, 2, '#000'); R(g, bx + 4, wallTop + 1, 1, 2, '#000'); R(g, bx + 3, wallTop + 1, 1, 1, '#000');
+      });
+      R(g, cx - 4, h - 31, 8, 5, OL); R(g, cx - 3, h - 30, 6, 3, '#e8c050'); R(g, cx - 1, h - 31, 2, 1, '#fff0a0');
+    }
     if (medieval) { pennant(g, 5); lantern(g, cx - 10, h - 22); lantern(g, cx + 8, h - 22); }
     sign(g, cx, h - 24, st, ICON[kind]);
     door(g, cx, h - 1, kind === 'clinic' || kind === 'rumahsakit' ? '#5cb8b0' : kind === 'rumah' ? '#6a4020' : kind === 'post' ? '#c86028' : kind === 'gudang' ? '#f2ead8' : kind === 'casino' ? '#8a2a3a' : kind === 'papan' ? '#6a4020' : null);
@@ -241,10 +262,12 @@
 
   var cache = {};
   // bare: without what the 2.5D view models for itself (the windmill's sails)
-  S.drawPublic = function (g, kind, x, y, wt, ht, bare) {
+  // level: the private Town Hall's look (1-3); other kinds ignore it
+  S.drawPublic = function (g, kind, x, y, wt, ht, bare, level) {
     if (!STYLE[kind]) return S.drawHouse(g, x, y, 0, false);
-    var key = kind + ':' + wt + 'x' + ht + (bare ? ':bare' : '');
-    var c = cache[key] || (cache[key] = build(kind, wt, ht, !!bare));
+    var lv = kind === 'townhall' ? Math.max(1, Math.min(3, level | 0 || 1)) : 1;
+    var key = kind + ':' + wt + 'x' + ht + (bare ? ':bare' : '') + (lv > 1 ? ':L' + lv : '');
+    var c = cache[key] || (cache[key] = build(kind, wt, ht, !!bare, lv));
     g.drawImage(c, Math.round(x), Math.round(y));
   };
 

@@ -26,7 +26,7 @@
 
   function styleOf(b) {
     var pub = S.PUBLIC_STYLE && S.PUBLIC_STYLE[b.kind];
-    if (pub) return { st: pub, pub: true };
+    if (pub) return { st: (S.styleFor ? S.styleFor(b.kind, b.level) : null) || pub, pub: true }; // the Town Hall's roof follows its level
     var hs = S.HOUSE_STYLES || [];
     return { st: hs[(((b.style | 0) % hs.length) + hs.length) % hs.length] || { roof: '#b8442e', roofD: '#7a2a22', roofL: '#e2774a', wall: '#f2e2c4', wallD: '#d8bc94' }, pub: false };
   }
@@ -86,7 +86,7 @@
 
     /* --- the 2D facade, cut below its painted roof band */
     var art = GT3.canvas(pw, ph), ag = art.getContext('2d');
-    if (pub) S.drawPublic(ag, kind, 0, 0, W, D, true); else S.drawHouse(ag, 0, 0, b.style | 0, false);
+    if (pub) S.drawPublic(ag, kind, 0, 0, W, D, true, b.level); else S.drawHouse(ag, 0, 0, b.style | 0, false);
     var inset = pub ? 1 : 2, roofPx = pub ? Math.round(ph * 0.38) + 2 : 16;
     var wallPx = ph - roofPx, Hw = wallPx * PX;
     var face = GT3.crop(art, inset, roofPx, pw - 2 * inset, wallPx);
@@ -133,6 +133,12 @@
       var px = x1 - 5 * PX;
       trim.push(box(1 * PX, 14 * PX, 1 * PX, px, ridge + 7 * PX, zc, '#6a6a6a'));
       extras.push(GT3.nearFlag(px + 5 * PX, ridge + 11.5 * PX, zc, 8 * PX, 5.5 * PX));
+      if (kind === 'townhall' && (b.level | 0) >= 3) { // level 3: a second NEAR flag on the other end and a gold ridge
+        var px2 = x0 + 5 * PX;
+        trim.push(box(1 * PX, 14 * PX, 1 * PX, px2, ridge + 7 * PX, zc, '#6a6a6a'));
+        extras.push(GT3.nearFlag(px2 + 5 * PX, ridge + 11.5 * PX, zc, 8 * PX, 5.5 * PX));
+        trim.push(box(xb - xa + 2 * PX, 1.2 * PX, 3 * PX, (xa + xb) / 2, ridge + 1.4 * PX, zc, '#e8c050'));
+      }
     }
     if (kind === 'church') {
       // bell tower over the door: its front is the tower painted in the 2D art

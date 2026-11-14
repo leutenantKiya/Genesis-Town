@@ -463,7 +463,7 @@
     var jobs = [api('/market').then(function (m) { S.market = m.merchants; })];
     if (S.account) {
       var sp = standPos();
-      jobs.push(api('/state?x=' + sp.x + '&y=' + sp.y + '&world=' + encodeURIComponent(worldNow())).then(function (st) { S.st = st; syncClock(st.time); followWorld(st.world); }));
+      jobs.push(api('/state?x=' + sp.x + '&y=' + sp.y + '&world=' + encodeURIComponent(worldNow())).then(function (st) { S.st = st; S.stAt = Date.now(); syncClock(st.time); followWorld(st.world); }));
       if (full || S.modal) jobs.push(api('/history').then(function (h) { S.history = h.history || []; }));
       if (S.modal && S.modal.kind === 'history' && !S.modal.arg && S.histFilter === 'trade') jobs.push(api('/history?kind=trade').then(function (h) { S.tradeHistory = h.history || []; }));
       if (S.modal && S.modal.kind === 'history' && S.modal.arg) {
@@ -687,7 +687,7 @@
       var nb = button($t('Buat baru'), function () { act({ action: 'maketool', tool: k }).then(refreshModal, noop); });
       nb.disabled = !(canPay(cost.make) || (cost.alt && canPay(cost.alt)));
       acts.appendChild(rb); acts.appendChild(nb); row.appendChild(acts);
-      wrap.appendChild(row);
+      grid.appendChild(row);
     });
     return wrap;
   }
@@ -900,7 +900,7 @@
   function actSound(body, r) {
     var a = body.action, tile = body.tile;
     if (a === 'gather') return tile === 'tree' ? 'chop' : tile === 'rock' ? 'mine' : tile === 'water' ? 'catch' : 'pickup';
-    if (a === 'farm') return body.op === 'plant' ? 'plant' : body.op === 'water' ? 'water' : body.op === 'harvest' ? 'harvest' : 'dig';
+    if (a === 'farm') return body.op === 'plant' ? 'plant' : body.op === 'harvest' ? 'harvest' : 'dig';
     if (a === 'hoe') return 'dig';
     if (a === 'grass') return r && r.gained && Object.keys(r.gained).length ? 'pickup' : 'ui_click'; // a seed found: the pickup chime; an empty search: a soft tap
     if (a === 'craft') return 'craft';
@@ -930,7 +930,7 @@
     body.pos = standPos();
     if (!body.world) body.world = worldNow();
     return api('/act', { method: 'POST', body: body }).then(function (r) {
-      S.st = r.state; renderHud(); redraw();
+      S.st = r.state; S.stAt = Date.now(); renderHud(); redraw();
       if (body.action === 'gather' || body.action === 'sell') markGoal(body.action);
       sfx(actSound(body, r));
       if (!quiet) GT.toast(r.toast);
@@ -1057,11 +1057,22 @@
 
   function plotAt(x, y) { for (var i = 0; i < S.plots.length; i++) if (S.plots[i].x === x && S.plots[i].y === y) return i; return -1; }
 
+  /* Wheat grows in real time: the server sends how old the crop was (ageMs) and how long it takes (growMs) when it
+     answered; we add the time since then, so the stages move smoothly between polls. 7 growing stages, then ripe (gold). */
+  var WHEAT_STAGES = 7;
+  function plotLook(p) {
+    if (p.state !== 'planted' && p.state !== 'ready') return null;
+    var el = (p.ageMs || 0) + (Date.now() - (S.stAt || Date.now())), ripe = p.state === 'ready' || el >= p.growMs + 400;
+    return { ripe: ripe, prog: ripe ? 1 : Math.min(0.999, el / p.growMs), stage: ripe ? WHEAT_STAGES : Math.min(WHEAT_STAGES - 1, Math.floor(el / p.growMs * WHEAT_STAGES)) };
+  }
+
   var pendingPlant = null;
   function farm(idx) {
     var p = S.st && S.st.plots[idx];
     if (!p) { GT.toast($t('Masuk dulu untuk bertani.')); return; }
-    var op = p.state === 'empty' ? 'till' : p.state === 'tilled' ? 'plant' : p.state === 'ready' ? 'harvest' : 'water';
+    var look = plotLook(p);
+    if (look && !look.ripe) { GT.toast($t('Gandumnya masih tumbuh ({0}%). Tunggu sampai kuning.', [Math.floor(look.prog * 100)])); return; }
+    var op = p.state === 'empty' ? 'till' : p.state === 'tilled' ? 'plant' : 'harvest';
     // Planting spends 1 Gandum, so it needs a second press within 2 seconds.
     if (op === 'plant' && !(pendingPlant && pendingPlant.idx === idx && Date.now() - pendingPlant.t < 2000)) {
       pendingPlant = { idx: idx, t: Date.now() };
@@ -1101,8 +1112,9 @@
       var own = p.planter_name ? ' · ' + $t('milik {0}', p.planter_name) : '';
       if (p.state === 'empty') return $t('Cangkul (−2 energi)');
       if (p.state === 'tilled') return have('wheat') > 0 ? $t('Tanam gandum (1 Gandum, tekan 2x)') : $t('Tanam (benih gratis dari desa, tekan 2x)');
-      if (p.state === 'ready') return $t('Panen gandum') + own;
-      return (p.wateredToday ? $t('Sudah disiram hari ini') : $t('Siram (−2 energi)')) + own;
+      var lk = plotLook(p);
+      if (lk && lk.ripe) return $t('Panen gandum') + own;
+      return $t('Gandum tumbuh ({0}%)', [Math.floor(lk.prog * 100)]) + own;
     }
     var tok = TILE_ITEM[tt];
     if (tok) {
@@ -1149,14 +1161,24 @@
       if (x < -T || y < -T || x > vw || y > vh) return;
       // an empty plot: the soil stays as it is, four light corner marks say "a plot, till me"
       if (p.state === 'empty') { ctx.fillStyle = 'rgba(240,214,160,.85)'; [[1, 1], [T - 4, 1], [1, T - 2], [T - 4, T - 2]].forEach(function (c) { ctx.fillRect(x + c[0], y + c[1], 3, 1); }); [[1, 2], [T - 2, 2], [1, T - 4], [T - 2, T - 4]].forEach(function (c) { ctx.fillRect(x + c[0], y + c[1], 1, 2); }); return; }
-      if (p.state === 'planted' && p.wateredToday) { ctx.fillStyle = 'rgba(30,20,40,.28)'; ctx.fillRect(x, y, T, T); }
-      if (p.state === 'planted') {
-        var h = 2 + p.grown * 2;
-        ctx.fillStyle = '#2f7d3a'; ctx.fillRect(x + 2, y + T - 2 - h, 2, h); ctx.fillRect(x + 6, y + T - 3 - h, 2, h + 1); ctx.fillRect(x + 9, y + T - 2 - h, 1, h);
-        ctx.fillStyle = '#7cc23e'; ctx.fillRect(x + 2, y + T - 2 - h, 1, 1); ctx.fillRect(x + 6, y + T - 3 - h, 1, 1);
-      } else if (p.state === 'ready') {
-        ctx.fillStyle = '#c99a2e'; ctx.fillRect(x + 2, y + 3, 2, 8); ctx.fillRect(x + 6, y + 2, 2, 9); ctx.fillRect(x + 9, y + 4, 2, 7);
-        ctx.fillStyle = '#f2d24a'; ctx.fillRect(x + 2, y + 2, 2, 3); ctx.fillRect(x + 6, y + 1, 2, 3); ctx.fillRect(x + 9, y + 3, 2, 3);
+      var lk = plotLook(p); if (!lk) return;
+      var u = T / 12, st = lk.stage, now = performance.now();
+      // the same stalks in both views (the 2.5D ground sheet redraws this ~8 times a second): green sprouts, taller
+      // and yellower each stage, ripe = tall and golden with a grain head. The tops sway in the wind.
+      var h = lk.ripe ? 10 * u : (1.5 + st * 1.2) * u;
+      var body = lk.ripe ? '#c99a2e' : st < 4 ? '#3f9a3c' : st < 6 ? '#7aae35' : '#b2b432';
+      var tip = lk.ripe ? '#f2d24a' : st < 4 ? '#7cc23e' : st < 6 ? '#a8d44a' : '#d6c940';
+      var cols = [2, 5, 8, 10.5];
+      for (var k = 0; k < cols.length; k++) {
+        if (st === 0 && k % 2) continue; // the youngest stage: just two sprouts
+        var hk = Math.max(1, Math.round(h - (k % 2 ? 1 : 0) * u)), bx = Math.round(x + cols[k] * u), by = y + T - Math.round(1.5 * u);
+        var sw = Math.round(Math.sin(now / 420 + (pp.x * 7 + pp.y * 13 + k * 2.1)) * (st === 0 ? 0 : st < 4 ? 0.6 : 1.1) * u);
+        var low = Math.max(1, Math.floor(hk / 2)), top = hk - low, w = Math.max(1, Math.round(u));
+        ctx.fillStyle = body; ctx.fillRect(bx, by - low, w, low);
+        ctx.fillRect(bx + Math.round(sw / 2), by - low - Math.floor(top / 2), w, Math.floor(top / 2));
+        ctx.fillStyle = tip; ctx.fillRect(bx + sw, by - hk, w, Math.max(1, top - Math.floor(top / 2)));
+        if (lk.ripe) { ctx.fillStyle = '#f7e27a'; ctx.fillRect(bx + sw - (w > 1 ? 1 : 0), by - hk - Math.round(u), w + (w > 1 ? 2 : 1), Math.max(1, Math.round(1.5 * u))); }
+        else if (st >= 2) { ctx.fillStyle = tip; ctx.fillRect(bx + sw - 1, by - hk + 1, 1, 1); ctx.fillRect(bx + sw + w, by - hk + 1, 1, 1); } // leaves
       }
     });
   }
@@ -1196,6 +1218,18 @@
     head.appendChild($('span', 'chain-dim', m.rent ? $t('Kas {0} {1} · sewa {2}/hari', [m.name, m.cash, m.rent]) : $t('Kas {0} {1}', [m.name, m.cash])));
     wrap.appendChild(head);
     if (!m.open) return restoreBody(id, m, wrap);
+    // the tool merchant has two tabs: buying and selling goods, and the tool repairs / new tools
+    if (hasToolStall(id)) {
+      var tabOf = S.shopTab || (S.shopTab = {}), cur = tabOf[id] || 'trade';
+      var tabs = $('div', 'gt-mall-tabs'); tabs.setAttribute('role', 'tablist');
+      [['trade', '🛒 ' + $t('Jual-beli')], ['tools', '🔧 ' + $t('Perbaikan')]].forEach(function (t) {
+        var b = $('button', 'gt-mall-tab' + (cur === t[0] ? ' on' : ''), t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(cur === t[0]));
+        b.addEventListener('click', function () { if (tabOf[id] === t[0]) return; tabOf[id] = t[0]; redraw(); });
+        tabs.appendChild(b);
+      });
+      wrap.appendChild(tabs);
+      if (cur === 'tools') { toolStallRows(id, m, wrap); return wrap; }
+    }
     var sel = S.shopSel && S.shopSel.id === id ? S.shopSel.token : null;
     function pick(token) { S.shopSel = { id: id, token: token }; }
     function trade(kind, token, qty) { pick(token); if (qty > 0) act({ action: kind, merchant: id, token: token, qty: qty }).then(refreshModal, refreshModal); }
@@ -1211,7 +1245,6 @@
       });
       wrap.appendChild(g1);
     }
-    toolStallRows(id, m, wrap);
     wrap.appendChild($('h4', 'chain-h', $t('Barangmu · jual ke {0}', [m.name])));
     var g2 = $('div', 'gt-grid'), byToken = {};
     m.items.forEach(function (it) { byToken[it.token] = it; });
@@ -1238,20 +1271,23 @@
 
   // The tool stall inside one merchant's shop (economy/config.json `toolShop`): a new tool or a repair for coin, paid to that merchant.
   // A repair costs less the less worn the tool is (the same arithmetic as the server's Extras.toolStall).
+  function hasToolStall(id) { var ts = S.cfg && S.cfg.econ && S.cfg.econ.toolShop; return !!(ts && ts.merchant === id && S.cfg.econ.tools && S.st && S.st.tools); }
   function toolStallRows(id, m, wrap) {
-    var ts = S.cfg && S.cfg.econ && S.cfg.econ.toolShop, defs = S.cfg && S.cfg.econ && S.cfg.econ.tools;
-    if (!ts || ts.merchant !== id || !defs || !S.st || !S.st.tools) return;
-    wrap.appendChild($('h4', 'chain-h', $t('Alat · {0}', [m.name])));
+    var ts = S.cfg && S.cfg.econ && S.cfg.econ.toolShop;
+    if (!hasToolStall(id)) return;
+    wrap.appendChild($('p', 'chain-dim', $t('Perbaiki alatmu atau beli yang baru di {0}. Makin aus alatnya, makin mahal perbaikannya.', [m.name])));
+    var grid = $('div', 'gt-tool-grid'); wrap.appendChild(grid);
     TOOL_ORDER.forEach(function (k) {
       var t = S.st.tools[k]; if (!t || !ts.price[k]) return;
-      var row = $('div', 'gt-tool' + (t.broken ? ' broken' : ''));
+      var row = $('div', 'gt-tool gt-tool-card' + (t.broken ? ' broken' : ''));
       if (window.GT_ITEMS) row.appendChild(GT_ITEMS.icon(TOOL_ICON[k], 40));
       var txt = $('div', 'grow'), full = t.uses >= t.max;
       var fix = Math.max(1, Math.ceil(ts.repair[k] * (t.max - t.uses) / t.max)), coins = have('coin');
       txt.appendChild($('b', null, toolName(k) + ' · ' + t.uses + '/' + t.max + (t.broken ? ' · ' + $t('rusak') : '')));
       var pct = Math.max(0, Math.min(1, t.uses / Math.max(1, t.max))), bar = $('div', 'gt-dur'); bar.appendChild($('i'));
       bar.firstChild.style.width = Math.round(pct * 100) + '%'; bar.firstChild.style.background = 'hsl(' + Math.round(pct * 120) + ',72%,46%)'; txt.appendChild(bar);
-      txt.appendChild($('div', 'chain-dim', full ? $t('Seperti baru.') : $t('Perbaiki {0} koin', [fix]) + ' · ' + $t('Baru {0} koin', [ts.price[k]])));
+      txt.appendChild($('div', 'chain-dim', full ? $t('Seperti baru.') : $t('Biaya perbaikan: {0} koin', [fix])));
+      txt.appendChild($('div', 'chain-dim', $t('Harga alat baru: {0} koin', [ts.price[k]])));
       row.appendChild(txt);
       var acts = $('div', 'gt-tool-acts');
       var rb = button($t('Perbaiki'), function () { act({ action: 'toolshop', op: 'repair', tool: k }).then(refreshModal, refreshModal); }, t.broken ? 'primary' : '');

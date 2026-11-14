@@ -109,19 +109,18 @@ test('petani makes homeland crops grow faster', async () => {
   const w = await world();
   const { game, gs } = w, wid = w.wid(P);
   const standBy = (idx: number): Pos => { const M = w.hl(P); const q = M.layout.farm.plots[idx]; for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (M.walkable(q.x + dx, q.y + dy)) return { x: q.x + dx, y: q.y + dy }; throw new Error('no spot'); };
-  const DAY = 24 * 60_000;
   const farm = (op: string, idx: number) => { w.adv(60_000); return game.act(P, { action: 'farm', op, plot: idx, world: wid, pos: standBy(idx) }) as any; };
   const grow = (idx: number) => {
-    farm('till', idx); farm('plant', idx); farm('water', idx);
-    w.adv(DAY);
-    return farm('water', idx).state.plots.find((x: any) => x.idx === idx).state;
+    farm('till', idx); farm('plant', idx);
+    w.adv(45_000); // 45 s: a minute is not up, but 60 / 1.525 = 39 s is
+    return (game.state(P) as any).plots.find((x: any) => x.idx === idx).state;
   };
-  assert.equal(grow(0), 'planted'); // without a Petani two waterings of three are not enough
+  assert.equal(grow(0), 'planted'); // without a Petani 45 s is not a full minute
   gs.setHomelandTh(P, 2);
   w.give(P, 'coin', 200);
   w.hire(P, 'petani');
   assert.equal(game.homelands.effects(P).farmGrowFactor, 1.525); // 1 + 0.5 x 1.05 (motivation 60: a house with a radio)
-  assert.equal(grow(1), 'ready'); // ceil(3 / 1.5) = 2 days
+  assert.equal(grow(1), 'ready'); // 60 s / 1.525 = 39 s
 });
 
 test('nelayan raises kolam output', async () => {

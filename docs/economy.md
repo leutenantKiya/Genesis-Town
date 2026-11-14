@@ -26,7 +26,7 @@ One NEP-245 contract holds every token. Token ids are short ASCII strings.
 | `fish` | Ikan | raw | pond nodes | 8 | Ikan Bakar, sell |
 | `ore` | Bijih | raw | rock nodes (needs Alat) | 12 | Alat |
 | `wood` | Kayu | raw | tree nodes (by hand) | 6 | Ikan Bakar, Alat, town firewood |
-| `wheat` | Gandum | raw | farm plot: plant 1, harvest 3 after 3 watered days (not in Dingin) | 5 | Roti, seed |
+| `wheat` | Gandum | raw | farm plot: plant 1, harvest 3 after 1 real minute (cannot be planted in Dingin) | 5 | Roti, seed |
 | `bread` | Roti | food | craft: 2 `wheat` | 16 | eat (+25 energy), town demand |
 | `meal` | Ikan Bakar | food | craft: 1 `fish` + 1 `wood` | 20 | eat (+45 energy), town demand |
 | `tool` | Alat | tool | craft: 2 `ore` + 1 `wood` | 45 | needed to mine ore. 20 uses, then it breaks (burned) |

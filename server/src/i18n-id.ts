@@ -199,11 +199,8 @@ export const EXACT: Record<string, string> = {
  "The soil is hoed.": "Tanah dicangkul.",
  "Hoe the plot first.": "Cangkul dulu petaknya.",
  "Wheat does not grow in winter.": "Gandum tidak tumbuh di musim dingin.",
- "The village gives you 1 wheat seed, planted right away. Water it every day.": "Desa memberimu 1 benih gandum, dan langsung ditanam. Siram setiap hari.",
- "Wheat seed planted. Water it every day.": "Benih gandum ditanam. Siram setiap hari.",
- "Nothing needs watering.": "Tidak ada yang perlu disiram.",
- "Already watered today.": "Sudah disiram hari ini.",
- "The wheat is ready to harvest!": "Gandum siap dipanen!",
+ "The village gives you 1 wheat seed, planted right away. It ripens in about a minute.": "Desa memberimu 1 benih gandum, dan langsung ditanam. Matang dalam sekitar semenit.",
+ "Wheat seed planted. It ripens in about a minute.": "Benih gandum ditanam. Matang dalam sekitar semenit.",
  "Not ready to harvest yet.": "Belum siap dipanen.",
  "Unknown garden action.": "Aksi kebun tidak dikenal.",
  "Amount 1-50.": "Jumlah 1-50.",
@@ -246,6 +243,10 @@ export const EXACT: Record<string, string> = {
  "Price steady (capped at 10% per hour).": "Harga tetap (dibatasi 10% per jam)."
 };
 export const PATTERNS: Array<[string, string]> = [
+ [
+  "The boat is in use by {0}.",
+  "Perahu sedang dipakai {0}."
+ ],
  [
   "One grant can be at most {0} coin.",
   "Satu kiriman paling banyak {0} koin."
@@ -697,10 +698,6 @@ export const PATTERNS: Array<[string, string]> = [
  [
   "You have no Wheat seed, and today's village seeds are used up ({0} per day). Try again tomorrow, or buy Wheat.",
   "Kamu tidak punya benih Gandum, dan benih desa hari ini sudah habis ({0} per hari). Coba lagi besok, atau beli Gandum."
- ],
- [
-  "Watered ({0}/{1} days).",
-  "Disiram ({0}/{1} hari)."
  ],
  [
   "+{0} Wheat",

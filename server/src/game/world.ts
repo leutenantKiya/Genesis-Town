@@ -183,36 +183,23 @@ export class World {
     return { toast: `Yum! Energy +${e}.` };
   }
 
-  plots(account: string, count = this.econ.farm.plots): Plot[] {
+  /** A planted plot counts as 'ready' once `growSecs` of real time have passed since planting (the server clock decides). */
+  plots(account: string, count = this.econ.farm.plots, growSecs = this.econ.farm.growSecs): Plot[] {
     const have = this.gs.plots(account);
+    const now = this.clock.now();
     const out: Plot[] = [];
     for (let i = 0; i < count; i++) {
-      out.push(have.find((p) => p.idx === i) ?? { account, idx: i, state: 'empty', planted_day: 0, grown: 0, watered_day: -1, planter: '' });
+      const p = have.find((x) => x.idx === i) ?? { account, idx: i, state: 'empty' as const, planted_at: 0, planter: '' };
+      out.push(p.state === 'planted' && now - p.planted_at >= growSecs * 1000 ? { ...p, state: 'ready' } : p);
     }
     return out;
   }
 
-  /** Rain waters every planted plot once per rainy day (the weather comes from the shared village file). */
-  rainWater(account: string, wet: boolean): number {
-    if (!wet) return 0;
-    const t = this.clock.time(), f = this.econ.farm;
-    let n = 0;
-    for (const plot of this.plots(account)) {
-      if (plot.state !== 'planted' || plot.watered_day === t.day) continue;
-      plot.watered_day = t.day;
-      if (!f.noGrowthSeasons.includes(t.season)) plot.grown += 1;
-      if (plot.grown >= f.growDays) plot.state = 'ready';
-      this.gs.savePlot(plot);
-      n++;
-    }
-    return n;
-  }
-
-  /** `field` replaces the village farm with an island's: its own plot rows, plot count, growth days and extra yield. */
-  farm(account: string, op: string, idx: number, field?: { plotAccount: string; count: number; growDays: number; yieldBonus: number; owner?: string; guest?: boolean }): ActionResult {
-    const f = { ...this.econ.farm, plots: field?.count ?? this.econ.farm.plots, growDays: field?.growDays ?? this.econ.farm.growDays };
+  /** `field` replaces the village farm with an island's: its own plot rows, plot count, growth seconds and extra yield. */
+  farm(account: string, op: string, idx: number, field?: { plotAccount: string; count: number; growSecs: number; yieldBonus: number; owner?: string; guest?: boolean }): ActionResult {
+    const f = { ...this.econ.farm, plots: field?.count ?? this.econ.farm.plots, growSecs: field?.growSecs ?? this.econ.farm.growSecs };
     if (!Number.isInteger(idx) || idx < 0 || idx >= f.plots) throw new HttpError(400, 'No such plot.');
-    const plot = this.plots(field?.plotAccount ?? account, f.plots)[idx];
+    const plot = this.plots(field?.plotAccount ?? account, f.plots, f.growSecs)[idx];
     const t = this.clock.time();
     const p = this.state(account);
     let toast: string;
@@ -227,7 +214,7 @@ export class World {
       if (plot.state !== 'tilled') throw new HttpError(409, 'Hoe the plot first.');
       if (f.noGrowthSeasons.includes(t.season)) throw new HttpError(409, 'Wheat does not grow in winter.');
       if (field?.guest) {
-        const mine = this.plots(field.plotAccount, f.plots).filter((x) => x.planter === account && (x.state === 'planted' || x.state === 'ready')).length;
+        const mine = this.plots(field.plotAccount, f.plots, f.growSecs).filter((x) => x.planter === account && (x.state === 'planted' || x.state === 'ready')).length;
         if (mine >= this.econ.coop.guestPlotsPerHost) throw new HttpError(409, `You already have ${mine} crops growing here.`);
       }
       // Seeds can't run out for good: with no Gandum left, the village hands out a few seeds a day (net zero on
@@ -240,23 +227,15 @@ export class World {
       }
       if (this.gs.balance(account, f.seed) < 1) throw new HttpError(409, `You have no Wheat seed, and today's village seeds are used up (${seeds} per day). Try again tomorrow, or buy Wheat.`);
       this.gs.add(t.settleDay, account, f.seed, -1, 'plant');
-      Object.assign(plot, { state: 'planted', planted_day: t.day, grown: 0, watered_day: -1, planter: account });
-      toast = gift ? 'The village gives you 1 wheat seed, planted right away. Water it every day.' : 'Wheat seed planted. Water it every day.';
-    } else if (op === 'water') {
-      if (plot.state !== 'planted') throw new HttpError(409, 'Nothing needs watering.');
-      if (plot.watered_day === t.day) throw new HttpError(409, 'Already watered today.');
-      this.spendEnergy(p, f.energyCost);
-      plot.watered_day = t.day;
-      if (!f.noGrowthSeasons.includes(t.season)) plot.grown += 1;
-      if (plot.grown >= f.growDays) plot.state = 'ready';
-      toast = plot.state === 'ready' ? 'The wheat is ready to harvest!' : `Watered (${plot.grown}/${f.growDays} days).`;
+      Object.assign(plot, { state: 'planted', planted_at: this.clock.now(), planter: account });
+      toast = gift ? 'The village gives you 1 wheat seed, planted right away. It ripens in about a minute.' : 'Wheat seed planted. It ripens in about a minute.';
     } else if (op === 'harvest') {
       if (plot.state !== 'ready') throw new HttpError(409, 'Not ready to harvest yet.');
       const n = f.harvest + (this.econ.seasons[t.season]?.harvestBonus ?? 0) + (field?.yieldBonus ?? 0);
       const receiver = plot.planter || field?.owner || account;
       this.checkGain(receiver, f.seed, n);
       this.gs.add(t.settleDay, receiver, f.seed, n, 'harvest', receiver === account ? null : `coop:${account}`);
-      Object.assign(plot, { state: 'tilled', grown: 0, watered_day: -1, planter: '' });
+      Object.assign(plot, { state: 'tilled', planted_at: 0, planter: '' });
       if (receiver === account) toast = `+${n} Wheat`;
       else { toast = 'The wheat goes to the player who planted it.'; credit = { account: receiver, token: f.seed, n }; }
     } else {

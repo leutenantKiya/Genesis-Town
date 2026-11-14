@@ -5,6 +5,8 @@
  * is only a convenience.
  * Tab "Kas kota": the town treasury (books and chain), "send coin to a player" in one flow (search -> confirmation card ->
  * amount with the limits shown -> note -> Send -> result inline), and the recent grants.
+ * Tab "Akun": every account with a wallet (GET /api/admin/accounts), grouped Admin / Pemain / NPC, filtered by part of a
+ * name as you type; a row opens its wallet (GET /api/admin/wallet): each token in the game books and on chain.
  * Tab "Keamanan": guests online (Kick / Ban IP), banned addresses, frozen accounts, settlement status, and the purge of old
  * NEAR Auth accounts (POST /api/admin/purge-legacy: Dry run -> list with checkboxes -> Delete selected after typing the
  * confirmation word; the server only deletes accounts that are on a fresh dry-run list).
@@ -17,6 +19,9 @@
   var F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
   var PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' }; // the purge of old NEAR Auth accounts
   var ui = {};
+  var AC = { q: '', rows: null, total: 0, wallet: null, t: 0 }; // the Akun tab
+  var SG = { rows: [], t: 0 }; // name suggestions under the "Kirim koin" search
+  function whoName(w) { return (w.nick || w.name || w.account) + (w.tag ? '#' + w.tag : ''); }
 
   function $(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function st() { return C && C.state && C.state.st; }
@@ -55,9 +60,110 @@
     C.api('/admin/resolve?name=' + encodeURIComponent(v)).then(function (r) { F.who = r; F.err = ''; syncForm(); ui.amount && ui.amount.focus(); },
       function (e) { F.who = null; F.err = e.status === 404 ? $t('Pemain tidak ditemukan.') : (e.message || $t('Gagal.')); syncForm(); });
   }
+  // part of a name is enough: matching players and merchants show under the field; a pick fills the confirmation card
+  function suggestSoon() {
+    clearTimeout(SG.t);
+    var q = F.input.trim();
+    if (!q || F.who) { SG.rows = []; renderSugg(); return; }
+    SG.t = setTimeout(function () {
+      C.api('/admin/accounts?q=' + encodeURIComponent(q)).then(function (r) {
+        if (F.input.trim() !== q || F.who) return;
+        SG.rows = (r.rows || []).filter(function (x) { return x.name !== 'Town treasury'; }).slice(0, 8); renderSugg();
+      }, function () { SG.rows = []; renderSugg(); });
+    }, 250);
+  }
+  function renderSugg() {
+    if (!ui.sugg) return;
+    ui.sugg.textContent = '';
+    if (F.who) return;
+    SG.rows.forEach(function (x) {
+      var b = $('button', 'adm-sugg-row'); b.type = 'button'; b.setAttribute('role', 'option');
+      b.appendChild($('span', 'adm-sugg-n', whoName(x)));
+      b.appendChild($('span', 'adm-role ' + x.role, roleWord(x.role)));
+      b.appendChild($('span', 'chain-dim adm-sugg-a', x.account));
+      b.addEventListener('click', function () { F.input = x.account; ui.search.value = whoName(x); SG.rows = []; renderSugg(); find(); });
+      ui.sugg.appendChild(b);
+    });
+  }
+  function roleWord(r) { return r === 'admin' ? $t('Admin') : r === 'npc' ? 'NPC' : $t('Pemain'); }
+
+  /* ---------------------------------------------------------------- Akun: every wallet, by role */
+  function loadAccounts() {
+    var q = AC.q.trim();
+    C.api('/admin/accounts' + (q ? '?q=' + encodeURIComponent(q) : '')).then(function (r) {
+      if (AC.q.trim() !== q) return;
+      AC.rows = r.rows || []; AC.total = r.total || 0; renderAccounts();
+    }, fail);
+  }
+  function openWallet(account) {
+    AC.wallet = { account: account, loading: true }; renderAccounts();
+    C.api('/admin/wallet?account=' + encodeURIComponent(account)).then(function (w) { AC.wallet = w; renderAccounts(); },
+      function (e) { AC.wallet = null; fail(e); renderAccounts(); });
+  }
+  function buildAccounts() {
+    var box = $('div', 'adm-card');
+    box.appendChild($('div', 'chain-h', $t('Semua akun')));
+    box.appendChild($('p', 'chain-dim', $t('Setiap akun yang punya dompet di game: admin, pemain, dan NPC (pedagang dan kas kota). Ketik sebagian nama untuk menyaring, lalu klik akun untuk melihat isi dompetnya.')));
+    var f = $('div', 'chain-field'), inp = $('input');
+    inp.type = 'text'; inp.maxLength = 60; inp.placeholder = $t('Saring nama…'); inp.setAttribute('aria-label', $t('Saring nama'));
+    inp.value = AC.q;
+    inp.addEventListener('input', function () { AC.q = inp.value; clearTimeout(AC.t); AC.t = setTimeout(loadAccounts, 250); });
+    f.appendChild(inp); box.appendChild(f);
+    ui.acctWallet = $('div'); box.appendChild(ui.acctWallet);
+    ui.acctList = $('div', 'adm-accts'); box.appendChild(ui.acctList);
+    return box;
+  }
+  function renderAccounts() {
+    if (!ui.acctList) return;
+    // the open wallet, on top
+    ui.acctWallet.textContent = '';
+    var w = AC.wallet;
+    if (w) {
+      var wc = $('div', 'adm-wallet');
+      var hd = $('div', 'adm-wallet-h');
+      hd.appendChild($('b', 'gt-data', w.loading ? w.account : whoName(w)));
+      if (w.role) hd.appendChild($('span', 'adm-role ' + w.role, roleWord(w.role)));
+      hd.appendChild(btn($t('Tutup'), function () { AC.wallet = null; renderAccounts(); }));
+      wc.appendChild(hd);
+      wc.appendChild($('div', 'chain-dim adm-sugg-a', w.account));
+      if (w.loading) wc.appendChild($('p', 'chain-dim', $t('Memuat…')));
+      else if (!w.items.length) wc.appendChild($('p', 'chain-dim', $t('Dompet kosong.')));
+      else {
+        var tb = $('div', 'adm-wtable');
+        [$t('Barang'), $t('Di buku game'), $t('Di blockchain')].forEach(function (h) { tb.appendChild($('b', 'chain-dim', h)); });
+        w.items.forEach(function (it) {
+          tb.appendChild($('span', null, it.name));
+          tb.appendChild($('span', 'gt-data', num(it.books)));
+          tb.appendChild($('span', 'gt-data' + (it.books !== it.chain ? ' adm-diff' : ''), num(it.chain)));
+        });
+        wc.appendChild(tb);
+        wc.appendChild($('p', 'chain-dim', $t('Buku game = tersimpan + gerakan hari ini. Blockchain = per settlement terakhir (06:00).')));
+      }
+      ui.acctWallet.appendChild(wc);
+    }
+    // the list in three sections
+    ui.acctList.textContent = '';
+    if (!AC.rows) { ui.acctList.appendChild($('p', 'chain-dim', $t('Memuat…'))); return; }
+    if (!AC.rows.length) { ui.acctList.appendChild($('p', 'chain-dim', $t('Tidak ada akun dengan nama itu.'))); return; }
+    [['admin', $t('Admin')], ['player', $t('Pemain')], ['npc', 'NPC']].forEach(function (sec) {
+      var rows = AC.rows.filter(function (x) { return x.role === sec[0]; });
+      if (!rows.length) return;
+      ui.acctList.appendChild($('div', 'adm-step', sec[1] + ' (' + rows.length + ')'));
+      rows.forEach(function (x) {
+        var b = $('button', 'adm-acct' + (AC.wallet && AC.wallet.account === x.account ? ' on' : '')); b.type = 'button';
+        b.appendChild($('span', 'adm-sugg-n', whoName(x) || x.account));
+        b.appendChild($('span', 'gt-data', num(x.coin) + ' ' + $t('koin')));
+        b.appendChild($('span', 'chain-dim adm-sugg-a', x.account));
+        b.addEventListener('click', function () { openWallet(x.account); });
+        ui.acctList.appendChild(b);
+      });
+    });
+    if (AC.total > AC.rows.length) ui.acctList.appendChild($('p', 'chain-dim', $t('Menampilkan {0} dari {1}. Saring nama untuk mempersempit.', [AC.rows.length, AC.total])));
+  }
+
   function send() {
     if (F.busy || !F.who || !amountOk()) return;
-    var n = Number(F.amount), nick = F.who.nick + '#' + F.who.tag;
+    var n = Number(F.amount), nick = whoName(F.who);
     F.busy = true; F.result = null; syncForm();
     C.api('/admin/grant', { method: 'POST', body: { to: F.who.account, coin: n, note: F.note.trim() || undefined } }).then(function (r) {
       F.busy = false;
@@ -76,10 +182,11 @@
     box.appendChild($('div', 'adm-step', $t('1. Cari pemain')));
     var f = $('div', 'chain-field adm-find'), inp = $('input');
     inp.type = 'text'; inp.placeholder = $t('nama atau nama#tag'); inp.maxLength = 80; inp.setAttribute('aria-label', $t('Nama pemain'));
-    inp.addEventListener('input', function () { F.input = inp.value; if (F.who || F.err) { F.who = null; F.err = ''; F.result = null; syncForm(); } });
+    inp.addEventListener('input', function () { F.input = inp.value; if (F.who || F.err) { F.who = null; F.err = ''; F.result = null; syncForm(); } suggestSoon(); });
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } });
     ui.search = inp; ui.find = btn($t('Cari'), find);
     f.appendChild(inp); f.appendChild(ui.find); box.appendChild(f);
+    ui.sugg = $('div', 'adm-sugg'); ui.sugg.setAttribute('role', 'listbox'); box.appendChild(ui.sugg);
     ui.err = $('p', 'chain-closed'); box.appendChild(ui.err);
     // 2 confirmation card
     ui.who = $('div', 'adm-who'); box.appendChild(ui.who);
@@ -113,7 +220,7 @@
     if (F.who) {
       ui.who.appendChild(lookCanvas(F.who.look));
       var tx = $('div', 'adm-who-t');
-      tx.appendChild($('div', 'adm-who-n gt-data', F.who.nick + '#' + F.who.tag));
+      tx.appendChild($('div', 'adm-who-n gt-data', whoName(F.who)));
       if (F.who.gainLeft != null) tx.appendChild($('div', 'chain-dim', $t('Bisa menerima {0} koin lagi hari ini (batas harian {1}).', [num(F.who.gainLeft), num(F.who.gainCap)])));
       ui.who.appendChild(tx);
       ui.who.appendChild(btn($t('Ganti'), function () { if (F.busy) return; F.who = null; F.err = ''; F.input = ''; ui.search.value = ''; F.result = null; syncForm(); ui.search.focus(); }));
@@ -127,7 +234,7 @@
     ui.limits.textContent = l.maxPerGrant
       ? $t('Maks {0} koin per kirim · sisa hari ini {1} dari {2} · kas kota {3}', [num(l.maxPerGrant), num(Math.max(0, (l.maxPerDay || 0) - (l.sentToday || 0))), num(l.maxPerDay), num(treasury())])
       : '';
-    var n = Number(F.amount), name = F.who ? F.who.nick + '#' + F.who.tag : '';
+    var n = Number(F.amount), name = F.who ? whoName(F.who) : '';
     ui.go.textContent = amountOk() ? $t('Kirim {0} koin ke {1}', [num(n), name]) : $t('Kirim');
     ui.go.disabled = !!(F.busy || !F.who || !amountOk());
     var over = F.who && F.amount !== '' && Number(F.amount) >= 1 && !amountOk();
@@ -269,12 +376,14 @@
     if (!ui.coinView) return;
     ui.coinView.style.display = tab === 'coin' ? '' : 'none';
     ui.safetyView.style.display = tab === 'safety' ? '' : 'none';
+    ui.acctView.style.display = tab === 'acct' ? '' : 'none';
+    if (tab === 'acct' && !AC.rows) loadAccounts();
     [].forEach.call(ui.tabs.children, function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === tab); b.setAttribute('aria-selected', b.getAttribute('data-tab') === tab ? 'true' : 'false'); });
   }
   function build() {
     var root = $('div', 'adm');
     ui.tabs = $('div', 'gt-mall-tabs'); ui.tabs.setAttribute('role', 'tablist');
-    [['coin', $t('Kas kota')], ['safety', $t('Keamanan')]].forEach(function (t) {
+    [['coin', $t('Kas kota')], ['acct', $t('Akun')], ['safety', $t('Keamanan')]].forEach(function (t) {
       var b = $('button', 'gt-mall-tab', t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('data-tab', t[0]);
       b.addEventListener('click', function () { tab = t[0]; showTab(); });
       ui.tabs.appendChild(b);
@@ -285,6 +394,7 @@
     ui.coinView.appendChild(buildForm());
     ui.grants = $('div', 'adm-card'); ui.coinView.appendChild(ui.grants);
     root.appendChild(ui.coinView);
+    ui.acctView = $('div'); ui.acctView.appendChild(buildAccounts()); root.appendChild(ui.acctView);
     ui.safetyView = $('div'); root.appendChild(ui.safetyView);
     ui.safety = $('div', 'adm-card'); ui.safetyView.appendChild(ui.safety);
     ui.purge = $('div', 'adm-card'); ui.safetyView.appendChild(ui.purge);
@@ -303,7 +413,7 @@
     if (GT.isUiOpen()) return;
     F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
     PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' };
-    ui = {};
+    ui = {}; AC.rows = null; AC.wallet = null; SG.rows = [];
     panel = GT.modal({ title: $t('Admin'), wide: true, sticky: true, body: build(), onClose: function () { clearInterval(timer); }, actions: [{ label: $t('Muat ulang'), onClick: function () { load(); return false; } }, { label: $t('Tutup'), close: true }] });
     renderAll(); load();
     clearInterval(timer);
@@ -315,7 +425,7 @@
     if (!isAdmin()) return;
     F = { input: '', who: null, err: '', amount: '', note: '', busy: false, result: null };
     PG = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' };
-    ui = {};
+    ui = {}; AC.rows = null; AC.wallet = null; SG.rows = [];
     host.appendChild(build()); renderAll(); load();
     clearInterval(timer);
     timer = setInterval(function () { if (!host.isConnected) clearInterval(timer); else if (!host.closest('[hidden]')) load(); }, 5000);

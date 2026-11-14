@@ -173,23 +173,55 @@ export class Positions {
   last = new Map<string, Pos & { t: number }>();
   /** Which world each player is in (absent = the public island). */
   worlds = new Map<string, string>();
-  /** Players aboard the ferry boat (public village only): their reports must be water tiles the boat can sail on. */
+  /** Players aboard the ferry boat (public village only): their reports must be water tiles the boat can sail on. At most one (the boat is one). */
   aboard = new Set<string>();
+  /** The one public boat: where it floats, who steers it (`by`) and when it was last used. Starts at the mainland dock (see boatNow). */
+  boat: { x: number; y: number; by: string | null; since: number } | null = null;
+  /** A steerer silent this long (closed the page) lets go of the boat; an idle boat away from a dock sails home after RETURN_MS. */
+  static STALE_MS = 120_000;
+  static RETURN_MS = 120_000;
   map: WorldMap;
   constructor(map: WorldMap) { this.map = map; }
   worldOf(account: string): string { return this.worlds.get(account) ?? 'public'; }
+  /** Leaves the boat where it floats (the player stepped off, left the world or went away). */
+  private drop(account: string, now: number) {
+    this.aboard.delete(account);
+    if (this.boat && this.boat.by === account) { this.boat.by = null; this.boat.since = now; }
+  }
+  /** The boat now, with the rules applied lazily: a vanished steerer lets go; an idle boat with no shore next to it, or unused for a while with
+   *  nobody standing by it, goes back to the mainland dock. null when the village has no boat. */
+  boatNow(now: number): { x: number; y: number; by: string | null; since: number } | null {
+    const f = Village.ferryOf(this.map.layout);
+    if (!f) return null;
+    if (!this.boat) this.boat = { x: f.wa.x, y: f.wa.y, by: null, since: now };
+    const b = this.boat;
+    if (b.by) {
+      const lt = this.last.get(b.by)?.t ?? 0;
+      if (now - lt > Positions.STALE_MS) { this.drop(b.by, lt || now); }
+    }
+    if (!b.by && !(b.x === f.wa.x && b.y === f.wa.y)) {
+      const shore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => this.map.walkable(b.x + dx, b.y + dy));
+      let someone = false;
+      for (const [a, l] of this.last) if (this.worldOf(a) === 'public' && now - l.t < Positions.STALE_MS && Math.abs(l.x - b.x) + Math.abs(l.y - b.y) <= 3) { someone = true; break; }
+      if (!shore || (now - b.since > Positions.RETURN_MS && !someone)) { b.x = f.wa.x; b.y = f.wa.y; b.since = now; }
+    }
+    return b;
+  }
   /** Moves a player to another world at a tile the server chose. */
   setWorld(account: string, world: string, at: Pos, now: number) {
-    this.aboard.delete(account);
+    this.drop(account, now);
     if (world === 'public') this.worlds.delete(account); else this.worlds.set(account, world);
     this.last.set(account, { ...at, t: now });
   }
   /** Back to the public island with no remembered position (the next report starts fresh). */
-  reset(account: string) { this.worlds.delete(account); this.last.delete(account); this.aboard.delete(account); }
-  /** Steps onto the ferry boat at `at` (a water tile the server chose). */
-  board(account: string, at: Pos, now: number) { this.aboard.add(account); this.last.set(account, { ...at, t: now }); }
-  /** Steps off the boat onto the land tile `at`. */
-  land(account: string, at: Pos, now: number) { this.aboard.delete(account); this.last.set(account, { ...at, t: now }); }
+  reset(account: string) { this.worlds.delete(account); this.last.delete(account); this.drop(account, Date.now()); }
+  /** Steps onto the ferry boat (already at `at`, the water tile it floats on). */
+  board(account: string, at: Pos, now: number) {
+    this.aboard.add(account); this.last.set(account, { ...at, t: now });
+    if (this.boat) { this.boat.by = account; this.boat.x = at.x; this.boat.y = at.y; this.boat.since = now; }
+  }
+  /** Steps off the boat onto the land tile `at`; the boat stays where it floats. */
+  land(account: string, at: Pos, now: number) { this.drop(account, now); this.last.set(account, { ...at, t: now }); }
   /** `world` is the world the client says it is in, `map` that world's map (the caller already checked access to it). */
   /** The last position this check accepted for the player (what presence shows, never the raw report). */
   lastOf(account: string): Pos | null { const l = this.last.get(account); return l ? { x: l.x, y: l.y } : null; }
@@ -199,13 +231,13 @@ export class Positions {
     if (!r || !Number.isInteger(p.x) || !Number.isInteger(p.y)) throw new HttpError(400, 'player position missing');
     if (world !== this.worldOf(account)) {
       const pub = this.map.layout.spawn;
-      if (world === 'public' && p.x === pub.x && p.y === pub.y) { this.worlds.delete(account); this.last.delete(account); this.aboard.delete(account); }
+      if (world === 'public' && p.x === pub.x && p.y === pub.y) { this.worlds.delete(account); this.last.delete(account); this.drop(account, now); }
       // a reload (or Start) puts the client on its own Homeland spawn: always believed, wherever the server had the player
       else if (home && world === home.world && p.x === home.spawn.x && p.y === home.spawn.y) { this.worlds.set(account, world); this.last.delete(account); }
       else throw new HttpError(409, 'Change worlds through the portal.');
     }
     const sp0 = map.layout.spawn;
-    if (this.aboard.has(account) && p.x === sp0.x && p.y === sp0.y) this.aboard.delete(account); // a page reload puts the client back on the spawn
+    if (this.aboard.has(account) && p.x === sp0.x && p.y === sp0.y) this.drop(account, now); // a page reload puts the client back on the spawn
     if (this.aboard.has(account) ? !Village.boatWater(this.map.layout, p.x, p.y) : !map.walkable(p.x, p.y)) throw new HttpError(409, 'Invalid position.');
     const prev = this.last.get(account);
     const sp = map.layout.spawn;
@@ -214,6 +246,7 @@ export class Positions {
       if (dist(prev, p) > allowed) throw new HttpError(409, 'Position jumped too far. Reload the page.');
     }
     this.last.set(account, { ...p, t: now });
+    if (this.aboard.has(account) && this.boat && this.boat.by === account) { this.boat.x = p.x; this.boat.y = p.y; this.boat.since = now; }
     return p;
   }
 }

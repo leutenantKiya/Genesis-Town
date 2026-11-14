@@ -135,9 +135,9 @@
       face: function (camera) { band.forEach(function (a) { a.face(camera); }); }
     };
   };
-  /* The public ferry's boats (GTVillage.ferryOf: one at each landing), as a wooden rowing boat with a plank seat, a pair of oars and a
-     lantern on a post. They bob on the water; while a trip runs (window.GT_FERRY.sail, set by mods/ferry.js) the dock boat the player
-     left is hidden and a third boat, with the player seated, glides across. Returns { group, update(t) }. */
+  /* The public ferry's ONE boat (GTVillage.ferryOf; mods/ferry.js says where it is, window.GT_FERRY.pos {x, y, yaw}: on its tile, or following
+     whoever steers it), as a wooden rowing boat with a plank seat, a pair of oars and a lantern on a post. It bobs on the water.
+     Returns { group, update(t) }. */
   GT3.Boats = function (L) {
     var group = new THREE.Group(), V = window.GTVillage, f = null;
     group.name = 'boats';
@@ -157,23 +157,14 @@
       var g = new THREE.Group(), m = new THREE.Mesh(GT3.merge(p), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); g.visible = false;
       group.add(g); return g;
     }
-    var docks = [{ w: f.wa, land: f.a, g: model() }, { w: f.wb, land: f.b, g: model() }], sailer = model();
-    // a boat lies across its landing: along the shore line, the bow to the water side
-    docks.forEach(function (d) { d.yaw = Math.atan2(d.land.x - d.w.x, d.land.y - d.w.y) + Math.PI / 2; });
+    var one = model(), yaw0 = Math.atan2(f.a.x - f.wa.x, f.a.y - f.wa.y) + Math.PI / 2;
     return {
-      group: group, boats: docks,
+      group: group, boats: [one],
       update: function (t) {
-        var S = window.GT_FERRY && window.GT_FERRY.sail;
-        docks.forEach(function (d, i) {
-          d.g.visible = !(S && S.fromIdx === i);
-          d.g.position.set(d.w.x + 0.5, -0.2 + Math.sin(t * 1.6 + i * 2) * 0.012, d.w.y + 0.5);
-          d.g.rotation.set(Math.sin(t * 1.3 + i) * 0.02, d.yaw, Math.cos(t * 1.1 + i) * 0.03);
-        });
-        sailer.visible = !!S;
-        if (S) {
-          sailer.position.set(S.x + 0.5, -0.2 + Math.sin(t * 3) * 0.02, S.y + 0.5);
-          sailer.rotation.set(Math.sin(t * 2.2) * 0.04, S.yaw, Math.cos(t * 2.6) * 0.05);
-        }
+        var S = window.GT_FERRY && window.GT_FERRY.pos, x = S ? S.x : f.wa.x, y = S ? S.y : f.wa.y;
+        one.visible = true;
+        one.position.set(x + 0.5, -0.2 + Math.sin(t * 2) * 0.016, y + 0.5);
+        one.rotation.set(Math.sin(t * 1.5) * 0.03, S ? S.yaw : yaw0, Math.cos(t * 1.8) * 0.04);
       }
     };
   };

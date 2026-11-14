@@ -275,7 +275,8 @@
       for (var key in extra) b[key] = extra[key];
       return b;
     }
-    var buildings = [bld('townhall', tx, ty, 4, 4, tdx, tdy, { name: $t('Balai Kota'), own: true, style: 0, id: 0 })];
+    // level: how the Town Hall looks (1-3, the art goes no further: a higher level keeps the level-3 look)
+    var buildings = [bld('townhall', tx, ty, 4, 4, tdx, tdy, { name: $t('Balai Kota'), own: true, style: 0, id: 0, level: Math.max(1, Math.min(3, prog.th | 0 || 1)) })];
     if (hasHouse) buildings.push(bld('house', hx, hy, 3, 3, hdx, hdy, { name: $t('Rumahmu'), own: true, style: R.int(0, 3) }));
     var byId = {};
     lots.forEach(function (l) { byId[l.id] = l; });

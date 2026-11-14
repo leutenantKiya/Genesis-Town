@@ -15,6 +15,7 @@ import { TransferStore } from './transfer.ts';
 import { ReplayCache, verifyRequest } from './reqauth.ts';
 import { addDeviceKey } from './newdevice.ts';
 import { AdminGrants } from './admingrant.ts';
+import { AdminAccounts } from './adminaccounts.ts';
 import { Purge } from './purge.ts';
 import { Bazaar, titleFor } from './game/bazaar.ts';
 import { Social, worldIdOk } from './social.ts';
@@ -132,11 +133,13 @@ export function createApp(deps: AppDeps) {
   game.settlement.onSettled = (accts) => chainCheck.invalidate(accts);
   game.trade.verify = (a, tokens) => chainCheck.verify(a, tokens, 'trade/swap'); // a live trade's swap re-checks both sides
   const adminGrantLimiter = new RateLimiter(30, 300);
+  const adminReadLimiter = new RateLimiter(120, 5000); // the Akun list and wallets: reads, filtered as the admin types
   const bazaar = new Bazaar(deps.store.db);
   game.npc.onSale = (listingId, seller, units) => { bazaar.recordSale(listingId, seller, units); readCache.clear(); }; // a merchant bought a named listing
   const social = new Social(deps.store);
   game.trade.onDone = (a, b, world) => social.tradeLine(a, b, world); // a finished swap is a public line for its world
   const adminGrants = new AdminGrants({ game, store: deps.store, social, invalidate: (a) => chainCheck.invalidate(a) });
+  const adminAccounts = new AdminAccounts({ game, store: deps.store, admins: () => deps.cfg.adminAccounts });
   const purge = new Purge({ cfg: deps.cfg, chain: deps.chain, store: deps.store, game, social, invalidate: (a) => { chainCheck.invalidate(a); readCache.clear(); } });
   social.guestCfg = { max: game.econ.guest.max, idleSecs: game.econ.guest.idleSecs, perIp: game.econ.guest.perIp, maxMinutes: game.econ.guest.maxMinutes };
   const guestHelloLimiter = new RateLimiter(game.econ.guest.helloPerMinute, 200); // new guests per IP
@@ -464,6 +467,12 @@ export function createApp(deps: AppDeps) {
         }
         throw new HttpError(404, 'no such route');
       }
+      if (req.method === 'GET' && (p === '/api/admin/accounts' || p === '/api/admin/wallet')) {
+        // every account with a wallet (admins, players, NPCs) and one account's wallet (adminaccounts.ts); ADMIN_ACCOUNTS only
+        const acct = adminOf(req, url);
+        if (!adminReadLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+        return send(res, 200, p === '/api/admin/accounts' ? adminAccounts.list(url.searchParams.get('q')) : adminAccounts.wallet(url.searchParams.get('account')));
+      }
       if (p === '/api/admin/grant' || p === '/api/admin/resolve') {
         // coin from the town treasury to a player, off-chain like the starter kit (admingrant.ts); ADMIN_ACCOUNTS only
         if (req.method === 'GET' && p === '/api/admin/resolve') {
@@ -533,7 +542,7 @@ export function createApp(deps: AppDeps) {
         const b = await readJson(req) as { guest?: unknown; x?: unknown; y?: unknown; dir?: unknown };
         const g = social.guestReport(b.guest, ip, b, game.map ? (x, y) => game.map!.walkable(x, y) : undefined);
         const players = social.nearby(g.id, 'public').map((s) => ({ nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.x, y: s.y, dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)) }) }));
-        return send(res, 200, { me: g.nick, look: g.look, guest: true, online: social.online() + social.guests.size, world: 'public', players, chat: [], last: 0 });
+        return send(res, 200, { me: g.nick, look: g.look, guest: true, online: social.online() + social.guests.size, world: 'public', players, chat: [], last: 0, boat: game.boatView() });
       }
       if (req.method === 'POST' && p === '/api/presence') {
         // where I am now -> who else is in my world, and the chat lines since the last call
@@ -546,7 +555,7 @@ export function createApp(deps: AppDeps) {
         let onTile = true; // outdoors, only walkable tiles of that world's map are shown
         if (b.scene === 'out' && game.map) {
           try {
-            const m = game.worldFor(acct, w, 'visit').map; onTile = !m || m.walkable(Number(b.x), Number(b.y));
+            const m = game.worldFor(acct, w, 'visit').map; onTile = !m || m.walkable(Number(b.x), Number(b.y)) || !!game.positions?.aboard.has(acct); // aboard the boat: on water
             // a fishing float must sit on water of this world's map, or the report is not shown as fishing
             const f = b.fish as { x?: unknown; y?: unknown } | undefined;
             if (f && typeof f === 'object' && m && m.tileAt(Number(f.x), Number(f.y)) !== 'water') b.fish = undefined;
@@ -559,9 +568,9 @@ export function createApp(deps: AppDeps) {
         if (onTile) social.report(acct, w, b);
         const trading = game.trade.tradingPairs(); // who is in an open trade right now: everyone in the world sees "A <-> B"
         const tradeOf = (a: string) => { const o = trading.get(a); return o ? { trading: social.nick(o), tradingWith: o } : {}; };
-        const players = social.nearby(acct, w).map((s) => ({ ...(s.npc || s.guest ? {} : tradeOf(s.account)), nick: s.nick, tag: s.tag, look: s.look, account: s.account, x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), worn: game.extras.worn(s.account), ...(s.party ? { party: true } : {}) }) }));
+        const players = social.nearby(acct, w).map((s) => ({ ...(s.npc || s.guest ? {} : tradeOf(s.account)), nick: s.nick, tag: s.tag, look: s.look, account: s.account, ...(game.positions?.aboard.has(s.account) ? { aboard: true } : {}), x: s.room ? s.rx : s.x, y: s.room ? s.ry : s.y, fx: s.room ? s.rx : s.fx, fy: s.room ? s.ry : s.fy, vx: s.vx, vy: s.vy, ...(s.room ? { room: s.room } : {}), ...(s.fish ? { fish: s.fish } : {}), age: s.npc ? undefined : Math.max(0, social.now() - s.t), dir: s.dir, ...(s.npc ? { npc: true, merchant: s.merchant, title: s.title } : s.guest ? { guest: true } : { title: titleFor(bazaar.points(s.account)), worn: game.extras.worn(s.account), ...(s.party ? { party: true } : {}) }) }));
         const chat = social.since(acct, w, Math.max(0, Math.floor(Number(b.since) || 0)));
-        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w), ...tradeOf(acct) });
+        return send(res, 200, { me: social.nick(acct), tag: social.tag(acct), look: social.look(acct), worn: game.extras.worn(acct), named: !!deps.store.nameOf(acct), online: social.online(), world: w, players, chat, last: social.seq, party: partyWithPlaces(acct, w), ...(w === 'public' ? { boat: game.boatView(acct) } : {}), ...tradeOf(acct) });
       }
       if (req.method === 'POST' && p === '/api/chat') {
         const raw = await readRaw(req);
