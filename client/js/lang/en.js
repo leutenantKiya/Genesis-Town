@@ -2086,6 +2086,11 @@
     "Pegang {0} dulu (tombol {1} di hotbar).": "Hold the {0} first (key {1} on the hotbar).",
     "Pilih cara masuk. Masuk dengan Google dan masuk dengan email membuat akun yang berbeda, jadi pakai cara yang sama setiap kali.": "Choose how to sign in. Signing in with Google and signing in with email make different accounts, so use the same way every time.",
     "Masuk dengan Google": "Sign in with Google",
-    "Masuk dengan email": "Sign in with email"
+    "Masuk dengan email": "Sign in with email",
+    "{0} akun pemain ditemukan.": "{0} player accounts found.",
+    "{0} akun pemain dihapus. Kalau akunmu ikut terhapus, muat ulang halaman dan masuk lagi.": "{0} player accounts deleted. If yours was among them, reload the page and sign in again.",
+    "Hapus semua akun pemain": "Delete all player accounts",
+    "Menghapus data game semua pemain, termasuk akun admin: nama, Homeland, bangunan, pekerja, alat, chip, misi. Pedagang, bot warga, dan kas kota tidak tersentuh. Koin dan barang di blockchain dan di buku besar tetap milik akun itu, dan login yang sama bisa masuk lagi sebagai pemain baru. Tidak bisa dibatalkan.": "Deletes every player's game data, admin accounts included: name, Homeland, buildings, workers, tools, chips, missions. Merchants, the townsfolk and the town treasury are not touched. Coin and goods on the blockchain and in the ledger stay with that account, and the same login can sign in again as a new player. This cannot be undone.",
+    "Tidak ada akun pemain.": "No player accounts."
   });
 })();

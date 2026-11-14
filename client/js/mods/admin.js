@@ -379,6 +379,63 @@
     sync(); f.appendChild(inp); f.appendChild(del); b.appendChild(f);
   }
 
+  /* ---------------------------------------------------------------- reset of ALL players (POST /api/admin/purge-players)
+     Every player account, the admins' own too; merchants, the townsfolk and the treasury are not players. Not retired:
+     the same login starts again. Dry run -> the list (all ticked) -> type the word -> delete. */
+  var PA = { rows: null, info: null, sel: {}, word: '', busy: false, msg: '' };
+  function pickedAll() { return (PA.rows || []).filter(function (r) { return PA.sel[r.account]; }); }
+  function dryRunAll() {
+    if (PA.busy) return;
+    PA.busy = true; PA.msg = $t('Memeriksa semua akun…'); renderPurgeAll();
+    post('/admin/purge-players', { dryRun: true }).then(function (r) {
+      PA.busy = false; PA.rows = r.accounts || []; PA.info = r; PA.sel = {}; PA.word = '';
+      PA.rows.forEach(function (x) { PA.sel[x.account] = true; });
+      PA.msg = $t('{0} akun pemain ditemukan.', [PA.rows.length]);
+      renderPurgeAll();
+    }, function (e) { PA.busy = false; PA.msg = (e && e.message) || $t('Gagal.'); renderPurgeAll(); });
+  }
+  function doPurgeAll() {
+    var sel = pickedAll();
+    if (PA.busy || !sel.length || PA.word.trim() !== confirmWord()) return;
+    PA.busy = true; PA.msg = $t('Menghapus…'); renderPurgeAll();
+    post('/admin/purge-players', { dryRun: false, accounts: sel.map(function (r) { return r.account; }) }).then(function (r) {
+      PA.busy = false; PA.rows = null; PA.sel = {}; PA.word = '';
+      PA.msg = $t('{0} akun pemain dihapus. Kalau akunmu ikut terhapus, muat ulang halaman dan masuk lagi.', [(r.purged || []).length]);
+      renderPurgeAll();
+    }, function (e) { PA.busy = false; PA.msg = (e && e.message) || $t('Gagal.'); renderPurgeAll(); });
+  }
+  function renderPurgeAll() {
+    if (!ui.purgeAll) return;
+    var b = ui.purgeAll; b.textContent = '';
+    b.appendChild($('div', 'chain-h', $t('Hapus semua akun pemain')));
+    b.appendChild($('p', 'chain-dim', $t('Menghapus data game semua pemain, termasuk akun admin: nama, Homeland, bangunan, pekerja, alat, chip, misi. Pedagang, bot warga, dan kas kota tidak tersentuh. Koin dan barang di blockchain dan di buku besar tetap milik akun itu, dan login yang sama bisa masuk lagi sebagai pemain baru. Tidak bisa dibatalkan.')));
+    var go = btn($t('Dry run'), dryRunAll); go.disabled = PA.busy; b.appendChild(go);
+    if (PA.msg) b.appendChild($('p', 'chain-dim', PA.msg));
+    if (PA.info && PA.info.settling) b.appendChild($('p', 'chain-closed', $t('Settlement sedang berjalan: penghapusan ditolak sampai selesai.')));
+    if (!PA.rows) return;
+    if (!PA.rows.length) { b.appendChild($('p', 'chain-dim', $t('Tidak ada akun pemain.'))); return; }
+    var all = btn($t('Pilih semua'), function () { PA.rows.forEach(function (r) { PA.sel[r.account] = true; }); renderPurgeAll(); }); all.disabled = PA.busy;
+    var none = btn($t('Kosongkan'), function () { PA.sel = {}; renderPurgeAll(); }); none.disabled = PA.busy;
+    b.appendChild(all); b.appendChild(none);
+    PA.rows.forEach(function (r) {
+      var line = $('label', 'tr-lot'), cb = $('input'), tx = $('div', 'tr-lot-t');
+      cb.type = 'checkbox'; cb.checked = !!PA.sel[r.account]; cb.disabled = PA.busy;
+      cb.addEventListener('change', function () { PA.sel[r.account] = cb.checked; renderPurgeAll(); });
+      tx.appendChild($('div', 'tr-lot-n gt-data', r.nameTag));
+      tx.appendChild($('div', 'chain-dim', $t('terakhir masuk {0}', [when(r.lastSeen)]) + ' · ' + num(r.coin) + ' ' + $t('koin') + ' · ' + itemsText(r.items)));
+      if (r.homeland) tx.appendChild($('div', 'chain-dim', $t('Homeland TH{0}: {1} bangunan, {2} pekerja', [r.homeland.th, r.homeland.buildings, r.homeland.bots])));
+      line.appendChild(cb); line.appendChild(tx); b.appendChild(line);
+    });
+    var n = pickedAll().length;
+    b.appendChild($('p', 'chain-dim', $t('Ketik {0} untuk mengonfirmasi penghapusan {1} akun terpilih.', [confirmWord(), n])));
+    var f = $('div', 'chain-field'), inp = $('input');
+    inp.type = 'text'; inp.value = PA.word; inp.maxLength = 12; inp.disabled = PA.busy; inp.setAttribute('aria-label', $t('Kata konfirmasi'));
+    var del = btn($t('Hapus yang dipilih'), doPurgeAll, 'primary');
+    function sync() { del.disabled = !!(PA.busy || !n || PA.word.trim() !== confirmWord() || (PA.info && PA.info.settling)); }
+    inp.addEventListener('input', function () { PA.word = inp.value; sync(); });
+    sync(); f.appendChild(inp); f.appendChild(del); b.appendChild(f);
+  }
+
   /* ---------------------------------------------------------------- Bot warga: the townsfolk's wallet (GET/POST /api/admin/bots)
      and "Lacak uang" (GET /api/admin/trace): where any account's coin came from and went, one hop at a time */
   var KINDS = { trade: $t('Jual-beli dengan pedagang'), resident_buy: $t('Belanja warga'), resident_sale: $t('Dibeli warga'), handout: $t('Uang saku warga'),
@@ -918,9 +975,10 @@
     ui.safetyView = $('div'); root.appendChild(ui.safetyView);
     ui.safety = $('div', 'adm-card'); ui.safetyView.appendChild(ui.safety);
     ui.purge = $('div', 'adm-card'); ui.safetyView.appendChild(ui.purge);
+    ui.purgeAll = $('div', 'adm-card'); ui.safetyView.appendChild(ui.purgeAll);
     return root;
   }
-  function renderAll() { renderTreasury(); renderGrants(); renderSafety(); renderPurge(); renderBots(); syncForm(); showTab(); }
+  function renderAll() { renderTreasury(); renderGrants(); renderSafety(); renderPurge(); renderPurgeAll(); renderBots(); syncForm(); showTab(); }
   function load() {
     C.api('/admin/guests').then(function (r) { guests = r.guests || []; renderSafety(); }, fail);
     C.api('/admin/frozen').then(function (r) { frozen = r.frozen || []; renderSafety(); }, function () {});

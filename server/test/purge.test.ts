@@ -178,3 +178,42 @@ test('login: an admin whose account was made with the old NEAR Auth still signs 
     assert.equal(r.accountId ?? (r as any).account_id ?? acct, acct);
   } finally { h.close(); }
 });
+
+test('reset of all players: every player goes (admins too), merchants and the ledger stay, and the same login starts again', async () => {
+  const h = await harness();
+  try {
+    const all = (as: string, body: unknown) => h.call(as, '/api/admin/purge-players', body);
+    assert.equal((await all(C, { dryRun: true })).status, 403, 'admins only');
+    // a current player made by a real login, so the same login can come back
+    const sub = 'google-oauth2|888', deps = { cfg: h.cfg, chain: h.chain, store: h.store, verify: async (t: string) => ({ sub: t, iat: Math.floor(Date.now() / 1000) }) };
+    const first = await register(deps, { idToken: sub, sessionPublicKey: rnd() });
+    assert.equal(first.created, true);
+    h.game.onNewPlayer(first.accountId); h.store.setName(first.accountId, 'Pulang');
+    const dry = await all(ADM, { dryRun: true });
+    assert.equal(dry.status, 200);
+    const list = dry.json.accounts.map((a: any) => a.account).sort();
+    assert.deepEqual(list, [ADM, L1, L2, C, first.accountId].sort(), 'every player, the admin too, and nobody else');
+    assert.equal(h.count('players', 'account_id', C), 1, 'a dry run deletes nothing');
+    const ledger0 = (h.store.db.prepare('SELECT COUNT(*) AS n FROM ledger').get() as { n: number }).n;
+    const merchants0 = (h.store.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account LIKE '%.gt.test'").get() as { n: number }).n;
+    assert.equal((await all(ADM, { dryRun: false, accounts: ['sari.gt.test'] })).status, 409, 'a merchant is not a player');
+    const run = await all(ADM, { dryRun: false, accounts: list });
+    assert.equal(run.status, 200);
+    assert.equal(run.json.purged.length, 5);
+    for (const a of list) {
+      assert.equal(h.count('players', 'account_id', a), 0, `${a} gone`);
+      assert.equal(h.count('names', 'account', a), 0);
+      assert.equal(h.count('homelands', 'account', a), 0);
+      assert.equal(h.count('session_keys', 'account_id', a), 0);
+      assert.equal(h.count('retired_accounts', 'account_id', a), 0, 'not retired');
+    }
+    assert.equal((h.store.db.prepare('SELECT COUNT(*) AS n FROM ledger').get() as { n: number }).n, ledger0, 'the ledger stays');
+    assert.equal((h.store.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account LIKE '%.gt.test'").get() as { n: number }).n, merchants0, 'the merchants stay');
+    assert.equal((await all(ADM, { dryRun: true })).status, 401, 'the admin deleted itself: its session key is gone');
+    // the same login again: adopted as a new player, same account id
+    const again = await register(deps, { idToken: sub, sessionPublicKey: rnd() });
+    assert.equal(again.accountId, first.accountId);
+    assert.equal(h.count('players', 'account_id', first.accountId), 1, 'back as a new player');
+    assert.equal(h.store.nameOf(first.accountId), null, 'no name yet');
+  } finally { h.close(); }
+});

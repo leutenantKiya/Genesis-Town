@@ -526,6 +526,16 @@ export function createApp(deps: AppDeps) {
         if (typeof b.dryRun !== 'boolean') throw new HttpError(400, 'dryRun must be true or false');
         return send(res, 200, b.dryRun ? await purge.dryRun() : await purge.run(acct, b.accounts));
       }
+      if (req.method === 'POST' && p === '/api/admin/purge-players') {
+        // every player account, admins included (purge.ts): {dryRun: true} lists them, {dryRun: false, accounts: [...]} deletes the
+        // confirmed ones; they are not retired, so the same login starts again as a new player
+        const raw = await readRaw(req);
+        const acct = adminOf(req, url, raw);
+        if (!adminGrantLimiter.take(acct)) throw new HttpError(429, 'Slow down… too many actions');
+        const b = parseJson(raw);
+        if (typeof b.dryRun !== 'boolean') throw new HttpError(400, 'dryRun must be true or false');
+        return send(res, 200, b.dryRun ? purge.dryRunAll() : purge.runAll(acct, b.accounts));
+      }
       if (p === '/api/admin/frozen' || p === '/api/admin/status' || p === '/api/admin/unfreeze') {
         if (req.method === 'GET' && p !== '/api/admin/unfreeze') {
           const acct = adminOf(req, url);

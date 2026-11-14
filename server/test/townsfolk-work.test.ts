@@ -96,7 +96,7 @@ test('the work is shown on the spot, and the admin sees each resident\'s step no
   assert.deepEqual(near.act, seen.act, 'presence sends the work');
   const who = game.residents.walkers.find((w) => w.id === seen.id)!;
   assert.equal(who.role, 'gather', 'a man at work');
-  const p = bots.status(1).residents.find((r: any) => r.id === seen.id).plan;
+  const p = (bots.status(1).residents.find((r: any) => r.id === seen.id) as any).plan;
   assert.equal(p.doing.kind, seen.act.kind, 'the admin sees it now');
 });
 
